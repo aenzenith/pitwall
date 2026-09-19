@@ -1,0 +1,367 @@
+{
+    "name": "pitwall",
+    "displayName": "Pitwall",
+    "description": "%extension.description%",
+    "version": "0.9.0",
+    "publisher": "aenzenith",
+    "private": true,
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/aenzenith/pitwall.git"
+    },
+    "bugs": {
+        "url": "https://github.com/aenzenith/pitwall/issues"
+    },
+    "homepage": "https://github.com/aenzenith/pitwall#readme",
+    "engines": {
+        "vscode": "^1.93.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "keywords": [
+        "vite",
+        "laravel",
+        "npm",
+        "projects",
+        "multi-root",
+        "herd",
+        "monorepo",
+        "dev server"
+    ],
+    "main": "./out/extension.js",
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "pitwall",
+                    "title": "%container.title%",
+                    "icon": "resources/activity.svg"
+                }
+            ]
+        },
+        "views": {
+            "pitwall": [
+                {
+                    "id": "pitwall.view",
+                    "name": "%view.name%",
+                    "icon": "resources/activity.svg"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "pitwall.toggle",
+                "title": "%command.toggle%",
+                "category": "%category%",
+                "icon": "$(play)"
+            },
+            {
+                "command": "pitwall.restart",
+                "title": "%command.restart%",
+                "category": "%category%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "pitwall.stop",
+                "title": "%command.stop%",
+                "category": "%category%",
+                "icon": {
+                    "light": "resources/stop-outline-light.svg",
+                    "dark": "resources/stop-outline-dark.svg"
+                }
+            },
+            {
+                "command": "pitwall.startAll",
+                "title": "%command.startAll%",
+                "category": "%category%",
+                "icon": "$(run-all)"
+            },
+            {
+                "command": "pitwall.stopAll",
+                "title": "%command.stopAll%",
+                "category": "%category%",
+                "icon": {
+                    "light": "resources/stop-outline-light.svg",
+                    "dark": "resources/stop-outline-dark.svg"
+                }
+            },
+            {
+                "command": "pitwall.restartAll",
+                "title": "%command.restartAll%",
+                "category": "%category%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "pitwall.refresh",
+                "title": "%command.refresh%",
+                "category": "%category%",
+                "icon": "$(sync)"
+            },
+            {
+                "command": "pitwall.addFavorite",
+                "title": "%command.addFavorite%",
+                "category": "%category%",
+                "icon": "$(add)"
+            },
+            {
+                "command": "pitwall.focusView",
+                "title": "%command.focusView%",
+                "category": "%category%"
+            },
+            {
+                "command": "pitwall.startNode",
+                "title": "%command.startNode%",
+                "icon": "$(play)"
+            },
+            {
+                "command": "pitwall.stopNode",
+                "title": "%command.stopNode%",
+                "icon": {
+                    "light": "resources/stop-outline-light.svg",
+                    "dark": "resources/stop-outline-dark.svg"
+                }
+            },
+            {
+                "command": "pitwall.restartNode",
+                "title": "%command.restartNode%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "pitwall.openUrl",
+                "title": "%command.openUrl%",
+                "icon": "$(link-external)"
+            },
+            {
+                "command": "pitwall.showOutput",
+                "title": "%command.showOutput%",
+                "icon": "$(output)"
+            },
+            {
+                "command": "pitwall.focusWindow",
+                "title": "%command.focusWindow%",
+                "icon": "$(window)"
+            },
+            {
+                "command": "pitwall.toggleFavorite",
+                "title": "%command.toggleFavorite%",
+                "icon": "$(star-empty)"
+            },
+            {
+                "command": "pitwall.removeFavorite",
+                "title": "%command.removeFavorite%",
+                "icon": "$(star-full)"
+            }
+        ],
+        "menus": {
+            "view/title": [
+                {
+                    "command": "pitwall.startAll",
+                    "when": "view == pitwall.view",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "pitwall.stopAll",
+                    "when": "view == pitwall.view",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "pitwall.addFavorite",
+                    "when": "view == pitwall.view",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "pitwall.restartAll",
+                    "when": "view == pitwall.view",
+                    "group": "navigation@4"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "pitwall.startNode",
+                    "when": "view == pitwall.view && viewItem =~ /^project\\..*\\.idle/",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pitwall.stopNode",
+                    "when": "view == pitwall.view && viewItem =~ /^project\\..*\\.running/",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pitwall.restartNode",
+                    "when": "view == pitwall.view && viewItem =~ /^project\\..*\\.running/",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "pitwall.openUrl",
+                    "when": "view == pitwall.view && viewItem =~ /^project\\..*\\.running/",
+                    "group": "inline@3"
+                },
+                {
+                    "command": "pitwall.showOutput",
+                    "when": "view == pitwall.view && viewItem =~ /^project\\.here\\.running/",
+                    "group": "inline@4"
+                },
+                {
+                    "command": "pitwall.toggleFavorite",
+                    "when": "view == pitwall.view && viewItem =~ /^project\\..*\\.nofav$/",
+                    "group": "inline@9"
+                },
+                {
+                    "command": "pitwall.removeFavorite",
+                    "when": "view == pitwall.view && viewItem =~ /^project\\..*\\.fav$/",
+                    "group": "inline@9"
+                }
+            ],
+            "commandPalette": [
+                {
+                    "command": "pitwall.startNode",
+                    "when": "false"
+                },
+                {
+                    "command": "pitwall.stopNode",
+                    "when": "false"
+                },
+                {
+                    "command": "pitwall.restartNode",
+                    "when": "false"
+                },
+                {
+                    "command": "pitwall.openUrl",
+                    "when": "false"
+                },
+                {
+                    "command": "pitwall.showOutput",
+                    "when": "false"
+                },
+                {
+                    "command": "pitwall.focusWindow",
+                    "when": "false"
+                },
+                {
+                    "command": "pitwall.toggleFavorite",
+                    "when": "false"
+                },
+                {
+                    "command": "pitwall.removeFavorite",
+                    "when": "false"
+                }
+            ]
+        },
+        "keybindings": [
+            {
+                "command": "pitwall.toggle",
+                "key": "cmd+alt+d",
+                "win": "ctrl+alt+d",
+                "linux": "ctrl+alt+d"
+            },
+            {
+                "command": "pitwall.restart",
+                "key": "cmd+alt+r",
+                "win": "ctrl+alt+r",
+                "linux": "ctrl+alt+r"
+            }
+        ],
+        "configuration": {
+            "title": "%container.title%",
+            "properties": {
+                "pitwall.script": {
+                    "type": "string",
+                    "default": "dev",
+                    "scope": "resource",
+                    "markdownDescription": "%config.script%"
+                },
+                "pitwall.packageManager": {
+                    "type": "string",
+                    "enum": [
+                        "auto",
+                        "npm",
+                        "pnpm",
+                        "yarn",
+                        "bun"
+                    ],
+                    "default": "auto",
+                    "scope": "resource",
+                    "markdownDescription": "%config.packageManager%"
+                },
+                "pitwall.revealTerminal": {
+                    "type": "boolean",
+                    "default": false,
+                    "scope": "resource",
+                    "markdownDescription": "%config.revealTerminal%"
+                },
+                "pitwall.restartDelayMs": {
+                    "type": "number",
+                    "default": 600,
+                    "scope": "resource",
+                    "markdownDescription": "%config.restartDelayMs%"
+                },
+                "pitwall.openUrlOnStart": {
+                    "type": "boolean",
+                    "default": false,
+                    "scope": "resource",
+                    "markdownDescription": "%config.openUrlOnStart%"
+                },
+                "pitwall.url": {
+                    "type": "string",
+                    "default": "",
+                    "scope": "resource",
+                    "markdownDescription": "%config.url%"
+                },
+                "pitwall.openUrlTimeoutMs": {
+                    "type": "number",
+                    "default": 15000,
+                    "scope": "resource",
+                    "markdownDescription": "%config.openUrlTimeoutMs%"
+                },
+                "pitwall.port": {
+                    "type": "number",
+                    "default": 0,
+                    "scope": "resource",
+                    "markdownDescription": "%config.port%"
+                },
+                "pitwall.autoStart": {
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "lastSession",
+                        "favorites",
+                        "workspace"
+                    ],
+                    "enumDescriptions": [
+                        "%config.autoStart.off%",
+                        "%config.autoStart.lastSession%",
+                        "%config.autoStart.favorites%",
+                        "%config.autoStart.workspace%"
+                    ],
+                    "default": "lastSession",
+                    "markdownDescription": "%config.autoStart%"
+                },
+                "pitwall.autoStartOpensUrl": {
+                    "type": "boolean",
+                    "default": false,
+                    "markdownDescription": "%config.autoStartOpensUrl%"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "compile": "rm -rf out && tsc -p .",
+        "watch": "tsc -p . --watch",
+        "test": "vitest run",
+        "package": "npx --yes @vscode/vsce package",
+        "clean": "rm -rf out",
+        "vscode:prepublish": "npm run compile"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.0",
+        "@types/vscode": "^1.93.0",
+        "typescript": "^5.7.0",
+        "vitest": "^3.0.0"
+    },
+    "l10n": "./l10n"
+}
