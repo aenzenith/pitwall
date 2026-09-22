@@ -62,7 +62,7 @@ actually runs it; favourites are a shared list and are never claimed by a window
 - **Health probe** — every 30 s the port of each running server is checked. Process alive but
   the port silent turns the row amber (`:5173 not responding`).
 - **Error line on the row** — output matching `Failed to resolve`, `Cannot find module`,
-  `SyntaxError`, `npm ERR!` and friends is shortened onto the row; click to open the output.
+  `SyntaxError`, `npm ERR!` and friends is shortened onto the row; the `⎙` button opens the output.
 - **Orphan cleanup** — if the extension host crashes, `deactivate` never runs. Each window
   records its pids in a shared `pids/` directory, and the next start kills the process groups
   left behind by dead windows.

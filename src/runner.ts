@@ -175,7 +175,6 @@ export class DevRunner {
         channel.appendLine(`  ${target.path}`);
         channel.appendLine('');
 
-        // Giriş kabuğu üzerinden: nvm/homebrew ile kurulmuş node yollarını da görsün.
         const child = spawn(process.env.SHELL ?? '/bin/zsh', ['-lc', command], {
             cwd: target.path,
             detached: true,
@@ -222,7 +221,6 @@ export class DevRunner {
             }
         });
 
-        // Adres çıktıda görünmezse bilinen adresi yine de aç.
         run.timer = setTimeout(
             () => void this.settleUrl(target, undefined),
             Math.max(1000, config.get<number>('openUrlTimeoutMs', 15000)),
@@ -259,7 +257,6 @@ export class DevRunner {
     }
 
     public async toggle(target: Target): Promise<void> {
-        // Elle başlatma kurtarma hakkını geri verir.
         this.recovered.delete(target.path);
 
         if (this.isRunning(target.path)) {
@@ -460,13 +457,11 @@ export class DevRunner {
         }
 
         try {
-            // Eksi pid = bütün süreç grubu: kabuk, npm ve altındaki vite birlikte kapanır.
             process.kill(-pid, signal);
         } catch {
             try {
                 run.child.kill(signal);
             } catch {
-                // Süreç zaten ölmüş.
             }
         }
     }

@@ -70,7 +70,7 @@ pencere sahiplenir; favoriler ortak listedir, kimsenin penceresine yazılmaz.
 - **Sağlık yoklaması** — 30 sn'de bir sunucunun portu yoklanır. Süreç ayakta ama port cevap
   vermiyorsa satır sarıya döner (`:5173 yanıt vermiyor`).
 - **Hata satırı satırda** — çıktıda `Failed to resolve`, `Cannot find module`, `SyntaxError`,
-  `npm ERR!` gibi bir satır görülürse satırın yanına kısaltılıp yazılır; tıkla çıktıya git.
+  `npm ERR!` gibi bir satır görülürse satırın yanına kısaltılıp yazılır; çıktıya `⎙` düğmesiyle gidilir.
 - **Öksüz süreç temizliği** — eklenti çökerse `deactivate` koşmaz. Her pencere pid'lerini
   ortak `pids/` dizinine yazar; sonraki açılışta ölü pencerelerin bıraktığı süreç grupları
   kapatılır.

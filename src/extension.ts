@@ -83,7 +83,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('pitwall.openUrl', (node: ProjectNode) => void openNodeUrl(node)),
         vscode.commands.registerCommand('pitwall.focusWindow', (node: ProjectNode) => void focusWindow(node)),
         vscode.commands.registerCommand('pitwall.toggleFavorite', (node: ProjectNode) => toggleFavorite(node)),
-        // Aynı iş, ayrı ad: dolu yıldız ikonunu bu komut taşır.
         vscode.commands.registerCommand('pitwall.removeFavorite', (node: ProjectNode) => toggleFavorite(node)),
         vscode.commands.registerCommand('pitwall.addFavorite', () => void addFavorite()),
         vscode.commands.registerCommand('pitwall.showOutput', (node: ProjectNode) =>
@@ -91,7 +90,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ),
     );
 
-    // Uptime ve bayat pencere kayıtları için düzenli tazeleme.
     const ticker = setInterval(() => tree.refresh(), 5000);
     context.subscriptions.push({ dispose: () => clearInterval(ticker) });
 
@@ -113,7 +111,6 @@ function reapOrphans(): void {
             process.kill(-orphan.pid, 'SIGTERM');
             killed += 1;
         } catch {
-            // Süreç çoktan ölmüş ya da başkasına ait; dokunmuyoruz.
         }
     }
 
@@ -280,7 +277,6 @@ function pickAutoStartTargets(mode: string): Target[] {
 /* ---------- panel eylemleri ---------- */
 
 async function act(node: ProjectNode, action: 'start' | 'stop' | 'restart'): Promise<void> {
-    // Proje başka pencerede açıksa iş oraya devredilir; iki kopya çalışmaz.
     if (node.windowId) {
         registry.send({ target: node.windowId, action, folderPath: node.state.folderPath });
 
@@ -347,26 +343,16 @@ async function openNodeUrl(node: ProjectNode): Promise<void> {
 async function focusWindow(node: ProjectNode): Promise<void> {
     const local = tree.localTargets().some((target) => target.path === node.state.folderPath);
 
-    if (local && runner.isRunning(node.state.folderPath)) {
-        // Kendi penceremizde çalışıyor: çıktı kanalını göster.
-        runner.reveal(node.state.folderPath);
-
-        return;
-    }
-
     if (local) {
         return;
     }
 
-    // Projeyi açık tutan pencere varsa onu öne getir; pencere odaklama API'si yok,
-    // `vscode://file` o pencereyi öne alır.
     if (node.windowId) {
         await vscode.env.openExternal(vscode.Uri.parse(`vscode://file${node.state.folderPath}`));
 
         return;
     }
 
-    // Hiç açık değilse bu pencerenin üstüne açılmaz, yeni pencerede açılır.
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(node.state.folderPath), {
         forceNewWindow: true,
     });
@@ -391,7 +377,6 @@ async function startEverywhere(): Promise<void> {
 
     for (const [index, node] of idle.entries()) {
         if (index > 0) {
-            // Portlar aynı anda yarışmasın.
             await wait(1000);
         }
 

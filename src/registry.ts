@@ -178,7 +178,6 @@ export class Registry extends EventEmitter {
         try {
             fs.writeFileSync(file, JSON.stringify(payload), 'utf8');
         } catch {
-            // Emir düşerse panel yine de tazelenir; sessiz geçilir.
         }
     }
 
@@ -199,7 +198,6 @@ export class Registry extends EventEmitter {
 
             fs.writeFileSync(file, JSON.stringify({ windowId: this.windowId, entries }), 'utf8');
         } catch {
-            // Yazılamazsa öksüz temizliği yapılamaz; eklenti çalışmaya devam eder.
         }
     }
 
@@ -277,7 +275,6 @@ export class Registry extends EventEmitter {
         try {
             fs.writeFileSync(this.ownFile(), JSON.stringify(this.own), 'utf8');
         } catch {
-            // Disk yazılamıyorsa pencereler arası görünürlük kapanır, eklenti çalışmaya devam eder.
         }
     }
 
@@ -338,7 +335,6 @@ export class Registry extends EventEmitter {
 
             this.watchers.push(watcher);
         } catch {
-            // fs.watch desteklenmeyen dosya sisteminde kalp atışı yine de tazeler.
         }
     }
 
@@ -367,6 +363,5 @@ function safeUnlink(file: string): void {
     try {
         fs.unlinkSync(file);
     } catch {
-        // Başka pencere önce silmiş olabilir.
     }
 }

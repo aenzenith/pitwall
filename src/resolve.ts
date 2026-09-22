@@ -118,7 +118,6 @@ export function pickFolder<T extends FolderLike>(
     }
 
     if (activePath) {
-        // İç içe kökler olabilir; en uzun eşleşme doğru olan.
         const matches = folders
             .filter((folder) => isInside(activePath, folder.path))
             .sort((a, b) => b.path.length - a.path.length);
@@ -190,7 +189,6 @@ export function parseAppUrl(envRaw: string): string | undefined {
         if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
             value = value.slice(1, -1);
         } else {
-            // Tırnaksız değerde satır sonu yorumu (# ...) değere dahil değildir.
             value = value.split('#')[0].trim();
         }
 

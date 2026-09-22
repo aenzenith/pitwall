@@ -210,7 +210,6 @@ export class DevTree implements vscode.TreeDataProvider<Node> {
         item.tooltip = this.tooltip(node);
         item.iconPath = this.icon(node, busy);
         item.contextValue = this.contextValue(node);
-        // Satıra tıklamak hiçbir şey başlatmaz: projenin penceresine götürür.
         item.command = {
             command: 'pitwall.focusWindow',
             title: vscode.l10n.t('Go to its window'),
@@ -225,7 +224,6 @@ export class DevTree implements vscode.TreeDataProvider<Node> {
             return vscode.l10n.t('restarting…');
         }
 
-        // Sorun varsa satırda yazan odur; yoksa yalnız pencere etiketi kalır.
         return node.state.issue?.text ?? windowLabel(node);
     }
 
@@ -268,7 +266,6 @@ export class DevTree implements vscode.TreeDataProvider<Node> {
             return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconPassed'));
         }
 
-        // Favorinin penceresi hiç açık değil: ayrı ikon, satırda metne gerek kalmasın.
         if (node.scope === 'favorite' && !node.windowId) {
             return new vscode.ThemeIcon('circle-slash');
         }
