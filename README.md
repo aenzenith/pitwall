@@ -55,12 +55,15 @@ actually runs it; favourites are a shared list and are never claimed by a window
   marker on the row. Target port: `pitwall.port` → `server.port` in `vite.config` → 5173.
   Ports handed out are reserved for 60 s, so a second server starting at the same moment is
   never given the same one.
-- **Crash detection and one-shot recovery** — if a process dies on its own (exit code ≠ 0)
-  the row turns red and the server is brought back **once**, 2 s later. A second crash is
-  left alone; starting it by hand restores the recovery budget. Stopping it yourself is never
-  treated as a crash.
-- **Health probe** — every 30 s the port of each running server is checked. Process alive but
-  the port silent turns the row amber (`:5173 not responding`).
+- **Crash detection and automatic restart** — if a process dies on its own (any exit code,
+  not a deliberate stop) the row turns red and the server is brought back 3 s later. It keeps
+  coming back no matter how often it crashes; only three restarts in a row that die within
+  60 s make Pitwall give up (`crashed — … · gave up after 3 restarts`). Starting by hand
+  resets the counter.
+- **Health probe** — every 30 s the port of each running server is checked (IPv4 and IPv6
+  loopback). Process alive but the port silent turns the row amber (`:5173 not responding`);
+  if it is still silent 3 s later the process is killed and restarted, under the same
+  three-strikes rule.
 - **Error line on the row** — output matching `Failed to resolve`, `Cannot find module`,
   `SyntaxError`, `npm ERR!` and friends is shortened onto the row; the `⎙` button opens the output.
 - **Orphan cleanup** — if the extension host crashes, `deactivate` never runs. Each window

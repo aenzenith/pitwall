@@ -64,11 +64,15 @@ pencere sahiplenir; favoriler ortak listedir, kimsenin penceresine yazılmaz.
   bir Output kanalına (`Dev: paddock`) yazılır, satırdaki `⎙` düğmesiyle açılır. Süreçler
   kendi süreç grubunda başlar, durdurulurken `npm`'in altındaki `vite` de kapanır.
   Pencere kapanınca hepsi öldürülür — öksüz sunucu kalmaz.
-- **Çökme algısı ve tek seferlik kurtarma** — süreç kendi kendine düşerse (çıkış kodu ≠ 0)
-  satır kırmızıya döner ve **bir kez** 2 sn sonra geri kaldırılır. İkinci çöküşte sessizce
-  kalır; elle başlatmak kurtarma hakkını geri verir. Bilerek durdurma çökme sayılmaz.
-- **Sağlık yoklaması** — 30 sn'de bir sunucunun portu yoklanır. Süreç ayakta ama port cevap
-  vermiyorsa satır sarıya döner (`:5173 yanıt vermiyor`).
+- **Çökme algısı ve otomatik yeniden başlatma** — süreç kendi kendine düşerse (çıkış kodu
+  fark etmez, bilerek durdurma sayılmaz) satır kırmızıya döner ve sunucu 3 sn sonra geri
+  kaldırılır. Kaç kez çökerse çöksün geri gelir; yalnız art arda üç yeniden başlatma 60 sn
+  içinde ölürse vazgeçilir (`çöktü — … · 3 denemeden sonra vazgeçildi`). Elle başlatmak
+  sayacı sıfırlar.
+- **Sağlık yoklaması** — her 30 sn'de çalışan her sunucunun portu yoklanır (IPv4 ve IPv6
+  loopback). Süreç ayakta ama port cevap vermiyorsa satır sarıya döner (`:5173 yanıt
+  vermiyor`); 3 sn sonra hâlâ sessizse süreç öldürülüp yeniden başlatılır, aynı üç deneme
+  kuralıyla.
 - **Hata satırı satırda** — çıktıda `Failed to resolve`, `Cannot find module`, `SyntaxError`,
   `npm ERR!` gibi bir satır görülürse satırın yanına kısaltılıp yazılır; çıktıya `⎙` düğmesiyle gidilir.
 - **Öksüz süreç temizliği** — eklenti çökerse `deactivate` koşmaz. Her pencere pid'lerini

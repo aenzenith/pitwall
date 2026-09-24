@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import { findFreePort, isPortInUse, portFromUrl } from './ports';
+import { findFreePort, isPortServed, portFromUrl } from './ports';
 import type { ProjectIssue, ProjectState } from './registry';
 import {
     buildCommand,
@@ -46,8 +46,14 @@ const RESERVATION_MS = 60000;
 /** Sağlık yoklaması aralığı. */
 const HEALTH_MS = 30000;
 
-/** Çöken sunucu bu kadar bekleyip bir kez geri kaldırılır. */
-const RECOVER_DELAY_MS = 2000;
+/** Çöken ya da yanıt vermeyen sunucu bu kadar bekleyip geri kaldırılır. */
+const RESTART_DELAY_MS = 3000;
+
+/** Art arda bu kadar yeniden başlatma başarısız olursa vazgeçilir; elle başlatmak sayacı sıfırlar. */
+const MAX_RESTARTS = 3;
+
+/** Süreç bu kadar ayakta kalırsa başlatma başarılı sayılır ve başarısızlık sayacı sıfırlanır. */
+const STABLE_MS = 60000;
 
 export function targetFromFolder(folder: vscode.WorkspaceFolder): Target {
     return { path: folder.uri.fsPath, name: folder.name, uri: folder.uri };
@@ -84,8 +90,10 @@ export class DevRunner {
     /** Bilerek durdurulanlar: çıkış olayı çökme sayılmasın. */
     private readonly stopping = new Set<string>();
 
-    /** Çökme sonrası bir kez kurtarma denenmiş projeler. */
-    private readonly recovered = new Set<string>();
+    /** Art arda başarısız otomatik yeniden başlatma sayısı: proje -> deneme. */
+    private readonly attempts = new Map<string, number>();
+
+    private disposed = false;
 
     /** Satırda gösterilecek sorun notu: çökme, hata satırı ya da yanıtsızlık. */
     private readonly issues = new Map<string, ProjectIssue>();
@@ -142,6 +150,12 @@ export class DevRunner {
      * @param extraArgs Script'e geçirilecek ek argüman, ör. `['--port', '5176']`.
      */
     public async start(target: Target, openUrl = true, extraArgs: readonly string[] = []): Promise<void> {
+        this.attempts.delete(target.path);
+        await this.launch(target, openUrl, extraArgs);
+    }
+
+    /** Elle başlatmadan farkı: başarısızlık sayacına dokunmaz. Otomatik kurtarma buradan geçer. */
+    private async launch(target: Target, openUrl: boolean, extraArgs: readonly string[] = []): Promise<void> {
         if (this.runs.has(target.path)) {
             this.reveal(target.path);
 
@@ -216,8 +230,8 @@ export class DevRunner {
 
             this.forget(target.path);
 
-            if (!planned && code !== 0) {
-                void this.handleCrash(target, code, signal);
+            if (!planned && !this.disposed) {
+                void this.handleCrash(target, run, code, signal);
             }
         });
 
@@ -257,8 +271,6 @@ export class DevRunner {
     }
 
     public async toggle(target: Target): Promise<void> {
-        this.recovered.delete(target.path);
-
         if (this.isRunning(target.path)) {
             await this.stop(target.path);
 
@@ -274,6 +286,8 @@ export class DevRunner {
 
     /** Pencere kapanırken: bütün süreçler kapatılır, öksüz sunucu bırakılmaz. */
     public dispose(): void {
+        this.disposed = true;
+
         if (this.healthTimer) {
             clearInterval(this.healthTimer);
             this.healthTimer = undefined;
@@ -325,33 +339,65 @@ export class DevRunner {
     }
 
     /**
-     * Süreç kendi kendine düştü: satır "çöktü" olarak işaretlenir ve
-     * proje başına BİR kez geri kaldırılır. İkinci çöküşte sessizce kalır.
+     * Süreç kendi kendine düştü (bilerek durdurulmadı): satır "çöktü" olarak işaretlenir ve
+     * RESTART_DELAY_MS sonra geri kaldırılır. Art arda MAX_RESTARTS deneme STABLE_MS içinde
+     * ölürse vazgeçilir; elle başlatmak hakkı geri verir.
      */
-    private async handleCrash(target: Target, code: number | null, signal: string | null): Promise<void> {
+    private async handleCrash(target: Target, run: Run, code: number | null, signal: string | null): Promise<void> {
         const previous = this.issues.get(target.path);
         const detail = previous?.kind === 'error' ? previous.text : `code ${code ?? signal ?? '-'}`;
+        const attempt = this.claimRestart(target.path, run);
 
-        this.issues.set(target.path, { kind: 'crashed', text: vscode.l10n.t('crashed — {0}', detail) });
+        if (attempt === undefined) {
+            this.issues.set(target.path, {
+                kind: 'crashed',
+                text: vscode.l10n.t(
+                    'crashed — {0} · gave up after {1} restarts',
+                    detail,
+                    String(MAX_RESTARTS),
+                ),
+            });
+            this.onChange();
+            this.channelFor(target).appendLine(
+                `[pitwall] ${vscode.l10n.t(
+                    'gave up: {0} restarts in a row failed. Start it by hand.',
+                    String(MAX_RESTARTS),
+                )}`,
+            );
+
+            return;
+        }
+
+        this.issues.set(target.path, {
+            kind: 'crashed',
+            text: vscode.l10n.t(
+                'crashed — {0} · restarting ({1}/{2})',
+                detail,
+                String(attempt),
+                String(MAX_RESTARTS),
+            ),
+        });
         this.onChange();
+        this.channelFor(target).appendLine(
+            `[pitwall] ${vscode.l10n.t(
+                'crashed, restarting in {0} s (attempt {1}/{2})…',
+                String(RESTART_DELAY_MS / 1000),
+                String(attempt),
+                String(MAX_RESTARTS),
+            )}`,
+        );
 
-        if (this.recovered.has(target.path)) {
+        await wait(RESTART_DELAY_MS);
+
+        if (this.disposed || this.runs.has(target.path) || this.busy.has(target.path)) {
             return;
         }
 
-        this.recovered.add(target.path);
-        await wait(RECOVER_DELAY_MS);
-
-        if (this.runs.has(target.path)) {
-            return;
-        }
-
-        this.channelFor(target).appendLine(`[pitwall] ${vscode.l10n.t('crashed, restarting once…')}`);
-        await this.start(target, false);
+        await this.launch(target, false);
     }
 
     /**
-     * Süreç ayakta ama port cevap vermiyorsa satır uyarıya döner.
+     * Süreç ayakta ama port cevap vermiyorsa satır uyarıya döner ve kurtarma planlanır.
      * Port bilinmiyorsa (adres henüz basılmadıysa) dokunulmaz.
      */
     private async checkHealth(): Promise<void> {
@@ -362,7 +408,7 @@ export class DevRunner {
                 continue;
             }
 
-            const alive = await isPortInUse(run.port);
+            const alive = await isPortServed(run.port);
             const current = this.issues.get(folderPath);
 
             if (!alive && current?.kind !== 'unresponsive') {
@@ -371,6 +417,7 @@ export class DevRunner {
                     text: vscode.l10n.t(':{0} not responding', String(run.port)),
                 });
                 changed = true;
+                void this.recoverUnresponsive(folderPath, run);
             } else if (alive && current?.kind === 'unresponsive') {
                 this.issues.delete(folderPath);
                 changed = true;
@@ -380,6 +427,93 @@ export class DevRunner {
         if (changed) {
             this.onChange();
         }
+    }
+
+    /**
+     * Yanıtsız port: RESTART_DELAY_MS bekleyip bir daha yoklanır (anlık takılma olabilir),
+     * hâlâ sessizse süreç öldürülüp yeniden başlatılır. Sayaç çökmeyle ortak.
+     */
+    private async recoverUnresponsive(folderPath: string, run: Run): Promise<void> {
+        await wait(RESTART_DELAY_MS);
+
+        if (this.disposed || this.runs.get(folderPath) !== run || this.busy.has(folderPath) || !run.port) {
+            return;
+        }
+
+        if (await isPortServed(run.port)) {
+            if (this.issues.get(folderPath)?.kind === 'unresponsive') {
+                this.issues.delete(folderPath);
+                this.onChange();
+            }
+
+            return;
+        }
+
+        const target = this.lastTargets.get(folderPath);
+
+        if (!target) {
+            return;
+        }
+
+        const port = String(run.port);
+        const attempt = this.claimRestart(folderPath, run);
+
+        if (attempt === undefined) {
+            this.issues.set(folderPath, {
+                kind: 'unresponsive',
+                text: vscode.l10n.t(
+                    ':{0} not responding · gave up after {1} restarts',
+                    port,
+                    String(MAX_RESTARTS),
+                ),
+            });
+            this.onChange();
+            run.channel.appendLine(
+                `\n[pitwall] ${vscode.l10n.t(
+                    'gave up: {0} restarts in a row failed. Start it by hand.',
+                    String(MAX_RESTARTS),
+                )}`,
+            );
+
+            return;
+        }
+
+        run.channel.appendLine(
+            `\n[pitwall] ${vscode.l10n.t(
+                ':{0} not responding, restarting (attempt {1}/{2})…',
+                port,
+                String(attempt),
+                String(MAX_RESTARTS),
+            )}`,
+        );
+
+        await this.stop(folderPath);
+
+        if (this.disposed || this.runs.has(folderPath)) {
+            return;
+        }
+
+        await this.launch(target, false);
+    }
+
+    /**
+     * Yeniden başlatma hakkı ister. STABLE_MS ayakta kalmış bir koşu sayacı sıfırlar: bu
+     * yeni bir seri. Hak kalmadıysa undefined, yoksa bu denemenin sırası (1..MAX_RESTARTS).
+     */
+    private claimRestart(folderPath: string, run: Run): number | undefined {
+        if (Date.now() - run.startedAt >= STABLE_MS) {
+            this.attempts.delete(folderPath);
+        }
+
+        const used = this.attempts.get(folderPath) ?? 0;
+
+        if (used >= MAX_RESTARTS) {
+            return undefined;
+        }
+
+        this.attempts.set(folderPath, used + 1);
+
+        return used + 1;
     }
 
     /** Sunucunun adresi belli oldu: durumu işaretle, gerekiyorsa tarayıcıda aç. */
@@ -428,7 +562,7 @@ export class DevRunner {
         this.retried.add(target.path);
 
         await this.stop(target.path);
-        await this.start(target, false, ['--port', String(free)]);
+        await this.launch(target, false, ['--port', String(free)]);
     }
 
     /* ---------- süreç ---------- */

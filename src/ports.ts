@@ -28,6 +28,14 @@ export function isPortInUse(port: number, host = '127.0.0.1'): Promise<boolean> 
 }
 
 /**
+ * Port IPv4 ya da IPv6 loopback'te dinleniyor mu. Sağlık yoklaması için:
+ * `localhost` bazı Node sürümlerinde yalnız `::1`'e bağlanır, tek adrese bakmak yanıltır.
+ */
+export async function isPortServed(port: number): Promise<boolean> {
+    return (await isPortInUse(port, '127.0.0.1')) || (await isPortInUse(port, '::1'));
+}
+
+/**
  * `from` portundan başlayarak boş port arar.
  *
  * @param tries Kaç port denenecek.

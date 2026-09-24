@@ -4,6 +4,18 @@ All notable changes to this extension are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-09-24
+
+### Changed
+
+- Crashed servers are restarted automatically every time, 3 s after they die, instead of only
+  once per session. Any unplanned exit counts, including exit code 0. Three restarts in a row
+  that die within 60 s make Pitwall give up; starting by hand resets the counter.
+- A server whose port stays silent 3 s after the health probe flagged it is killed and
+  restarted under the same three-strikes rule, instead of only turning the row amber.
+- The health probe checks both IPv4 and IPv6 loopback, so a server bound only to `::1` is no
+  longer reported as unresponsive.
+
 ## [0.9.0] — 2026-09-19
 
 First public release.
