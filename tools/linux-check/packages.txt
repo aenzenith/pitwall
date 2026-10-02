@@ -1,0 +1,18 @@
+# Debian/Ubuntu packages Pitwall needs to compile on Linux. Read by .github/workflows/*.yml and
+# tools/linux-check/Dockerfile, so CI and the local check install the same thing.
+
+# Tauri 2's Linux prerequisites: https://v2.tauri.app/start/prerequisites/#linux
+libwebkit2gtk-4.1-dev
+build-essential
+curl
+wget
+file
+libxdo-dev
+libssl-dev
+libayatana-appindicator3-dev
+librsvg2-dev
+pkg-config
+
+# Pitwall's own crates
+libasound2-dev   # sound: rodio -> cpal -> alsa-sys
+libdbus-1-dev    # notifications: notify-rust's D-Bus backend

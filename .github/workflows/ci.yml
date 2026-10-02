@@ -14,10 +14,30 @@ concurrency:
 
 jobs:
   check:
-    name: macOS
-    runs-on: macos-latest
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+          # 22.04, as in Tauri's own pipeline: webkit2gtk-4.1 is there, and what builds on it
+          # runs on newer distributions too.
+          - name: Linux
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+
+      # Tauri's prerequisites plus the libraries Pitwall's crates link against; the list is
+      # shared with tools/linux-check, the same checks in Docker.
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sed 's/#.*//' tools/linux-check/packages.txt | xargs sudo apt-get install -y --no-install-recommends
 
       - uses: actions/setup-node@v5
         with:
@@ -30,7 +50,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: src-tauri -> target
+          key: ${{ matrix.os }}
 
       - name: Install dependencies
         run: npm ci
