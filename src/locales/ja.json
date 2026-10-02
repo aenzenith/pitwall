@@ -397,6 +397,7 @@
   "core.tray.tooltip": "Pitwall — 実行中 {running} · 入力待ち {waiting}",
   "core.dialog.projectsFolder": "プロジェクトフォルダを選択",
   "core.error.launchAtLoginDev": "ログイン時の起動はインストール済みのアプリでのみ機能し、開発ビルドでは機能しません。",
+  "core.error.hookDev": "フックはインストール済みのアプリでのみ機能し、開発ビルドでは機能しません。",
   "core.error.notFolder": "フォルダではありません：{path}",
   "core.error.linkScheme": "開けるのはウェブとメールのリンクだけです：{url}",
   "core.error.invalidJson": "{file}は有効なJSONではないため、Pitwallは変更しません。",

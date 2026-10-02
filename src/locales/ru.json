@@ -397,6 +397,7 @@
   "core.tray.tooltip": "Pitwall — запущено: {running} · ждут вас: {waiting}",
   "core.dialog.projectsFolder": "Выберите папку проектов",
   "core.error.launchAtLoginDev": "Открытие при входе работает только в установленном приложении, а не в dev-сборке.",
+  "core.error.hookDev": "Хук работает только в установленном приложении, а не в dev-сборке.",
   "core.error.notFolder": "Это не папка: {path}",
   "core.error.linkScheme": "Открываются только веб-ссылки и ссылки на почту: {url}",
   "core.error.invalidJson": "{file} — некорректный JSON; Pitwall не будет его менять.",

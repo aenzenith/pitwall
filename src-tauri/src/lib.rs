@@ -37,6 +37,8 @@ use tauri_plugin_opener::OpenerExt;
 use crate::core::{Core, CoreConfig, CoreEvent};
 use crate::i18n::t;
 
+pub use crate::hooks::hook_mode;
+
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";
 pub const SWITCHER: &str = "switcher";

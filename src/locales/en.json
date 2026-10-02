@@ -397,6 +397,7 @@
   "core.tray.tooltip": "Pitwall — {running} running · {waiting} waiting on you",
   "core.dialog.projectsFolder": "Choose your projects folder",
   "core.error.launchAtLoginDev": "Launch at login works from the installed app, not from a dev build.",
+  "core.error.hookDev": "The hook works from the installed app, not from a dev build.",
   "core.error.notFolder": "Not a folder: {path}",
   "core.error.linkScheme": "Only web and mail links open: {url}",
   "core.error.invalidJson": "{file} is not valid JSON; Pitwall won't change it.",
