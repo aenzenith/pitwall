@@ -90,6 +90,9 @@
   "switcher.confirmAgain": "Нажмите ↵ ещё раз, чтобы выполнить {name}",
   "switcher.noCommandMatch": "Нет команд по запросу «{query}».",
   "switcher.noCommands": "Команд пока нет. Добавьте их в разделе «Команды» проекта.",
+  "switcher.goToProject": "Перейти к проекту",
+  "switcher.noLinkMatch": "Нет ссылок по запросу «{query}».",
+  "switcher.noLinks": "Ссылок пока нет. Добавьте их в разделе «Ссылки» проекта.",
 
   "window.filters": "Фильтры",
   "window.filter.all": "Все проекты",

@@ -9,10 +9,10 @@ import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Marquee from "../components/Marquee.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
-import { claudeState, gitLine, meta, uptime } from "../lib/format";
+import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
 import { t } from "../lib/i18n";
 import { api, now, snapshot } from "../lib/store";
-import type { CommandView, Folder, Project } from "../lib/types";
+import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
 
 const WIDTH = 640;
 const MAX_HEIGHT = 540;
@@ -20,15 +20,19 @@ const MAX_HEIGHT = 540;
 type Match = { project: Project; score: number; hits: Set<number> };
 type FolderMatch = { folder: Folder; score: number; hits: Set<number> };
 type CommandMatch = { project: Project; command: CommandView; score: number; hits: Set<number> };
+type LinkMatch = { project: Project; link: ProjectLink; score: number; hits: Set<number> };
 
-/** One row of the list: a project, a project's command, or a folder from the projects folder. */
+/** One row of the list: a project, a project's command or link, or a folder from the projects folder. */
 type Item =
   | { kind: "project"; key: string; project: Project; hits: Set<number> }
   | { kind: "command"; key: string; project: Project; command: CommandView; hits: Set<number> }
+  | { kind: "link"; key: string; project: Project; link: ProjectLink; hits: Set<number> }
   | { kind: "folder"; key: string; folder: Folder; hits: Set<number> };
 
 /** Commands shown under the projects while typing; `>` lists them all. */
 const MIXED_COMMANDS = 6;
+/** Links shown under them; `@` lists them all. */
+const MIXED_LINKS = 4;
 
 const query = ref("");
 const index = ref(0);
@@ -128,10 +132,12 @@ const folderMatches = computed<FolderMatch[]>(() => {
   return found.sort((a, b) => b.score - a.score).slice(0, 50);
 });
 
-/** `>` at the start lists only commands, as in VS Code's command palette. */
+/** `>` at the start lists only commands, as in VS Code's command palette; `@` only links. */
 const commandMode = computed(() => query.value.trimStart().startsWith(">"));
-const needle = computed(() => (commandMode.value ? query.value.trimStart().slice(1) : query.value).trim().toLowerCase());
+const linkMode = computed(() => query.value.trimStart().startsWith("@"));
+const needle = computed(() => (commandMode.value || linkMode.value ? query.value.trimStart().slice(1) : query.value).trim().toLowerCase());
 const anyCommands = computed(() => (snapshot.value?.projects ?? []).some((p) => p.commands.length));
+const anyLinks = computed(() => (snapshot.value?.projects ?? []).some((p) => p.settings.links?.length));
 
 /**
  * Every project's commands that match: by the command's name, by project and name together
@@ -140,7 +146,7 @@ const anyCommands = computed(() => (snapshot.value?.projects ?? []).some((p) => 
  */
 const commandMatches = computed<CommandMatch[]>(() => {
   const q = needle.value;
-  if (!commandMode.value && !q) return [];
+  if (linkMode.value || (!commandMode.value && !q)) return [];
 
   const found: CommandMatch[] = [];
 
@@ -166,13 +172,47 @@ const commandMatches = computed<CommandMatch[]>(() => {
   return commandMode.value ? found : found.slice(0, MIXED_COMMANDS);
 });
 
-/** What the list shows: with `>` commands only; else projects, then matching commands; else folders. */
+/**
+ * Every project's links that match: by the link's name, by project and name together
+ * ("tel stag"), or by the address. With `@` and nothing typed, all of them in list order.
+ */
+const linkMatches = computed<LinkMatch[]>(() => {
+  const q = needle.value;
+  if (commandMode.value || (!linkMode.value && !q)) return [];
+
+  const found: LinkMatch[] = [];
+
+  (snapshot.value?.projects ?? []).forEach((project, order) => {
+    (project.settings.links ?? []).forEach((link, at) => {
+      if (!q) {
+        found.push({ project, link, score: -(order * 1000 + at), hits: new Set() });
+        return;
+      }
+
+      const byName = fuzzy(link.name, q);
+      const byBoth = fuzzy(`${project.name} ${link.name}`, q);
+      const byUrl = fuzzy(bareUrl(link.url), q);
+      const best = Math.max(byName?.score ?? -Infinity, (byBoth?.score ?? -Infinity) * 0.8, (byUrl?.score ?? -Infinity) * 0.5);
+
+      if (best > -Infinity) found.push({ project, link, score: best, hits: new Set(byName?.hits ?? []) });
+    });
+  });
+
+  found.sort((a, b) => b.score - a.score);
+  return linkMode.value ? found : found.slice(0, MIXED_LINKS);
+});
+
+/** What the list shows: with `>` commands only, with `@` links only; else projects, then matching
+ * commands and links; else folders. */
 const items = computed<Item[]>(() => {
   const commands: Item[] = commandMatches.value.map(({ project, command, hits }) => ({ kind: "command", key: `c:${project.path}:${command.id}`, project, command, hits }));
   if (commandMode.value) return commands;
 
+  const links: Item[] = linkMatches.value.map(({ project, link, hits }, at) => ({ kind: "link", key: `l:${project.path}:${at}:${link.url}`, project, link, hits }));
+  if (linkMode.value) return links;
+
   const projects: Item[] = matches.value.map(({ project, hits }) => ({ kind: "project", key: `p:${project.path}`, project, hits }));
-  if (projects.length || commands.length) return [...projects, ...commands];
+  if (projects.length || commands.length || links.length) return [...projects, ...commands, ...links];
 
   return folderMatches.value.map(({ folder, hits }) => ({ kind: "folder", key: `f:${folder.path}`, folder, hits }));
 });
@@ -252,10 +292,26 @@ function runCommand(item: Extract<Item, { kind: "command" }>, show: boolean): vo
   else void api.hideSwitcher();
 }
 
+/** Pitwall's window, on the project. */
+function showProject(path: string): void {
+  void emitTo("main", "reveal-project", { path });
+  void api.openWindow();
+}
+
+/** A link: ↵ opens it (its tab comes forward if open) and the switcher goes; ⌘↵ shows its project in Pitwall's window. */
+function openLink(item: Extract<Item, { kind: "link" }>, show: boolean): void {
+  if (show) showProject(item.project.path);
+  else {
+    conceal();
+    void api.openUrl(item.link.url);
+  }
+}
+
 /** A click does what ↵ does. */
 function pick(item: Item): void {
   if (item.kind === "project") open(item.project);
   else if (item.kind === "command") runCommand(item, false);
+  else if (item.kind === "link") openLink(item, false);
   else openFolder(item.folder, false);
 }
 
@@ -279,8 +335,14 @@ function onKey(event: KeyboardEvent): void {
     if (!item) return;
     if (item.kind === "folder") openFolder(item.folder, event.metaKey);
     else if (item.kind === "command") runCommand(item, event.metaKey);
+    else if (item.kind === "link") openLink(item, event.metaKey);
     else if (event.metaKey) toggle(item.project);
     else open(item.project);
+  } else if (event.metaKey && event.code === "KeyC" && current.value?.kind === "link" && !hasSelection()) {
+    // ⌘C on a link copies its address (text selected in the search box copies as usual).
+    event.preventDefault();
+    void api.copyText(current.value.link.url);
+    void api.hideSwitcher();
   } else if (event.metaKey && event.key.toLowerCase() === "b" && selected.value) {
     // The browser takes focus; the switcher goes as it opens.
     event.preventDefault();
@@ -291,6 +353,11 @@ function onKey(event: KeyboardEvent): void {
     event.preventDefault();
     void api.openWindow();
   }
+}
+
+function hasSelection(): boolean {
+  const el = input.value;
+  return !!el && el.selectionStart !== el.selectionEnd;
 }
 
 async function fitWindow(): Promise<void> {
@@ -357,11 +424,21 @@ onBeforeUnmount(() => {
       <kbd class="esc">esc</kbd>
     </div>
 
-    <ul v-if="items.length" id="results" ref="list" class="list" role="listbox" :aria-label="t(commandMode ? 'common.commands' : 'common.projects')">
+    <ul
+      v-if="items.length"
+      id="results"
+      ref="list"
+      class="list"
+      role="listbox"
+      :aria-label="t(commandMode ? 'common.commands' : linkMode ? 'common.links' : 'common.projects')"
+    >
       <template v-for="(item, i) in items" :key="item.key">
         <!-- Under the projects, the commands that match get their own heading. -->
         <li v-if="item.kind === 'command' && !commandMode && i > 0 && items[i - 1].kind !== 'command'" class="group" role="presentation">
           {{ t("common.commands") }}
+        </li>
+        <li v-if="item.kind === 'link' && !linkMode && i > 0 && items[i - 1].kind !== 'link'" class="group" role="presentation">
+          {{ t("common.links") }}
         </li>
         <li :class="['row', { on: i === index }]" role="option" :aria-selected="i === index" @mousemove="index = i" @click="pick(item)">
           <template v-if="item.kind === 'project'">
@@ -393,6 +470,17 @@ onBeforeUnmount(() => {
             <span v-if="item.command.status === 'running'" class="uptime">{{ uptime(item.command.startedAt, now) }}</span>
           </template>
 
+          <template v-else-if="item.kind === 'link'">
+            <span class="folder-icon"><Icon name="link" :size="16" /></span>
+            <div class="text">
+              <div class="name">
+                <span class="link-project">{{ item.project.name }} › </span>
+                <span v-for="(seg, j) in segments(item.link.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+              </div>
+              <div class="meta"><Marquee :text="bareUrl(item.link.url)" /></div>
+            </div>
+          </template>
+
           <template v-else>
             <span class="folder-icon"><Icon name="folder" :size="16" /></span>
             <div class="text">
@@ -411,6 +499,8 @@ onBeforeUnmount(() => {
     <div v-else class="empty">
       <template v-if="commandMode && needle">{{ t("switcher.noCommandMatch", { query: needle }) }}</template>
       <template v-else-if="commandMode">{{ t("switcher.noCommands") }}</template>
+      <template v-else-if="linkMode && needle">{{ t("switcher.noLinkMatch", { query: needle }) }}</template>
+      <template v-else-if="linkMode">{{ t("switcher.noLinks") }}</template>
       <template v-else-if="query.trim() && projectsDir">{{ t("switcher.noMatchAnywhere", { folder: dirName, query }) }}</template>
       <template v-else-if="query.trim()">
         {{ t("switcher.noMatch", { query }) }}
@@ -431,11 +521,19 @@ onBeforeUnmount(() => {
       <span class="grow"></span>
       <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
+    <footer v-else-if="current?.kind === 'link'" class="foot">
+      <span><kbd>↵</kbd> {{ t("common.openInBrowser") }}</span>
+      <span><kbd>⌘C</kbd> {{ t("link.copyAddress") }}</span>
+      <span><kbd>⌘↵</kbd> {{ t("switcher.goToProject") }}</span>
+      <span class="grow"></span>
+      <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
+    </footer>
     <footer v-else class="foot">
       <span><kbd>↵</kbd> {{ t(selected?.claude ? "switcher.openMarkSeen" : "common.openInEditor") }}</span>
       <span><kbd>⌘↵</kbd> {{ t(selected?.status === "running" ? "common.stop" : "common.start") }}</span>
       <span><kbd>⌘B</kbd> {{ t("switcher.browser") }}</span>
       <span v-if="anyCommands"><kbd>&gt;</kbd> {{ t("common.commands") }}</span>
+      <span v-if="anyLinks"><kbd>@</kbd> {{ t("common.links") }}</span>
       <span class="grow"></span>
       <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
@@ -628,6 +726,12 @@ kbd {
   display: inline-flex;
   justify-content: center;
   flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* A link's project before its name, quieter. */
+.link-project {
+  font-weight: 400;
   color: var(--text-muted);
 }
 

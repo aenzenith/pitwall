@@ -90,6 +90,9 @@
   "switcher.confirmAgain": "再按 ↵ 运行 {name}",
   "switcher.noCommandMatch": "没有与“{query}”匹配的命令。",
   "switcher.noCommands": "还没有命令。可在项目的“命令”中添加。",
+  "switcher.goToProject": "前往项目",
+  "switcher.noLinkMatch": "没有与“{query}”匹配的链接。",
+  "switcher.noLinks": "还没有链接。可在项目的“链接”中添加。",
 
   "window.filters": "筛选",
   "window.filter.all": "所有项目",

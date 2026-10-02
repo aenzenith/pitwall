@@ -88,21 +88,28 @@ function onKey(event: KeyboardEvent): void {
 }
 
 let unlistenReveal: UnlistenFn | null = null;
+let unlistenProject: UnlistenFn | null = null;
 
-/** From the switcher (⌘↵ on a command): select the project, even if a filter or search hid it. */
-function revealOutput(path: string, job: string): void {
+/** From the switcher (⌘↵ on a link): select the project, even if a filter or search hid it. */
+function revealProject(path: string): void {
   view.value = "projects";
   if (!rows.value.some((p) => p.path === path)) {
     filter.value = "all";
     query.value = "";
   }
   selectedPath.value = path;
+}
+
+/** From the switcher (⌘↵ on a command): the project, with that command's output showing. */
+function revealOutput(path: string, job: string): void {
+  revealProject(path);
   outputRequest.value = { path, job };
 }
 
 onMounted(async () => {
   window.addEventListener("keydown", onKey);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
+  unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
   const win = getCurrentWindow();
   const check = async (): Promise<void> => {
     fullscreen.value = await win.isFullscreen();
@@ -114,6 +121,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   unlistenReveal?.();
+  unlistenProject?.();
   unlistenResize?.();
 });
 

@@ -90,6 +90,9 @@
   "switcher.confirmAgain": "{name} için tekrar ↵ bas",
   "switcher.noCommandMatch": "“{query}” ile eşleşen komut yok.",
   "switcher.noCommands": "Henüz komut yok. Bir projenin Komutlar bölümünden ekleyebilirsin.",
+  "switcher.goToProject": "Projeye git",
+  "switcher.noLinkMatch": "“{query}” ile eşleşen bağlantı yok.",
+  "switcher.noLinks": "Henüz bağlantı yok. Bir projenin Bağlantılar bölümünden ekleyebilirsin.",
 
   "window.filters": "Filtreler",
   "window.filter.all": "Tüm projeler",

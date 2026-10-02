@@ -90,6 +90,9 @@
   "switcher.confirmAgain": "{name}を実行するにはもう一度↵を押す",
   "switcher.noCommandMatch": "「{query}」に一致するコマンドはありません。",
   "switcher.noCommands": "コマンドはまだありません。プロジェクトの「コマンド」から追加できます。",
+  "switcher.goToProject": "プロジェクトへ移動",
+  "switcher.noLinkMatch": "「{query}」に一致するリンクはありません。",
+  "switcher.noLinks": "リンクはまだありません。プロジェクトの「リンク」から追加できます。",
 
   "window.filters": "フィルタ",
   "window.filter.all": "すべてのプロジェクト",

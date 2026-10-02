@@ -90,6 +90,9 @@
   "switcher.confirmAgain": "Zum Ausführen von {name} erneut ↵ drücken",
   "switcher.noCommandMatch": "Kein Befehl passt zu „{query}“.",
   "switcher.noCommands": "Noch keine Befehle. Füge sie unter „Befehle“ in einem Projekt hinzu.",
+  "switcher.goToProject": "Zum Projekt",
+  "switcher.noLinkMatch": "Kein Link passt zu „{query}“.",
+  "switcher.noLinks": "Noch keine Links. Füge sie unter „Links“ in einem Projekt hinzu.",
 
   "window.filters": "Filter",
   "window.filter.all": "Alle Projekte",

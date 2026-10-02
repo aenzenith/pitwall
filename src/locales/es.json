@@ -90,6 +90,9 @@
   "switcher.confirmAgain": "Pulsa ↵ otra vez para ejecutar {name}",
   "switcher.noCommandMatch": "Ningún comando coincide con «{query}».",
   "switcher.noCommands": "Aún no hay comandos. Añádelos en Comandos de un proyecto.",
+  "switcher.goToProject": "Ir al proyecto",
+  "switcher.noLinkMatch": "Ningún enlace coincide con «{query}».",
+  "switcher.noLinks": "Aún no hay enlaces. Añádelos en Enlaces de un proyecto.",
 
   "window.filters": "Filtros",
   "window.filter.all": "Todos los proyectos",
