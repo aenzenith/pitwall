@@ -63,6 +63,8 @@ export const api = {
   openWindow: () => invoke("open_window"),
   hidePopover: () => invoke("hide_popover"),
   hideSwitcher: () => invoke("hide_switcher"),
+  /** The page is listening: a window made on first use comes up. */
+  windowReady: () => invoke("window_ready"),
   installClaudeHook: () => invoke("install_claude_hook"),
   uninstallClaudeHook: () => invoke("uninstall_claude_hook"),
   openLink: (link: "site" | "coffee") => invoke("open_link", { link }),

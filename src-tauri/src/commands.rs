@@ -302,6 +302,12 @@ pub fn open_window(app: AppHandle) {
     tray::show_main(&app);
 }
 
+/// A window's page is up and listening; a window made on first use comes up now.
+#[tauri::command]
+pub fn window_ready(window: tauri::WebviewWindow) {
+    crate::windows::ready(window.app_handle(), window.label());
+}
+
 /// Esc in the popover: close it and go back to the app from before.
 #[tauri::command]
 pub fn hide_popover(app: AppHandle) {
@@ -326,7 +332,7 @@ fn step_aside(app: &AppHandle) {
                 if wait {
                     tray::hide_once_focus_moves(window, std::time::Duration::from_millis(1500));
                 } else {
-                    let _ = window.hide();
+                    let _ = crate::windows::hide(&window);
                 }
             }
         }

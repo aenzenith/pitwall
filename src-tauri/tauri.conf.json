@@ -28,6 +28,7 @@
       },
       {
         "label": "main",
+        "create": false,
         "title": "Pitwall",
         "width": 1280,
         "height": 800,
@@ -40,6 +41,7 @@
       },
       {
         "label": "switcher",
+        "create": false,
         "title": "Pitwall",
         "width": 640,
         "height": 420,

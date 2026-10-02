@@ -396,6 +396,8 @@ onMounted(async () => {
   void fitWindow();
   void loadFolders();
   input.value?.focus();
+  // Listening for `switcher-opened` now: on its first opening the window comes up with this.
+  void api.windowReady();
 });
 
 onBeforeUnmount(() => {

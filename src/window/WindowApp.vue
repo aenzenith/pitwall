@@ -110,6 +110,8 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
   unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
+  // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
+  void api.windowReady();
   const win = getCurrentWindow();
   const check = async (): Promise<void> => {
     fullscreen.value = await win.isFullscreen();

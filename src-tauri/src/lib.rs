@@ -16,6 +16,7 @@ mod resolve;
 mod settings;
 mod sound;
 mod tray;
+mod windows;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -239,17 +240,12 @@ pub fn run() {
             let settings = core.settings();
             let _ = apply_shortcut(app.handle(), settings.shortcut, &settings.shortcut_keys);
             tray::create(app.handle())?;
+            // The main window and the switcher are made on first use (`windows`).
             #[cfg(target_os = "macos")]
-            {
-                if let Some(switcher) = app.get_webview_window(SWITCHER) {
-                    tray::make_panel(&switcher);
-                }
-                for label in [POPOVER, SWITCHER] {
-                    if let Some(window) = app.get_webview_window(label) {
-                        tray::float_over_spaces(&window);
-                    }
-                }
+            if let Some(popover) = app.get_webview_window(POPOVER) {
+                tray::float_over_spaces(&popover);
             }
+            windows::setup(app.handle());
 
             // One loop for everything periodic: commands every second, heartbeat and Claude every
             // 5 s, health every 30 s.
@@ -278,13 +274,14 @@ pub fn run() {
                 eprintln!("[pitwall] switcher focused={_focused}");
                 if !_focused {
                     let _ = window.hide();
+                    windows::tell(window.app_handle(), SWITCHER, false);
                 }
             }
             // Nor does it stay up behind Pitwall's window once that window has the keyboard.
             WindowEvent::Focused(true) if window.label() == MAIN => {
                 if let Some(switcher) = window.app_handle().get_webview_window(SWITCHER) {
                     if switcher.is_visible().unwrap_or(false) {
-                        let _ = switcher.hide();
+                        let _ = windows::hide(&switcher);
                     }
                 }
             }
@@ -292,6 +289,7 @@ pub fn run() {
             WindowEvent::CloseRequested { api, .. } if window.label() == MAIN => {
                 api.prevent_close();
                 let _ = window.hide();
+                windows::tell(window.app_handle(), MAIN, false);
                 tray::set_dock_visible(window.app_handle(), false);
             }
             // Folders dropped on the window become projects.
@@ -347,6 +345,7 @@ pub fn run() {
             commands::open_window,
             commands::hide_popover,
             commands::hide_switcher,
+            commands::window_ready,
             commands::install_claude_hook,
             commands::uninstall_claude_hook,
             commands::open_link,

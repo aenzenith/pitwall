@@ -11,7 +11,7 @@ use tauri_plugin_positioner::{Position, WindowExt};
 
 use crate::core::Snapshot;
 use crate::i18n::t;
-use crate::{AppState, MAIN, POPOVER, SWITCHER};
+use crate::{windows, AppState, MAIN, POPOVER, SWITCHER};
 
 const TRAY_ID: &str = "pitwall";
 
@@ -78,7 +78,7 @@ pub fn hide_once_focus_moves<R: Runtime>(window: WebviewWindow<R>, wait: Duratio
     std::thread::spawn(move || {
         std::thread::sleep(wait);
         if window.is_visible().unwrap_or(false) {
-            let _ = window.hide();
+            let _ = windows::hide(&window);
         }
     });
 }
@@ -91,7 +91,7 @@ pub fn dismiss_switcher<R: Runtime>(app: &AppHandle<R>) {
             if hand_back_focus() {
                 hide_once_focus_moves(switcher, Duration::from_millis(300));
             } else {
-                let _ = switcher.hide();
+                let _ = windows::hide(&switcher);
             }
         }
     }
@@ -158,7 +158,7 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
     }
 
     note_front_app(app);
-    let _ = popover.show();
+    let _ = windows::show(&popover);
     let _ = popover.set_focus();
 
     if let Some(state) = app.try_state::<AppState>() {
@@ -169,7 +169,7 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
 pub fn hide_popover<R: Runtime>(app: &AppHandle<R>) {
     if let Some(popover) = app.get_webview_window(POPOVER) {
         if popover.is_visible().unwrap_or(false) {
-            let _ = popover.hide();
+            let _ = windows::hide(&popover);
             if let Ok(mut at) = LAST_HIDE.lock() {
                 *at = Some(Instant::now());
             }
@@ -179,12 +179,8 @@ pub fn hide_popover<R: Runtime>(app: &AppHandle<R>) {
 
 /// The quick switcher: a centred palette for jumping to a project from the keyboard.
 pub fn toggle_switcher<R: Runtime>(app: &AppHandle<R>) {
-    let Some(switcher) = app.get_webview_window(SWITCHER) else {
-        return;
-    };
-
     // The shortcut toggles: pressed again, it closes and hands focus back.
-    if switcher.is_visible().unwrap_or(false) {
+    if app.get_webview_window(SWITCHER).is_some_and(|switcher| switcher.is_visible().unwrap_or(false)) {
         dismiss_switcher(app);
         return;
     }
@@ -196,12 +192,22 @@ pub fn toggle_switcher<R: Runtime>(app: &AppHandle<R>) {
         PREVIOUS_APP.store(0, std::sync::atomic::Ordering::SeqCst);
     }
 
+    // Made on first use; it comes up once its page listens for `switcher-opened`.
+    windows::open(app, SWITCHER);
+}
+
+/// Puts the switcher up on the screen the pointer is on, with the keyboard.
+pub fn present_switcher<R: Runtime>(app: &AppHandle<R>) {
+    let Some(switcher) = app.get_webview_window(SWITCHER) else {
+        return;
+    };
+
     // The popover, if open, steps aside by itself once the switcher has the keyboard (its blur
     // hides it); hiding it first would hand the keyboard to Pitwall's window for a moment.
     if !center_on_pointer(app, &switcher) {
         let _ = switcher.move_window(Position::Center);
     }
-    let shown = switcher.show();
+    let shown = windows::show(&switcher);
     focus_alone(&switcher);
     #[cfg(debug_assertions)]
     eprintln!("[pitwall] switcher show={shown:?}");
@@ -331,12 +337,20 @@ fn center_on_pointer<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) 
 }
 
 /// Shows the main window. The Dock icon appears while it is open, like any other app window.
+/// Made on first use, it comes up once its page is ready; the Dock icon comes at once.
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     hide_popover(app);
 
-    if let Some(main) = app.get_webview_window(MAIN) {
+    if windows::get_or_create(app, MAIN).is_some() {
         set_dock_visible(app, true);
-        let _ = main.show();
+        windows::open(app, MAIN);
+    }
+}
+
+/// Puts the main window up, in front, with the keyboard.
+pub fn present_main<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(main) = app.get_webview_window(MAIN) {
+        let _ = windows::show(&main);
         let _ = main.unminimize();
         let _ = main.set_focus();
     }
