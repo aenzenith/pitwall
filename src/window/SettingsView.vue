@@ -2,7 +2,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 
-import ClaudeMark from "../components/ClaudeMark.vue";
+import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Rich from "../components/Rich.vue";
@@ -314,7 +314,7 @@ async function save(): Promise<void> {
           @keydown="onRailKey($event, section.id)"
         >
           <span class="tab-icon">
-            <ClaudeMark v-if="section.icon === 'claude'" :size="14" color="currentColor" />
+            <ClaudeLogo v-if="section.icon === 'claude'" :size="14" color="currentColor" />
             <Icon v-else :name="section.icon" :size="15" />
           </span>
           {{ t(section.label) }}

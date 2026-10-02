@@ -139,7 +139,7 @@ pub fn copy_text(app: &AppHandle, text: String) {
     let _ = app.clipboard().write_text(text);
 }
 
-/// Claude's spark beside the notification text. The APIs take a file, so the bundled image is
+/// Claude's mark (components/ClaudeLogo) beside the notification text. The APIs take a file, so the bundled image is
 /// written to the cache folder (again when it changed).
 fn claude_mark(app: &AppHandle) -> Option<String> {
     const MARK: &[u8] = include_bytes!("../icons/claude-mark.png");

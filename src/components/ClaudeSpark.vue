@@ -3,7 +3,7 @@
 // (with `lock`, a permission prompt: a lock in place of the spark); working, a line running round
 // the square's edge; quiet, dimmed. The project details' Claude card and the session details
 // show it.
-import ClaudeMark from "./ClaudeMark.vue";
+import ClaudeLogo from "./ClaudeLogo.vue";
 import Icon from "./Icon.vue";
 
 withDefaults(defineProps<{ state: "waiting" | "working" | "quiet"; lock?: boolean }>(), { lock: false });
@@ -29,7 +29,7 @@ const traceLines = Array.from({ length: TRACE_STEPS }, (_, i) => {
 <template>
   <span :class="['spark', state]" aria-hidden="true">
     <Icon v-if="lock && state === 'waiting'" name="lock" :size="16" class="lock" />
-    <ClaudeMark v-else :size="18" :color="state === 'waiting' ? '#fff7f0' : undefined" />
+    <ClaudeLogo v-else :size="18" :color="state === 'waiting' ? '#fff7f0' : undefined" />
     <svg v-if="state === 'working'" class="trace" viewBox="0 0 30 30">
       <rect v-for="(line, i) in traceLines" :key="i" x="0.75" y="0.75" width="28.5" height="28.5" rx="7.25" :style="line" />
     </svg>

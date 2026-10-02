@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Claude's symbol as Anthropic draws it, filled (from Wikimedia Commons' Claude_AI_symbol.svg).
-// ClaudeMark is the app's own stroked spark for small states; this is the brand mark itself.
+// Claude's symbol as Anthropic draws it, filled (from Wikimedia Commons' Claude_AI_symbol.svg),
+// marking whatever belongs to Claude. The same mark is drawn into src-tauri/icons/claude-mark.png
+// for notifications.
 withDefaults(defineProps<{ size?: number; color?: string }>(), { size: 16, color: "#d97757" });
 </script>
 

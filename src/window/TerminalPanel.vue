@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-import ClaudeMark from "../components/ClaudeMark.vue";
+import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import { t } from "../lib/i18n";
 import { keys, TERMINAL_MOD } from "../lib/platform";
@@ -282,7 +282,7 @@ defineExpose({ openTerminal });
             aria-describedby="terminal-tab-keys"
             @keydown="onTabKey($event, term.id)"
           >
-            <ClaudeMark v-if="term.kind === 'claude'" :size="11" />
+            <ClaudeLogo v-if="term.kind === 'claude'" :size="11" />
             <Icon v-else name="terminal" :size="11" />
             <span>{{ term.name }}</span>
           </div>
@@ -303,7 +303,7 @@ defineExpose({ openTerminal });
         <Icon name="plus" :size="13" /> {{ t("terminal.newTab") }}
       </button>
       <button type="button" class="action" :title="t('terminal.newClaudeTitle')" :disabled="opening" @click="openTerminal(true)">
-        <ClaudeMark :size="12" /> {{ t("terminal.newClaude") }}
+        <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
       </button>
       <button
         type="button"

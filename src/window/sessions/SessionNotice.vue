@@ -1,14 +1,18 @@
 <script setup lang="ts">
+import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
 
 /** What the page can't show or do, and why: a tag, a title, what it means; a button in the
  * `action` slot. `compact` for the session details' narrower column. */
-withDefaults(defineProps<{ tag: string; title: string; icon?: "spark" | "info" | "lock"; compact?: boolean }>(), { icon: "spark", compact: false });
+withDefaults(defineProps<{ tag: string; title: string; icon?: "claude" | "info" | "lock"; compact?: boolean }>(), { icon: "claude", compact: false });
 </script>
 
 <template>
   <section :class="['notice', { compact }]" role="note" :aria-label="title">
-    <span class="badge"><Icon :name="icon" :size="compact ? 14 : 15" /></span>
+    <span class="badge">
+      <ClaudeLogo v-if="icon === 'claude'" :size="compact ? 14 : 15" color="currentColor" />
+      <Icon v-else :name="icon" :size="compact ? 14 : 15" />
+    </span>
     <div class="text">
       <span class="section-label">{{ tag }}</span>
       <span class="title">{{ title }}</span>
