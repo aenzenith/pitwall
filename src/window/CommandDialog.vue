@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import Rich from "../components/Rich.vue";
+import { useBackdropClose } from "../lib/dialog";
 import { t } from "../lib/i18n";
 import type { CustomCommand } from "../lib/types";
 
@@ -10,6 +11,7 @@ const props = defineProps<{ command: CustomCommand | null; running?: boolean; pr
 const emit = defineEmits<{ save: [command: CustomCommand]; close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
+const backdrop = useBackdropClose(dialog);
 const nameInput = ref<HTMLInputElement | null>(null);
 const draft = ref<CustomCommand>(props.command ? { ...props.command } : { id: "", name: "", command: "", keepRunning: false, confirm: false, withServer: false });
 const error = ref("");
@@ -32,14 +34,14 @@ function submit(): void {
   emit("save", { ...draft.value, name, command });
 }
 
-/** Esc and Cancel both end here, through the dialog's own close event. */
+/** Esc, Cancel and a click outside all end here, through the dialog's own close event. */
 function cancel(): void {
   dialog.value?.close();
 }
 </script>
 
 <template>
-  <dialog ref="dialog" class="dialog" :aria-label="title" @close="emit('close')">
+  <dialog ref="dialog" class="dialog" :aria-label="title" @close="emit('close')" @pointerdown="backdrop.down" @click="backdrop.click">
     <form class="body" @submit.prevent="submit">
       <div class="head">
         <div class="title">{{ title }}</div>

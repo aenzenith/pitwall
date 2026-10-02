@@ -5,6 +5,7 @@ import { onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Rich from "../components/Rich.vue";
+import { useBackdropClose } from "../lib/dialog";
 import { shortcutLabel } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { api, snapshot } from "../lib/store";
@@ -22,6 +23,7 @@ const tabs: Array<{ id: Tab; label: Key }> = [
 ];
 
 const dialog = ref<HTMLDialogElement | null>(null);
+const backdrop = useBackdropClose(dialog);
 const tab = ref<Tab>("general");
 const version = ref("");
 const form = reactive<Settings>({
@@ -163,7 +165,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <dialog ref="dialog" class="settings" :aria-label="t('common.settings')" @cancel="onCancel" @close="emit('close')">
+  <dialog ref="dialog" class="settings" :aria-label="t('common.settings')" @cancel="onCancel" @close="emit('close')" @pointerdown="backdrop.down" @click="backdrop.click">
     <div class="head">
       <div class="heading">{{ t("common.settings") }}</div>
       <button type="button" class="close" :aria-label="t('settings.close')" :title="t('common.close')" @click="dialog?.close()">

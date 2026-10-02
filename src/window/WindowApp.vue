@@ -20,11 +20,11 @@ import SettingsView from "./SettingsView.vue";
 
 type Filter = "all" | "running" | "favourites" | "waiting";
 
-const filters: Array<{ id: Filter; label: Key; test: (p: Project) => boolean }> = [
-  { id: "all", label: "window.filter.all", test: () => true },
-  { id: "running", label: "window.filter.running", test: (p) => p.status === "running" },
-  { id: "favourites", label: "window.filter.favourites", test: (p) => p.favourite },
-  { id: "waiting", label: "window.filter.waiting", test: (p) => p.claude !== null },
+const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "star" | "chat"; test: (p: Project) => boolean }> = [
+  { id: "all", label: "window.filter.all", icon: "grid", test: () => true },
+  { id: "running", label: "window.filter.running", icon: "pulse", test: (p) => p.status === "running" },
+  { id: "favourites", label: "window.filter.favourites", icon: "star", test: (p) => p.favourite },
+  { id: "waiting", label: "window.filter.waiting", icon: "chat", test: (p) => p.claude !== null },
 ];
 
 const filter = ref<Filter>("all");
@@ -133,7 +133,7 @@ function server(project: Project): string {
           :class="{ on: filter === f.id }"
           @click="pick(f.id)"
         >
-          {{ t(f.label) }}
+          <Icon :name="f.icon" /> {{ t(f.label) }}
           <span :class="['count', { hot: f.id === 'waiting' && count(f.id) > 0 }]">{{ count(f.id) }}</span>
         </button>
       </nav>
@@ -309,11 +309,12 @@ function server(project: Project): string {
 }
 
 .count.hot {
-  padding: 1px 7px;
-  border-radius: 9px;
-  background: var(--claude);
-  color: #0c0d10;
-  font-weight: 600;
+  color: var(--claude);
+  font-weight: 700;
+}
+
+.today {
+  margin-top: 12px;
 }
 
 .grow {
