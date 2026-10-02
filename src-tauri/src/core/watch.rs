@@ -104,8 +104,15 @@ fn git_dirs(project: &str) -> Vec<(PathBuf, RecursiveMode)> {
     }
 }
 
+/// A watched folder as its events name it: FSEvents (macOS) reports resolved paths
+/// (`/private/var/…` for `/var/…`), the watchers of Linux and Windows the path as it was given
+/// (resolving it there would add `\\?\` on Windows, and no event would match).
 fn canonical(path: &Path) -> PathBuf {
-    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    if cfg!(target_os = "macos") {
+        fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    } else {
+        path.to_path_buf()
+    }
 }
 
 impl Core {

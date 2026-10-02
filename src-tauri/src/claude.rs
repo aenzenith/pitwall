@@ -14,7 +14,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::registry::{now_ms, write_atomic};
+use crate::registry::{base36, now_ms, path_key, same_path, write_atomic};
 
 const ASKING_TOOLS: [&str; 2] = ["AskUserQuestion", "ExitPlanMode"];
 const TAIL_START: u64 = 64 * 1024;
@@ -73,6 +73,14 @@ pub struct SeenBook {
     /// The first run; older turns count as seen.
     pub since: u64,
     pub paths: HashMap<String, u64>,
+}
+
+impl SeenBook {
+    /// When the project was last looked at, under whichever spelling of its path (on Windows
+    /// the extension writes `c:\…`, the app `C:\…`); the latest look counts.
+    fn seen(&self, folder_path: &str) -> Option<u64> {
+        self.paths.iter().filter(|(path, _)| same_path(path, folder_path)).map(|(_, at)| *at).max()
+    }
 }
 
 /// Both sides write the book: keep the larger timestamp per project and the earlier start, so
@@ -196,18 +204,27 @@ pub fn read_title(lines: &[&str]) -> Option<String> {
     generated
 }
 
-/// Claude Code's folder name for a project: every non-alphanumeric character becomes `-`.
+/// Claude Code's folder name for a project, as Claude Code makes it: every UTF-16 unit that isn't
+/// an ASCII letter or digit becomes `-` (`C:\Users\me\proj` is `C--Users-me-proj`). A name
+/// longer than 200 is cut there and gets the path's hash, in base 36, after a `-`.
 pub fn encode_project_path(folder_path: &str) -> String {
-    folder_path.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+    const MAX: usize = 200;
+    let name: String = folder_path
+        .encode_utf16()
+        .map(|unit| char::from_u32(u32::from(unit)).filter(char::is_ascii_alphanumeric).unwrap_or('-'))
+        .collect();
+
+    if name.len() <= MAX {
+        return name;
+    }
+    format!("{}-{}", &name[..MAX], base36(path_hash(folder_path)))
 }
 
-/// Paths are case-insensitive on Windows, where VS Code lowercases the drive letter.
-fn fold_case(value: &str) -> String {
-    if cfg!(windows) {
-        value.to_lowercase()
-    } else {
-        value.to_string()
-    }
+/// Claude Code's hash of a path: `hash * 31 + unit` over its UTF-16 units in 32 bits, made
+/// positive.
+fn path_hash(folder_path: &str) -> u64 {
+    let hash = folder_path.encode_utf16().fold(0i32, |hash, unit| (hash << 5).wrapping_sub(hash).wrapping_add(i32::from(unit)));
+    i64::from(hash).unsigned_abs()
 }
 
 /// Reads from the end of the file, growing the window until a line decides. A single tool
@@ -473,19 +490,21 @@ fn modified_ms(path: &Path) -> Option<u64> {
     Some(system_ms(fs::metadata(path).ok()?.modified().ok()?))
 }
 
+/// `cwd` is the project's folder or under it; on Windows in any letter case and with either
+/// separator (see `path_key`).
 fn inside(cwd: &str, folder_path: &str) -> bool {
-    let cwd = fold_case(cwd);
-    let folder = fold_case(folder_path);
-    cwd == folder || cwd.starts_with(&format!("{folder}{MAIN_SEPARATOR}"))
+    let cwd = path_key(cwd);
+    let folder = path_key(folder_path);
+    *cwd == *folder || cwd.starts_with(&format!("{folder}{MAIN_SEPARATOR}"))
 }
 
 /// Whether a folder under `~/.claude/projects` holds a project's sessions: `Some(true)` for its
 /// own folder, `Some(false)` for a subfolder's (`<project>-sub`, which a neighbour such as
 /// `pitwall-docs` also looks like; the session's cwd tells them apart).
 fn dir_match(dir: &str, encoded: &str) -> Option<bool> {
-    let name = fold_case(dir);
+    let name = path_key(dir);
 
-    if name == encoded {
+    if *name == *encoded {
         Some(true)
     } else if name.starts_with(&format!("{encoded}-")) {
         Some(false)
@@ -636,8 +655,8 @@ impl ClaudeWatch {
         let mut wanted: HashMap<String, u64> = HashMap::new();
 
         for folder_path in &self.listed {
-            let since = book.paths.get(folder_path).copied().unwrap_or(book.since).min(recent);
-            let encoded = fold_case(&encode_project_path(folder_path));
+            let since = book.seen(folder_path).unwrap_or(book.since).min(recent);
+            let encoded = path_key(&encode_project_path(folder_path)).into_owned();
 
             for dir in dirs.iter().filter(|dir| dir_match(dir, &encoded).is_some()) {
                 let slot = wanted.entry(dir.clone()).or_insert(since);
@@ -706,7 +725,7 @@ impl ClaudeWatch {
         let Some(id) = file_name.strip_suffix(".jsonl") else {
             return;
         };
-        if !self.listed.iter().any(|folder| dir_match(dir, &fold_case(&encode_project_path(folder))).is_some()) {
+        if !self.listed.iter().any(|folder| dir_match(dir, &path_key(&encode_project_path(folder))).is_some()) {
             return;
         }
 
@@ -780,9 +799,9 @@ impl ClaudeWatch {
         let Self { logs, hooked, listed, .. } = self;
 
         for folder_path in listed.iter() {
-            let baseline = book.paths.get(folder_path).copied().unwrap_or(book.since);
+            let baseline = book.seen(folder_path).unwrap_or(book.since);
             let since = baseline.min(recent);
-            let encoded = fold_case(&encode_project_path(folder_path));
+            let encoded = path_key(&encode_project_path(folder_path)).into_owned();
             let mut states: Vec<SessionState> = Vec::new();
 
             for (dir, sessions) in logs.iter() {
@@ -867,6 +886,18 @@ mod tests {
 
         assert_eq!(merged.since, 100);
         assert_eq!(merged.paths, HashMap::from([("/a".into(), 500), ("/b".into(), 300), ("/c".into(), 600)]));
+    }
+
+    /// The folder Claude Code keeps a project's logs in, as its own code names it (expected
+    /// values from Claude Code 2.1.287's function): a wrong name loses every session silently.
+    #[test]
+    fn project_folders_are_named_as_claude_code_names_them() {
+        assert_eq!(encode_project_path(r"C:\Users\me\proj"), "C--Users-me-proj");
+        assert_eq!(encode_project_path("/Users/me/🚀 app"), "-Users-me----app");
+
+        let long = format!(r"C:\Users\me\{}proj", "çok-uzun-klasör-".repeat(14));
+        let expected = format!("C--Users-me-{}-ok-uzun-kla-yvlsze", "-ok-uzun-klas-r-".repeat(11));
+        assert_eq!(encode_project_path(&long), expected);
     }
 
     #[test]

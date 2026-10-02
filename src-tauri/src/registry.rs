@@ -1,6 +1,7 @@
 //! The `~/.pitwall/` registry shared with the VS Code extension.
 //! Same files and fields as the extension's `src/registry.ts`; the app is one more participant.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -65,13 +66,11 @@ impl WindowRecord {
     /// Projects this record owns: its roots, plus whatever it actually runs. Without `roots`
     /// (old versions) only running projects count, as favourites may have been published too.
     pub fn owned(&self) -> impl Iterator<Item = &ProjectState> {
-        self.projects.iter().filter(move |project| {
-            project.running || self.roots.as_ref().is_some_and(|roots| roots.contains(&project.folder_path))
-        })
+        self.projects.iter().filter(move |project| project.running || self.has_root(&project.folder_path))
     }
 
     pub fn has_root(&self, folder_path: &str) -> bool {
-        self.roots.as_ref().is_some_and(|roots| roots.iter().any(|root| root == folder_path))
+        self.roots.as_ref().is_some_and(|roots| roots.iter().any(|root| same_path(root, folder_path)))
     }
 
     pub fn takes(&self, feature: &str) -> bool {
@@ -82,6 +81,30 @@ impl WindowRecord {
     pub fn pid(&self) -> Option<u32> {
         participant_pid(&self.window_id)
     }
+}
+
+/// A path as participants compare it (rule 3 of PROTOCOL.md). On Windows letter case doesn't
+/// count, `/` is `\` and a trailing separator is dropped (unless the path is a drive's root):
+/// VS Code writes `c:\…`, the app and Claude Code `C:\…`. Elsewhere the path as it is.
+pub fn path_key(path: &str) -> Cow<'_, str> {
+    fold_path(path, cfg!(windows))
+}
+
+fn fold_path(path: &str, windows: bool) -> Cow<'_, str> {
+    if !windows {
+        return Cow::Borrowed(path);
+    }
+
+    let mut key = path.replace('/', "\\").to_lowercase();
+    while key.len() > 3 && key.ends_with('\\') {
+        key.pop();
+    }
+    Cow::Owned(key)
+}
+
+/// The two paths name the same folder, as participants compare paths (see `path_key`).
+pub fn same_path(a: &str, b: &str) -> bool {
+    a == b || path_key(a) == path_key(b)
 }
 
 /// The pid in a participant id (`<pid>-<time>`, both base 36).
@@ -476,7 +499,7 @@ impl Registry {
     /// Adds or removes a favourite; returns whether it is a favourite now.
     pub fn set_favourite(&self, favourite: Favourite, on: bool) -> bool {
         let mut list = self.read_favourites();
-        let exists = list.iter().any(|item| item.path == favourite.path);
+        let exists = list.iter().any(|item| same_path(&item.path, &favourite.path));
 
         if exists == on {
             return on;
@@ -486,7 +509,7 @@ impl Registry {
             list.push(favourite);
             list.sort_by_key(|item| item.name.to_lowercase());
         } else {
-            list.retain(|item| item.path != favourite.path);
+            list.retain(|item| !same_path(&item.path, &favourite.path));
         }
 
         if let Ok(json) = serde_json::to_string_pretty(&list) {
@@ -535,6 +558,19 @@ mod tests {
 
         assert_eq!(old.owned().map(|p| p.folder_path.as_str()).collect::<Vec<_>>(), ["/b"]);
         assert_eq!(new.owned().map(|p| p.folder_path.as_str()).collect::<Vec<_>>(), ["/a", "/b"]);
+    }
+
+    /// On Windows the extension's `c:\…` and the app's `C:\…` are one project (rule 3), or a
+    /// server would start twice; a neighbour that only shares the start stays another.
+    #[test]
+    fn windows_paths_match_whatever_their_case_and_separators() {
+        let key = |path| fold_path(path, true).into_owned();
+
+        assert_eq!(key(r"c:\Users\Me\paddock"), key(r"C:\users\me\paddock\"));
+        assert_eq!(key("C:/Users/me/paddock"), key(r"c:\users\me\paddock"));
+        assert_eq!(key(r"C:\"), r"c:\");
+        assert_ne!(key(r"C:\Users\me\paddock"), key(r"C:\Users\me\paddock-docs"));
+        assert_eq!(fold_path("/Users/Me", false), "/Users/Me");
     }
 
     #[test]

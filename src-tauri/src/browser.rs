@@ -39,7 +39,7 @@ pub fn prefixes(urls: &[String]) -> Vec<String> {
 #[cfg(target_os = "macos")]
 mod mac {
     use std::io::Write;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     use std::time::{Duration, Instant};
 
     /// The asking stops after this long (a browser that doesn't answer, a permission prompt left
@@ -121,17 +121,17 @@ end run
 
     /// Running processes' executables; only browsers in here are asked, so AppleScript never
     /// looks for (and offers to locate) one that isn't installed.
-    fn running() -> String {
-        Command::new("ps")
-            .args(["-axo", "comm="])
-            .output()
-            .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
-            .unwrap_or_default()
+    fn running() -> Vec<String> {
+        use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+
+        let mut system = System::new();
+        system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_exe(UpdateKind::Always));
+        system.processes().values().filter_map(|process| process.exe().map(|exe| exe.to_string_lossy().into_owned())).collect()
     }
 
     /// Runs `script` with `args`; true when it printed "found".
     fn ask(script: &str, args: &[&str]) -> bool {
-        let Ok(mut child) = Command::new("osascript").arg("-").args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+        let Ok(mut child) = crate::process::command("osascript").arg("-").args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
             return false;
         };
 
@@ -157,7 +157,7 @@ end run
 
     pub fn focus_tab(prefixes: &[String], reload: bool) -> bool {
         let running = running();
-        let is_running = |executable: &str| running.lines().any(|line| line.trim_end().ends_with(executable));
+        let is_running = |executable: &str| running.iter().any(|path| path.ends_with(executable));
         let args: Vec<&str> = std::iter::once(if reload { "reload" } else { "keep" }).chain(prefixes.iter().map(String::as_str)).collect();
 
         BROWSERS

@@ -81,7 +81,7 @@ impl Core {
         // new one otherwise. The URL scheme below is the fallback.
         #[cfg(target_os = "macos")]
         {
-            let opened = Command::new("open")
+            let opened = process::command("open")
                 .args(["-a", settings.editor_app(), path])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -93,6 +93,24 @@ impl Core {
             }
         }
 
+        // Elsewhere the editor's own launcher (`code <folder>`, a `.cmd` on Windows) does the
+        // same. Off the calling thread once started; without it, the URL scheme below.
+        #[cfg(not(target_os = "macos"))]
+        {
+            let cli = editor_cli(settings.editor_scheme());
+            let started = process::find_program(cli).and_then(|program| {
+                process::command(program).arg(path).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().ok()
+            });
+
+            match started {
+                Some(mut child) => {
+                    thread::spawn(move || child.wait());
+                    return;
+                }
+                None => eprintln!("pitwall: `{cli}` is not on PATH; opening the folder through the editor's URL scheme"),
+            }
+        }
+
         let scheme = settings.editor_scheme().to_string();
         let mut url_path = path.replace('\\', "/");
 
@@ -101,5 +119,15 @@ impl Core {
         }
 
         self.emit(CoreEvent::Open(format!("{scheme}://file{url_path}")));
+    }
+}
+
+/// The command-line launcher of the editor that has URL scheme `scheme`.
+#[cfg(not(target_os = "macos"))]
+fn editor_cli(scheme: &str) -> &str {
+    match scheme {
+        "vscode" => "code",
+        "vscode-insiders" => "code-insiders",
+        other => other,
     }
 }

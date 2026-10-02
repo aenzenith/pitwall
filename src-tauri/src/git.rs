@@ -1,7 +1,7 @@
 //! Branch and working-tree state per project, from `git status --porcelain=v2 --branch`.
 
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use serde::Serialize;
 
@@ -52,7 +52,7 @@ pub fn status(path: &str) -> Option<GitInfo> {
         return None;
     }
 
-    let output = Command::new("git")
+    let output = crate::process::command("git")
         .args(["-C", path, "status", "--porcelain=v2", "--branch", "--untracked-files=normal"])
         // Read-only: don't take the index lock and race the user's own git commands.
         .env("GIT_OPTIONAL_LOCKS", "0")

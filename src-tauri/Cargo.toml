@@ -35,6 +35,10 @@ tauri-plugin-single-instance = "2.5.2"
 portable-pty = "0.9.0"
 sys-locale = "0.3.2"
 ureq = { version = "3.4.2", default-features = false, features = ["native-tls"] }
+# The process table (reveal-claude, browsers that run) on macOS, Linux and Windows alike.
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+# Local time (the day's bounds, wall-clock times) on every platform.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -55,3 +59,7 @@ block2 = "0.6.2"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSArray", "NSError", "NSData"] }
 objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "bitflags", "UNUserNotificationCenter", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationAttachment", "UNNotificationTrigger"] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication", "NSApplication", "NSResponder", "NSWindow", "NSPanel", "NSSound", "NSPasteboard", "libc"] }
+
+# Job objects (a server's whole tree), process times and console-less children on Windows.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_SystemInformation", "Win32_System_Threading"] }

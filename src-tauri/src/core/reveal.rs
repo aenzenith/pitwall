@@ -89,33 +89,6 @@ pub(super) fn plan_reveal(path: &str, liveness: &Liveness, peers: &[WindowRecord
     }
 }
 
-/// Pid to (parent pid, command line), from one `ps` run. `None` where it can't be read.
-#[cfg(unix)]
-fn process_table() -> Option<HashMap<u32, (u32, String)>> {
-    let output = Command::new("ps").args(["-A", "-ww", "-o", "pid=,ppid=,args="]).env("LC_ALL", "C").output().ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let table = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.split_whitespace();
-            let pid = parts.next()?.parse().ok()?;
-            let ppid = parts.next()?.parse().ok()?;
-            Some((pid, (ppid, parts.collect::<Vec<_>>().join(" "))))
-        })
-        .collect::<HashMap<_, _>>();
-
-    (!table.is_empty()).then_some(table)
-}
-
-#[cfg(not(unix))]
-fn process_table() -> Option<HashMap<u32, (u32, String)>> {
-    None
-}
-
 /// The process and its parents, nearest first.
 fn lineage(table: &HashMap<u32, (u32, String)>, pid: u32) -> Vec<u32> {
     let mut chain = vec![pid];
@@ -183,7 +156,7 @@ impl Core {
             return Liveness::Unknown;
         }
 
-        let Some(table) = process_table() else {
+        let Some(table) = process::process_table() else {
             return Liveness::Unknown;
         };
 

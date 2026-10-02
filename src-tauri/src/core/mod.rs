@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::Child;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
@@ -24,7 +24,7 @@ use crate::hooks::ClaudeHook;
 use crate::i18n::{self, t};
 use crate::ports::Reservations;
 use crate::process::{self, kill_tree};
-use crate::registry::{now_ms, Favourite, Issue, PidEntry, Registry, WindowRecord};
+use crate::registry::{now_ms, same_path, Favourite, Issue, PidEntry, Registry, WindowRecord};
 use crate::resolve::PackageManager;
 use crate::settings::{ProjectSettings, Settings};
 

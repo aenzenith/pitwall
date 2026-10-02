@@ -1,5 +1,6 @@
 mod browser;
 mod claude;
+mod clock;
 mod commands;
 mod core;
 mod extension;
@@ -149,9 +150,11 @@ fn claude_mark(app: &AppHandle) -> Option<String> {
     Some(file.to_string_lossy().into_owned())
 }
 
-/// Running from an installed `.app`, not from `tauri dev`.
+/// Running as the installed app (an `.app`, Program Files, `/usr/bin`, an AppImage…), not from
+/// `tauri dev`.
 pub fn is_bundled() -> bool {
-    std::env::current_exe().is_ok_and(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS"))
+    let appimage = std::env::var_os("APPIMAGE").is_some_and(|path| !path.is_empty());
+    std::env::current_exe().is_ok_and(|exe| process::installed_app(&exe, appimage))
 }
 
 /// Registers the quick-switcher shortcut (or none when off). An error means the keys are

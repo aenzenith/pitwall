@@ -3,7 +3,6 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use serde::Serialize;
 
@@ -94,7 +93,7 @@ pub fn suggestions(path: &str) -> Vec<LinkSuggestion> {
         }
     };
 
-    let remote = Command::new("git")
+    let remote = crate::process::command("git")
         .args(["-C", path, "remote", "get-url", "origin"])
         .output()
         .ok()

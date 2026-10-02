@@ -148,26 +148,10 @@ impl Fuel {
             let used = window.used.round().min(100.0) as u32;
             let title = if window.id == "five_hour" { t!("fuel.alert.session", used = used) } else { t!("fuel.alert.week", used = used) };
             let body = match window.resets_at {
-                Some(at) => t!("fuel.alert.refills", time = clock(at)),
+                Some(at) => t!("fuel.alert.refills", time = crate::clock::clock(at)),
                 None => String::new(),
             };
             crate::notify(app, NOTIFICATION_ID.to_string(), title, body);
         }
     }
-}
-
-/// `at` (ms) as the local wall-clock time, `16:40`.
-#[cfg(unix)]
-fn clock(at: i64) -> String {
-    let seconds = (at / 1000) as libc::time_t;
-    // SAFETY: an all-zero `tm` is valid, and localtime_r only fills the struct it is handed.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe { libc::localtime_r(&seconds, &mut tm) };
-    format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
-}
-
-#[cfg(not(unix))]
-fn clock(at: i64) -> String {
-    let minutes = at / 60_000;
-    format!("{:02}:{:02}", (minutes / 60) % 24, minutes % 60)
 }

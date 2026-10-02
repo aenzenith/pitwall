@@ -5,7 +5,7 @@
 use std::io::{Seek, SeekFrom};
 
 use super::*;
-use super::snapshot::build_snapshot;
+use super::snapshot::{build_snapshot, listed_path};
 use crate::registry::ProjectState;
 
 /// Most bytes read from a followed output file at once; a bigger burst skips to its newest part.
@@ -75,11 +75,13 @@ impl Core {
             let mut wanted: Vec<(String, PathBuf)> = Vec::new();
 
             for project in inner.peers.iter().flat_map(|peer| peer.projects.iter()) {
-                if !project.running || inner.runs.contains_key(&project.folder_path) || wanted.iter().any(|(path, _)| path == &project.folder_path) {
+                // Kept under the spelling the project is listed under, where the window reads it.
+                let path = listed_path(&inner, &project.folder_path);
+                if !project.running || inner.runs.contains_key(&path) || wanted.iter().any(|(known, _)| *known == path) {
                     continue;
                 }
                 if let Some(file) = project.output.as_deref().and_then(|relative| self.registry.output_file(relative)) {
-                    wanted.push((project.folder_path.clone(), file));
+                    wanted.push((path, file));
                 }
             }
 
@@ -137,14 +139,11 @@ impl Core {
     }
 
     /// Process groups left by a participant that died without cleaning up: SIGTERM now, SIGKILL
-    /// for whatever is left a moment later. The number of groups found.
+    /// for whatever is left a moment later. The number of groups found. On Windows only a pid
+    /// that still belongs to `cmd.exe` is reaped (see `process::may_reap`).
     pub fn reap_orphans(&self) -> usize {
-        if cfg!(windows) {
-            // Windows reuses pids quickly; without a check on the image name it is not safe.
-            return 0;
-        }
-
-        let groups: Vec<u32> = self.registry.take_orphans().into_iter().map(|orphan| orphan.pid).filter(|pid| process::group_alive(*pid)).collect();
+        let groups: Vec<u32> =
+            self.registry.take_orphans().into_iter().map(|orphan| orphan.pid).filter(|pid| process::group_alive(*pid) && process::may_reap(*pid)).collect();
 
         if !groups.is_empty() {
             let reaped = groups.clone();

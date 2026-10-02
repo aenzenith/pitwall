@@ -95,6 +95,10 @@ impl Core {
         let writer = pair.master.take_writer().map_err(|error| error.to_string())?;
         let killer = child.clone_killer();
         let pid = child.process_id();
+        // On Windows, where the shell leads no process group, it gets a job of its own instead.
+        if let Some(pid) = pid {
+            process::contain(pid);
+        }
 
         let view = {
             let mut inner = self.lock();

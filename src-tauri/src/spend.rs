@@ -13,8 +13,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::clock::local_day;
 use crate::registry::now_ms;
 
+#[cfg(test)]
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 /// Lines without this can't hold token counts and aren't parsed.
 const USAGE_MARK: &str = "\"usage\"";
@@ -646,45 +648,8 @@ fn parse_iso_ms(value: &str) -> Option<u64> {
     (ms >= 0.0).then_some(ms.round() as u64)
 }
 
-/// The local day holding `now`: its midnight, the next one, and its `YYYY-MM-DD`.
-#[cfg(unix)]
-fn local_day(now: u64) -> (u64, u64, String) {
-    let seconds = (now / 1000) as libc::time_t;
-    // SAFETY: localtime_r only fills the struct it is handed.
-    let mut today: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe { libc::localtime_r(&seconds, &mut today) };
-
-    let midnight = |day: i32| {
-        // SAFETY: mktime only reads and normalises the struct it is handed (day 32 → next month).
-        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-        tm.tm_year = today.tm_year;
-        tm.tm_mon = today.tm_mon;
-        tm.tm_mday = day;
-        tm.tm_isdst = -1;
-        let seconds = unsafe { libc::mktime(&mut tm) };
-        (seconds >= 0).then(|| seconds as u64 * 1000)
-    };
-    let date = format!("{:04}-{:02}-{:02}", today.tm_year + 1900, today.tm_mon + 1, today.tm_mday);
-
-    match (midnight(today.tm_mday), midnight(today.tm_mday + 1)) {
-        (Some(start), Some(end)) if start <= now && now < end => (start, end, date),
-        _ => utc_day(now),
-    }
-}
-
-/// Without the C library's local time (Windows), days are counted in UTC.
-#[cfg(not(unix))]
-fn local_day(now: u64) -> (u64, u64, String) {
-    utc_day(now)
-}
-
-fn utc_day(now: u64) -> (u64, u64, String) {
-    let start = now - now % DAY_MS;
-    let (year, month, day) = civil((now / DAY_MS) as i64);
-    (start, start + DAY_MS, format!("{year:04}-{month:02}-{day:02}"))
-}
-
 /// Year, month and day of a day count since the epoch (Howard Hinnant).
+#[cfg(test)]
 fn civil(days: i64) -> (i64, i64, i64) {
     let days = days + 719_468;
     let era = days.div_euclid(146_097);

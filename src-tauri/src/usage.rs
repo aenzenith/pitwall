@@ -15,10 +15,12 @@ use serde_json::Value;
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const BETA: &str = "oauth-2025-04-20";
+#[cfg(target_os = "macos")]
 const KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
 const USER_AGENT: &str = concat!("Pitwall/", env!("CARGO_PKG_VERSION"));
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+#[cfg(target_os = "macos")]
 const KEYCHAIN_TIMEOUT: Duration = Duration::from_secs(30);
 /// A token this close to its expiry counts as expired: it could lapse mid-request.
 const EXPIRY_MARGIN_MS: i64 = 60_000;
@@ -313,10 +315,10 @@ fn read_credentials() -> (Vec<Credentials>, bool) {
 #[cfg(target_os = "macos")]
 fn keychain_secret() -> Result<Option<String>, ()> {
     use std::io::Read;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     use std::sync::mpsc;
 
-    let mut child = Command::new("/usr/bin/security")
+    let mut child = crate::process::command("/usr/bin/security")
         .args(["find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

@@ -10,6 +10,7 @@ use serde::Deserialize;
 
 use super::*;
 use crate::claude::{SessionPhase, SessionState};
+use crate::clock::{day_name, local_midnight};
 
 /// Day files older than this are deleted when the app starts.
 const KEEP_DAYS: u64 = 90;
@@ -513,13 +514,13 @@ fn day_commits(path: &str, start: u64, end: u64) -> Vec<DayCommit> {
         return Vec::new();
     }
 
-    let email = Command::new("git")
+    let email = process::command("git")
         .args(["-C", path, "config", "user.email"])
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .unwrap_or_default();
 
-    let mut command = Command::new("git");
+    let mut command = process::command("git");
     command.args(["-C", path, "log", "--all", "--no-merges", "--fixed-strings", "--format=%ct%x1f%s"]);
     command.arg(format!("--since=@{}", start / 1000)).arg(format!("--until=@{}", end / 1000));
     if !email.is_empty() {
@@ -540,12 +541,6 @@ fn day_commits(path: &str, start: u64, end: u64) -> Vec<DayCommit> {
         .collect()
 }
 
-/// `YYYY-MM-DD` of `ms`, local time.
-fn day_name(ms: u64) -> String {
-    let (year, month, day) = local_date(ms);
-    format!("{year:04}-{month:02}-{day:02}")
-}
-
 /// The local midnight starting a `YYYY-MM-DD` day, and the next one.
 fn day_bounds(date: &str) -> Option<(u64, u64)> {
     let mut parts = date.split('-').map(|part| part.parse::<i32>().ok());
@@ -553,54 +548,7 @@ fn day_bounds(date: &str) -> Option<(u64, u64)> {
     if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
         return None;
     }
-    let start = local_midnight(year, month, day)?;
-    let end = local_midnight(year, month, day + 1)?;
+    let start = local_midnight(year, month as u32, day as u32)?;
+    let end = local_midnight(year, month as u32, day as u32 + 1)?;
     (end > start).then_some((start, end))
-}
-
-#[cfg(unix)]
-fn local_date(ms: u64) -> (i32, i32, i32) {
-    let seconds = (ms / 1000) as libc::time_t;
-    // SAFETY: localtime_r only fills the struct it is handed.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe { libc::localtime_r(&seconds, &mut tm) };
-    (tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday)
-}
-
-#[cfg(unix)]
-fn local_midnight(year: i32, month: i32, day: i32) -> Option<u64> {
-    // SAFETY: mktime only reads and normalises the struct it is handed (day 32 → next month).
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    tm.tm_year = year - 1900;
-    tm.tm_mon = month - 1;
-    tm.tm_mday = day;
-    tm.tm_isdst = -1;
-    let seconds = unsafe { libc::mktime(&mut tm) };
-    (seconds >= 0).then(|| seconds as u64 * 1000)
-}
-
-/// Without the C library's local time (Windows), days are counted in UTC.
-#[cfg(not(unix))]
-fn local_date(ms: u64) -> (i32, i32, i32) {
-    let days = (ms / DAY_MS) as i64 + 719_468;
-    let era = days.div_euclid(146_097);
-    let doe = days - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    (year as i32, month as i32, day as i32)
-}
-
-#[cfg(not(unix))]
-fn local_midnight(year: i32, month: i32, day: i32) -> Option<u64> {
-    let (y, m) = if month <= 2 { (i64::from(year) - 1, i64::from(month) + 9) } else { (i64::from(year), i64::from(month) - 3) };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let doy = (153 * m + 2) / 5 + i64::from(day) - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
-    (days >= 0).then(|| days as u64 * DAY_MS)
 }

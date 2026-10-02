@@ -347,17 +347,20 @@ fn starting_deletes_only_day_files_older_than_kept() {
 }
 
 /// A process in a group of its own, like a server another participant started.
+#[cfg(unix)]
 fn group_leader() -> std::process::Child {
     use std::os::unix::process::CommandExt;
     std::process::Command::new("sleep").arg("60").process_group(0).spawn().unwrap()
 }
 
+#[cfg(unix)]
 fn pid_file(dir: &Path, window_id: &str, pid: u32) {
     let record = serde_json::json!({ "windowId": window_id, "entries": [{ "path": "/p", "pid": pid }] });
     fs::write(dir.join("pids").join(format!("{window_id}.json")), record.to_string()).unwrap();
 }
 
 #[test]
+#[cfg(unix)]
 fn only_a_participant_that_is_really_gone_has_its_servers_reaped() {
     let fx = fixture("node server.js", &[]);
     let stale = now_ms() - 120_000;
@@ -389,6 +392,7 @@ fn only_a_participant_that_is_really_gone_has_its_servers_reaped() {
 }
 
 #[test]
+#[cfg(unix)]
 fn stopping_a_command_ends_children_that_ignore_sigterm() {
     let fx = fixture("node server.js", &[]);
     fx.core.add_project(&fx.project).unwrap();

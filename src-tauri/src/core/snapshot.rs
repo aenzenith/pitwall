@@ -135,12 +135,28 @@ fn server_sounds(inner: &mut Inner, projects: &[ProjectView]) -> Vec<String> {
     sounds
 }
 
+/// The spelling a project is listed under (see `build_snapshot`), for a path another
+/// participant gave: on Windows one folder can come as `c:\…` and as `C:\…`. A path not
+/// listed stays as given.
+pub(super) fn listed_path(inner: &Inner, path: &str) -> String {
+    inner
+        .favourites
+        .iter()
+        .map(|favourite| favourite.path.as_str())
+        .chain(inner.peers.iter().flat_map(|peer| peer.owned().map(|project| project.folder_path.as_str())))
+        .chain(inner.runs.keys().map(String::as_str))
+        .find(|known| same_path(known, path))
+        .unwrap_or(path)
+        .to_string()
+}
+
 /// Every project the app shows: favourites, projects of open editor windows, and whatever runs.
 pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
     let mut order: Vec<String> = Vec::new();
     let mut names: HashMap<String, String> = HashMap::new();
+    // One row per folder: on Windows a peer's `c:\…` is the app's `C:\…`.
     let mut add = |path: &str, name: &str| {
-        if !names.contains_key(path) {
+        if !order.iter().any(|known| same_path(known, path)) {
             order.push(path.to_string());
             names.insert(path.to_string(), name.to_string());
         }
@@ -164,11 +180,11 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
             let peer_run = inner
                 .peers
                 .iter()
-                .find_map(|peer| peer.projects.iter().find(|p| &p.folder_path == path && p.running).map(|p| (peer, p)));
+                .find_map(|peer| peer.projects.iter().find(|p| same_path(&p.folder_path, path) && p.running).map(|p| (peer, p)));
             let open_in = inner.peers.iter().find(|peer| peer.has_root(path)).map(|peer| peer.title.clone());
             let run = inner.runs.get(path);
             let issue = inner.issues.get(path).cloned().or_else(|| {
-                inner.peers.iter().find_map(|peer| peer.projects.iter().find(|p| &p.folder_path == path).and_then(|p| p.issue.clone()))
+                inner.peers.iter().find_map(|peer| peer.projects.iter().find(|p| same_path(&p.folder_path, path)).and_then(|p| p.issue.clone()))
             });
 
             let pending = inner.pending.get(path);
@@ -199,7 +215,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
             ProjectView {
                 path: path.clone(),
                 name: names.get(path).cloned().unwrap_or_else(|| folder_name(path)),
-                favourite: inner.favourites.iter().any(|f| &f.path == path),
+                favourite: inner.favourites.iter().any(|f| same_path(&f.path, path)),
                 status,
                 phase,
                 port,

@@ -3,6 +3,7 @@
 //! orders from them run here. The spinner shows each action until it is visibly done.
 
 use super::*;
+use super::snapshot::listed_path;
 use crate::registry::RemoteCommand;
 
 /// A start counts as done once the server printed its address, or after this long.
@@ -70,7 +71,7 @@ impl Core {
             let runner = inner
                 .peers
                 .iter()
-                .find(|peer| peer.projects.iter().any(|p| p.folder_path == path && p.running))
+                .find(|peer| peer.projects.iter().any(|p| same_path(&p.folder_path, path) && p.running))
                 .map(|peer| peer.window_id.clone());
             let root_owner = inner.peers.iter().find(|peer| peer.has_root(path)).map(|peer| peer.window_id.clone());
 
@@ -136,11 +137,12 @@ impl Core {
         };
 
         let core = Arc::clone(self);
+        let path = listed_path(&self.lock(), &command.folder_path);
 
         thread::spawn(move || match action {
-            Action::Start => core.start(&command.folder_path, false),
-            Action::Stop => core.stop(&command.folder_path),
-            Action::Restart => core.restart(&command.folder_path),
+            Action::Start => core.start(&path, false),
+            Action::Stop => core.stop(&path),
+            Action::Restart => core.restart(&path),
         });
     }
 }
@@ -165,7 +167,7 @@ fn pending_done(inner: &Inner, path: &str, pending: &Pending) -> bool {
     }
 
     let run = inner.runs.get(path);
-    let peer = inner.peers.iter().find_map(|peer| peer.projects.iter().find(|p| p.folder_path == path && p.running));
+    let peer = inner.peers.iter().find_map(|peer| peer.projects.iter().find(|p| same_path(&p.folder_path, path) && p.running));
     let ready = |run: &Run| run.settled || run.started.elapsed() > SETTLE_LIMIT;
 
     match pending.action {
