@@ -9,7 +9,9 @@ mod git;
 mod hooks;
 mod i18n;
 mod links;
-#[cfg(target_os = "macos")]
+// One API, one file per system: UserNotifications on macOS, toasts on Windows, D-Bus on Linux.
+#[cfg_attr(target_os = "linux", path = "notify_linux.rs")]
+#[cfg_attr(windows, path = "notify_windows.rs")]
 mod notify;
 mod ports;
 mod process;
@@ -28,6 +30,7 @@ use std::thread;
 use std::time::Duration;
 
 use tauri::{AppHandle, DragDropEvent, Emitter, Manager, RunEvent, WindowEvent};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
 
@@ -105,7 +108,6 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
 }
 
 /// A system notification; clicking it opens the project and counts the turn as seen.
-#[cfg(target_os = "macos")]
 pub(crate) fn notify(app: &AppHandle, path: String, title: String, body: String) {
     let image = claude_mark(app);
     notify::post(path, title, body, image.as_deref().map(std::path::Path::new));
@@ -118,25 +120,11 @@ pub fn play_sound(app: &AppHandle, id: String) {
 
 /// Puts `text` on the clipboard.
 pub fn copy_text(app: &AppHandle, text: String) {
-    #[cfg(target_os = "macos")]
-    let _ = app.run_on_main_thread(move || {
-        let board = objc2_app_kit::NSPasteboard::generalPasteboard();
-        board.clearContents();
-        // SAFETY: an AppKit constant, read on the main thread.
-        let kind = unsafe { objc2_app_kit::NSPasteboardTypeString };
-        board.setString_forType(&objc2_foundation::NSString::from_str(&text), kind);
-    });
-
-    #[cfg(not(target_os = "macos"))]
-    let _ = (app, text);
+    let _ = app.clipboard().write_text(text);
 }
 
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn notify(_app: &AppHandle, _path: String, _title: String, _body: String) {}
-
-/// Claude's spark beside the notification text. The API takes a file, so the bundled image is
+/// Claude's spark beside the notification text. The APIs take a file, so the bundled image is
 /// written to the cache folder (again when it changed).
-#[cfg(target_os = "macos")]
 fn claude_mark(app: &AppHandle) -> Option<String> {
     const MARK: &[u8] = include_bytes!("../icons/claude-mark.png");
     let dir = app.path().app_cache_dir().ok()?;
@@ -168,6 +156,14 @@ pub fn apply_shortcut(app: &AppHandle, on: bool, keys: &str) -> Result<(), Strin
     }
 
     let shortcut = keys.parse::<Shortcut>().map_err(|error| t!("core.error.invalidShortcut", keys = keys, error = error))?;
+
+    // Global shortcuts on Linux go through X11 (XWayland under Wayland). Without a display the
+    // registration would "succeed" and never fire.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("DISPLAY").is_none_or(|display| display.is_empty()) {
+        return Err(t!("core.error.shortcutNoDisplay", keys = keys));
+    }
+
     let result = shortcuts.register(shortcut).map_err(|error| t!("core.error.shortcutTaken", keys = keys, error = error));
 
     #[cfg(debug_assertions)]
@@ -186,6 +182,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![AUTOSTART_ARG])))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -209,19 +206,16 @@ pub fn run() {
             // Bring favourites and seen state over from the extension's old storage, once.
             registry::adopt_old_storage(&registry_dir, &old_extension_storage());
 
-            #[cfg(target_os = "macos")]
-            {
-                let clicks = app.handle().clone();
-                notify::start(is_bundled(), move |path| {
-                    // The Fuel page's notification opens that page.
-                    if path == fuel::NOTIFICATION_ID {
-                        tray::show_main(&clicks);
-                        let _ = clicks.emit("reveal-fuel", ());
-                    } else if let Some(state) = clicks.try_state::<AppState>() {
-                        state.core.open_editor(&path);
-                    }
-                });
-            }
+            let clicks = app.handle().clone();
+            notify::start(is_bundled(), move |path| {
+                // The Fuel page's notification opens that page.
+                if path == fuel::NOTIFICATION_ID {
+                    tray::show_main(&clicks);
+                    let _ = clicks.emit("reveal-fuel", ());
+                } else if let Some(state) = clicks.try_state::<AppState>() {
+                    state.core.open_editor(&path);
+                }
+            });
 
             let handle = app.handle().clone();
             let legacy = old_extension_storage();
@@ -252,12 +246,16 @@ pub fn run() {
             }
             let settings = core.settings();
             let _ = apply_shortcut(app.handle(), settings.shortcut, &settings.shortcut_keys);
+            // The popover opens from the icon. Linux delivers no clicks on it (the tray has a
+            // menu there instead), so it is made only on macOS and Windows.
+            #[cfg(not(target_os = "linux"))]
+            let _popover = windows::get_or_create(app.handle(), POPOVER);
+            #[cfg(target_os = "macos")]
+            if let Some(popover) = &_popover {
+                tray::float_over_spaces(popover);
+            }
             tray::create(app.handle())?;
             // The main window and the switcher are made on first use (`windows`).
-            #[cfg(target_os = "macos")]
-            if let Some(popover) = app.get_webview_window(POPOVER) {
-                tray::float_over_spaces(&popover);
-            }
             windows::setup(app.handle());
 
             // One loop for everything periodic: commands every second, heartbeat and Claude every
@@ -281,6 +279,9 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             // The popover behaves like a menu: it goes away when it loses focus.
             WindowEvent::Focused(false) if window.label() == POPOVER => tray::hide_popover(window.app_handle()),
+            // It sizes itself to its content; above a taskbar it grows upwards, away from the icon.
+            #[cfg(windows)]
+            WindowEvent::Resized(_) if window.label() == POPOVER => tray::keep_popover_by_icon(window.app_handle()),
             // The search goes away the moment it loses the keyboard: a click outside, another app.
             WindowEvent::Focused(_focused) if window.label() == SWITCHER => {
                 #[cfg(debug_assertions)]

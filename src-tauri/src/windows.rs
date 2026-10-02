@@ -60,6 +60,10 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     }
 
     let config = app.config().app.windows.iter().find(|config| config.label == label)?.clone();
+    // Linux composites a see-through window only on some desktops (black corners elsewhere), so
+    // the switcher is opaque there and its page paints the whole window.
+    #[cfg(target_os = "linux")]
+    let config = tauri::utils::config::WindowConfig { transparent: false, ..config };
     // A new page, should an earlier window of this label have gone: not listening yet.
     pages().ready.retain(|l| l != label);
     let built = WebviewWindowBuilder::from_config(app, &config)

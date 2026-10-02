@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use tauri::{
     image::Image,
     Emitter,
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, LogicalPosition, Manager, Monitor, PhysicalPosition, Runtime, Theme, WebviewWindow,
+    tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
+    AppHandle, LogicalPosition, Manager, Monitor, PhysicalPosition, Runtime, WebviewWindow,
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
@@ -117,10 +117,12 @@ pub fn dismiss_popover<R: Runtime>(app: &AppHandle<R>) {
 /// (hiding it), then arrives as a click; without this the click would reopen it at once.
 static LAST_HIDE: Mutex<Option<Instant>> = Mutex::new(None);
 
-/// Menu bar icon: a template image, so macOS tints it for light and dark menu bars.
+/// Menu bar icon: a template image, so macOS tints it for light and dark menu bars. On Windows
+/// and Linux the tray also has a menu (`menu`): Linux delivers no clicks on the icon, so the menu
+/// is all there is; Windows opens it with the right button.
 pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
+    let builder = TrayIconBuilder::with_id(TRAY_ID)
+        .icon(plain_icon(bar_is_dark(app))?)
         .icon_as_template(true)
         .tooltip("Pitwall")
         .on_tray_icon_event(|tray, event| {
@@ -130,9 +132,20 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                 toggle_popover(tray.app_handle());
             }
-        })
-        .build(app)?;
+        });
 
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder
+        .menu(&menu::build(app, None)?)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| menu::clicked(app, event.id().as_ref()));
+
+    builder.build(app)?;
+
+    // The count and the icon now, not at the first change.
+    if let Some(state) = app.try_state::<AppState>() {
+        refresh(app, &state.core.snapshot());
+    }
     Ok(())
 }
 
@@ -152,10 +165,7 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
         return;
     }
 
-    // Under the icon; before the icon was ever clicked (shortcut), the top-right corner.
-    if popover.move_window(Position::TrayBottomCenter).is_err() {
-        let _ = popover.move_window(Position::TopRight);
-    }
+    place_popover(app, &popover);
 
     note_front_app(app);
     let _ = windows::show(&popover);
@@ -163,6 +173,62 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
 
     if let Some(state) = app.try_state::<AppState>() {
         state.core.popover_opened();
+    }
+}
+
+/// Under the icon in the menu bar; before the icon was ever clicked, the top-right corner.
+#[cfg(target_os = "macos")]
+fn place_popover<R: Runtime>(_app: &AppHandle<R>, popover: &WebviewWindow<R>) {
+    if popover.move_window(Position::TrayBottomCenter).is_err() {
+        let _ = popover.move_window(Position::TopRight);
+    }
+}
+
+/// By the icon, inside the work area: above it on a taskbar at the bottom (the usual place),
+/// below it on one at the top. Without the icon's place, the bottom-right corner.
+#[cfg(not(target_os = "macos"))]
+fn place_popover<R: Runtime>(app: &AppHandle<R>, popover: &WebviewWindow<R>) {
+    if !place_by_icon(app, popover) {
+        let _ = popover.move_window(Position::BottomRight);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn place_by_icon<R: Runtime>(app: &AppHandle<R>, popover: &WebviewWindow<R>) -> bool {
+    let Some(icon) = app.tray_by_id(TRAY_ID).and_then(|tray| tray.rect().ok().flatten()) else {
+        return false;
+    };
+    let (Ok(scale), Ok(size)) = (popover.scale_factor(), popover.outer_size()) else {
+        return false;
+    };
+    let (at, extent) = (icon.position.to_physical::<f64>(scale), icon.size.to_physical::<f64>(scale));
+    let Some(monitor) = app.monitor_from_point(at.x, at.y).ok().flatten() else {
+        return false;
+    };
+
+    // Physical pixels throughout, as Windows reports them.
+    let area = monitor.work_area();
+    let (left, top) = (f64::from(area.position.x), f64::from(area.position.y));
+    let (right, bottom) = (left + f64::from(area.size.width), top + f64::from(area.size.height));
+    let (width, height) = (f64::from(size.width), f64::from(size.height));
+    let middle = f64::from(monitor.position().y) + f64::from(monitor.size().height) / 2.0;
+
+    let x = at.x + extent.width / 2.0 - width / 2.0;
+    let y = if at.y > middle { at.y - height } else { at.y + extent.height };
+    let x = x.min(right - width).max(left);
+    let y = y.min(bottom - height).max(top);
+
+    popover.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32)).is_ok()
+}
+
+/// The popover sizes itself to its content after it is placed. Above a taskbar it has to grow
+/// upwards, so its edge stays by the icon.
+#[cfg(windows)]
+pub fn keep_popover_by_icon<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(popover) = app.get_webview_window(POPOVER) {
+        if popover.is_visible().unwrap_or(false) {
+            let _ = place_by_icon(app, &popover);
+        }
     }
 }
 
@@ -366,8 +432,13 @@ pub fn set_dock_visible<R: Runtime>(app: &AppHandle<R>, visible: bool) {
     });
 }
 
+/// The icon in the bar now (waiting, crashed, dark bar), so a refresh that changes none of them
+/// leaves it alone.
+static ICON: Mutex<Option<(bool, bool, bool)>> = Mutex::new(None);
+
 /// Count next to the icon and the coloured dot. Waiting projects win over the running count;
-/// a crash shows a red dot until the popover is opened.
+/// a crash shows a red dot until the popover is opened. Windows shows no text beside a tray icon,
+/// so there the tooltip carries the counts.
 pub fn refresh<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
@@ -376,8 +447,21 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
     let count = if snapshot.waiting > 0 { snapshot.waiting } else { snapshot.running };
     let _ = tray.set_title(if count > 0 { Some(count.to_string()) } else { None::<String> });
 
-    let dark = app.get_webview_window(POPOVER).and_then(|w| w.theme().ok()).is_none_or(|theme| theme == Theme::Dark);
-    let variant: Option<&[u8]> = match (snapshot.waiting > 0, snapshot.crash_unseen, dark) {
+    let icon = (snapshot.waiting > 0, snapshot.crash_unseen, bar_is_dark(app));
+    let changed = ICON.lock().map_or(true, |mut shown| shown.replace(icon) != Some(icon));
+    if changed {
+        set_icon(&tray, icon);
+    }
+
+    let tooltip = t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting);
+    let _ = tray.set_tooltip(Some(tooltip));
+
+    #[cfg(not(target_os = "macos"))]
+    menu::sync(app, &tray, snapshot);
+}
+
+fn set_icon<R: Runtime>(tray: &TrayIcon<R>, (waiting, crashed, dark): (bool, bool, bool)) {
+    let variant: Option<&[u8]> = match (waiting, crashed, dark) {
         (true, _, true) => Some(include_bytes!("../icons/tray-claude-dark.png")),
         (true, _, false) => Some(include_bytes!("../icons/tray-claude-light.png")),
         (false, true, true) => Some(include_bytes!("../icons/tray-crash-dark.png")),
@@ -391,13 +475,146 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
             let _ = tray.set_icon_as_template(false);
         }
         None => {
-            if let Ok(image) = Image::from_bytes(include_bytes!("../icons/tray.png")) {
+            if let Ok(image) = plain_icon(dark) {
                 let _ = tray.set_icon(Some(image));
                 let _ = tray.set_icon_as_template(true);
             }
         }
     }
+}
 
-    let tooltip = t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting);
-    let _ = tray.set_tooltip(Some(tooltip));
+/// The plain glyph. macOS tints the template itself; elsewhere a dark bar gets it in white.
+fn plain_icon(dark: bool) -> tauri::Result<Image<'static>> {
+    let image = Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+    if cfg!(target_os = "macos") || !dark {
+        return Ok(image);
+    }
+
+    let mut rgba = image.rgba().to_vec();
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        pixel[..3].fill(255);
+    }
+    Ok(Image::new_owned(rgba, image.width(), image.height()))
+}
+
+/// Whether the menu bar is dark, for the coloured icons: it follows the system's appearance.
+#[cfg(target_os = "macos")]
+fn bar_is_dark<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.get_webview_window(POPOVER).and_then(|w| w.theme().ok()).is_none_or(|theme| theme == tauri::Theme::Dark)
+}
+
+/// Whether the taskbar is dark. It has a mode of its own (Settings › Personalisation › Colours,
+/// "Windows mode"), apart from the apps'.
+#[cfg(windows)]
+fn bar_is_dark<R: Runtime>(_app: &AppHandle<R>) -> bool {
+    windows_registry::CURRENT_USER
+        .open(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+        .and_then(|key| key.get_u32("SystemUsesLightTheme"))
+        .map_or(true, |light| light == 0)
+}
+
+/// Whether the panel is dark. GNOME's top bar is dark in either mode; elsewhere the panel follows
+/// the desktop's theme, as Pitwall's windows do.
+#[cfg(target_os = "linux")]
+fn bar_is_dark<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let gnome = std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|desktop| desktop.split(':').any(|name| matches!(name, "GNOME" | "Unity" | "ubuntu")));
+    gnome || app.webview_windows().values().next().and_then(|w| w.theme().ok()).is_none_or(|theme| theme == tauri::Theme::Dark)
+}
+
+/// The tray's menu on Windows and Linux: Pitwall's window, the quick switcher, the projects that
+/// wait on you and those that run (a few of each; a click opens one in its editor, as a
+/// notification does), and Quit. Rebuilt only when what it lists changes.
+#[cfg(not(target_os = "macos"))]
+mod menu {
+    use std::sync::Mutex;
+
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::TrayIcon;
+    use tauri::{AppHandle, Manager, Runtime};
+
+    use crate::core::Snapshot;
+    use crate::i18n::t;
+    use crate::AppState;
+
+    const OPEN: &str = "pitwall:open";
+    const SWITCHER: &str = "pitwall:switcher";
+    const QUIT: &str = "pitwall:quit";
+    /// Followed by the project's path.
+    const PROJECT: &str = "project:";
+    /// Projects listed under each heading.
+    const MAX_PROJECTS: usize = 5;
+
+    /// The headings and projects the menu shows now, to tell when it needs building again.
+    static SHOWN: Mutex<Option<Vec<(String, String)>>> = Mutex::new(None);
+
+    /// (id, label) for each line between the fixed ones; a heading has no id.
+    fn lines(snapshot: &Snapshot) -> Vec<(String, String)> {
+        let mut lines = Vec::new();
+        let waiting: Vec<_> = snapshot.projects.iter().filter(|p| p.claude.is_some()).take(MAX_PROJECTS).collect();
+        let running: Vec<_> = snapshot.projects.iter().filter(|p| p.claude.is_none() && p.status == "running").take(MAX_PROJECTS).collect();
+
+        for (heading, projects) in [(t!("window.filter.waiting"), waiting), (t!("window.filter.running"), running)] {
+            if projects.is_empty() {
+                continue;
+            }
+            lines.push((String::new(), heading));
+            lines.extend(projects.into_iter().map(|p| (format!("{PROJECT}{}", p.path), p.name.clone())));
+        }
+        lines
+    }
+
+    pub fn build<R: Runtime>(app: &AppHandle<R>, snapshot: Option<&Snapshot>) -> tauri::Result<Menu<R>> {
+        let menu = Menu::new(app)?;
+        menu.append(&MenuItem::with_id(app, OPEN, t!("switcher.openPitwall"), true, None::<&str>)?)?;
+        menu.append(&MenuItem::with_id(app, SWITCHER, t!("switcher.placeholder"), true, None::<&str>)?)?;
+
+        let lines = snapshot.map(lines).unwrap_or_default();
+        if !lines.is_empty() {
+            menu.append(&PredefinedMenuItem::separator(app)?)?;
+        }
+        for (id, label) in lines {
+            // Headings are greyed out; their projects follow.
+            let enabled = !id.is_empty();
+            let id = if enabled { id } else { format!("heading:{label}") };
+            menu.append(&MenuItem::with_id(app, id, label, enabled, None::<&str>)?)?;
+        }
+
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+        menu.append(&MenuItem::with_id(app, QUIT, t!("common.quit"), true, None::<&str>)?)?;
+        Ok(menu)
+    }
+
+    /// Builds the menu again when its projects (or the language) changed.
+    pub fn sync<R: Runtime>(app: &AppHandle<R>, tray: &TrayIcon<R>, snapshot: &Snapshot) {
+        let mut now = lines(snapshot);
+        // The fixed lines change with the language only.
+        now.push((String::new(), t!("switcher.openPitwall")));
+
+        // Not held while building: menus are made on the main thread, which may be waiting here.
+        {
+            let mut shown = SHOWN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if shown.as_ref() == Some(&now) {
+                return;
+            }
+            *shown = Some(now);
+        }
+
+        let set = build(app, Some(snapshot)).and_then(|menu| tray.set_menu(Some(menu)));
+        if set.is_err() {
+            *SHOWN.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        }
+    }
+
+    pub fn clicked<R: Runtime>(app: &AppHandle<R>, id: &str) {
+        match id {
+            OPEN => super::show_main(app),
+            SWITCHER => super::toggle_switcher(app),
+            QUIT => app.exit(0),
+            _ => {
+                if let (Some(path), Some(state)) = (id.strip_prefix(PROJECT), app.try_state::<AppState>()) {
+                    state.core.open_editor(path);
+                }
+            }
+        }
+    }
 }

@@ -404,6 +404,7 @@
   "core.error.noScript": "package.json enthält kein Skript „{script}“",
   "core.error.invalidShortcut": "{keys} ist kein gültiger Tastaturkurzbefehl ({error})",
   "core.error.shortcutTaken": "{keys} konnte nicht registriert werden ({error})",
+  "core.error.shortcutNoDisplay": "{keys} konnte nicht registriert werden: Globale Tastaturkurzbefehle brauchen ein X11-Display (X11 oder XWayland)",
   "core.issue.couldNotStart": "konnte nicht starten: {error}",
   "core.issue.exitCode": "Code {code}",
   "core.issue.exitSignal": "Signal {signal}",

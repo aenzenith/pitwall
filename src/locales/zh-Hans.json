@@ -404,6 +404,7 @@
   "core.error.noScript": "package.json 中没有“{script}”脚本",
   "core.error.invalidShortcut": "{keys} 不是有效的快捷键（{error}）",
   "core.error.shortcutTaken": "无法注册 {keys}（{error}）",
+  "core.error.shortcutNoDisplay": "无法注册 {keys}：全局快捷键需要 X11 显示（X11 或 XWayland）",
   "core.issue.couldNotStart": "无法启动：{error}",
   "core.issue.exitCode": "退出码 {code}",
   "core.issue.exitSignal": "信号 {signal}",

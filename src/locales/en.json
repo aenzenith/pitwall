@@ -404,6 +404,7 @@
   "core.error.noScript": "package.json has no \"{script}\" script",
   "core.error.invalidShortcut": "{keys} is not a valid shortcut ({error})",
   "core.error.shortcutTaken": "{keys} could not be registered ({error})",
+  "core.error.shortcutNoDisplay": "{keys} could not be registered: global shortcuts need an X11 display (X11 or XWayland)",
   "core.issue.couldNotStart": "could not start: {error}",
   "core.issue.exitCode": "code {code}",
   "core.issue.exitSignal": "signal {signal}",

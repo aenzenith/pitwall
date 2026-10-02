@@ -404,6 +404,7 @@
   "core.error.noScript": "package.jsonに「{script}」スクリプトがありません",
   "core.error.invalidShortcut": "{keys}は有効なショートカットではありません（{error}）",
   "core.error.shortcutTaken": "{keys}を登録できませんでした（{error}）",
+  "core.error.shortcutNoDisplay": "{keys}を登録できませんでした：グローバルショートカットには X11 ディスプレイ（X11 または XWayland）が必要です",
   "core.issue.couldNotStart": "起動できませんでした：{error}",
   "core.issue.exitCode": "終了コード {code}",
   "core.issue.exitSignal": "シグナル {signal}",

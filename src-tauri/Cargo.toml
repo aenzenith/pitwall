@@ -39,6 +39,7 @@ ureq = { version = "3.4.2", default-features = false, features = ["native-tls"] 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 # Local time (the day's bounds, wall-clock times) on every platform.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tauri-plugin-clipboard-manager = "2.4.1"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -58,8 +59,19 @@ objc2 = "0.6.4"
 block2 = "0.6.2"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSArray", "NSError", "NSData"] }
 objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "bitflags", "UNUserNotificationCenter", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationAttachment", "UNNotificationTrigger"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication", "NSApplication", "NSResponder", "NSWindow", "NSPanel", "NSSound", "NSPasteboard", "libc"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication", "NSApplication", "NSResponder", "NSWindow", "NSPanel", "NSSound", "libc"] }
 
-# Job objects (a server's whole tree), process times and console-less children on Windows.
+# Pitwall's sounds elsewhere: WAV only. On Linux cpal links ALSA (`libasound2-dev` to build).
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+rodio = { version = "0.22.2", default-features = false, features = ["playback", "wav"] }
+
+# Job objects (a server's whole tree), process times and console-less children; toasts; the
+# taskbar's theme.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+tauri-winrt-notification = "0.8.1"
+windows-registry = "0.6.1"
+
+# Notifications over D-Bus, in pure Rust (zbus): no libdbus to build against.
+[target.'cfg(target_os = "linux")'.dependencies]
+notify-rust = { version = "4.18.1", default-features = false, features = ["z"] }

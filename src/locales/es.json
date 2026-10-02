@@ -404,6 +404,7 @@
   "core.error.noScript": "package.json no tiene el script \"{script}\"",
   "core.error.invalidShortcut": "{keys} no es un atajo válido ({error})",
   "core.error.shortcutTaken": "No se pudo registrar {keys} ({error})",
+  "core.error.shortcutNoDisplay": "No se pudo registrar {keys}: los atajos globales necesitan una pantalla X11 (X11 o XWayland)",
   "core.issue.couldNotStart": "no se pudo iniciar: {error}",
   "core.issue.exitCode": "código {code}",
   "core.issue.exitSignal": "señal {signal}",

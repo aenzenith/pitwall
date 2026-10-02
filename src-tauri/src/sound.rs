@@ -28,7 +28,7 @@ pub fn play(id: &str) {
     mac::play(bytes);
 
     #[cfg(not(target_os = "macos"))]
-    let _ = bytes;
+    device::play(bytes);
 }
 
 #[cfg(target_os = "macos")]
@@ -57,5 +57,76 @@ mod mac {
             sound.play();
             *playing.borrow_mut() = Some(sound);
         });
+    }
+}
+
+/// Windows and Linux: the default output device through rodio, from a thread of its own. The
+/// device is opened for a sound and let go a moment after the last one ends, so an idle Pitwall
+/// holds no audio stream.
+#[cfg(not(target_os = "macos"))]
+mod device {
+    use std::io::Cursor;
+    use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+    use std::sync::OnceLock;
+    use std::thread;
+    use std::time::Duration;
+
+    use rodio::{Decoder, DeviceSinkBuilder, Player};
+
+    /// How often the thread looks whether the sound has ended.
+    const POLL: Duration = Duration::from_millis(100);
+    /// Quiet polls before the device is let go, so the sound's last samples still play.
+    const LINGER: u32 = 10;
+
+    static QUEUE: OnceLock<Sender<&'static [u8]>> = OnceLock::new();
+
+    pub fn play(bytes: &'static [u8]) {
+        let queue = QUEUE.get_or_init(|| {
+            let (queue, sounds) = mpsc::channel();
+            let _ = thread::Builder::new().name("pitwall-sound".into()).spawn(move || run(&sounds));
+            queue
+        });
+        let _ = queue.send(bytes);
+    }
+
+    fn run(sounds: &Receiver<&'static [u8]>) {
+        while let Ok(first) = sounds.recv() {
+            // No output device (or none that opens): this sound is skipped, the next one tries again.
+            let Ok(mut device) = DeviceSinkBuilder::open_default_sink() else {
+                continue;
+            };
+            device.log_on_drop(false);
+
+            let mut next = Some(first);
+            let mut playing: Option<Player> = None;
+            let mut quiet = 0;
+
+            loop {
+                if let Some(bytes) = next.take() {
+                    if let Some(previous) = playing.take() {
+                        previous.stop();
+                    }
+                    let player = Player::connect_new(device.mixer());
+                    if let Ok(sound) = Decoder::new_wav(Cursor::new(bytes)) {
+                        player.append(sound);
+                    }
+                    playing = Some(player);
+                    quiet = 0;
+                }
+
+                match sounds.recv_timeout(POLL) {
+                    Ok(bytes) => next = Some(bytes),
+                    Err(RecvTimeoutError::Timeout) => {
+                        if playing.as_ref().is_none_or(Player::empty) {
+                            quiet += 1;
+                            if quiet >= LINGER {
+                                break;
+                            }
+                        }
+                    }
+                    Err(RecvTimeoutError::Disconnected) => return,
+                }
+            }
+        }
     }
 }

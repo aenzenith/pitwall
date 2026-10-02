@@ -404,6 +404,7 @@
   "core.error.noScript": "package.json içinde \"{script}\" script'i yok",
   "core.error.invalidShortcut": "{keys} geçerli bir kısayol değil ({error})",
   "core.error.shortcutTaken": "{keys} kaydedilemedi ({error})",
+  "core.error.shortcutNoDisplay": "{keys} kaydedilemedi: genel kısayollar bir X11 ekranı ister (X11 ya da XWayland)",
   "core.issue.couldNotStart": "başlatılamadı: {error}",
   "core.issue.exitCode": "kod {code}",
   "core.issue.exitSignal": "sinyal {signal}",

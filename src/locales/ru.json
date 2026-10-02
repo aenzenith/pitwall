@@ -404,6 +404,7 @@
   "core.error.noScript": "В package.json нет скрипта «{script}»",
   "core.error.invalidShortcut": "{keys} — недопустимое сочетание клавиш ({error})",
   "core.error.shortcutTaken": "Не удалось зарегистрировать {keys} ({error})",
+  "core.error.shortcutNoDisplay": "Не удалось зарегистрировать {keys}: глобальным сочетаниям клавиш нужен дисплей X11 (X11 или XWayland)",
   "core.issue.couldNotStart": "не удалось запустить: {error}",
   "core.issue.exitCode": "код {code}",
   "core.issue.exitSignal": "сигнал {signal}",

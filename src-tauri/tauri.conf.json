@@ -14,6 +14,7 @@
     "windows": [
       {
         "label": "popover",
+        "create": false,
         "title": "Pitwall",
         "width": 372,
         "height": 320,
@@ -64,11 +65,29 @@
     "active": true,
     "targets": [
       "app",
-      "dmg"
+      "dmg",
+      "nsis",
+      "msi",
+      "deb",
+      "appimage"
     ],
     "category": "DeveloperTool",
     "macOS": {
       "signingIdentity": "-"
+    },
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {
+        "section": "devel"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
     },
     "shortDescription": "Dev servers and Claude sessions in the menu bar",
     "icon": [

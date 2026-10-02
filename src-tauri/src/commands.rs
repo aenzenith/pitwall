@@ -269,9 +269,10 @@ pub fn set_shortcut(app: AppHandle, state: State<'_, AppState>, keys: String) ->
     Ok(())
 }
 
-/// The quick switcher, from the popover's search button.
+/// The quick switcher, from the popover's search button. Async, as is every command that can make
+/// a window: made from a synchronous command, WebView2 deadlocks (wry#583).
 #[tauri::command]
-pub fn show_switcher(app: AppHandle) {
+pub async fn show_switcher(app: AppHandle) {
     tray::toggle_switcher(&app);
 }
 
@@ -298,7 +299,7 @@ pub fn set_project_settings(state: State<'_, AppState>, path: String, settings: 
 }
 
 #[tauri::command]
-pub fn open_window(app: AppHandle) {
+pub async fn open_window(app: AppHandle) {
     tray::show_main(&app);
 }
 
