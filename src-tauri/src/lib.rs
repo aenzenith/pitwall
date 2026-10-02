@@ -223,6 +223,17 @@ pub fn run() {
             let settings = core.settings();
             let _ = apply_shortcut(app.handle(), settings.shortcut, &settings.shortcut_keys);
             tray::create(app.handle())?;
+            #[cfg(target_os = "macos")]
+            {
+                if let Some(switcher) = app.get_webview_window(SWITCHER) {
+                    tray::make_panel(&switcher);
+                }
+                for label in [POPOVER, SWITCHER] {
+                    if let Some(window) = app.get_webview_window(label) {
+                        tray::float_over_spaces(&window);
+                    }
+                }
+            }
 
             // One loop for everything periodic: commands every second, heartbeat and Claude every
             // 5 s, health every 30 s.
@@ -245,11 +256,20 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             // The popover behaves like a menu: it goes away when it loses focus.
             WindowEvent::Focused(false) if window.label() == POPOVER => tray::hide_popover(window.app_handle()),
+            // The search goes away the moment it loses the keyboard: a click outside, another app.
             WindowEvent::Focused(_focused) if window.label() == SWITCHER => {
                 #[cfg(debug_assertions)]
                 eprintln!("[pitwall] switcher focused={_focused}");
                 if !_focused {
                     let _ = window.hide();
+                }
+            }
+            // Nor does it stay up behind Pitwall's window once that window has the keyboard.
+            WindowEvent::Focused(true) if window.label() == MAIN => {
+                if let Some(switcher) = window.app_handle().get_webview_window(SWITCHER) {
+                    if switcher.is_visible().unwrap_or(false) {
+                        let _ = switcher.hide();
+                    }
                 }
             }
             // Closing the window only hides it; the app lives in the menu bar.

@@ -46,35 +46,61 @@ fn note_front_app<R: Runtime>(app: &AppHandle<R>) {
 }
 
 /// After an explicit dismiss (shortcut, Esc, a pick): the app from before gets focus back.
-fn hand_back_focus() {
+/// Returns whether there was one to hand it to.
+fn hand_back_focus() -> bool {
     let pid = PREVIOUS_APP.swap(0, std::sync::atomic::Ordering::SeqCst);
 
     #[cfg(target_os = "macos")]
     if pid != 0 {
         if let Some(previous) = objc2_app_kit::NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
-            previous.activateWithOptions(objc2_app_kit::NSApplicationActivationOptions::empty());
+            return previous.activateWithOptions(objc2_app_kit::NSApplicationActivationOptions::empty());
         }
     }
     #[cfg(not(target_os = "macos"))]
     let _ = pid;
+    false
 }
 
-/// Closes the switcher on purpose and returns to whatever was in front before.
+/// Hides a focused window once Pitwall has stepped back. Hidden while Pitwall is still the
+/// active app, its focus would pass to Pitwall's main window, which then flashed up for a few
+/// milliseconds; so the window goes when it loses focus (its blur handler hides it) and, should
+/// that not come, after `wait`.
+pub fn hide_once_focus_moves<R: Runtime>(window: WebviewWindow<R>, wait: Duration) {
+    std::thread::spawn(move || {
+        std::thread::sleep(wait);
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        }
+    });
+}
+
+/// Closes the switcher on purpose and returns to whatever was in front before: that app first,
+/// then the switcher, so no Pitwall window comes up in between.
 pub fn dismiss_switcher<R: Runtime>(app: &AppHandle<R>) {
     if let Some(switcher) = app.get_webview_window(SWITCHER) {
         if switcher.is_visible().unwrap_or(false) {
-            let _ = switcher.hide();
-            hand_back_focus();
+            if hand_back_focus() {
+                hide_once_focus_moves(switcher, Duration::from_millis(300));
+            } else {
+                let _ = switcher.hide();
+            }
         }
     }
 }
 
-/// Closes the popover on purpose (Esc) and returns to whatever was in front before.
+/// Closes the popover on purpose (Esc) and returns to whatever was in front before, in the
+/// same order as the switcher.
 pub fn dismiss_popover<R: Runtime>(app: &AppHandle<R>) {
-    let visible = app.get_webview_window(POPOVER).and_then(|p| p.is_visible().ok()).unwrap_or(false);
-    hide_popover(app);
-    if visible {
-        hand_back_focus();
+    let Some(popover) = app.get_webview_window(POPOVER) else {
+        return;
+    };
+    if !popover.is_visible().unwrap_or(false) {
+        return;
+    }
+    if hand_back_focus() {
+        hide_once_focus_moves(popover, Duration::from_millis(300));
+    } else {
+        hide_popover(app);
     }
 }
 
@@ -154,22 +180,115 @@ pub fn toggle_switcher<R: Runtime>(app: &AppHandle<R>) {
         return;
     }
 
-    // Coming from the popover's search button, the app to return to is the popover's.
+    // Coming from the popover's search button, the app to return to is the popover's. Otherwise
+    // there is none: the switcher never takes the front from the app you are in (`make_panel`).
     let from_popover = app.get_webview_window(POPOVER).and_then(|p| p.is_visible().ok()).unwrap_or(false);
     if !from_popover {
-        note_front_app(app);
+        PREVIOUS_APP.store(0, std::sync::atomic::Ordering::SeqCst);
     }
 
-    hide_popover(app);
+    // The popover, if open, steps aside by itself once the switcher has the keyboard (its blur
+    // hides it); hiding it first would hand the keyboard to Pitwall's window for a moment.
     if !center_on_pointer(app, &switcher) {
         let _ = switcher.move_window(Position::Center);
     }
     let shown = switcher.show();
-    let focused = switcher.set_focus();
+    focus_alone(&switcher);
     #[cfg(debug_assertions)]
-    eprintln!("[pitwall] switcher show={shown:?} focus={focused:?}");
-    let _ = (shown, focused);
+    eprintln!("[pitwall] switcher show={shown:?}");
+    let _ = shown;
     let _ = switcher.emit("switcher-opened", ());
+}
+
+/// Gives the switcher the keyboard. It is a non-activating panel (`make_panel`), so Pitwall is
+/// not brought to the front and none of its other windows come along.
+#[cfg(target_os = "macos")]
+fn focus_alone<R: Runtime>(window: &WebviewWindow<R>) {
+    let Ok(ns_window) = window.ns_window() else {
+        let _ = window.set_focus();
+        return;
+    };
+    let ns_window = ns_window as usize;
+
+    let _ = window.run_on_main_thread(move || {
+        // SAFETY: the pointer is this window's NSWindow, alive while the window is, and AppKit
+        // is only touched here, on the main thread.
+        let ns_window = unsafe { &*(ns_window as *const objc2_app_kit::NSWindow) };
+        ns_window.makeKeyAndOrderFront(None);
+    });
+}
+
+/// Turns the switcher into a non-activating panel, as Spotlight's is: it takes the keyboard while
+/// the app you are in stays in front. Activating Pitwall for it raised Pitwall's main window too,
+/// and now and then that window took the keyboard and the search went away. Once, at start.
+///
+/// The window's class becomes a subclass of NSPanel. NSPanel adds no fields to NSWindow, and the
+/// one field of tao's window class, `focusable`, is declared again in the same place, so tao's
+/// window object stays valid as it is.
+#[cfg(target_os = "macos")]
+pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
+    let Ok(ns_window) = window.ns_window() else {
+        return;
+    };
+    let ns_window = ns_window as usize;
+
+    let _ = window.run_on_main_thread(move || {
+        use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
+        use objc2::{msg_send, sel, ClassType};
+        use objc2_app_kit::{NSPanel, NSWindow, NSWindowStyleMask};
+
+        extern "C-unwind" fn yes(_: &AnyObject, _: Sel) -> Bool {
+            Bool::YES
+        }
+        extern "C-unwind" fn no(_: &AnyObject, _: Sel) -> Bool {
+            Bool::NO
+        }
+
+        let class = AnyClass::get(c"PitwallPanel").or_else(|| {
+            let mut builder = ClassBuilder::new(c"PitwallPanel", NSPanel::class())?;
+            builder.add_ivar::<Bool>(c"focusable");
+            // SAFETY: both methods match their selectors' signatures (no arguments, BOOL).
+            unsafe {
+                builder.add_method(sel!(canBecomeKeyWindow), yes as extern "C-unwind" fn(_, _) -> _);
+                builder.add_method(sel!(canBecomeMainWindow), no as extern "C-unwind" fn(_, _) -> _);
+            }
+            Some(builder.register())
+        });
+        let Some(class) = class else {
+            return;
+        };
+
+        // SAFETY: this window's NSWindow, on the main thread; the new class has the same layout
+        // (see above).
+        unsafe { objc2::ffi::object_setClass(ns_window as *mut AnyObject, class) };
+        let ns_window = unsafe { &*(ns_window as *const NSWindow) };
+        ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+        // Hiding is the blur handler's job, not AppKit's.
+        ns_window.setHidesOnDeactivate(false);
+        let _: () = unsafe { msg_send![ns_window, setBecomesKeyOnlyIfNeeded: false] };
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn focus_alone<R: Runtime>(window: &WebviewWindow<R>) {
+    let _ = window.set_focus();
+}
+
+/// The popover and the switcher show on the Space you are on, a full-screen app's included.
+/// Otherwise macOS takes you to the Space they were last shown on, where Pitwall's window may be.
+#[cfg(target_os = "macos")]
+pub fn float_over_spaces<R: Runtime>(window: &WebviewWindow<R>) {
+    let Ok(ns_window) = window.ns_window() else {
+        return;
+    };
+    let ns_window = ns_window as usize;
+
+    let _ = window.run_on_main_thread(move || {
+        use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+        // SAFETY: as in `focus_alone`: this window's NSWindow, on the main thread.
+        let ns_window = unsafe { &*(ns_window as *const NSWindow) };
+        ns_window.setCollectionBehavior(ns_window.collectionBehavior() | NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::FullScreenAuxiliary);
+    });
 }
 
 /// Centres a window on the screen the pointer is on, so the switcher opens where you are working.

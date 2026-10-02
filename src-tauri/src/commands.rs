@@ -8,7 +8,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::core::{Action, Snapshot};
 use crate::i18n::t;
 use crate::settings::{ProjectSettings, Settings};
-use crate::{apply_shortcut, tray, AppState, SWITCHER};
+use crate::{apply_shortcut, tray, AppState, POPOVER, SWITCHER};
 use tauri::Manager;
 
 #[tauri::command]
@@ -154,15 +154,13 @@ pub fn open_browser(state: State<'_, AppState>, path: String) {
 
 #[tauri::command]
 pub fn open_editor(app: AppHandle, state: State<'_, AppState>, path: String) {
-    tray::hide_popover(&app);
-    clear_switcher(&app);
+    step_aside(&app);
     state.core.open_editor(&path);
 }
 
 #[tauri::command]
 pub fn open_claude(app: AppHandle, state: State<'_, AppState>, path: String) {
-    tray::hide_popover(&app);
-    clear_switcher(&app);
+    step_aside(&app);
     state.core.open_claude(&path);
 }
 
@@ -261,11 +259,16 @@ pub fn hide_switcher(app: AppHandle) {
     tray::dismiss_switcher(&app);
 }
 
-/// Before opening something (editor, browser): just get the switcher out of the way; the
-/// opened app takes focus itself.
-fn clear_switcher(app: &AppHandle) {
-    if let Some(switcher) = app.get_webview_window(SWITCHER) {
-        let _ = switcher.hide();
+/// Before opening something (editor, Claude): the opened app takes focus itself, and the popover
+/// and switcher go when they lose it. Hidden right away, while Pitwall is still active, Pitwall's
+/// own window would come up for a moment.
+fn step_aside(app: &AppHandle) {
+    for label in [POPOVER, SWITCHER] {
+        if let Some(window) = app.get_webview_window(label) {
+            if window.is_visible().unwrap_or(false) {
+                tray::hide_once_focus_moves(window, std::time::Duration::from_millis(1500));
+            }
+        }
     }
 }
 
