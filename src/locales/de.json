@@ -306,6 +306,7 @@
   "core.dialog.projectsFolder": "Projektordner auswählen",
   "core.error.launchAtLoginDev": "„Beim Anmelden öffnen“ funktioniert nur in der installierten App, nicht in einem Dev-Build.",
   "core.error.notFolder": "Kein Ordner: {path}",
+  "core.error.linkScheme": "Nur Web- und E-Mail-Links werden geöffnet: {url}",
   "core.error.invalidJson": "{file} ist kein gültiges JSON; Pitwall ändert die Datei nicht.",
   "core.error.forbiddenScript": "Pitwall führt dieses Skript nicht aus: „{script}“",
   "core.error.noScript": "package.json enthält kein Skript „{script}“",

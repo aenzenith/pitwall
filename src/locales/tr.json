@@ -306,6 +306,7 @@
   "core.dialog.projectsFolder": "Projeler klasörünü seç",
   "core.error.launchAtLoginDev": "Girişte başlatma kurulu uygulamada çalışır, dev derlemesinde değil.",
   "core.error.notFolder": "Klasör değil: {path}",
+  "core.error.linkScheme": "Yalnızca web ve e-posta bağlantıları açılır: {url}",
   "core.error.invalidJson": "{file} geçerli bir JSON değil; Pitwall ona dokunmaz.",
   "core.error.forbiddenScript": "Pitwall bu script'i çalıştırmaz: \"{script}\"",
   "core.error.noScript": "package.json içinde \"{script}\" script'i yok",

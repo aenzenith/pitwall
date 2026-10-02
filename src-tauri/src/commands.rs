@@ -82,11 +82,15 @@ pub fn project_folders(state: State<'_, AppState>) -> Vec<crate::core::Folder> {
     state.core.project_folders()
 }
 
-/// Opens one of a project's links; a tab that already shows it comes forward.
+/// Opens one of a project's links; a tab that already shows it comes forward. Only web and mail
+/// addresses open.
 #[tauri::command]
-pub fn open_url(app: AppHandle, state: State<'_, AppState>, url: String) {
-    step_aside(&app);
-    state.core.open_url(&url);
+pub fn open_url(app: AppHandle, state: State<'_, AppState>, url: String) -> Result<(), String> {
+    // A refused link leaves the popover where it is.
+    if crate::links::normalize(&url).is_some() {
+        step_aside(&app);
+    }
+    state.core.open_url(&url)
 }
 
 #[tauri::command]

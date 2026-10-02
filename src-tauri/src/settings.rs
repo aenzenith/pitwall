@@ -2,11 +2,14 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
-use crate::registry::write_atomic;
+use crate::registry::{now_ms, write_atomic};
 
 /// A project's own command (queue worker, migrations, tests…), run from the detail panel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -120,8 +123,39 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// The saved settings; defaults when there is no file. A file that can't be read or doesn't
+    /// parse is moved aside first (`settings.json.broken-<ms>`), so no save ever overwrites what
+    /// is in it. Of JSON that doesn't fit as a whole, every field that fits on its own is kept
+    /// (each project, command and link separately) and written back at once.
     pub fn load(file: &Path) -> Self {
-        fs::read_to_string(file).ok().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or_default()
+        let raw = match fs::read(file) {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Self::default(),
+            Err(error) => {
+                set_aside(file, &error.to_string());
+                return Self::default();
+            }
+        };
+
+        let value = match serde_json::from_slice::<Value>(&raw) {
+            Ok(value) => value,
+            Err(error) => {
+                set_aside(file, &error.to_string());
+                return Self::default();
+            }
+        };
+
+        match serde_json::from_value::<Self>(value.clone()) {
+            Ok(settings) => settings,
+            Err(error) => {
+                set_aside(file, &error.to_string());
+                let settings = salvage(value);
+                if settings != Self::default() {
+                    settings.save(file);
+                }
+                settings
+            }
+        }
     }
 
     pub fn save(&self, file: &Path) {
@@ -160,5 +194,131 @@ impl Settings {
             "windsurf" => "windsurf",
             _ => "vscode",
         }
+    }
+}
+
+/// Moves a settings file that can't be used to `<file>.broken-<ms>` (with `-1`, `-2`… when that
+/// is taken: an earlier backup is never overwritten) and says so on stderr.
+fn set_aside(file: &Path, reason: &str) {
+    let stamp = now_ms();
+
+    for attempt in 0..100 {
+        let suffix = if attempt == 0 { String::new() } else { format!("-{attempt}") };
+        let backup = PathBuf::from(format!("{}.broken-{stamp}{suffix}", file.display()));
+
+        // A hard link fails rather than replace an existing file; then the original goes.
+        let kept = match fs::hard_link(file, &backup) {
+            Ok(()) => fs::remove_file(file).is_ok(),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(_) => !backup.exists() && fs::rename(file, &backup).is_ok(),
+        };
+
+        if kept {
+            eprintln!("[pitwall] {} is unusable ({reason}); kept as {}", file.display(), backup.display());
+        } else {
+            eprintln!("[pitwall] {} is unusable ({reason}) and could not be set aside", file.display());
+        }
+        return;
+    }
+}
+
+/// Settings out of JSON that doesn't fit as a whole: field by field, so a value of the wrong
+/// type costs only itself. Projects, their commands and links, and the sounds are each kept or
+/// trimmed on their own.
+fn salvage(mut value: Value) -> Settings {
+    if let Some(Value::Object(projects)) = value.get_mut("projects") {
+        for project in projects.values_mut() {
+            if let Value::Object(fields) = project {
+                if let Some(Value::Array(commands)) = fields.get_mut("commands") {
+                    for command in commands.iter_mut() {
+                        *command = fitting::<CustomCommand>(command.take());
+                    }
+                }
+                if let Some(Value::Array(links)) = fields.get_mut("links") {
+                    for link in links.iter_mut() {
+                        *link = fitting::<ProjectLink>(link.take());
+                    }
+                }
+            }
+            *project = fitting::<ProjectSettings>(project.take());
+        }
+    }
+    if let Some(sounds) = value.get_mut("sounds") {
+        *sounds = fitting::<Sounds>(sounds.take());
+    }
+
+    serde_json::from_value(fitting::<Settings>(value)).unwrap_or_default()
+}
+
+/// `value` with only the fields that fit `T`: each is tried on top of the defaults and dropped
+/// (with a word on stderr) when it doesn't parse.
+fn fitting<T: DeserializeOwned + Serialize + Default>(value: Value) -> Value {
+    let mut kept = match serde_json::to_value(T::default()) {
+        Ok(Value::Object(defaults)) => defaults,
+        _ => Map::new(),
+    };
+    let Value::Object(fields) = value else {
+        return Value::Object(kept);
+    };
+
+    for (name, field) in fields {
+        let before = kept.insert(name.clone(), field);
+        if serde_json::from_value::<T>(Value::Object(kept.clone())).is_err() {
+            eprintln!("[pitwall] settings: dropped `{name}`, which doesn't parse");
+            match before {
+                Some(before) => kept.insert(name, before),
+                None => kept.remove(&name),
+            };
+        }
+    }
+
+    Value::Object(kept)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_broken_settings_file_is_kept_and_what_parses_survives() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        let backups = || {
+            let mut found: Vec<String> = fs::read_dir(dir.path())
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with("settings.json.broken-"))
+                .collect();
+            found.sort();
+            found
+        };
+
+        // Not JSON at all: nothing to recover, but the file is kept and no save touches it.
+        fs::write(&file, "{\"projects\": {\"/a\": {\"script\": \"dev\"").unwrap();
+        assert_eq!(Settings::load(&file), Settings::default());
+        Settings::default().save(&file);
+
+        // JSON with one value of the wrong type: the rest stays.
+        let mixed = r#"{"script":"serve","notify":"yes","projects":{"/a":{"port":"x","url":"https://a.test","commands":[{"id":"w","name":"Worker","command":"php artisan queue:work","keepRunning":"yes"}],"links":[{"name":"Staging","url":"https://s.a.test"}]}}}"#;
+        fs::write(&file, mixed).unwrap();
+        let loaded = Settings::load(&file);
+
+        assert_eq!(loaded.script, "serve");
+        assert!(loaded.notify);
+        let project = loaded.project("/a");
+        assert_eq!(project.port, None);
+        assert_eq!(project.url.as_deref(), Some("https://a.test"));
+        assert_eq!(project.commands.len(), 1);
+        assert_eq!(project.commands[0].command, "php artisan queue:work");
+        assert_eq!(project.links.len(), 1);
+        assert_eq!(Settings::load(&file), loaded, "what was recovered is written back");
+
+        // Two backups, neither overwritten, each with what it had.
+        let found = backups();
+        assert_eq!(found.len(), 2, "{found:?}");
+        let contents: Vec<String> = found.iter().map(|name| fs::read_to_string(dir.path().join(name)).unwrap()).collect();
+        assert!(contents.iter().any(|c| c.starts_with("{\"projects\"")));
+        assert!(contents.iter().any(|c| c == mixed));
     }
 }

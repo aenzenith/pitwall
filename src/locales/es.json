@@ -306,6 +306,7 @@
   "core.dialog.projectsFolder": "Elige tu carpeta de proyectos",
   "core.error.launchAtLoginDev": "Abrir al iniciar sesión funciona desde la app instalada, no desde una compilación de desarrollo.",
   "core.error.notFolder": "No es una carpeta: {path}",
+  "core.error.linkScheme": "Solo se abren enlaces web y de correo: {url}",
   "core.error.invalidJson": "{file} no es un JSON válido; Pitwall no lo modificará.",
   "core.error.forbiddenScript": "Pitwall no ejecutará este script: \"{script}\"",
   "core.error.noScript": "package.json no tiene el script \"{script}\"",

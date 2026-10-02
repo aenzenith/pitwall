@@ -306,6 +306,7 @@
   "core.dialog.projectsFolder": "Выберите папку проектов",
   "core.error.launchAtLoginDev": "Открытие при входе работает только в установленном приложении, а не в dev-сборке.",
   "core.error.notFolder": "Это не папка: {path}",
+  "core.error.linkScheme": "Открываются только веб-ссылки и ссылки на почту: {url}",
   "core.error.invalidJson": "{file} — некорректный JSON; Pitwall не будет его менять.",
   "core.error.forbiddenScript": "Pitwall не будет запускать этот скрипт: «{script}»",
   "core.error.noScript": "В package.json нет скрипта «{script}»",

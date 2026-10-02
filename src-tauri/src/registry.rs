@@ -4,12 +4,15 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
 const STALE_MS: u64 = 20_000;
+/// A record this old is deleted by whoever sweeps; only then may its pids be reaped.
+const DEAD_MS: u64 = STALE_MS * 3;
 const COMMAND_TTL_MS: u64 = 30_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,9 +80,14 @@ impl WindowRecord {
 
     /// The pid of the process that writes this record: ids are `<pid>-<time>`, both base 36.
     pub fn pid(&self) -> Option<u32> {
-        let (pid, _) = self.window_id.split_once('-')?;
-        u32::from_str_radix(pid, 36).ok()
+        participant_pid(&self.window_id)
     }
+}
+
+/// The pid in a participant id (`<pid>-<time>`, both base 36).
+fn participant_pid(window_id: &str) -> Option<u32> {
+    let (pid, _) = window_id.split_once('-')?;
+    u32::from_str_radix(pid, 36).ok()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -139,13 +147,27 @@ pub(crate) fn base36(mut value: u64) -> String {
     String::from_utf8(out).unwrap_or_default()
 }
 
-/// Write to `<file>.<pid>.tmp`, then rename: readers never see half a file, and the temp name
-/// doesn't end in `.json`, so directory scans skip it.
-pub fn write_atomic(file: &Path, content: &str) -> std::io::Result<()> {
-    let temp = PathBuf::from(format!("{}.{}.tmp", file.display(), std::process::id()));
+/// A name part no other call in this process returns: a counter, and the clock's nanoseconds for
+/// another process that got the same pid. Base 36.
+fn unique() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
 
-    fs::write(&temp, content)?;
-    fs::rename(&temp, file)
+    base36(count * 1_000_000_000 + nanos as u64)
+}
+
+/// Write to `<file>.<pid>-<unique>.tmp`, then rename: readers never see half a file, two threads
+/// writing one file never share a temp, and the temp name doesn't end in `.json`, so directory
+/// scans skip it.
+pub fn write_atomic(file: &Path, content: &str) -> std::io::Result<()> {
+    let temp = PathBuf::from(format!("{}.{}-{}.tmp", file.display(), std::process::id(), unique()));
+    let written = fs::write(&temp, content).and_then(|()| fs::rename(&temp, file));
+
+    if written.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    written
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(file: &Path) -> Option<T> {
@@ -179,6 +201,13 @@ pub fn adopt_old_storage(target: &Path, sources: &[PathBuf]) {
             let _ = fs::copy(from, to);
         }
     }
+}
+
+/// A participant still counts as alive while its record is younger than the sweep's limit, or
+/// while the process in its id runs. An id without a pid has only its record to go by.
+fn participant_alive(window_id: &str, records: &[WindowRecord], now: u64) -> bool {
+    let fresh = records.iter().any(|record| record.window_id == window_id && now.saturating_sub(record.updated_at) <= DEAD_MS);
+    fresh || participant_pid(window_id).is_some_and(crate::process::process_alive)
 }
 
 pub struct Registry {
@@ -298,7 +327,9 @@ impl Registry {
     fn deliver(&self, command: RemoteCommand) {
         let target = command.target.as_str();
         let dir = self.peer_dirs.lock().ok().and_then(|known| known.get(target).cloned()).unwrap_or_else(|| self.dir.clone());
-        let file = dir.join("commands").join(format!("{}__{}-{}.json", target, now_ms(), base36(now_ms() % 1_000_000)));
+        // `<rand>` is unique to this send, even for sends in the same millisecond.
+        let rand = format!("{}{}", base36(std::process::id() as u64), unique());
+        let file = dir.join("commands").join(format!("{}__{}-{}.json", target, now_ms(), rand));
 
         if let Ok(json) = serde_json::to_string(&command) {
             let _ = write_atomic(&file, &json);
@@ -344,25 +375,53 @@ impl Registry {
         }
     }
 
-    /// Pids left behind by participants that are no longer alive; their files are deleted.
-    /// A live participant's entries are never returned.
+    /// Pids left behind by participants that are clearly dead; their files are deleted. A
+    /// participant is dead once its record is gone or older than the sweep's limit and the
+    /// process in its id is gone too: a window that slept, or whose extension host was blocked
+    /// for a while, keeps its servers. A live participant's entries are never returned.
+    ///
+    /// Pids can be reused. A file written before the last boot names nothing of ours: it is
+    /// deleted, nothing returned. A pid whose process started after the file was written is
+    /// someone else's now and is left out. (A group whose leader is gone keeps its id from
+    /// being reused while any member lives.)
     pub fn take_orphans(&self) -> Vec<PidEntry> {
-        let mut live: Vec<String> = self.read_peers().into_iter().map(|record| record.window_id).collect();
-        live.push(self.id.clone());
-
+        let now = now_ms();
+        let records = self.all_records();
+        let booted = crate::process::booted_at();
         let mut orphans = Vec::new();
 
         for file in list_json(&self.dir.join("pids")) {
-            match read_json::<PidRecord>(&file) {
-                Some(record) if live.contains(&record.window_id) => continue,
-                Some(record) => orphans.extend(record.entries),
-                None => {}
+            let record = read_json::<PidRecord>(&file);
+
+            if let Some(record) = &record {
+                if record.window_id == self.id || participant_alive(&record.window_id, &records, now) {
+                    continue;
+                }
+            }
+
+            let written = fs::metadata(&file).and_then(|meta| meta.modified()).ok();
+            let written = written.and_then(|at| at.duration_since(UNIX_EPOCH).ok()).map(|at| at.as_millis() as u64);
+
+            if let (Some(record), Some(written)) = (record, written) {
+                if booted.is_none_or(|booted| written >= booted) {
+                    let ours = |entry: &PidEntry| crate::process::started_at(entry.pid).is_none_or(|started| started <= written);
+                    orphans.extend(record.entries.into_iter().filter(ours));
+                }
             }
 
             let _ = fs::remove_file(&file);
         }
 
         orphans
+    }
+
+    /// Every participant record in our folder and the legacy ones, however old.
+    fn all_records(&self) -> Vec<WindowRecord> {
+        std::iter::once(&self.dir)
+            .chain(self.legacy.iter())
+            .flat_map(|dir| list_json(&dir.join("windows")))
+            .filter_map(|file| read_json::<WindowRecord>(&file))
+            .collect()
     }
 
     /// A participant's output file, from the relative path in its record. Only plain names under
@@ -385,7 +444,7 @@ impl Registry {
         let now = now_ms();
 
         for file in list_json(&self.dir.join("windows")) {
-            let dead = read_json::<WindowRecord>(&file).is_none_or(|record| now.saturating_sub(record.updated_at) > STALE_MS * 3);
+            let dead = read_json::<WindowRecord>(&file).is_none_or(|record| now.saturating_sub(record.updated_at) > DEAD_MS);
 
             if dead {
                 let _ = fs::remove_file(file);
@@ -517,6 +576,37 @@ mod tests {
         assert_eq!(received[0].action, "stop");
         assert_eq!(received[0].issued_by, app.id);
         assert!(other.drain_commands().is_empty());
+    }
+
+    #[test]
+    fn commands_sent_in_the_same_millisecond_all_arrive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = std::sync::Arc::new(Registry::new(tmp.path().to_path_buf(), "Pitwall"));
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+
+        let senders: Vec<_> = (0..8)
+            .map(|thread| {
+                let (app, barrier) = (std::sync::Arc::clone(&app), std::sync::Arc::clone(&barrier));
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    for n in 0..25 {
+                        app.send("target", "stop", &format!("/p{thread}-{n}"));
+                    }
+                })
+            })
+            .collect();
+        for sender in senders {
+            sender.join().unwrap();
+        }
+
+        let names: Vec<String> = fs::read_dir(tmp.path().join("commands")).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert!(names.iter().all(|name| name.starts_with("target__") && name.ends_with(".json")), "{names:?}");
+
+        let target = Registry::with_id(tmp.path().to_path_buf(), "VS Code", "target");
+        let mut paths: Vec<String> = target.drain_commands().into_iter().map(|c| c.folder_path).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), 200);
     }
 
     #[test]

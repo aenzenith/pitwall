@@ -306,6 +306,7 @@
   "core.dialog.projectsFolder": "Choose your projects folder",
   "core.error.launchAtLoginDev": "Launch at login works from the installed app, not from a dev build.",
   "core.error.notFolder": "Not a folder: {path}",
+  "core.error.linkScheme": "Only web and mail links open: {url}",
   "core.error.invalidJson": "{file} is not valid JSON; Pitwall won't change it.",
   "core.error.forbiddenScript": "Pitwall will not run this script: \"{script}\"",
   "core.error.noScript": "package.json has no \"{script}\" script",

@@ -306,6 +306,7 @@
   "core.dialog.projectsFolder": "选择你的项目文件夹",
   "core.error.launchAtLoginDev": "“登录时启动”仅适用于已安装的应用，在开发版本中不可用。",
   "core.error.notFolder": "不是文件夹：{path}",
+  "core.error.linkScheme": "只能打开网页和邮件链接：{url}",
   "core.error.invalidJson": "{file} 不是有效的 JSON；Pitwall 不会修改它。",
   "core.error.forbiddenScript": "Pitwall 不会运行此脚本：“{script}”",
   "core.error.noScript": "package.json 中没有“{script}”脚本",

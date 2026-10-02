@@ -5,9 +5,10 @@
 //! silent free port, crash restart after 3 s, give up after 3 failures within 60 s, health
 //! probe every 30 s.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -22,6 +23,7 @@ use crate::git::{self, GitInfo};
 use crate::hooks::ClaudeHook;
 use crate::i18n::{self, t};
 use crate::ports::{is_port_served, Reservations};
+use crate::process::{self, kill_tree};
 use crate::registry::{now_ms, Favourite, Issue, PidEntry, ProjectState, Registry, RemoteCommand, WindowRecord};
 use crate::resolve::{
     build_command, detect_error_line, detect_package_manager, detect_port_conflict, extract_local_url, has_script,
@@ -35,17 +37,22 @@ mod activity;
 mod jobs;
 #[path = "reveal.rs"]
 mod reveal;
+#[path = "supervise.rs"]
+mod supervise;
 #[path = "terminal.rs"]
 mod terminal;
 pub use activity::DaySummary;
 pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
-use jobs::{Job, JobResult};
+use jobs::{job_key, Job, JobResult};
+use supervise::{Supervisor, Unit};
 
 const RESTART_DELAY: Duration = Duration::from_secs(3);
 const MAX_RESTARTS: u32 = 3;
 const STABLE: Duration = Duration::from_secs(60);
 const OUTPUT_LINES: usize = 500;
+/// Output reaches the UI in batches, one per project and command at most this often.
+const OUTPUT_BATCH: Duration = Duration::from_millis(50);
 /// Most bytes read from a followed output file at once; a bigger burst skips to its newest part.
 const TAIL_CHUNK: u64 = 256 * 1024;
 /// A "line" that never ends is cut here.
@@ -65,8 +72,8 @@ const PENDING_LIMIT: Duration = Duration::from_secs(30);
 pub enum CoreEvent {
     /// The snapshot changed; read it with `Core::snapshot`.
     State,
-    /// A line of output: the dev server's (`job` empty) or a custom command's.
-    Output { path: String, job: Option<String>, line: String },
+    /// Lines of output, batched: the dev server's (`job` empty) or a custom command's.
+    Output { path: String, job: Option<String>, lines: Vec<String> },
     /// The core wants a URL opened (browser or editor).
     Open(String),
     /// A system notification: Claude waits in this project.
@@ -161,6 +168,8 @@ pub struct ProjectView {
     pub claude_sessions: Vec<LiveSession>,
     pub git: Option<GitInfo>,
     pub script: String,
+    /// The command its dev server runs here, or would: `pnpm run dev`, `npm run dev -- --port 5174`.
+    pub run_command: String,
     pub settings: ProjectSettings,
     /// The project's custom commands and their state.
     pub commands: Vec<CommandView>,
@@ -186,6 +195,14 @@ pub struct Snapshot {
     pub system_language: &'static str,
 }
 
+/// Whether an issue ends a start the user waits on: a refused or failed start, or a final
+/// give-up, does; a crash or a hang on its way back doesn't.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IssueEnd {
+    Final,
+    Retrying,
+}
+
 /// A start/stop/restart the user asked for and hasn't seen finish yet; drives the spinner.
 struct Pending {
     action: Action,
@@ -197,6 +214,8 @@ struct Run {
     id: u64,
     pid: u32,
     name: String,
+    /// The command line it runs.
+    command: String,
     started: Instant,
     started_at: u64,
     port: Option<u16>,
@@ -211,10 +230,13 @@ struct Inner {
     settings: Settings,
     runs: HashMap<String, Run>,
     issues: HashMap<String, Issue>,
-    attempts: HashMap<String, u32>,
     retried: HashSet<String>,
     busy: HashSet<String>,
+    /// Servers and commands being stopped, by `Unit::key`: their exit is no crash.
     stopping: HashSet<String>,
+    supervisor: Supervisor,
+    /// Each project's package manager as its lock file tells, read once and again at each start.
+    managers: RefCell<HashMap<String, PackageManager>>,
     output: HashMap<String, VecDeque<String>>,
     peers: Vec<WindowRecord>,
     favourites: Vec<Favourite>,
@@ -233,7 +255,6 @@ struct Inner {
     /// Running custom commands, by `job_key(path, id)`.
     jobs: HashMap<String, Job>,
     job_results: HashMap<String, JobResult>,
-    job_stopping: HashSet<String>,
     /// Servers another participant runs, whose mirrored output we follow; by project path.
     tails: HashMap<String, Tail>,
     /// Open project terminals, in the order they were opened.
@@ -272,6 +293,9 @@ pub struct Core {
     claude: Mutex<ClaudeWatch>,
     hook: ClaudeHook,
     git_busy: AtomicBool,
+    /// Held while the pids file is built and written, so it is never stale or torn.
+    pids_lock: Mutex<()>,
+    outbox: Arc<Mutex<Outbox>>,
     sink: Sink,
 }
 
@@ -279,57 +303,21 @@ fn folder_name(path: &str) -> String {
     Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path).to_string()
 }
 
-#[cfg(unix)]
-fn spawn_shell(command: &str, cwd: &str) -> std::io::Result<Child> {
-    use std::os::unix::process::CommandExt;
-
-    // A login shell so PATH (nvm, Herd, Homebrew) matches the terminal; its own process group
-    // so stopping it takes the `vite` under `npm` down too.
-    let shell = std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "/bin/zsh".into());
-
-    Command::new(shell)
-        .args(["-l", "-c", command])
-        .current_dir(cwd)
-        .env("FORCE_COLOR", "0")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
+/// Output lines on their way to the UI, gathered per project and command.
+#[derive(Default)]
+struct Outbox {
+    batches: Vec<(String, Option<String>, Vec<String>)>,
+    /// A flush is on its way.
+    due: bool,
 }
 
-#[cfg(windows)]
-fn spawn_shell(command: &str, cwd: &str) -> std::io::Result<Child> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-    Command::new("cmd")
-        .args(["/D", "/S", "/C", command])
-        .current_dir(cwd)
-        .env("FORCE_COLOR", "0")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-}
-
-/// Signals the whole process tree started for a server.
-#[cfg(unix)]
-pub fn kill_tree(pid: u32, force: bool) -> bool {
-    let signal = if force { libc::SIGKILL } else { libc::SIGTERM };
-    // SAFETY: killpg only sends a signal; the group id is the leader pid we spawned.
-    unsafe { libc::killpg(pid as libc::pid_t, signal) == 0 }
-}
-
-#[cfg(windows)]
-pub fn kill_tree(pid: u32, _force: bool) -> bool {
-    use std::os::windows::process::CommandExt;
-    Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .creation_flags(0x0800_0000)
-        .status()
-        .is_ok_and(|s| s.success())
+/// Sends the gathered output, in the order it came.
+fn flush_outbox(outbox: &Mutex<Outbox>, sink: &Sink) {
+    let mut outbox = outbox.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    // Sent under the lock, so a batch never overtakes the one before it.
+    for (path, job, lines) in outbox.batches.drain(..) {
+        sink(CoreEvent::Output { path, job, lines });
+    }
 }
 
 impl Core {
@@ -354,6 +342,8 @@ impl Core {
             claude: Mutex::new(claude),
             hook,
             git_busy: AtomicBool::new(false),
+            pids_lock: Mutex::new(()),
+            outbox: Arc::new(Mutex::new(Outbox::default())),
             sink,
         })
     }
@@ -489,7 +479,7 @@ impl Core {
     }
 
     fn act_now(self: &Arc<Self>, path: &str, action: Action) {
-        let (running_here, runner, root_owner) = {
+        let (running_here, stoppable, runner, root_owner) = {
             let inner = self.lock();
             let runner = inner
                 .peers
@@ -498,7 +488,9 @@ impl Core {
                 .map(|peer| peer.window_id.clone());
             let root_owner = inner.peers.iter().find(|peer| peer.has_root(path)).map(|peer| peer.window_id.clone());
 
-            (inner.runs.contains_key(path), runner, root_owner)
+            // A start under way or a crash restart waiting is ours to stop as well.
+            let running_here = inner.runs.contains_key(path);
+            (running_here, running_here || inner.supervisor.pending(path), runner, root_owner)
         };
 
         match action {
@@ -507,8 +499,8 @@ impl Core {
                 Some(owner) => self.registry.send(&owner, "start", path),
                 None => self.start(path, true),
             },
-            Action::Stop if running_here => self.stop(path),
-            Action::Restart if running_here => self.restart(path),
+            Action::Stop if stoppable => self.stop(path),
+            Action::Restart if stoppable => self.restart(path),
             Action::Stop | Action::Restart => {
                 if let Some(owner) = runner {
                     self.registry.send(&owner, action.as_str(), path);
@@ -539,8 +531,15 @@ impl Core {
     }
 
     pub fn stop_all(self: &Arc<Self>) {
-        for project in self.snapshot().projects.into_iter().filter(|p| p.status == "running") {
-            self.act(&project.path, Action::Stop);
+        let mut paths: Vec<String> = self.snapshot().projects.into_iter().filter(|p| p.status == "running").map(|p| p.path).collect();
+        for path in self.lock().supervisor.pending_servers() {
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+
+        for path in paths {
+            self.act(&path, Action::Stop);
         }
     }
 
@@ -563,7 +562,7 @@ impl Core {
 
     /// A start by hand resets the restart counter.
     pub fn start(self: &Arc<Self>, path: &str, open_url: bool) {
-        self.lock().attempts.remove(path);
+        self.lock().supervisor.reset_attempts(path);
         let open = open_url && self.lock().settings.open_url_on_start;
         self.launch(path, open, Vec::new());
 
@@ -577,18 +576,12 @@ impl Core {
         self.start(path, false);
     }
 
-    fn set_issue(&self, path: &str, kind: &str, text: String) {
+    /// `end` says whether the spinner of a start the user waits on stops here.
+    fn set_issue(&self, path: &str, kind: &str, text: String, end: IssueEnd) {
         {
             let mut inner = self.lock();
-            inner.issues.insert(path.to_string(), Issue { kind: kind.into(), text: text.clone() });
-            // A refused or failed start, or a final give-up, ends the spinner; a crash that is
-            // on its way back keeps it.
-            let ends_spinner = match kind {
-                "error" => true,
-                "crashed" => text.contains("gave up") || text.starts_with("could not start"),
-                _ => false,
-            };
-            if ends_spinner {
+            inner.issues.insert(path.to_string(), Issue { kind: kind.into(), text });
+            if end == IssueEnd::Final {
                 inner.pending.remove(path);
             }
         }
@@ -605,37 +598,62 @@ impl Core {
             }
         }
 
-        self.emit(CoreEvent::Output { path: path.to_string(), job: None, line });
+        self.send_output(path, None, line);
+    }
+
+    /// Queues a line for the UI. The first line of a batch sends the batch `OUTPUT_BATCH` later,
+    /// with whatever else came for any project or command meanwhile.
+    fn send_output(&self, path: &str, job: Option<&str>, line: String) {
+        let mut outbox = self.outbox.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        match outbox.batches.iter_mut().find(|(p, j, _)| p == path && j.as_deref() == job) {
+            Some((_, _, lines)) => lines.push(line),
+            None => outbox.batches.push((path.to_string(), job.map(str::to_string), vec![line])),
+        }
+
+        if !outbox.due {
+            outbox.due = true;
+            let (pending, sink) = (Arc::clone(&self.outbox), Arc::clone(&self.sink));
+
+            thread::spawn(move || {
+                thread::sleep(OUTPUT_BATCH);
+                pending.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).due = false;
+                flush_outbox(&pending, &sink);
+            });
+        }
+    }
+
+    /// Sends the queued output at once: a process ended, its last lines shouldn't wait.
+    fn flush_output(&self) {
+        flush_outbox(&self.outbox, &self.sink);
     }
 
     fn launch(self: &Arc<Self>, path: &str, open_url: bool, extra_args: Vec<String>) {
+        // Claimed before the slow part, so a second start meanwhile does nothing.
+        let Some(start) = self.begin_start(&Unit::Server(path.to_string())) else {
+            return;
+        };
         let (settings, project) = {
             let inner = self.lock();
-            if inner.runs.contains_key(path) || inner.disposed {
-                return;
-            }
             (inner.settings.clone(), inner.settings.project(path))
         };
 
         let script = settings.script_for(path);
 
         if is_forbidden_script(&script) {
-            self.set_issue(path, "error", t!("core.error.forbiddenScript", script = script));
-            return;
+            return self.set_issue(path, "error", t!("core.error.forbiddenScript", script = script), IssueEnd::Final);
         }
 
         let package_json = fs::read_to_string(Path::new(path).join("package.json")).unwrap_or_default();
 
         if !has_script(&package_json, &script) {
-            self.set_issue(path, "error", t!("core.error.noScript", script = script));
-            return;
+            return self.set_issue(path, "error", t!("core.error.noScript", script = script), IssueEnd::Final);
         }
 
         let manager = PackageManager::parse(&settings.package_manager).unwrap_or_else(|| {
-            let files: Vec<String> = fs::read_dir(path)
-                .map(|entries| entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect())
-                .unwrap_or_default();
-            detect_package_manager(&files)
+            let detected = detect_manager(path);
+            self.lock().managers.borrow_mut().insert(path.to_string(), detected);
+            detected
         });
 
         let (args, port) = if extra_args.is_empty() {
@@ -653,19 +671,15 @@ impl Core {
 
         let command = match build_command(manager, &script, &args) {
             Ok(command) => command,
-            Err(message) => return self.set_issue(path, "error", message),
+            Err(message) => return self.set_issue(path, "error", message, IssueEnd::Final),
         };
 
-        let mut child = match spawn_shell(&command, path) {
+        let child = match process::spawn_shell(&command, path) {
             Ok(child) => child,
-            Err(error) => return self.set_issue(path, "crashed", t!("core.issue.couldNotStart", error = error)),
+            Err(error) => return self.set_issue(path, "crashed", t!("core.issue.couldNotStart", error = error), IssueEnd::Final),
         };
 
-        let pid = child.id();
-        let run_id = {
-            let mut inner = self.lock();
-            inner.next_run += 1;
-            let id = inner.next_run;
+        let adopted = self.adopt(start, child, |inner, id, pid| {
             inner.output.insert(path.to_string(), VecDeque::new());
             inner.issues.remove(path);
             inner.runs.insert(
@@ -674,6 +688,7 @@ impl Core {
                     id,
                     pid,
                     name: folder_name(path),
+                    command: command.clone(),
                     started: Instant::now(),
                     started_at: now_ms(),
                     port,
@@ -683,44 +698,16 @@ impl Core {
                     settled: false,
                 },
             );
-            id
+        });
+        let Some((run_id, child)) = adopted else {
+            return;
         };
 
         self.push_line(path, format!("$ {command}"));
         self.push_line(path, format!("  {path}"));
         self.record_pids();
         self.notify();
-
-        if let Some(stdout) = child.stdout.take() {
-            self.read_stream(path, run_id, stdout);
-        }
-        if let Some(stderr) = child.stderr.take() {
-            self.read_stream(path, run_id, stderr);
-        }
-
-        let core = Arc::clone(self);
-        let path = path.to_string();
-
-        thread::spawn(move || {
-            let status = child.wait();
-            core.on_exit(&path, run_id, status.ok());
-        });
-    }
-
-    fn read_stream(self: &Arc<Self>, path: &str, run_id: u64, stream: impl Read + Send + 'static) {
-        let core = Arc::clone(self);
-        let path = path.to_string();
-
-        thread::spawn(move || {
-            let mut reader = BufReader::new(stream);
-            let mut bytes = Vec::new();
-
-            while reader.read_until(b'\n', &mut bytes).unwrap_or(0) > 0 {
-                let line = String::from_utf8_lossy(&bytes).trim_end_matches(['\n', '\r']).to_string();
-                bytes.clear();
-                core.on_line(&path, run_id, line);
-            }
-        });
+        self.watch(Unit::Server(path.to_string()), run_id, child);
     }
 
     fn on_line(self: &Arc<Self>, path: &str, run_id: u64, line: String) {
@@ -797,19 +784,12 @@ impl Core {
         }
     }
 
-    fn on_exit(self: &Arc<Self>, path: &str, run_id: u64, status: Option<std::process::ExitStatus>) {
+    /// The server's shell exited (taken out of `runs` already); `planned` when a stop did it.
+    fn on_exit(self: &Arc<Self>, path: &str, started: Instant, planned: bool, disposed: bool, status: Option<std::process::ExitStatus>) {
         let (code, signal) = describe_exit(status);
-        let (planned, run_started, disposed) = {
-            let mut inner = self.lock();
-            let same = inner.runs.get(path).is_some_and(|run| run.id == run_id);
-            if !same {
-                return;
-            }
-            let run = inner.runs.remove(path);
-            (inner.stopping.contains(path), run.map(|r| r.started), inner.disposed)
-        };
 
         self.push_line(path, format!("[pitwall] {}", t!("core.log.processEnded", code = code, signal = signal)));
+        self.flush_output();
         self.record_pids();
         self.notify();
 
@@ -817,7 +797,7 @@ impl Core {
             return;
         }
 
-        self.handle_crash(path, run_started.unwrap_or_else(Instant::now), &code, &signal);
+        self.handle_crash(path, started, &code, &signal);
     }
 
     fn handle_crash(self: &Arc<Self>, path: &str, started: Instant, code: &str, signal: &str) {
@@ -833,44 +813,17 @@ impl Core {
         self.lock().crash_unseen = true;
         self.record_crash(path);
 
-        let Some(attempt) = self.claim_restart(path, started) else {
-            self.set_issue(path, "crashed", t!("core.issue.crashedGaveUp", detail = detail, max = MAX_RESTARTS));
+        let unit = Unit::Server(path.to_string());
+        let Some(attempt) = self.claim_restart(&unit, started) else {
+            self.set_issue(path, "crashed", t!("core.issue.crashedGaveUp", detail = detail, max = MAX_RESTARTS), IssueEnd::Final);
             self.push_line(path, format!("[pitwall] {}", t!("core.log.gaveUpServer", max = MAX_RESTARTS)));
             return;
         };
 
-        self.set_issue(path, "crashed", t!("core.issue.crashedRestarting", detail = detail, attempt = attempt, max = MAX_RESTARTS));
+        let text = t!("core.issue.crashedRestarting", detail = detail, attempt = attempt, max = MAX_RESTARTS);
+        self.set_issue(path, "crashed", text, IssueEnd::Retrying);
         self.push_line(path, format!("[pitwall] {}", t!("core.log.crashedRestarting", attempt = attempt, max = MAX_RESTARTS)));
-
-        thread::sleep(RESTART_DELAY);
-
-        let blocked = {
-            let inner = self.lock();
-            inner.disposed || inner.runs.contains_key(path) || inner.busy.contains(path)
-        };
-
-        if !blocked {
-            self.launch(path, false, Vec::new());
-        }
-    }
-
-    /// A restart slot. A run that stayed up for a minute starts a new series. `None` when the
-    /// three slots are used up; otherwise this attempt's number.
-    fn claim_restart(&self, path: &str, started: Instant) -> Option<u32> {
-        let mut inner = self.lock();
-
-        if started.elapsed() >= STABLE {
-            inner.attempts.remove(path);
-        }
-
-        let used = inner.attempts.get(path).copied().unwrap_or(0);
-
-        if used >= MAX_RESTARTS {
-            return None;
-        }
-
-        inner.attempts.insert(path.to_string(), used + 1);
-        Some(used + 1)
+        self.restart_later(&unit);
     }
 
     /// Stops the dev server and the commands that run along with it.
@@ -881,41 +834,7 @@ impl Core {
 
     /// The dev server only; recovery paths restart it without touching its companions.
     fn stop_server(self: &Arc<Self>, path: &str) {
-        let Some((pid, run_id)) = ({
-            let mut inner = self.lock();
-            let found = inner.runs.get(path).map(|run| (run.pid, run.id));
-            if found.is_some() {
-                inner.stopping.insert(path.to_string());
-                inner.busy.insert(path.to_string());
-                inner.issues.remove(path);
-            }
-            found
-        }) else {
-            return;
-        };
-
-        self.notify();
-        kill_tree(pid, false);
-
-        let delay = Duration::from_millis(600);
-        let gone = |core: &Self| !core.lock().runs.get(path).is_some_and(|run| run.id == run_id);
-
-        if !wait_until(delay, || gone(self)) {
-            kill_tree(pid, true);
-            wait_until(Duration::from_secs(3), || gone(self));
-        }
-
-        {
-            let mut inner = self.lock();
-            if inner.runs.get(path).is_some_and(|run| run.id == run_id) {
-                inner.runs.remove(path);
-            }
-            inner.busy.remove(path);
-            inner.stopping.remove(path);
-        }
-
-        self.record_pids();
-        self.notify();
+        self.stop_unit(&Unit::Server(path.to_string()));
     }
 
     /// Quit: every server goes, nothing is left behind.
@@ -925,43 +844,57 @@ impl Core {
         let mut pids: Vec<u32> = {
             let mut inner = self.lock();
             inner.disposed = true;
-            inner.runs.values().map(|run| run.pid).chain(inner.jobs.values().map(|job| job.pid())).collect()
+            let lingering: Vec<u32> = inner.supervisor.lingering_groups().into_iter().map(|(pgid, _)| pgid).collect();
+            inner.runs.values().map(|run| run.pid).chain(inner.jobs.values().map(|job| job.pid())).chain(lingering).collect()
         };
         pids.extend(self.terminal_pids());
-
-        for pid in &pids {
-            kill_tree(*pid, false);
-        }
+        pids.sort_unstable();
+        pids.dedup();
 
         if !pids.is_empty() {
-            thread::sleep(Duration::from_millis(600));
-            for pid in &pids {
-                kill_tree(*pid, true);
-            }
+            process::stop_groups(&pids, Duration::from_millis(600), Duration::ZERO);
         }
 
         self.registry.dispose();
     }
 
-    /// Process groups left by a participant that died without cleaning up.
+    /// Process groups left by a participant that died without cleaning up: SIGTERM now, SIGKILL
+    /// for whatever is left a moment later. The number of groups found.
     pub fn reap_orphans(&self) -> usize {
         if cfg!(windows) {
             // Windows reuses pids quickly; without a check on the image name it is not safe.
             return 0;
         }
 
-        self.registry.take_orphans().iter().filter(|orphan| kill_tree(orphan.pid, false)).count()
+        let groups: Vec<u32> = self.registry.take_orphans().into_iter().map(|orphan| orphan.pid).filter(|pid| process::group_alive(*pid)).collect();
+
+        if !groups.is_empty() {
+            let reaped = groups.clone();
+            thread::spawn(move || process::stop_groups(&reaped, Duration::from_millis(600), Duration::from_secs(3)));
+        }
+
+        groups.len()
     }
 
+    /// Writes down every process group we started and that may still have processes, for the
+    /// orphan cleanup after a crash. One writer at a time, so the file is never stale or torn.
     fn record_pids(&self) {
+        let _writing = self.pids_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut entries: Vec<PidEntry> = {
-            let inner = self.lock();
-            inner
+            let mut inner = self.lock();
+            let lingering = inner.supervisor.lingering_groups();
+            let mut entries: Vec<PidEntry> = inner
                 .runs
                 .iter()
                 .map(|(path, run)| PidEntry { path: path.clone(), pid: run.pid })
                 .chain(inner.jobs.iter().map(|(key, job)| PidEntry { path: key.clone(), pid: job.pid() }))
-                .collect()
+                .collect();
+            for (pid, key) in lingering {
+                if !entries.iter().any(|entry| entry.pid == pid) {
+                    entries.push(PidEntry { path: key, pid });
+                }
+            }
+            entries
         };
         entries.extend(self.sessions().values().filter_map(|session| session.pid_entry()));
         self.registry.record_pids(&entries);
@@ -985,7 +918,7 @@ impl Core {
             let current = self.lock().issues.get(&path).map(|issue| issue.kind.clone());
 
             if !alive && current.as_deref() != Some("unresponsive") {
-                self.set_issue(&path, "unresponsive", t!("core.issue.notResponding", port = port));
+                self.set_issue(&path, "unresponsive", t!("core.issue.notResponding", port = port), IssueEnd::Retrying);
                 let core = Arc::clone(self);
                 thread::spawn(move || core.recover_unresponsive(&path, run_id, port));
             } else if alive && current.as_deref() == Some("unresponsive") {
@@ -1016,8 +949,8 @@ impl Core {
             return;
         }
 
-        let Some(attempt) = self.claim_restart(path, started) else {
-            self.set_issue(path, "unresponsive", t!("core.issue.notRespondingGaveUp", port = port, max = MAX_RESTARTS));
+        let Some(attempt) = self.claim_restart(&Unit::Server(path.to_string()), started) else {
+            self.set_issue(path, "unresponsive", t!("core.issue.notRespondingGaveUp", port = port, max = MAX_RESTARTS), IssueEnd::Final);
             return;
         };
 
@@ -1048,12 +981,13 @@ impl Core {
     }
 
     /// Opens one of a project's links: the tab that already shows it comes forward, else it opens.
-    /// Off the calling thread, as asking the browsers can take a moment.
-    pub fn open_url(self: &Arc<Self>, url: &str) {
-        let url = crate::links::normalize(url);
-        if url.is_empty() {
-            return;
+    /// Off the calling thread, as asking the browsers can take a moment. Only web and mail
+    /// addresses open (see `links::normalize`); anything else is an error.
+    pub fn open_url(self: &Arc<Self>, url: &str) -> Result<(), String> {
+        if url.trim().is_empty() {
+            return Ok(());
         }
+        let url = crate::links::normalize(url).ok_or_else(|| t!("core.error.linkScheme", url = url.trim()))?;
         let core = Arc::clone(self);
 
         thread::spawn(move || {
@@ -1061,6 +995,7 @@ impl Core {
                 core.emit(CoreEvent::Open(url));
             }
         });
+        Ok(())
     }
 
     pub fn open_browser(self: &Arc<Self>, path: &str) {
@@ -1070,9 +1005,10 @@ impl Core {
 
     /// Shows the project in the browser: a tab that already has it (its address or the dev
     /// server's) comes forward, reloaded with `reload`; without one, the address opens. Off the
-    /// calling thread, as asking the browsers can take a moment.
+    /// calling thread, as asking the browsers can take a moment. Only a web address opens, so a
+    /// project's setting or `.env` can't open a local file or app.
     fn show_in_browser(self: &Arc<Self>, path: &str, local: Option<String>, reload: bool) {
-        let Some(url) = self.resolve_url(path, local.clone()) else {
+        let Some(url) = self.resolve_url(path, local.clone()).and_then(|url| crate::links::normalize(&url)) else {
             return;
         };
         let urls: Vec<String> = std::iter::once(url.clone()).chain(local.filter(|l| *l != url)).collect();
@@ -1429,19 +1365,6 @@ fn live_sessions(sessions: &[crate::claude::SessionState]) -> HashMap<String, Ve
     found
 }
 
-fn wait_until(limit: Duration, mut done: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + limit;
-
-    while Instant::now() < deadline {
-        if done() {
-            return true;
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
-
-    done()
-}
-
 fn describe_exit(status: Option<std::process::ExitStatus>) -> (String, String) {
     let Some(status) = status else {
         return ("-".into(), "-".into());
@@ -1458,6 +1381,24 @@ fn describe_exit(status: Option<std::process::ExitStatus>) -> (String, String) {
     let signal = "-".to_string();
 
     (code, signal)
+}
+
+/// The package manager a project's lock file names (npm without one).
+fn detect_manager(path: &str) -> PackageManager {
+    let files: Vec<String> =
+        fs::read_dir(path).map(|entries| entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect()).unwrap_or_default();
+    detect_package_manager(&files)
+}
+
+/// The command a project's dev server would run, as the launcher builds it: Settings' package
+/// manager or the lock file's, and the project's script. The lock file is read once per
+/// project (and again at each start).
+fn run_command(inner: &Inner, path: &str) -> String {
+    let script = inner.settings.script_for(path);
+    let manager = PackageManager::parse(&inner.settings.package_manager)
+        .unwrap_or_else(|| *inner.managers.borrow_mut().entry(path.to_string()).or_insert_with(|| detect_manager(path)));
+
+    build_command(manager, &script, &[]).unwrap_or_else(|_| format!("{manager} run {}", script.trim()))
 }
 
 /// The port a project wants: `server.port` in its Vite config, else 5173.
@@ -1649,6 +1590,7 @@ fn build_snapshot(inner: &Inner) -> Snapshot {
                 claude_sessions: inner.claude_sessions.get(path).cloned().unwrap_or_default(),
                 git: inner.git.get(path).cloned(),
                 script: inner.settings.script_for(path),
+                run_command: run.map(|run| run.command.clone()).unwrap_or_else(|| run_command(inner, path)),
                 settings: inner.settings.project(path),
                 commands: jobs::command_views(inner, path),
                 terminals: inner.terminal_list.iter().filter(|t| &t.path == path).cloned().collect(),

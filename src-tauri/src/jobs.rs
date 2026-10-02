@@ -1,6 +1,6 @@
-//! A project's custom commands (workers, migrations, tests…). Same process handling as the dev
-//! server: login shell, own process group, whole-tree stop, output per command. Workers marked
-//! "keep running" come back after a crash under the same three-strikes rule.
+//! A project's custom commands (workers, migrations, tests…). Same supervision as the dev server
+//! (`supervise.rs`): login shell, own process group, whole-tree stop, output per command. Workers
+//! marked "keep running" come back after a crash under the same three-strikes rule.
 
 use super::*;
 use crate::resolve::{is_forbidden_command, strip_ansi};
@@ -12,9 +12,9 @@ pub(super) fn job_key(path: &str, id: &str) -> String {
 }
 
 pub(super) struct Job {
-    run: u64,
-    pid: u32,
-    started: Instant,
+    pub(super) run: u64,
+    pub(super) pid: u32,
+    pub(super) started: Instant,
     started_at: u64,
 }
 
@@ -59,7 +59,7 @@ pub(super) fn command_views(inner: &Inner, path: &str) -> Vec<CommandView> {
             let key = job_key(path, &command.id);
             let job = inner.jobs.get(&key);
             let result = inner.job_results.get(&key).cloned();
-            let status = if inner.job_stopping.contains(&key) {
+            let status = if inner.stopping.contains(&key) {
                 "busy"
             } else if job.is_some() {
                 "running"
@@ -103,7 +103,7 @@ impl Core {
             }
         }
 
-        self.emit(CoreEvent::Output { path: path.to_string(), job: Some(id.to_string()), line });
+        self.send_output(path, Some(id), line);
     }
 
     fn finish_job(&self, path: &str, id: &str, result: JobResult) {
@@ -128,103 +128,81 @@ impl Core {
 
     /// Runs a project's command. A run by hand starts a fresh output and restart series.
     pub fn run_command(self: &Arc<Self>, path: &str, id: &str) {
-        self.lock().attempts.remove(&job_key(path, id));
+        self.lock().supervisor.reset_attempts(&job_key(path, id));
         self.spawn_job(path, id, true);
     }
 
-    fn spawn_job(self: &Arc<Self>, path: &str, id: &str, fresh: bool) {
+    pub(super) fn spawn_job(self: &Arc<Self>, path: &str, id: &str, fresh: bool) {
         let Some(command) = self.custom_command(path, id) else {
+            return;
+        };
+        let unit = Unit::Command(path.to_string(), id.to_string());
+        let Some(start) = self.begin_start(&unit) else {
             return;
         };
         let key = job_key(path, id);
 
-        {
-            let mut inner = self.lock();
-            if inner.jobs.contains_key(&key) || inner.disposed {
-                return;
-            }
-            if fresh {
-                inner.output.insert(key.clone(), VecDeque::new());
-            }
+        if fresh {
+            self.lock().output.insert(key.clone(), VecDeque::new());
         }
 
         let failed = |code| JobResult { ok: false, code, stopped: false, finished_at: now_ms() };
 
         if is_forbidden_command(&command.command) {
             self.push_job_line(path, id, format!("[pitwall] {}", t!("core.log.refusedBuild", command = command.command)));
+            drop(start);
             return self.finish_job(path, id, failed(None));
         }
 
-        let mut child = match spawn_shell(&command.command, path) {
+        let child = match process::spawn_shell(&command.command, path) {
             Ok(child) => child,
             Err(error) => {
                 self.push_job_line(path, id, format!("[pitwall] {}", t!("core.issue.couldNotStart", error = error)));
+                drop(start);
                 return self.finish_job(path, id, failed(None));
             }
         };
 
-        let run = {
-            let mut inner = self.lock();
-            inner.next_run += 1;
-            let run = inner.next_run;
-            inner.jobs.insert(key, Job { run, pid: child.id(), started: Instant::now(), started_at: now_ms() });
-            run
+        let adopted = self.adopt(start, child, |inner, run, pid| {
+            inner.jobs.insert(key, Job { run, pid, started: Instant::now(), started_at: now_ms() });
+        });
+        let Some((run, child)) = adopted else {
+            return;
         };
 
         self.push_job_line(path, id, format!("$ {}", command.command));
         self.record_command(path, &command.name, "running");
         self.record_pids();
         self.notify();
-
-        for stream in [child.stdout.take().map(|s| Box::new(s) as Box<dyn Read + Send>), child.stderr.take().map(|s| Box::new(s) as Box<dyn Read + Send>)]
-            .into_iter()
-            .flatten()
-        {
-            let core = Arc::clone(self);
-            let (path, id) = (path.to_string(), id.to_string());
-
-            thread::spawn(move || {
-                let mut reader = BufReader::new(stream);
-                let mut bytes = Vec::new();
-
-                while reader.read_until(b'\n', &mut bytes).unwrap_or(0) > 0 {
-                    let line = strip_ansi(String::from_utf8_lossy(&bytes).trim_end_matches(['\n', '\r']));
-                    bytes.clear();
-
-                    let current = core.lock().jobs.get(&job_key(&path, &id)).is_some_and(|job| job.run == run);
-                    if current {
-                        core.push_job_line(&path, &id, line);
-                    }
-                }
-            });
-        }
-
-        let core = Arc::clone(self);
-        let (path, id) = (path.to_string(), id.to_string());
-
-        thread::spawn(move || {
-            let status = child.wait();
-            core.on_job_exit(&path, &id, run, status.ok());
-        });
+        self.watch(unit, run, child);
     }
 
-    fn on_job_exit(self: &Arc<Self>, path: &str, id: &str, run: u64, status: Option<std::process::ExitStatus>) {
-        let key = job_key(path, id);
-        let (planned, started, disposed) = {
-            let mut inner = self.lock();
-            if !inner.jobs.get(&key).is_some_and(|job| job.run == run) {
-                return;
-            }
-            let job = inner.jobs.remove(&key);
-            (inner.job_stopping.contains(&key), job.map(|j| j.started), inner.disposed)
-        };
+    /// A line of run `run`'s output; a line of an earlier run is dropped.
+    pub(super) fn on_job_line(&self, path: &str, id: &str, run: u64, line: String) {
+        let line = strip_ansi(&line);
+        let current = self.lock().jobs.get(&job_key(path, id)).is_some_and(|job| job.run == run);
+        if current {
+            self.push_job_line(path, id, line);
+        }
+    }
 
+    /// The command's shell exited (taken out of `jobs` already); `planned` when a stop did it.
+    pub(super) fn on_job_exit(
+        self: &Arc<Self>,
+        path: &str,
+        id: &str,
+        started: Instant,
+        planned: bool,
+        disposed: bool,
+        status: Option<std::process::ExitStatus>,
+    ) {
         let code = status.and_then(|s| s.code());
         let ok = code == Some(0);
         let text = code.map(|c| c.to_string()).unwrap_or_else(|| "-".into());
 
         let line = if planned { t!("core.log.stopped", code = text) } else { t!("core.log.exited", code = text) };
         self.push_job_line(path, id, format!("[pitwall] {line}"));
+        self.flush_output();
         self.finish_job(path, id, JobResult { ok: ok || planned, code, stopped: planned, finished_at: now_ms() });
 
         let keep_running = self.custom_command(path, id).is_some_and(|c| c.keep_running);
@@ -233,58 +211,19 @@ impl Core {
             return;
         }
 
-        let Some(attempt) = self.claim_restart(&key, started.unwrap_or_else(Instant::now)) else {
+        let unit = Unit::Command(path.to_string(), id.to_string());
+        let Some(attempt) = self.claim_restart(&unit, started) else {
             self.push_job_line(path, id, format!("[pitwall] {}", t!("core.log.gaveUpCommand", max = MAX_RESTARTS)));
             return;
         };
 
         self.push_job_line(path, id, format!("[pitwall] {}", t!("core.log.crashedRestarting", attempt = attempt, max = MAX_RESTARTS)));
-        thread::sleep(RESTART_DELAY);
-
-        let blocked = {
-            let inner = self.lock();
-            inner.disposed || inner.jobs.contains_key(&key)
-        };
-
-        if !blocked {
-            self.spawn_job(path, id, false);
-        }
+        self.restart_later(&unit);
     }
 
-    /// Stops a command and its whole process tree.
+    /// Stops a command and its whole process tree; a restart it waits for is called off too.
     pub fn stop_command(self: &Arc<Self>, path: &str, id: &str) {
-        let key = job_key(path, id);
-        let Some((pid, run)) = ({
-            let mut inner = self.lock();
-            let found = inner.jobs.get(&key).map(|job| (job.pid, job.run));
-            if found.is_some() {
-                inner.job_stopping.insert(key.clone());
-            }
-            found
-        }) else {
-            return;
-        };
-
-        self.notify();
-        kill_tree(pid, false);
-
-        let gone = |core: &Self| !core.lock().jobs.get(&key).is_some_and(|job| job.run == run);
-
-        if !wait_until(Duration::from_millis(600), || gone(self)) {
-            kill_tree(pid, true);
-            wait_until(Duration::from_secs(3), || gone(self));
-        }
-
-        {
-            let mut inner = self.lock();
-            if inner.jobs.get(&key).is_some_and(|job| job.run == run) {
-                inner.jobs.remove(&key);
-            }
-            inner.job_stopping.remove(&key);
-        }
-
-        self.record_pids();
-        self.notify();
+        self.stop_unit(&Unit::Command(path.to_string(), id.to_string()));
     }
 
     /// Commands marked "start with the dev server".
@@ -304,7 +243,10 @@ impl Core {
                 .project(path)
                 .commands
                 .into_iter()
-                .filter(|c| c.with_server && inner.jobs.contains_key(&job_key(path, &c.id)))
+                .filter(|c| {
+                    let key = job_key(path, &c.id);
+                    c.with_server && (inner.jobs.contains_key(&key) || inner.supervisor.pending(&key))
+                })
                 .map(|c| c.id)
                 .collect()
         };

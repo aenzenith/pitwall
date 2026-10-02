@@ -343,3 +343,95 @@ fn starting_deletes_only_day_files_older_than_kept() {
         assert!(dir.join(kept).exists(), "{kept} kept");
     }
 }
+
+/// A process in a group of its own, like a server another participant started.
+fn group_leader() -> std::process::Child {
+    use std::os::unix::process::CommandExt;
+    std::process::Command::new("sleep").arg("60").process_group(0).spawn().unwrap()
+}
+
+fn pid_file(dir: &Path, window_id: &str, pid: u32) {
+    let record = serde_json::json!({ "windowId": window_id, "entries": [{ "path": "/p", "pid": pid }] });
+    fs::write(dir.join("pids").join(format!("{window_id}.json")), record.to_string()).unwrap();
+}
+
+#[test]
+fn only_a_participant_that_is_really_gone_has_its_servers_reaped() {
+    let fx = fixture("node server.js", &[]);
+    let stale = now_ms() - 120_000;
+
+    // Asleep (or its extension host blocked): the record is old, its process still runs.
+    let asleep = format!("{}-asleep", crate::registry::base36(std::process::id() as u64));
+    // Gone: its process has exited.
+    let mut exited = std::process::Command::new("true").spawn().unwrap();
+    exited.wait().unwrap();
+    let gone = format!("{}-gone", crate::registry::base36(exited.id() as u64));
+
+    let mut kept = group_leader();
+    let mut reaped = group_leader();
+    for (id, child) in [(&asleep, &kept), (&gone, &reaped)] {
+        let record = WindowRecord { window_id: id.clone(), title: id.clone(), updated_at: stale, projects: vec![], roots: None, features: None, terminals: None };
+        fs::write(fx.registry_dir.join("windows").join(format!("{id}.json")), serde_json::to_string(&record).unwrap()).unwrap();
+        pid_file(&fx.registry_dir, id, child.id());
+    }
+
+    assert_eq!(fx.core.reap_orphans(), 1);
+
+    assert!(wait_for(Duration::from_secs(5), || reaped.try_wait().unwrap().is_some()), "a dead participant's server outlived the reaper");
+    std::thread::sleep(Duration::from_millis(800));
+    assert!(kept.try_wait().unwrap().is_none(), "a live participant's server was killed");
+    assert!(fx.registry_dir.join("pids").join(format!("{asleep}.json")).exists());
+
+    let _ = kept.kill();
+    let _ = kept.wait();
+}
+
+#[test]
+fn stopping_a_command_ends_children_that_ignore_sigterm() {
+    let fx = fixture("node server.js", &[]);
+    fx.core.add_project(&fx.project).unwrap();
+    // The shell goes on SIGTERM; the child it leaves behind ignores it.
+    let stubborn = r#"sh -c 'trap "" TERM; echo ready; sleep 60' & wait"#;
+    fx.core.set_project_settings(&fx.project, ProjectSettings { commands: vec![command("stubborn", stubborn, false, false)], ..Default::default() });
+
+    fx.core.run_command(&fx.project, "stubborn");
+    assert!(wait_for(Duration::from_secs(20), || fx.core.command_output(&fx.project, "stubborn").iter().any(|l| l == "ready")), "never started");
+    let group = fx.core.lock().jobs.get(&job_key(&fx.project, "stubborn")).map(|job| job.pid()).expect("running");
+
+    fx.core.stop_command(&fx.project, "stubborn");
+
+    assert!(!process::group_alive(group), "something of the command outlived stop");
+    assert_eq!(command_view(&fx.core, &fx.project, "stubborn").status, "idle");
+}
+
+#[test]
+fn two_starts_at_once_run_one_server() {
+    const COUNTING_JS: &str = "require('fs').appendFileSync(__dirname + '/starts.txt', process.pid + '\\n');\n";
+    let port = free_port();
+    let fx = fixture("node server.js", &[("server.js", &format!("{COUNTING_JS}{SERVER_JS}")), ("port.txt", &port.to_string())]);
+    fx.core.add_project(&fx.project).unwrap();
+    fx.core.set_project_settings(&fx.project, ProjectSettings { port: Some(port), ..Default::default() });
+
+    let barrier = Arc::new(std::sync::Barrier::new(2));
+    let starters: Vec<_> = (0..2)
+        .map(|_| {
+            let (core, project, barrier) = (Arc::clone(&fx.core), fx.project.clone(), Arc::clone(&barrier));
+            std::thread::spawn(move || {
+                barrier.wait();
+                core.start(&project, false);
+            })
+        })
+        .collect();
+    for starter in starters {
+        starter.join().unwrap();
+    }
+
+    assert!(wait_for(Duration::from_secs(30), || view(&fx.core, &fx.project).url.is_some()), "server never printed its URL");
+    // Time enough for a second server to come up too, if one was started.
+    std::thread::sleep(Duration::from_secs(3));
+
+    let starts = fs::read_to_string(Path::new(&fx.project).join("starts.txt")).unwrap();
+    assert_eq!(starts.lines().count(), 1, "servers started: {starts}");
+
+    fx.core.stop(&fx.project);
+}

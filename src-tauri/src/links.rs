@@ -17,14 +17,32 @@ pub struct LinkSuggestion {
     pub source: String,
 }
 
+/// The only schemes a link may have. Anything else (`file:`, an app's own scheme) could open a
+/// local file or program, so it is never opened or suggested.
+const SCHEMES: [&str; 3] = ["http", "https", "mailto"];
+
 /// An address as typed, made openable: `staging.app.dev` becomes `https://staging.app.dev`.
-pub fn normalize(url: &str) -> String {
+/// `None` when it is empty or names a scheme other than `http`, `https` or `mailto`.
+pub fn normalize(url: &str) -> Option<String> {
     let url = url.trim();
-    if url.is_empty() || url.contains("://") || url.starts_with("mailto:") {
-        url.to_string()
-    } else {
-        format!("https://{url}")
+    if url.is_empty() {
+        return None;
     }
+
+    match scheme(url) {
+        Some(scheme) => SCHEMES.iter().any(|allowed| scheme.eq_ignore_ascii_case(allowed)).then(|| url.to_string()),
+        None => Some(format!("https://{url}")),
+    }
+}
+
+/// The scheme an address names: `https` in `https://…`, `mailto` in `mailto:…`, `file` in
+/// `file:/…`. A host with a port (`localhost:5173`, `app.test:8080/x`) names none.
+fn scheme(url: &str) -> Option<&str> {
+    let (head, rest) = url.split_once(':')?;
+    let named = head.starts_with(|c: char| c.is_ascii_alphabetic()) && head.chars().all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c));
+    let port = rest.split(['/', '?', '#']).next().is_some_and(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()));
+
+    (named && !port).then_some(head)
 }
 
 /// The web page of a git remote: `git@github.com:me/app.git` and
@@ -102,5 +120,29 @@ pub fn suggestions(path: &str) -> Vec<LinkSuggestion> {
         add("Homepage".into(), url, "package.json");
     }
 
+    // Only what would open: a project's files can't suggest a local file or app.
+    found.retain(|suggestion| normalize(&suggestion.url).as_deref() == Some(suggestion.url.as_str()));
     found
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_web_and_mail_addresses_open() {
+        for (typed, opened) in [
+            ("staging.app.dev", "https://staging.app.dev"),
+            ("localhost:5173/admin", "https://localhost:5173/admin"),
+            (" https://app.test ", "https://app.test"),
+            ("HTTP://app.test", "HTTP://app.test"),
+            ("mailto:team@app.dev", "mailto:team@app.dev"),
+        ] {
+            assert_eq!(normalize(typed).as_deref(), Some(opened), "{typed}");
+        }
+
+        for refused in ["file:///Applications/Calculator.app", "file:/etc/passwd", "FILE://x", "vscode://file/tmp", "javascript:alert(1)", "smb://server/share", "ssh://host", ""] {
+            assert_eq!(normalize(refused), None, "{refused}");
+        }
+    }
 }

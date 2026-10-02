@@ -10,6 +10,7 @@ mod links;
 #[cfg(target_os = "macos")]
 mod notify;
 mod ports;
+mod process;
 mod registry;
 mod resolve;
 mod settings;
@@ -43,12 +44,14 @@ struct TerminalData {
     data: String,
 }
 
+/// Lines of output, batched per project and command (see `core::OUTPUT_BATCH`).
 #[derive(Clone, serde::Serialize)]
-struct OutputLine {
+#[serde(rename_all = "camelCase")]
+struct OutputBatch {
     path: String,
     /// Empty for the dev server, the command id otherwise.
     job: Option<String>,
-    line: String,
+    lines: Vec<String>,
 }
 
 /// VS Code-family storage folders the extension used before `~/.pitwall/`.
@@ -77,8 +80,9 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
                 let _ = app.emit("state", snapshot);
             }
         }
-        CoreEvent::Output { path, job, line } => {
-            let _ = app.emit("output", OutputLine { path, job, line });
+        // Only the window shows output.
+        CoreEvent::Output { path, job, lines } => {
+            let _ = app.emit_to(MAIN, "output", OutputBatch { path, job, lines });
         }
         CoreEvent::Open(url) => {
             let _ = app.opener().open_url(url, None::<&str>);
