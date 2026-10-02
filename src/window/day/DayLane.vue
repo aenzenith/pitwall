@@ -54,11 +54,11 @@ function onKey(event: KeyboardEvent): void {
   >
     <!-- The hint sits on the name only: the blocks have their own tooltips. -->
     <span class="label" :title="t('day.laneTitle')">
-      <span class="name-row">
-        <ClaudeDot :live="live" />
+      <span class="mark"><ClaudeDot :live="live" /></span>
+      <span class="names">
         <span class="name">{{ lane.project.name }}</span>
+        <span class="lane-total">{{ lane.total }}</span>
       </span>
-      <span class="lane-total under">{{ lane.total }}</span>
     </span>
     <!-- Drawn for the eye; VoiceOver hears each block as the arrows reach it. -->
     <span class="track" aria-hidden="true">
@@ -89,7 +89,7 @@ function onKey(event: KeyboardEvent): void {
   width: 100%;
   flex-shrink: 0;
   margin: 0;
-  padding: 6px 8px;
+  padding: 6px 10px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -111,26 +111,29 @@ function onKey(event: KeyboardEvent): void {
   outline-offset: -2px;
 }
 
+/* Claude's dot before the name and its time, centred on the two, spaced as the project list
+   spaces its status: in a 16px slot, 10 from the row's edge and 10 from the name. */
 .label {
-  width: 150px;
+  width: 160px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mark {
+  width: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.names {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-
-/* Claude's dot right before the name, on its line; the line below starts where the name does
-   (dot 7 + gap 8). */
-.name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.under {
-  padding-left: 15px;
 }
 
 .name {

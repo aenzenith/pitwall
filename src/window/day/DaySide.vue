@@ -9,8 +9,8 @@ import { dragRegion } from "../../lib/platform";
 import { api, now, snapshot } from "../../lib/store";
 import type { DayProject } from "../../lib/types";
 
-/** `selected`: the project shown; `live`: its Claude, right now. */
-const props = defineProps<{ selected: DayProject | null; live?: Live }>();
+/** `selected`: the project shown. */
+const props = defineProps<{ selected: DayProject | null }>();
 
 /** Claude, live, per session, whatever day is shown: waiting on you or working. */
 const liveSessions = computed(() => {
@@ -39,11 +39,8 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
     <!-- Always drawn, so its line doesn't pop in when the day arrives. -->
     <div class="side-head" :data-tauri-drag-region="dragRegion">
       <template v-if="selected">
-        <span class="name-row">
-          <ClaudeDot :live="live" />
-          <span class="side-name">{{ selected.name }}</span>
-        </span>
-        <span class="side-span under">{{ selectedSpan }}</span>
+        <span class="side-name">{{ selected.name }}</span>
+        <span class="side-span">{{ selectedSpan }}</span>
       </template>
     </div>
 
@@ -70,17 +67,19 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
             @keydown.enter.prevent="api.revealClaude(selected.path, session.id)"
             @keydown.space.prevent="api.revealClaude(selected.path, session.id)"
           >
-            <div class="session-top">
-              <ClaudeDot :live="liveSessions.get(session.id)" />
-              <span :class="['session-name', { untitled: !session.title }]" :title="session.title ?? ''">{{ session.title || t("day.untitled") }}</span>
-              <span v-if="session.turns" class="session-turns">{{ t("day.turns", { count: session.turns }) }}</span>
-            </div>
-            <div class="session-bottom under">
-              <span class="mini">
-                <i class="mini-work" :style="{ width: sessionShare(session.work, session) }"></i>
-                <i class="mini-wait" :style="{ width: sessionShare(session.wait, session) }"></i>
-              </span>
-              <span class="mono session-length">{{ duration(session.work + session.wait) }}</span>
+            <span class="mark"><ClaudeDot :live="liveSessions.get(session.id)" /></span>
+            <div class="session-body">
+              <div class="session-top">
+                <span :class="['session-name', { untitled: !session.title }]" :title="session.title ?? ''">{{ session.title || t("day.untitled") }}</span>
+                <span v-if="session.turns" class="session-turns">{{ t("day.turns", { count: session.turns }) }}</span>
+              </div>
+              <div class="session-bottom">
+                <span class="mini">
+                  <i class="mini-work" :style="{ width: sessionShare(session.work, session) }"></i>
+                  <i class="mini-wait" :style="{ width: sessionShare(session.wait, session) }"></i>
+                </span>
+                <span class="mono session-length">{{ duration(session.work + session.wait) }}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -139,19 +138,6 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
   gap: 18px;
   padding: 18px 20px;
   overflow-y: auto;
-}
-
-/* Claude's dot right before the name, on its line; the line below starts where the name does
-   (dot 7 + gap 8). */
-.name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.under {
-  padding-left: 15px;
 }
 
 .side-name {
@@ -219,13 +205,15 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
   gap: 6px;
 }
 
+/* Claude's dot centred on the session's two lines, spaced as the project list spaces its status:
+   in a 16px slot, 10 from the row's edge and 10 from the name. Clickable as a whole: the hover
+   background reaches past the dot to the row's edge. */
 .session {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  /* Clickable as a whole: the hover background reaches past the text a little. */
-  margin: 0 -6px;
-  padding: 4px 6px;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -10px;
+  padding: 4px 10px;
   border-radius: 6px;
 }
 
@@ -235,6 +223,21 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
 
 .session:focus-visible {
   outline-offset: 0;
+}
+
+.mark {
+  width: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.session-body {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .session-top {

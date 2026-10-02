@@ -107,7 +107,7 @@ onBeforeUnmount(() => window.clearInterval(timer));
       </div>
     </div>
 
-    <DaySide :selected="selected" :live="selected ? liveProjects.get(selected.path) : undefined" />
+    <DaySide :selected="selected" />
 
     <span id="lane-keys" class="sr-only">{{ t("day.laneKeys") }}</span>
     <div class="sr-only" aria-live="polite">{{ announced }}</div>

@@ -57,12 +57,12 @@ const nowLeft = computed(() => (props.day.today ? `${pct(props.day.now, props.ra
   gap: 4px;
 }
 
-/* Lines up with the tracks: lane padding 8 + label 150 + gap 18, and the lane's 8 on the right. */
+/* Lines up with the tracks: lane padding 10 + label 160 + gap 18, and the lane's 10 on the right. */
 .axis {
   position: relative;
   flex-shrink: 0;
   height: 20px;
-  margin: 0 8px 0 176px;
+  margin: 0 10px 0 188px;
 }
 
 .tick {
