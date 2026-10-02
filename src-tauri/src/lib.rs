@@ -5,6 +5,8 @@ mod core;
 mod git;
 mod hooks;
 mod i18n;
+#[cfg(target_os = "macos")]
+mod notify;
 mod ports;
 mod registry;
 mod resolve;
@@ -91,24 +93,8 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
 /// A system notification; clicking it opens the project and counts the turn as seen.
 #[cfg(target_os = "macos")]
 fn notify(app: &AppHandle, path: String, title: String, body: String) {
-    let app = app.clone();
-
-    // Waiting for the click blocks, so each notification gets its own thread.
-    thread::spawn(move || {
-        let image = claude_mark(&app);
-        let mut notification = mac_notification_sys::Notification::new();
-        notification.title(&title).message(&body).default_sound().wait_for_click(true);
-        if let Some(image) = image.as_deref() {
-            notification.content_image(image);
-        }
-        let response = notification.send();
-
-        if let Ok(mac_notification_sys::NotificationResponse::Click) = response {
-            if let Some(state) = app.try_state::<AppState>() {
-                state.core.open_claude(&path);
-            }
-        }
-    });
+    let image = claude_mark(app);
+    notify::post(path, title, body, image.as_deref().map(std::path::Path::new));
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -133,13 +119,6 @@ fn claude_mark(app: &AppHandle) -> Option<String> {
 /// Running from an installed `.app`, not from `tauri dev`.
 pub fn is_bundled() -> bool {
     std::env::current_exe().is_ok_and(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS"))
-}
-
-/// Notifications are posted on behalf of a bundle id. A built app uses its own; a dev binary
-/// isn't registered with macOS, so it borrows Terminal's.
-#[cfg(target_os = "macos")]
-fn set_notification_sender(identifier: &str) {
-    let _ = mac_notification_sys::set_application(if is_bundled() { identifier } else { "com.apple.Terminal" });
 }
 
 /// Registers the quick-switcher shortcut (or none when off). An error means the keys are
@@ -195,7 +174,14 @@ pub fn run() {
             registry::adopt_old_storage(&registry_dir, &old_extension_storage());
 
             #[cfg(target_os = "macos")]
-            set_notification_sender(&app.config().identifier);
+            {
+                let clicks = app.handle().clone();
+                notify::start(is_bundled(), move |path| {
+                    if let Some(state) = clicks.try_state::<AppState>() {
+                        state.core.open_claude(&path);
+                    }
+                });
+            }
 
             let handle = app.handle().clone();
             let legacy = old_extension_storage();

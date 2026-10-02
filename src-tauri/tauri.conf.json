@@ -65,6 +65,9 @@
       "dmg"
     ],
     "category": "DeveloperTool",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "shortDescription": "Dev servers and Claude sessions in the menu bar",
     "icon": [
       "icons/32x32.png",

@@ -49,4 +49,7 @@ tempfile = "3.27.0"
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-notification-sys = "0.6.15"
 objc2 = "0.6.4"
+block2 = "0.6.2"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSArray", "NSError"] }
+objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "bitflags", "UNUserNotificationCenter", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSound", "UNNotificationAttachment", "UNNotificationTrigger"] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication", "NSApplication", "NSResponder", "NSWindow", "NSPanel", "libc"] }
