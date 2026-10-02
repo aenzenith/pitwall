@@ -44,7 +44,9 @@ function reveal(): void {
   requestAnimationFrame(() => requestAnimationFrame(() => (shown.value = true)));
 }
 
-/** The window went away (blur, Esc, a pick): be in the hidden state for the next opening. */
+/** The window went away (blur, Esc, a pick): be in the hidden state for the next opening. A pick
+ * that opens another app conceals at once, so the panel is gone even while the window waits for
+ * that app to take focus. */
 function conceal(): void {
   shown.value = false;
 }
@@ -196,6 +198,7 @@ function detail(p: Project): string {
 
 function open(p: Project | null): void {
   if (!p) return;
+  conceal();
   void (p.claude ? api.openClaude(p.path) : api.openEditor(p.path));
 }
 
@@ -207,6 +210,7 @@ function toggle(p: Project | null): void {
 /** A folder from the projects folder: ↵ opens it in the editor, ⌘↵ adds it to Pitwall. */
 function openFolder(folder: Folder | null, add: boolean): void {
   if (!folder) return;
+  if (!add) conceal();
   void (add ? api.addProject(folder.path) : api.openEditor(folder.path));
 }
 
@@ -278,8 +282,9 @@ function onKey(event: KeyboardEvent): void {
     else if (event.metaKey) toggle(item.project);
     else open(item.project);
   } else if (event.metaKey && event.key.toLowerCase() === "b" && selected.value) {
-    // The browser takes focus; the switcher closes on its own as it loses it.
+    // The browser takes focus; the switcher goes as it opens.
     event.preventDefault();
+    conceal();
     void api.openBrowser(selected.value.path);
   } else if (event.metaKey && event.code === "KeyP") {
     // ⌘P: open Pitwall's window; the switcher closes as the window takes focus.

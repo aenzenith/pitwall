@@ -61,6 +61,15 @@ fn hand_back_focus() -> bool {
     false
 }
 
+/// Whether Pitwall is the active app. Opened by its shortcut, the switcher (a non-activating
+/// panel) leaves it inactive; opened from the popover, it is active.
+pub fn pitwall_active() -> bool {
+    #[cfg(target_os = "macos")]
+    return objc2_app_kit::NSRunningApplication::currentApplication().isActive();
+    #[cfg(not(target_os = "macos"))]
+    true
+}
+
 /// Hides a focused window once Pitwall has stepped back. Hidden while Pitwall is still the
 /// active app, its focus would pass to Pitwall's main window, which then flashed up for a few
 /// milliseconds; so the window goes when it loses focus (its blur handler hides it) and, should

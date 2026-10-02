@@ -162,7 +162,8 @@ pub fn stop_all(state: State<'_, AppState>) {
 }
 
 #[tauri::command]
-pub fn open_browser(state: State<'_, AppState>, path: String) {
+pub fn open_browser(app: AppHandle, state: State<'_, AppState>, path: String) {
+    step_aside(&app);
     state.core.open_browser(&path);
 }
 
@@ -279,14 +280,20 @@ pub fn hide_switcher(app: AppHandle) {
     tray::dismiss_switcher(&app);
 }
 
-/// Before opening something (editor, Claude): the opened app takes focus itself, and the popover
-/// and switcher go when they lose it. Hidden right away, while Pitwall is still active, Pitwall's
-/// own window would come up for a moment.
+/// Before opening something (editor, Claude, a link): the popover and switcher get out of the
+/// way. While Pitwall is the active app they go when the opened app takes focus, since hidden
+/// right away Pitwall's own window would come up for a moment. When it isn't (the switcher,
+/// opened by its shortcut), they go at once rather than linger while that app starts.
 fn step_aside(app: &AppHandle) {
+    let wait = tray::pitwall_active();
     for label in [POPOVER, SWITCHER] {
         if let Some(window) = app.get_webview_window(label) {
             if window.is_visible().unwrap_or(false) {
-                tray::hide_once_focus_moves(window, std::time::Duration::from_millis(1500));
+                if wait {
+                    tray::hide_once_focus_moves(window, std::time::Duration::from_millis(1500));
+                } else {
+                    let _ = window.hide();
+                }
             }
         }
     }
