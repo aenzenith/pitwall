@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
@@ -10,6 +10,7 @@ import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { claudeState, gitLine, meta } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
+import { outputRequest } from "../lib/panel";
 import { useReorder } from "../lib/reorder";
 import { api, now, snapshot } from "../lib/store";
 import type { Project } from "../lib/types";
@@ -82,8 +83,21 @@ function onKey(event: KeyboardEvent): void {
   }
 }
 
+let unlistenReveal: UnlistenFn | null = null;
+
+/** From the switcher (⌘↵ on a command): select the project, even if a filter or search hid it. */
+function revealOutput(path: string, job: string): void {
+  if (!rows.value.some((p) => p.path === path)) {
+    filter.value = "all";
+    query.value = "";
+  }
+  selectedPath.value = path;
+  outputRequest.value = { path, job };
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", onKey);
+  unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
   const win = getCurrentWindow();
   const check = async (): Promise<void> => {
     fullscreen.value = await win.isFullscreen();
@@ -94,6 +108,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
+  unlistenReveal?.();
   unlistenResize?.();
 });
 

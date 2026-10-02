@@ -15,6 +15,7 @@ import {
   COLLAPSED_HEIGHT,
   outputCollapsed,
   outputHeight,
+  outputRequest,
   outputShown,
   terminalCollapsed,
   terminalHeight,
@@ -84,6 +85,21 @@ function showTab(id: string | null): void {
   tab.value = id;
   void loadOutput();
 }
+
+// The switcher asked for a command's output: that tab, the panel open. After the project
+// switch has reset the tab, hence the tick.
+watch(
+  () => [outputRequest.value, props.project.path] as const,
+  async ([request, path]) => {
+    if (!request || request.path !== path) return;
+    await nextTick();
+    settingsOpen.value = false;
+    outputCollapsed.value = false;
+    showTab(request.job);
+    outputRequest.value = null;
+  },
+  { immediate: true },
+);
 
 // The output keeps the height you gave it, whatever the sections above do. It can grow over
 // them, up to the whole area under the header; the sections scroll on their own.

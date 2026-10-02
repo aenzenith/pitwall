@@ -81,6 +81,11 @@
   "switcher.openPitwall": "Pitwallを開く",
   "switcher.openMarkSeen": "開いて既読にする",
   "switcher.browser": "ブラウザ",
+  "switcher.runAndShow": "実行して表示",
+  "switcher.showOutput": "出力を表示",
+  "switcher.confirmAgain": "{name}を実行するにはもう一度↵を押す",
+  "switcher.noCommandMatch": "「{query}」に一致するコマンドはありません。",
+  "switcher.noCommands": "コマンドはまだありません。プロジェクトの「コマンド」から追加できます。",
 
   "window.filters": "フィルタ",
   "window.filter.all": "すべてのプロジェクト",

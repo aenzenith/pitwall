@@ -81,6 +81,11 @@
   "switcher.openPitwall": "Pitwall öffnen",
   "switcher.openMarkSeen": "Öffnen, als gesehen markieren",
   "switcher.browser": "Browser",
+  "switcher.runAndShow": "Ausführen und anzeigen",
+  "switcher.showOutput": "Ausgabe anzeigen",
+  "switcher.confirmAgain": "Zum Ausführen von {name} erneut ↵ drücken",
+  "switcher.noCommandMatch": "Kein Befehl passt zu „{query}“.",
+  "switcher.noCommands": "Noch keine Befehle. Füge sie unter „Befehle“ in einem Projekt hinzu.",
 
   "window.filters": "Filter",
   "window.filter.all": "Alle Projekte",

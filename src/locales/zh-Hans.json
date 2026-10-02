@@ -81,6 +81,11 @@
   "switcher.openPitwall": "打开 Pitwall",
   "switcher.openMarkSeen": "打开并标为已读",
   "switcher.browser": "浏览器",
+  "switcher.runAndShow": "运行并显示",
+  "switcher.showOutput": "显示输出",
+  "switcher.confirmAgain": "再按 ↵ 运行 {name}",
+  "switcher.noCommandMatch": "没有与“{query}”匹配的命令。",
+  "switcher.noCommands": "还没有命令。可在项目的“命令”中添加。",
 
   "window.filters": "筛选",
   "window.filter.all": "所有项目",

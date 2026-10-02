@@ -15,6 +15,12 @@ export const terminalHeight = ref(PANEL_DEFAULT);
 /** The output is on screen (not while the project's settings fill the details). */
 export const outputShown = ref(false);
 
+/**
+ * The switcher's ⌘↵ on a command: the window selects that project and shows the command's
+ * output tab, its panel open. Whoever shows it clears it.
+ */
+export const outputRequest = ref<{ path: string; job: string } | null>(null);
+
 /** A collapsed panel keeps only its handle and tab row; its height waits for its return. */
 export const COLLAPSED_HEIGHT = 42;
 export const outputCollapsed = ref(false);

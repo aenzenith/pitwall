@@ -81,6 +81,11 @@
   "switcher.openPitwall": "Pitwall'ı aç",
   "switcher.openMarkSeen": "Aç, görüldü say",
   "switcher.browser": "Tarayıcı",
+  "switcher.runAndShow": "Çalıştır ve göster",
+  "switcher.showOutput": "Çıktıyı göster",
+  "switcher.confirmAgain": "{name} için tekrar ↵ bas",
+  "switcher.noCommandMatch": "“{query}” ile eşleşen komut yok.",
+  "switcher.noCommands": "Henüz komut yok. Bir projenin Komutlar bölümünden ekleyebilirsin.",
 
   "window.filters": "Filtreler",
   "window.filter.all": "Tüm projeler",

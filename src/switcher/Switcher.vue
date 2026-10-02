@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { LogicalSize } from "@tauri-apps/api/dpi";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
@@ -9,16 +9,26 @@ import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Marquee from "../components/Marquee.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
-import { claudeState, gitLine, meta } from "../lib/format";
+import { claudeState, gitLine, meta, uptime } from "../lib/format";
 import { t } from "../lib/i18n";
 import { api, now, snapshot } from "../lib/store";
-import type { Folder, Project } from "../lib/types";
+import type { CommandView, Folder, Project } from "../lib/types";
 
 const WIDTH = 640;
 const MAX_HEIGHT = 540;
 
 type Match = { project: Project; score: number; hits: Set<number> };
 type FolderMatch = { folder: Folder; score: number; hits: Set<number> };
+type CommandMatch = { project: Project; command: CommandView; score: number; hits: Set<number> };
+
+/** One row of the list: a project, a project's command, or a folder from the projects folder. */
+type Item =
+  | { kind: "project"; key: string; project: Project; hits: Set<number> }
+  | { kind: "command"; key: string; project: Project; command: CommandView; hits: Set<number> }
+  | { kind: "folder"; key: string; folder: Folder; hits: Set<number> };
+
+/** Commands shown under the projects while typing; `>` lists them all. */
+const MIXED_COMMANDS = 6;
 
 const query = ref("");
 const index = ref(0);
@@ -116,9 +126,60 @@ const folderMatches = computed<FolderMatch[]>(() => {
   return found.sort((a, b) => b.score - a.score).slice(0, 50);
 });
 
-const count = computed(() => matches.value.length || folderMatches.value.length);
-const selected = computed(() => matches.value[index.value]?.project ?? null);
-const selectedFolder = computed(() => (matches.value.length ? null : (folderMatches.value[index.value]?.folder ?? null)));
+/** `>` at the start lists only commands, as in VS Code's command palette. */
+const commandMode = computed(() => query.value.trimStart().startsWith(">"));
+const needle = computed(() => (commandMode.value ? query.value.trimStart().slice(1) : query.value).trim().toLowerCase());
+const anyCommands = computed(() => (snapshot.value?.projects ?? []).some((p) => p.commands.length));
+
+/**
+ * Every project's commands that match: by the command's name, by project and name together
+ * ("cog mig"), or by the command line. Running ones first among equals; with `>` and nothing
+ * typed, all of them in list order.
+ */
+const commandMatches = computed<CommandMatch[]>(() => {
+  const q = needle.value;
+  if (!commandMode.value && !q) return [];
+
+  const found: CommandMatch[] = [];
+
+  (snapshot.value?.projects ?? []).forEach((project, order) => {
+    project.commands.forEach((command, at) => {
+      if (!q) {
+        found.push({ project, command, score: -(order * 1000 + at), hits: new Set() });
+        return;
+      }
+
+      const byName = fuzzy(command.name, q);
+      const byBoth = fuzzy(`${project.name} ${command.name}`, q);
+      const byLine = fuzzy(command.command, q);
+      const best = Math.max(byName?.score ?? -Infinity, (byBoth?.score ?? -Infinity) * 0.8, (byLine?.score ?? -Infinity) * 0.5);
+
+      if (best > -Infinity) {
+        found.push({ project, command, score: best + (command.status === "running" ? 0.5 : 0), hits: new Set(byName?.hits ?? []) });
+      }
+    });
+  });
+
+  found.sort((a, b) => b.score - a.score);
+  return commandMode.value ? found : found.slice(0, MIXED_COMMANDS);
+});
+
+/** What the list shows: with `>` commands only; else projects, then matching commands; else folders. */
+const items = computed<Item[]>(() => {
+  const commands: Item[] = commandMatches.value.map(({ project, command, hits }) => ({ kind: "command", key: `c:${project.path}:${command.id}`, project, command, hits }));
+  if (commandMode.value) return commands;
+
+  const projects: Item[] = matches.value.map(({ project, hits }) => ({ kind: "project", key: `p:${project.path}`, project, hits }));
+  if (projects.length || commands.length) return [...projects, ...commands];
+
+  return folderMatches.value.map(({ folder, hits }) => ({ kind: "folder", key: `f:${folder.path}`, folder, hits }));
+});
+
+const count = computed(() => items.value.length);
+const current = computed<Item | null>(() => items.value[index.value] ?? null);
+const selected = computed(() => (current.value?.kind === "project" ? current.value.project : null));
+/** A command marked "ask first" waits here for a second ↵. */
+const confirming = ref<string | null>(null);
 
 async function loadFolders(): Promise<void> {
   folders.value = await api.projectFolders();
@@ -149,12 +210,59 @@ function openFolder(folder: Folder | null, add: boolean): void {
   void (add ? api.addProject(folder.path) : api.openEditor(folder.path));
 }
 
+function mark(command: CommandView): string {
+  return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[command.status];
+}
+
+/** Pitwall's window, on the project, showing this command's output. */
+function showOutput(path: string, job: string): void {
+  void emitTo("main", "reveal-output", { path, job });
+  void api.openWindow();
+}
+
+/**
+ * A command: ↵ runs it (stops it while it runs) and the switcher goes away; ⌘↵ also shows its
+ * output in Pitwall's window. One marked "ask first" wants a second ↵.
+ */
+function runCommand(item: Extract<Item, { kind: "command" }>, show: boolean): void {
+  const { project, command } = item;
+  if (command.status === "busy") return;
+
+  if (command.status === "running") {
+    if (show) showOutput(project.path, command.id);
+    else {
+      void api.stopCommand(project.path, command.id);
+      void api.hideSwitcher();
+    }
+    return;
+  }
+
+  if (command.confirm && confirming.value !== item.key) {
+    confirming.value = item.key;
+    return;
+  }
+
+  confirming.value = null;
+  void api.runCommand(project.path, command.id);
+  if (show) showOutput(project.path, command.id);
+  else void api.hideSwitcher();
+}
+
+/** A click does what ↵ does. */
+function pick(item: Item): void {
+  if (item.kind === "project") open(item.project);
+  else if (item.kind === "command") runCommand(item, false);
+  else openFolder(item.folder, false);
+}
+
 function onKey(event: KeyboardEvent): void {
   const total = count.value;
 
   if (event.key === "Escape") {
     event.preventDefault();
-    void api.hideSwitcher();
+    // Esc first takes back a pending "run?", then closes.
+    if (confirming.value) confirming.value = null;
+    else void api.hideSwitcher();
   } else if (event.key === "ArrowDown") {
     event.preventDefault();
     if (total) index.value = (index.value + 1) % total;
@@ -163,9 +271,12 @@ function onKey(event: KeyboardEvent): void {
     if (total) index.value = (index.value - 1 + total) % total;
   } else if (event.key === "Enter") {
     event.preventDefault();
-    if (selectedFolder.value) openFolder(selectedFolder.value, event.metaKey);
-    else if (event.metaKey) toggle(selected.value);
-    else open(selected.value);
+    const item = current.value;
+    if (!item) return;
+    if (item.kind === "folder") openFolder(item.folder, event.metaKey);
+    else if (item.kind === "command") runCommand(item, event.metaKey);
+    else if (event.metaKey) toggle(item.project);
+    else open(item.project);
   } else if (event.metaKey && event.key.toLowerCase() === "b" && selected.value) {
     // The browser takes focus; the switcher closes on its own as it loses it.
     event.preventDefault();
@@ -186,8 +297,12 @@ async function fitWindow(): Promise<void> {
   await getCurrentWindow().setSize(new LogicalSize(WIDTH, Math.min(natural, MAX_HEIGHT)));
 }
 
-watch(query, () => (index.value = 0));
+watch(query, () => {
+  index.value = 0;
+  confirming.value = null;
+});
 watch(index, async () => {
+  confirming.value = null;
   await nextTick();
   list.value?.querySelector(".row.on")?.scrollIntoView({ block: "nearest" });
 });
@@ -237,55 +352,61 @@ onBeforeUnmount(() => {
       <kbd class="esc">esc</kbd>
     </div>
 
-    <ul v-if="matches.length" id="results" ref="list" class="list" role="listbox" :aria-label="t('common.projects')">
-      <li
-        v-for="(match, i) in matches"
-        :key="match.project.path"
-        :class="['row', { on: i === index }]"
-        role="option"
-        :aria-selected="i === index"
-        @mousemove="index = i"
-        @click="open(match.project)"
-      >
-        <StatusIcon :project="match.project" :ring="i === index ? '#23272f' : 'var(--bg-panel)'" />
-        <div class="text">
-          <div class="name">
-            <span v-for="(seg, j) in segments(match.project.name, match.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
-          </div>
-          <div :class="['meta', { bad: match.project.status === 'crashed' }]"><Marquee :text="detail(match.project)" /></div>
-        </div>
-        <span v-if="match.project.claude || match.project.claudeWorking" :class="['claude', { quiet: !match.project.claude }]">
-          {{ claudeState(match.project, now) }}
-        </span>
-        <span v-if="match.project.status === 'busy'" class="busy"><Spinner :size="12" /></span>
-        <span v-if="i === index" class="enter">↵</span>
-      </li>
-    </ul>
+    <ul v-if="items.length" id="results" ref="list" class="list" role="listbox" :aria-label="t(commandMode ? 'common.commands' : 'common.projects')">
+      <template v-for="(item, i) in items" :key="item.key">
+        <!-- Under the projects, the commands that match get their own heading. -->
+        <li v-if="item.kind === 'command' && !commandMode && i > 0 && items[i - 1].kind !== 'command'" class="group" role="presentation">
+          {{ t("common.commands") }}
+        </li>
+        <li :class="['row', { on: i === index }]" role="option" :aria-selected="i === index" @mousemove="index = i" @click="pick(item)">
+          <template v-if="item.kind === 'project'">
+            <StatusIcon :project="item.project" :ring="i === index ? '#23272f' : 'var(--bg-panel)'" />
+            <div class="text">
+              <div class="name">
+                <span v-for="(seg, j) in segments(item.project.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+              </div>
+              <div :class="['meta', { bad: item.project.status === 'crashed' }]"><Marquee :text="detail(item.project)" /></div>
+            </div>
+            <span v-if="item.project.claude || item.project.claudeWorking" :class="['claude', { quiet: !item.project.claude }]">
+              {{ claudeState(item.project, now) }}
+            </span>
+            <span v-if="item.project.status === 'busy'" class="busy"><Spinner :size="12" /></span>
+          </template>
 
-    <!-- No project matched: folders in the projects folder that aren't projects yet. -->
-    <ul v-else-if="folderMatches.length" id="results" ref="list" class="list" role="listbox" :aria-label="t('switcher.foldersIn', { folder: dirName })">
-      <li
-        v-for="(match, i) in folderMatches"
-        :key="match.folder.path"
-        :class="['row', { on: i === index }]"
-        role="option"
-        :aria-selected="i === index"
-        @mousemove="index = i"
-        @click="openFolder(match.folder, false)"
-      >
-        <span class="folder-icon"><Icon name="folder" :size="16" /></span>
-        <div class="text">
-          <div class="name">
-            <span v-for="(seg, j) in segments(match.folder.name, match.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
-          </div>
-          <div class="meta">{{ match.folder.path }}</div>
-        </div>
-        <span v-if="i === index" class="enter">↵</span>
-      </li>
+          <template v-else-if="item.kind === 'command'">
+            <span :class="['cmd-mark', item.command.status]">
+              <Spinner v-if="item.command.status === 'busy'" :size="12" />
+              <template v-else>{{ mark(item.command) }}</template>
+            </span>
+            <div class="text">
+              <div class="name">
+                <span v-for="(seg, j) in segments(item.command.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+              </div>
+              <div v-if="confirming === item.key" class="meta confirm">{{ t("switcher.confirmAgain", { name: item.command.name }) }}</div>
+              <div v-else class="meta"><Marquee :text="`${item.project.name}  ·  ${item.command.command}`" /></div>
+            </div>
+            <span v-if="item.command.status === 'running'" class="uptime">{{ uptime(item.command.startedAt, now) }}</span>
+          </template>
+
+          <template v-else>
+            <span class="folder-icon"><Icon name="folder" :size="16" /></span>
+            <div class="text">
+              <div class="name">
+                <span v-for="(seg, j) in segments(item.folder.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+              </div>
+              <div class="meta">{{ item.folder.path }}</div>
+            </div>
+          </template>
+
+          <span v-if="i === index" class="enter">↵</span>
+        </li>
+      </template>
     </ul>
 
     <div v-else class="empty">
-      <template v-if="query.trim() && projectsDir">{{ t("switcher.noMatchAnywhere", { folder: dirName, query }) }}</template>
+      <template v-if="commandMode && needle">{{ t("switcher.noCommandMatch", { query: needle }) }}</template>
+      <template v-else-if="commandMode">{{ t("switcher.noCommands") }}</template>
+      <template v-else-if="query.trim() && projectsDir">{{ t("switcher.noMatchAnywhere", { folder: dirName, query }) }}</template>
       <template v-else-if="query.trim()">
         {{ t("switcher.noMatch", { query }) }}
         <span class="hint">{{ t("switcher.chooseFolderHint") }}</span>
@@ -293,9 +414,15 @@ onBeforeUnmount(() => {
       <template v-else>{{ t("switcher.noProjects") }}</template>
     </div>
 
-    <footer v-if="selectedFolder" class="foot">
+    <footer v-if="current?.kind === 'folder'" class="foot">
       <span><kbd>↵</kbd> {{ t("common.openInEditor") }}</span>
       <span><kbd>⌘↵</kbd> {{ t("switcher.addToPitwall") }}</span>
+      <span class="grow"></span>
+      <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
+    </footer>
+    <footer v-else-if="current?.kind === 'command'" class="foot">
+      <span><kbd>↵</kbd> {{ t(current.command.status === "running" ? "common.stop" : "common.run") }}</span>
+      <span><kbd>⌘↵</kbd> {{ t(current.command.status === "running" ? "switcher.showOutput" : "switcher.runAndShow") }}</span>
       <span class="grow"></span>
       <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
@@ -303,6 +430,7 @@ onBeforeUnmount(() => {
       <span><kbd>↵</kbd> {{ t(selected?.claude ? "switcher.openMarkSeen" : "common.openInEditor") }}</span>
       <span><kbd>⌘↵</kbd> {{ t(selected?.status === "running" ? "common.stop" : "common.start") }}</span>
       <span><kbd>⌘B</kbd> {{ t("switcher.browser") }}</span>
+      <span v-if="anyCommands"><kbd>&gt;</kbd> {{ t("common.commands") }}</span>
       <span class="grow"></span>
       <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
@@ -495,6 +623,56 @@ kbd {
   display: inline-flex;
   justify-content: center;
   flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* Commands: the heading under the projects, a state mark where projects have their dot. */
+.group {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.cmd-mark {
+  width: 16px;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c727c;
+}
+
+.cmd-mark.running {
+  color: var(--run);
+  font-size: 10px;
+}
+
+.cmd-mark.ok {
+  color: var(--run);
+}
+
+.cmd-mark.failed {
+  color: var(--crash-text);
+}
+
+.cmd-mark.busy {
+  color: var(--text-muted);
+}
+
+/* "Press ↵ again": the command asks before it runs. */
+.meta.confirm {
+  font-family: inherit;
+  color: #f3c29b;
+}
+
+.uptime {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--text-muted);
 }
 

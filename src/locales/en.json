@@ -81,6 +81,11 @@
   "switcher.openPitwall": "Open Pitwall",
   "switcher.openMarkSeen": "Open, mark seen",
   "switcher.browser": "Browser",
+  "switcher.runAndShow": "Run and show",
+  "switcher.showOutput": "Show output",
+  "switcher.confirmAgain": "Press ↵ again to run {name}",
+  "switcher.noCommandMatch": "No command matches “{query}”.",
+  "switcher.noCommands": "No commands yet. Add them under Commands in a project.",
 
   "window.filters": "Filters",
   "window.filter.all": "All projects",
