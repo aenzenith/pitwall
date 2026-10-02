@@ -1,6 +1,9 @@
 //! Claude Code session watcher. Port of the extension's `src/claude.ts`.
 //! Reads only the last lines of each session log, and only to see whether the turn ended;
-//! message text is never kept. "Seen" state lives in the shared `claude-seen.json`.
+//! message text is never kept. Where the opt-in hook is installed (hooks.rs), its events decide
+//! instead: a prompt sent, the turn over, a permission prompt or question open, the session
+//! gone. Logs stay the fallback for sessions the hook hasn't reported. "Seen" state lives in the
+//! shared `claude-seen.json`.
 
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
@@ -24,8 +27,8 @@ pub enum TurnKind {
     Finished,
     /// Claude asked a question (AskUserQuestion, plan approval).
     Asking,
-    /// Claude waits for a permission prompt. Only the Notification hook reports this; the
-    /// session log doesn't record it.
+    /// Claude waits for a permission prompt. Only the hook reports this; the session log
+    /// doesn't record it.
     Permission,
 }
 
@@ -237,16 +240,22 @@ fn read_file_tail(file: &Path, size: u64) -> Option<Verdict> {
     }
 }
 
-struct Cached {
+/// A session log as last read.
+struct Log {
     modified: SystemTime,
+    modified_ms: u64,
     size: u64,
     verdict: Option<Verdict>,
 }
 
 /// A session counts as working while its log changed this recently and the turn isn't over.
 pub(crate) const WORKING_WINDOW_MS: u64 = 5 * 60 * 1000;
-/// Hook events nobody resolved are dropped after a day.
+/// Hook events, and sessions known only from them, are dropped after a day.
 const EVENT_MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
+/// Claude Code reports a permission prompt only once it has been open this long.
+const PROMPT_NOTICE_MS: u64 = 6_000;
+/// Log writes this soon after a prompt was reported are the turn catching up, not an answer.
+const ANSWER_SLACK_MS: u64 = 1_500;
 
 #[derive(Debug, Default)]
 pub struct ScanResult {
@@ -258,9 +267,30 @@ pub struct ScanResult {
     pub sessions: Vec<SessionState>,
 }
 
-/// What the Notification hook wrote (see hooks.rs). Only these fields are read.
+/// One event from the hook script (see hooks.rs). Only these fields are ever written; never
+/// the prompt, a message or a tool's input.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct HookEvent {
+    /// Claude Code's event: `UserPromptSubmit`, `Stop`, `Notification`…
+    event: String,
+    session_id: String,
+    /// The subagent it came from; none for the session's own thread.
+    agent_id: Option<String>,
+    cwd: Option<String>,
+    transcript_path: Option<String>,
+    notification_type: Option<String>,
+    /// Why a session started: `startup` | `resume` | `clear` | `compact`.
+    source: Option<String>,
+    /// When it happened: the file's modification time.
+    at: u64,
+}
+
+/// A file of the first hook script: Claude Code's whole Notification input. Only these fields
+/// are read.
 #[derive(Debug, Deserialize)]
-struct HookInput {
+struct LegacyInput {
+    #[serde(default)]
+    session_id: Option<String>,
     #[serde(default)]
     transcript_path: Option<String>,
     #[serde(default)]
@@ -269,20 +299,210 @@ struct HookInput {
     notification_type: Option<String>,
 }
 
-struct HookEvent {
-    cwd: String,
-    turn: Turn,
+impl HookEvent {
+    /// The script's `key=value` lines; unknown keys are skipped.
+    fn parse(text: &str, at: u64) -> Option<Self> {
+        let mut event = HookEvent { at, ..HookEvent::default() };
+
+        for line in text.lines() {
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            let value = Some(value.to_string()).filter(|value| !value.is_empty());
+
+            match key {
+                "event" => event.event = value.unwrap_or_default(),
+                "session_id" => event.session_id = value.unwrap_or_default(),
+                "agent_id" => event.agent_id = value,
+                "cwd" => event.cwd = value,
+                "transcript_path" => event.transcript_path = value,
+                "notification_type" => event.notification_type = value,
+                "source" => event.source = value,
+                _ => {}
+            }
+        }
+
+        (!event.event.is_empty() && !event.session_id.is_empty()).then_some(event)
+    }
+
+    fn parse_legacy(raw: &str, at: u64) -> Option<Self> {
+        let input: LegacyInput = serde_json::from_str(raw).ok()?;
+
+        Some(HookEvent {
+            event: "Notification".into(),
+            session_id: input.session_id?,
+            cwd: input.cwd,
+            transcript_path: input.transcript_path,
+            notification_type: input.notification_type,
+            at,
+            ..HookEvent::default()
+        })
+    }
+}
+
+/// Where a session stands by its hook events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HookPhase {
+    /// Started, or back at the prompt; nothing to wait on.
+    Idle,
+    Working,
+    /// Its turn ended, or it waits on a permission prompt or a question.
+    Waiting(TurnKind),
+    /// Nothing decisive heard yet, or a prompt answered without an event saying so (a denied
+    /// tool ends the turn silently): the log decides until the next event.
+    Log,
+    Ended,
+}
+
+struct HookSession {
+    /// Where it was first seen running.
+    cwd: Option<String>,
+    transcript: Option<PathBuf>,
+    phase: HookPhase,
+    /// When the phase began.
+    since: u64,
+    /// The latest event.
+    last: u64,
+    /// Each thread's latest finished tool call: `""` for the session's own, else the subagent.
+    threads: HashMap<String, u64>,
+    /// Threads that kept running while the open prompt waited: their tool calls don't answer it.
+    busy: HashSet<String>,
+}
+
+impl HookSession {
+    fn new(at: u64) -> Self {
+        Self { cwd: None, transcript: None, phase: HookPhase::Log, since: at, last: at, threads: HashMap::new(), busy: HashSet::new() }
+    }
+
+    fn apply(&mut self, event: &HookEvent) {
+        if self.cwd.is_none() {
+            self.cwd = event.cwd.clone();
+        }
+        if let Some(path) = &event.transcript_path {
+            self.transcript = Some(PathBuf::from(path));
+        }
+        self.last = self.last.max(event.at);
+
+        let thread = event.agent_id.clone().unwrap_or_default();
+        let prompt_open = matches!(self.phase, HookPhase::Waiting(TurnKind::Permission | TurnKind::Asking));
+
+        let next = match event.event.as_str() {
+            "SessionStart" if event.source.as_deref() == Some("compact") => None,
+            "SessionStart" => Some(HookPhase::Idle),
+            "UserPromptSubmit" => Some(HookPhase::Working),
+            // Installed only for the tools that ask: AskUserQuestion, ExitPlanMode.
+            "PreToolUse" => Some(HookPhase::Waiting(TurnKind::Asking)),
+            "PostToolUse" => {
+                self.threads.insert(thread.clone(), event.at);
+                match self.phase {
+                    // A finished tool call answers the prompt, unless its thread kept running
+                    // while the prompt was open (a parallel subagent).
+                    _ if prompt_open => (!self.busy.contains(&thread)).then_some(HookPhase::Working),
+                    // Another tool's Stop hook can keep the turn going; a subagent left running
+                    // in the background doesn't.
+                    HookPhase::Waiting(TurnKind::Finished) => thread.is_empty().then_some(HookPhase::Working),
+                    HookPhase::Ended => None,
+                    _ => Some(HookPhase::Working),
+                }
+            }
+            "Notification" => match event.notification_type.as_deref() {
+                Some("permission_prompt") => {
+                    // The waiting thread can't finish a tool call while its prompt is open.
+                    let opened = event.at.saturating_sub(PROMPT_NOTICE_MS);
+                    self.busy = self.threads.iter().filter(|(_, at)| **at > opened).map(|(thread, _)| thread.clone()).collect();
+                    Some(HookPhase::Waiting(TurnKind::Permission))
+                }
+                Some("elicitation_dialog" | "elicitation_url_dialog" | "agent_needs_input") => Some(HookPhase::Waiting(TurnKind::Asking)),
+                Some("elicitation_complete" | "elicitation_response") if prompt_open => Some(HookPhase::Working),
+                _ => None,
+            },
+            "Stop" => Some(HookPhase::Waiting(TurnKind::Finished)),
+            "SessionEnd" => Some(HookPhase::Ended),
+            _ => None,
+        };
+
+        if let Some(phase) = next {
+            if phase != HookPhase::Waiting(TurnKind::Permission) {
+                self.busy.clear();
+            }
+            if matches!(phase, HookPhase::Idle | HookPhase::Ended | HookPhase::Waiting(TurnKind::Finished)) {
+                self.threads.clear();
+            }
+            self.phase = phase;
+            self.since = event.at;
+        }
+    }
+
+    /// Its phase and the turn it waits with, given when its log was last written; `None` when
+    /// the log decides. A prompt counts as answered once the log is written again.
+    fn state(&mut self, logged: u64, baseline: u64, recent: u64) -> Option<(SessionPhase, Option<Turn>)> {
+        let alive = if self.last.max(logged) > recent { SessionPhase::Working } else { SessionPhase::Idle };
+
+        match self.phase {
+            HookPhase::Log => None,
+            HookPhase::Idle | HookPhase::Ended => Some((SessionPhase::Idle, None)),
+            HookPhase::Working => Some((alive, None)),
+            HookPhase::Waiting(TurnKind::Finished) if self.since > baseline => {
+                Some((SessionPhase::Waiting, Some(Turn { kind: TurnKind::Finished, at: self.since })))
+            }
+            HookPhase::Waiting(TurnKind::Finished) => Some((SessionPhase::Idle, None)),
+            HookPhase::Waiting(kind) => {
+                let written = self.transcript.as_deref().and_then(modified_ms).unwrap_or(0).max(logged);
+
+                if written > self.since + ANSWER_SLACK_MS {
+                    self.phase = HookPhase::Log;
+                    self.busy.clear();
+                    return None;
+                }
+
+                if self.since > baseline {
+                    Some((SessionPhase::Waiting, Some(Turn { kind, at: self.since })))
+                } else {
+                    Some((alive, None))
+                }
+            }
+        }
+    }
+}
+
+fn system_ms(time: SystemTime) -> u64 {
+    time.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 fn modified_ms(path: &Path) -> Option<u64> {
-    let modified = fs::metadata(path).ok()?.modified().ok()?;
-    modified.duration_since(SystemTime::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)
+    Some(system_ms(fs::metadata(path).ok()?.modified().ok()?))
 }
 
 fn inside(cwd: &str, folder_path: &str) -> bool {
     let cwd = fold_case(cwd);
     let folder = fold_case(folder_path);
     cwd == folder || cwd.starts_with(&format!("{folder}{MAIN_SEPARATOR}"))
+}
+
+/// Whether a folder under `~/.claude/projects` holds a project's sessions: `Some(true)` for its
+/// own folder, `Some(false)` for a subfolder's (`<project>-sub`, which a neighbour such as
+/// `pitwall-docs` also looks like; the session's cwd tells them apart).
+fn dir_match(dir: &str, encoded: &str) -> Option<bool> {
+    let name = fold_case(dir);
+
+    if name == encoded {
+        Some(true)
+    } else if name.starts_with(&format!("{encoded}-")) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// A session decided by its log's last lines.
+fn log_state(verdict: &Verdict, modified: u64, baseline: u64, recent: u64) -> (SessionPhase, Option<Turn>) {
+    let phase = match verdict.turn {
+        Some(turn) if turn.at > baseline => SessionPhase::Waiting,
+        None if modified > recent => SessionPhase::Working,
+        _ => SessionPhase::Idle,
+    };
+
+    (phase, verdict.turn.filter(|_| phase == SessionPhase::Waiting))
 }
 
 pub struct ClaudeWatch {
@@ -292,7 +512,14 @@ pub struct ClaudeWatch {
     /// to `~/.pitwall/` still record "I looked" there; read, never written.
     legacy_seen: Vec<PathBuf>,
     events_dir: PathBuf,
-    files: HashMap<PathBuf, Cached>,
+    /// Session logs read so far: by folder under `root`, then by session id.
+    logs: HashMap<String, HashMap<String, Log>>,
+    /// Sessions the hook reported, by session id.
+    hooked: HashMap<String, HookSession>,
+    /// The projects listed now.
+    listed: Vec<String>,
+    /// A full scan ran; nothing is known before.
+    ready: bool,
 }
 
 impl ClaudeWatch {
@@ -302,13 +529,43 @@ impl ClaudeWatch {
             seen_file: registry_dir.join("claude-seen.json"),
             legacy_seen: Vec::new(),
             events_dir: registry_dir.join("claude-events"),
-            files: HashMap::new(),
+            logs: HashMap::new(),
+            hooked: HashMap::new(),
+            listed: Vec::new(),
+            ready: false,
         }
     }
 
     pub fn with_legacy_seen(mut self, files: Vec<PathBuf>) -> Self {
         self.legacy_seen = files;
         self
+    }
+
+    /// The projects folder of Claude Code (`~/.claude/projects`).
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Where the hook drops its events.
+    pub fn events_dir(&self) -> &Path {
+        &self.events_dir
+    }
+
+    pub fn ready(&self) -> bool {
+        self.ready
+    }
+
+    pub fn listed(&self) -> &[String] {
+        &self.listed
+    }
+
+    /// The projects to follow; true when the list changed.
+    pub fn set_listed(&mut self, paths: &[String]) -> bool {
+        if self.listed == paths {
+            return false;
+        }
+        self.listed = paths.to_vec();
+        true
     }
 
     /// The shared book plus every "I looked" from the legacy books (latest wins). The start
@@ -359,134 +616,49 @@ impl ClaudeWatch {
         self.write_seen(SeenBook { since: self.read_seen().since, paths });
     }
 
-    /// Prompts reported by the Notification hook that are still open. A prompt is answered
-    /// once its session log is written again; then the event file goes.
-    fn hook_events(&self) -> Vec<HookEvent> {
-        let Ok(entries) = fs::read_dir(&self.events_dir) else {
-            return Vec::new();
-        };
-
-        let now = now_ms();
-        let mut events = Vec::new();
-
-        for entry in entries.flatten() {
-            let file = entry.path();
-
-            if file.extension().is_none_or(|ext| ext != "json") {
-                continue;
-            }
-
-            let at = modified_ms(&file).unwrap_or(0);
-            let input = fs::read_to_string(&file).ok().and_then(|raw| serde_json::from_str::<HookInput>(&raw).ok());
-            let kind = match input.as_ref().and_then(|i| i.notification_type.as_deref()) {
-                Some("permission_prompt") => Some(TurnKind::Permission),
-                Some("elicitation_dialog" | "elicitation_url_dialog" | "agent_needs_input") => Some(TurnKind::Asking),
-                _ => None,
-            };
-
-            let answered = input
-                .as_ref()
-                .and_then(|i| i.transcript_path.as_deref())
-                .and_then(|path| modified_ms(Path::new(path)))
-                .is_some_and(|log| log > at + 1_500);
-
-            match (kind, input.and_then(|i| i.cwd)) {
-                (Some(kind), Some(cwd)) if !answered && now.saturating_sub(at) < EVENT_MAX_AGE_MS => {
-                    events.push(HookEvent { cwd, turn: Turn { kind, at } });
-                }
-                _ => {
-                    let _ = fs::remove_file(&file);
-                }
-            }
-        }
-
-        events
+    /// A full pass: every log of the listed projects, the hook's events, then the verdict.
+    #[cfg(test)]
+    pub fn scan(&mut self, folder_paths: &[String]) -> ScanResult {
+        self.set_listed(folder_paths);
+        self.rescan();
+        self.apply_events();
+        self.evaluate()
     }
 
-    pub fn scan(&mut self, folder_paths: &[String]) -> ScanResult {
+    /// Reads the session logs of the listed projects changed since their turns were last seen
+    /// (or lately), and forgets those of projects no longer listed.
+    pub fn rescan(&mut self) {
         let book = self.read_seen_everywhere();
+        let recent = now_ms().saturating_sub(WORKING_WINDOW_MS);
         let dirs: Vec<String> = fs::read_dir(&self.root)
             .map(|entries| entries.flatten().filter_map(|entry| entry.file_name().into_string().ok()).collect())
             .unwrap_or_default();
-        let events = self.hook_events();
-        let recent = now_ms().saturating_sub(WORKING_WINDOW_MS);
-        let mut result = ScanResult::default();
+        let mut wanted: HashMap<String, u64> = HashMap::new();
 
-        for folder_path in folder_paths {
-            let baseline = book.paths.get(folder_path).copied().unwrap_or(book.since);
-            let (logged, working, sessions) = self.sessions(folder_path, &dirs, baseline, recent);
-            result.sessions.extend(sessions);
-            let prompted = events
-                .iter()
-                .filter(|event| event.turn.at > baseline && inside(&event.cwd, folder_path))
-                .map(|event| event.turn);
+        for folder_path in &self.listed {
+            let since = book.paths.get(folder_path).copied().unwrap_or(book.since).min(recent);
+            let encoded = fold_case(&encode_project_path(folder_path));
 
-            match logged.into_iter().chain(prompted).max_by_key(|turn| turn.at) {
-                Some(turn) => {
-                    result.waiting.insert(folder_path.clone(), turn);
-                }
-                None if working => {
-                    result.working.insert(folder_path.clone());
-                }
-                None => {}
+            for dir in dirs.iter().filter(|dir| dir_match(dir, &encoded).is_some()) {
+                let slot = wanted.entry(dir.clone()).or_insert(since);
+                *slot = (*slot).min(since);
             }
         }
 
-        result
-    }
-
-    /// The newest finished turn after `baseline`, whether a session is mid-turn, and each
-    /// session's state.
-    fn sessions(&mut self, folder_path: &str, dirs: &[String], baseline: u64, recent: u64) -> (Option<Turn>, bool, Vec<SessionState>) {
-        let encoded = fold_case(&encode_project_path(folder_path));
-        let mut newest: Option<Turn> = None;
-        let mut working = false;
-        let mut states = Vec::new();
-
-        for dir in dirs {
-            let name = fold_case(dir);
-            let exact = name == encoded;
-
-            // Sessions started in a subfolder get `<project>-sub`; the log's cwd tells them
-            // apart from a neighbour such as `pitwall-docs`.
-            if !exact && !name.starts_with(&format!("{encoded}-")) {
-                continue;
-            }
-
-            for (verdict, modified, id) in self.verdicts_in(&self.root.join(dir), baseline.min(recent)) {
-                if !exact && !verdict.cwd.as_deref().is_some_and(|cwd| inside(cwd, folder_path)) {
-                    continue;
-                }
-
-                let phase = match verdict.turn {
-                    Some(turn) if turn.at > baseline => SessionPhase::Waiting,
-                    None if modified > recent => SessionPhase::Working,
-                    _ => SessionPhase::Idle,
-                };
-                let turn = verdict.turn.filter(|_| phase == SessionPhase::Waiting);
-                states.push(SessionState { id, path: folder_path.to_string(), title: verdict.title.clone(), phase, turn });
-
-                match verdict.turn {
-                    Some(turn) if turn.at > baseline && newest.is_none_or(|current| turn.at > current.at) => {
-                        newest = Some(turn);
-                    }
-                    None if modified > recent => working = true,
-                    _ => {}
-                }
-            }
+        self.logs.retain(|dir, _| wanted.contains_key(dir));
+        for (dir, since) in wanted {
+            self.rescan_dir(&dir, since);
         }
-
-        (newest, working, states)
+        self.ready = true;
     }
 
-    /// Verdicts of the session logs changed after `since`, with their modification time and
-    /// session id.
-    fn verdicts_in(&mut self, dir: &Path, since: u64) -> Vec<(Verdict, u64, String)> {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return Vec::new();
+    fn rescan_dir(&mut self, dir: &str, since: u64) {
+        let Ok(entries) = fs::read_dir(self.root.join(dir)) else {
+            self.logs.remove(dir);
+            return;
         };
 
-        let mut verdicts = Vec::new();
+        let mut present = HashSet::new();
 
         for entry in entries.flatten() {
             let file = entry.path();
@@ -495,35 +667,191 @@ impl ClaudeWatch {
                 continue;
             }
 
+            let Some(id) = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()) else {
+                continue;
+            };
             let Ok(meta) = entry.metadata() else {
                 continue;
             };
-            let Ok(modified) = meta.modified() else {
-                continue;
-            };
 
-            let modified_ms = modified.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+            present.insert(id.clone());
 
-            if modified_ms <= since {
-                continue;
-            }
-
-            let id = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
-            let verdict = match self.files.get(&file) {
-                Some(cached) if cached.modified == modified && cached.size == meta.len() => cached.verdict.clone(),
-                _ => {
-                    let verdict = read_file_tail(&file, meta.len());
-                    self.files.insert(file, Cached { modified, size: meta.len(), verdict: verdict.clone() });
-                    verdict
-                }
-            };
-
-            if let Some(verdict) = verdict {
-                verdicts.push((verdict, modified_ms, id));
+            if meta.modified().map(system_ms).unwrap_or(0) > since {
+                self.read_log(dir, id, &file, &meta);
             }
         }
 
-        verdicts
+        if let Some(logs) = self.logs.get_mut(dir) {
+            logs.retain(|id, _| present.contains(id));
+        }
+    }
+
+    /// The log's last lines, unless it is unchanged since they were read.
+    fn read_log(&mut self, dir: &str, id: String, file: &Path, meta: &fs::Metadata) {
+        let Ok(modified) = meta.modified() else {
+            return;
+        };
+        let logs = self.logs.entry(dir.to_string()).or_default();
+
+        if logs.get(&id).is_some_and(|log| log.modified == modified && log.size == meta.len()) {
+            return;
+        }
+
+        let verdict = read_file_tail(file, meta.len());
+        logs.insert(id, Log { modified, modified_ms: system_ms(modified), size: meta.len(), verdict });
+    }
+
+    /// One session log changed (`<folder>/<session>.jsonl` under the projects folder).
+    pub fn refresh_log(&mut self, dir: &str, file_name: &str) {
+        let Some(id) = file_name.strip_suffix(".jsonl") else {
+            return;
+        };
+        if !self.listed.iter().any(|folder| dir_match(dir, &fold_case(&encode_project_path(folder))).is_some()) {
+            return;
+        }
+
+        let file = self.root.join(dir).join(file_name);
+
+        match fs::metadata(&file) {
+            Ok(meta) => self.read_log(dir, id.to_string(), &file, &meta),
+            Err(_) => {
+                if let Some(logs) = self.logs.get_mut(dir) {
+                    logs.remove(id);
+                }
+            }
+        }
+    }
+
+    /// Applies the hook's event files in the order they were written, then deletes them; one
+    /// older than a day is only deleted. Returns the listed projects where a turn just ended.
+    pub fn apply_events(&mut self) -> Vec<String> {
+        let Ok(entries) = fs::read_dir(&self.events_dir) else {
+            return Vec::new();
+        };
+
+        let now = now_ms();
+        let mut files: Vec<(SystemTime, PathBuf)> = entries
+            .flatten()
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "event" || ext == "json"))
+            .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+            .collect();
+        files.sort();
+
+        let mut ended = Vec::new();
+
+        for (modified, file) in files {
+            let at = system_ms(modified);
+            let raw = fs::read_to_string(&file).unwrap_or_default();
+            let _ = fs::remove_file(&file);
+
+            if now.saturating_sub(at) >= EVENT_MAX_AGE_MS {
+                continue;
+            }
+
+            let legacy = file.extension().is_some_and(|ext| ext == "json");
+            let Some(event) = (if legacy { HookEvent::parse_legacy(&raw, at) } else { HookEvent::parse(&raw, at) }) else {
+                continue;
+            };
+
+            let session = self.hooked.entry(event.session_id.clone()).or_insert_with(|| HookSession::new(at));
+            session.apply(&event);
+
+            if event.event == "Stop" {
+                if let Some(cwd) = session.cwd.as_deref() {
+                    ended.extend(self.listed.iter().filter(|folder| inside(cwd, folder)).cloned());
+                }
+            }
+        }
+
+        ended.sort();
+        ended.dedup();
+        ended
+    }
+
+    /// Where every session of the listed projects stands, from what was read so far: the
+    /// hook's events where it reported, else the log's last lines. Only the seen book is read.
+    pub fn evaluate(&mut self) -> ScanResult {
+        let book = self.read_seen_everywhere();
+        let now = now_ms();
+        let recent = now.saturating_sub(WORKING_WINDOW_MS);
+        let mut result = ScanResult::default();
+
+        self.hooked.retain(|_, session| now.saturating_sub(session.last) < EVENT_MAX_AGE_MS);
+        let Self { logs, hooked, listed, .. } = self;
+
+        for folder_path in listed.iter() {
+            let baseline = book.paths.get(folder_path).copied().unwrap_or(book.since);
+            let since = baseline.min(recent);
+            let encoded = fold_case(&encode_project_path(folder_path));
+            let mut states: Vec<SessionState> = Vec::new();
+
+            for (dir, sessions) in logs.iter() {
+                let Some(exact) = dir_match(dir, &encoded) else {
+                    continue;
+                };
+
+                for (id, log) in sessions {
+                    if !exact {
+                        let cwd = log.verdict.as_ref().and_then(|v| v.cwd.clone()).or_else(|| hooked.get(id).and_then(|h| h.cwd.clone()));
+                        if !cwd.is_some_and(|cwd| inside(&cwd, folder_path)) {
+                            continue;
+                        }
+                    }
+
+                    let hook = hooked.get_mut(id);
+                    if hook.as_ref().map_or(0, |h| h.last).max(log.modified_ms) <= since {
+                        continue;
+                    }
+
+                    let (phase, turn) = match hook.and_then(|h| h.state(log.modified_ms, baseline, recent)) {
+                        Some(state) => state,
+                        None => match &log.verdict {
+                            Some(verdict) if log.modified_ms > since => log_state(verdict, log.modified_ms, baseline, recent),
+                            _ => continue,
+                        },
+                    };
+                    let title = log.verdict.as_ref().and_then(|v| v.title.clone());
+                    states.push(SessionState { id: id.clone(), path: folder_path.clone(), title, phase, turn });
+                }
+            }
+
+            // Sessions the hook reported whose log hasn't been read: not written yet, or older.
+            for (id, session) in hooked.iter_mut() {
+                if session.last <= since || states.iter().any(|state| &state.id == id) {
+                    continue;
+                }
+
+                let log_dir = session.transcript.as_deref().and_then(Path::parent).and_then(Path::file_name).map(|dir| dir.to_string_lossy().into_owned());
+                let by_cwd = session.cwd.as_deref().is_some_and(|cwd| inside(cwd, folder_path));
+                if !by_cwd && log_dir.as_deref().is_none_or(|dir| dir_match(dir, &encoded) != Some(true)) {
+                    continue;
+                }
+
+                let log = log_dir.as_deref().and_then(|dir| logs.get(dir)).and_then(|sessions| sessions.get(id));
+                let title = log.and_then(|log| log.verdict.as_ref()).and_then(|v| v.title.clone());
+
+                if let Some((phase, turn)) = session.state(log.map_or(0, |log| log.modified_ms), baseline, recent) {
+                    states.push(SessionState { id: id.clone(), path: folder_path.clone(), title, phase, turn });
+                }
+            }
+
+            // A stable order, so an unchanged state never looks changed.
+            states.sort_by(|a, b| a.id.cmp(&b.id));
+
+            let newest = states.iter().filter(|s| s.phase == SessionPhase::Waiting).filter_map(|s| s.turn).max_by_key(|turn| turn.at);
+            match newest {
+                Some(turn) => {
+                    result.waiting.insert(folder_path.clone(), turn);
+                }
+                None if states.iter().any(|s| s.phase == SessionPhase::Working) => {
+                    result.working.insert(folder_path.clone());
+                }
+                None => {}
+            }
+            result.sessions.extend(states);
+        }
+
+        result
     }
 }
 
@@ -583,6 +911,71 @@ mod tests {
         assert_eq!(read_tail(&[asking]).unwrap().turn.unwrap().kind, TurnKind::Asking);
         assert_eq!(read_tail(&[finished, working]).unwrap().turn, None);
         assert_eq!(read_tail(&[noise]), None);
+    }
+
+    #[test]
+    fn hook_events_drive_the_session_and_a_running_subagent_never_answers_a_prompt() {
+        use std::time::Duration;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let claude = tmp.path().join("claude");
+        let registry = tmp.path().join("registry");
+        let events = registry.join("claude-events");
+        let project = "/Users/me/projects/paddock";
+        let session_dir = claude.join(encode_project_path(project));
+        let transcript = session_dir.join("s1.jsonl");
+        let base = SystemTime::now() - Duration::from_secs(60);
+        let at = |seconds: u64| base + Duration::from_secs(seconds);
+
+        fs::create_dir_all(&session_dir).unwrap();
+        fs::create_dir_all(&events).unwrap();
+        fs::write(registry.join("claude-seen.json"), r#"{"since":0,"paths":{}}"#).unwrap();
+        // Its log, last written before all of this, ends with an older finished turn.
+        fs::write(&transcript, "{\"type\":\"assistant\",\"timestamp\":\"2026-09-24T17:33:19.947Z\",\"message\":{\"stop_reason\":\"end_turn\"}}\n").unwrap();
+        File::options().write(true).open(&transcript).unwrap().set_modified(base - Duration::from_secs(60)).unwrap();
+
+        let mut watch = ClaudeWatch::new(claude, &registry);
+        let paths = vec![project.to_string()];
+        let common = format!("session_id=s1\ncwd={project}/app\ntranscript_path={}\n", transcript.display());
+        let mut step = |name: &str, seconds: u64, lines: String| {
+            let file = events.join(format!("{name}.event"));
+            fs::write(&file, lines).unwrap();
+            File::options().write(true).open(&file).unwrap().set_modified(at(seconds)).unwrap();
+            let result = watch.scan(&paths);
+            let session = result.sessions.iter().find(|s| s.id == "s1").expect("the session is listed");
+            (session.phase, session.turn.map(|turn| turn.kind), result)
+        };
+
+        let (phase, _, result) = step("1", 0, format!("event=UserPromptSubmit\n{common}"));
+        assert_eq!(phase, SessionPhase::Working);
+        assert!(result.working.contains(project) && result.waiting.is_empty());
+
+        // A subagent runs tools; a prompt opens (reported 6 s later) for another thread.
+        step("2", 3, "event=PostToolUse\nsession_id=s1\nagent_id=a1\n".into());
+        let (phase, kind, result) = step("3", 8, format!("event=Notification\nnotification_type=permission_prompt\n{common}"));
+        assert_eq!((phase, kind), (SessionPhase::Waiting, Some(TurnKind::Permission)));
+        assert_eq!(result.waiting[project].kind, TurnKind::Permission);
+        assert!(!result.working.contains(project));
+
+        let (_, kind, _) = step("4", 9, "event=PostToolUse\nsession_id=s1\nagent_id=a1\n".into());
+        assert_eq!(kind, Some(TurnKind::Permission), "the subagent that kept running didn't answer it");
+
+        let (phase, kind, _) = step("5", 12, "event=PostToolUse\nsession_id=s1\n".into());
+        assert_eq!((phase, kind), (SessionPhase::Working, None), "the waiting thread's tool ran: answered");
+
+        let (_, kind, _) = step("6", 14, format!("event=PreToolUse\n{common}"));
+        assert_eq!(kind, Some(TurnKind::Asking));
+        let (phase, _, _) = step("7", 16, "event=PostToolUse\nsession_id=s1\n".into());
+        assert_eq!(phase, SessionPhase::Working);
+
+        let (phase, _, result) = step("8", 20, format!("event=Stop\n{common}"));
+        assert_eq!(phase, SessionPhase::Waiting);
+        assert_eq!(result.waiting[project], Turn { kind: TurnKind::Finished, at: system_ms(at(20)) });
+
+        let (phase, _, result) = step("9", 25, "event=SessionEnd\nsession_id=s1\n".into());
+        assert_eq!(phase, SessionPhase::Idle, "gone, and its older turn in the log doesn't come back");
+        assert!(result.waiting.is_empty() && result.working.is_empty());
+        assert_eq!(fs::read_dir(&events).unwrap().count(), 0, "applied events are deleted");
     }
 
     #[test]

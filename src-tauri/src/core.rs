@@ -41,6 +41,8 @@ mod reveal;
 mod supervise;
 #[path = "terminal.rs"]
 mod terminal;
+#[path = "watch.rs"]
+mod watch;
 pub use activity::DaySummary;
 pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
@@ -60,7 +62,9 @@ const TAIL_LINE_MAX: usize = 64 * 1024;
 const HEARTBEAT_EVERY: u64 = 5;
 const HEALTH_EVERY: u64 = 30;
 const SWEEP_EVERY: u64 = 60;
-const GIT_EVERY: u64 = 10;
+/// Claude's logs, the hook's events and Git are read again in full this often, in case a
+/// file-system event was missed; otherwise they are read when they change.
+const POLL_EVERY: u64 = 60;
 /// A waiting turn is announced only if it is still waiting this long after it was first seen:
 /// a focused VS Code window marks it seen in the meantime.
 const NOTIFY_AFTER: Duration = Duration::from_secs(4);
@@ -92,7 +96,7 @@ pub struct CoreConfig {
     pub registry_dir: PathBuf,
     pub claude_dir: PathBuf,
     pub settings_file: PathBuf,
-    /// `~/.claude/settings.json`, where the Notification hook goes.
+    /// `~/.claude/settings.json`, where the Claude Code hook goes.
     pub claude_settings: PathBuf,
     /// Registry folders of older extension versions, read for windows not yet reloaded.
     pub legacy_registries: Vec<PathBuf>,
@@ -186,8 +190,11 @@ pub struct Snapshot {
     pub crashed: usize,
     /// A server crashed since the popover was last opened.
     pub crash_unseen: bool,
-    /// The Claude Code Notification hook is installed (permission prompts are caught).
+    /// Pitwall's Claude Code hook is installed (turns, permission prompts and questions are
+    /// reported the moment they happen).
     pub claude_hook: bool,
+    /// The hook is installed but older than this version's; installing it again updates it.
+    pub claude_hook_outdated: bool,
     pub settings: Settings,
     /// The language the UI speaks: Settings' choice, else the system's.
     pub language: &'static str,
@@ -246,6 +253,7 @@ struct Inner {
     claude_sessions: HashMap<String, Vec<LiveSession>>,
     git: HashMap<String, GitInfo>,
     claude_hook: bool,
+    claude_hook_outdated: bool,
     claude_scanned: bool,
     /// Turn timestamps already announced, per project.
     notified: HashMap<String, u64>,
@@ -292,10 +300,15 @@ pub struct Core {
     reservations: Mutex<Reservations>,
     claude: Mutex<ClaudeWatch>,
     hook: ClaudeHook,
+    /// File-system events for Claude's logs, the hook's events and Git; started by the first
+    /// poll.
+    watch: Mutex<Option<watch::Watch>>,
     git_busy: AtomicBool,
     /// Held while the pids file is built and written, so it is never stale or torn.
     pids_lock: Mutex<()>,
     outbox: Arc<Mutex<Outbox>>,
+    /// Projects whose Git state is to be read again.
+    git_queue: Mutex<HashSet<String>>,
     sink: Sink,
 }
 
@@ -326,7 +339,7 @@ impl Core {
         let legacy_seen = cfg.legacy_registries.iter().map(|dir| dir.join("claude-seen.json")).collect();
         let claude = ClaudeWatch::new(cfg.claude_dir.clone(), &cfg.registry_dir).with_legacy_seen(legacy_seen);
         let hook = ClaudeHook::new(cfg.claude_settings.clone(), &cfg.registry_dir);
-        let claude_hook = hook.installed();
+        let hook_status = hook.status();
         let settings = Settings::load(&cfg.settings_file);
         i18n::set(i18n::resolve(&settings.language));
         let favourites = registry.read_favourites();
@@ -335,15 +348,24 @@ impl Core {
         Arc::new(Self {
             registry,
             cfg,
-            inner: Mutex::new(Inner { settings, favourites, peers, claude_hook, ..Inner::default() }),
+            inner: Mutex::new(Inner {
+                settings,
+                favourites,
+                peers,
+                claude_hook: hook_status.installed,
+                claude_hook_outdated: hook_status.outdated,
+                ..Inner::default()
+            }),
             terminals: Mutex::new(HashMap::new()),
             activity: Mutex::new(activity::Recorder::default()),
             reservations: Mutex::new(Reservations::default()),
             claude: Mutex::new(claude),
             hook,
+            watch: Mutex::new(None),
             git_busy: AtomicBool::new(false),
             pids_lock: Mutex::new(()),
             outbox: Arc::new(Mutex::new(Outbox::default())),
+            git_queue: Mutex::new(HashSet::new()),
             sink,
         })
     }
@@ -1119,8 +1141,14 @@ impl Core {
             self.notify();
         }
 
+        if tick.is_multiple_of(POLL_EVERY) {
+            self.poll_files();
+        }
+
         if tick.is_multiple_of(HEARTBEAT_EVERY) {
             self.heartbeat();
+        } else if self.claude_due() {
+            self.refresh_claude();
         }
 
         if tick.is_multiple_of(SWEEP_EVERY) {
@@ -1133,14 +1161,10 @@ impl Core {
         if tick > 0 && tick.is_multiple_of(HEALTH_EVERY) {
             self.check_health();
         }
-
-        if tick.is_multiple_of(GIT_EVERY) {
-            self.refresh_git();
-        }
     }
 
-    /// Publish our state, read everybody else's, rescan Claude sessions.
-    pub fn heartbeat(&self) {
+    /// Publish our state, read everybody else's, see where Claude stands.
+    pub fn heartbeat(self: &Arc<Self>) {
         let own: Vec<ProjectState> = {
             let inner = self.lock();
             inner
@@ -1170,18 +1194,49 @@ impl Core {
             build_snapshot(&inner).projects.into_iter().map(|p| p.path).collect()
         };
 
-        let scan = self.claude.lock().map(|mut watch| watch.scan(&paths)).unwrap_or_default();
-        let hook_installed = self.hook.installed();
-        let (announce, projects) = {
+        self.follow_projects(&paths);
+        let hook = self.hook.status();
+        {
             let mut inner = self.lock();
-            let announce = due_notifications(&mut inner, &scan.waiting);
-            inner.waiting = scan.waiting;
-            inner.working = scan.working;
-            inner.claude_sessions = live_sessions(&scan.sessions);
-            inner.claude_hook = hook_installed;
-            (announce, build_snapshot(&inner).projects)
+            inner.claude_hook = hook.installed;
+            inner.claude_hook_outdated = hook.outdated;
+        }
+
+        if !self.refresh_claude() {
+            self.notify();
+        }
+    }
+
+    /// A waiting turn's notification falls due before the next heartbeat.
+    fn claude_due(&self) -> bool {
+        self.lock().candidates.values().any(|(_, since)| since.elapsed() >= NOTIFY_AFTER)
+    }
+
+    /// Where Claude stands, from what was read so far (`ClaudeWatch::evaluate`): working and
+    /// waiting projects, their notifications once due, sounds and the day's timeline. Nothing
+    /// before the first full read; false then.
+    fn refresh_claude(&self) -> bool {
+        let announce = {
+            let Ok(mut watch) = self.claude.lock() else {
+                return false;
+            };
+            if !watch.ready() {
+                return false;
+            }
+
+            let scan = watch.evaluate();
+            let (announce, projects) = {
+                let mut inner = self.lock();
+                let announce = due_notifications(&mut inner, &scan.waiting);
+                inner.waiting = scan.waiting;
+                inner.working = scan.working;
+                inner.claude_sessions = live_sessions(&scan.sessions);
+                (announce, build_snapshot(&inner).projects)
+            };
+            // Still under the watch's lock: two refreshes never write the timeline out of order.
+            self.record_activity(&scan.sessions, &projects);
+            announce
         };
-        self.record_activity(&scan.sessions, &projects);
 
         let sounds = self.settings().sounds;
         let mut sound = None;
@@ -1202,6 +1257,7 @@ impl Core {
         }
 
         self.notify();
+        true
     }
 
     /// Servers another participant runs show their output here too: each mirrors it to a file
@@ -1274,37 +1330,67 @@ impl Core {
         self.lock().tails = tails;
     }
 
-    /// Branch and changes of every listed project, off the loop thread; one pass at a time.
-    fn refresh_git(self: &Arc<Self>) {
+    /// Branch and changes of these projects, off the caller's thread. One thread at a time
+    /// reads them; projects asked for meanwhile are read right after.
+    fn refresh_git(self: &Arc<Self>, paths: Vec<String>) {
+        if paths.is_empty() {
+            return;
+        }
+        self.git_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).extend(paths);
         if self.git_busy.swap(true, Ordering::SeqCst) {
             return;
         }
 
-        let paths: Vec<String> = self.snapshot().projects.into_iter().map(|p| p.path).collect();
         let core = Arc::clone(self);
 
-        thread::spawn(move || {
-            let states: HashMap<String, GitInfo> =
-                paths.iter().filter_map(|path| git::status(path).map(|info| (path.clone(), info))).collect();
+        thread::spawn(move || loop {
+            let paths: Vec<String> = core.git_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).drain().collect();
 
-            core.lock().git = states;
-            core.git_busy.store(false, Ordering::SeqCst);
+            if paths.is_empty() {
+                core.git_busy.store(false, Ordering::SeqCst);
+                // Queued between the drain and the store: this thread takes it after all.
+                let queued = !core.git_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).is_empty();
+                if queued && !core.git_busy.swap(true, Ordering::SeqCst) {
+                    continue;
+                }
+                return;
+            }
+
+            let states: Vec<(String, Option<GitInfo>)> = paths.into_iter().map(|path| (path.clone(), git::status(&path))).collect();
+            {
+                let mut inner = core.lock();
+                for (path, state) in states {
+                    match state {
+                        Some(info) => inner.git.insert(path, info),
+                        None => inner.git.remove(&path),
+                    };
+                }
+            }
             core.notify();
         });
     }
 
+    /// Installs the hook, or brings an older one up to date.
     pub fn install_claude_hook(&self) -> Result<(), String> {
         let result = self.hook.install();
-        self.lock().claude_hook = self.hook.installed();
-        self.notify();
+        self.update_hook_status();
         result
     }
 
     pub fn uninstall_claude_hook(&self) -> Result<(), String> {
         let result = self.hook.uninstall();
-        self.lock().claude_hook = self.hook.installed();
-        self.notify();
+        self.update_hook_status();
         result
+    }
+
+    fn update_hook_status(&self) {
+        let status = self.hook.status();
+        {
+            let mut inner = self.lock();
+            inner.claude_hook = status.installed;
+            inner.claude_hook_outdated = status.outdated;
+        }
+        self.notify();
     }
 
     pub fn registry_dir(&self) -> &Path {
@@ -1614,6 +1700,7 @@ fn build_snapshot(inner: &Inner) -> Snapshot {
         crashed: projects.iter().filter(|p| p.status == "crashed").count(),
         crash_unseen: inner.crash_unseen,
         claude_hook: inner.claude_hook,
+        claude_hook_outdated: inner.claude_hook_outdated,
         settings: inner.settings.clone(),
         language: i18n::resolve(&inner.settings.language),
         system_language: i18n::system(),
