@@ -14,6 +14,7 @@
   "common.open": "Открыть",
   "common.startName": "Запустить {name}",
   "common.stopName": "Остановить {name}",
+  "common.rowKeys": "Стрелки переходят между проектами и их кнопками. Return открывает проект, пробел запускает или останавливает его.",
   "common.runName": "Выполнить {name}",
   "common.editName": "Изменить {name}",
   "common.deleteName": "Удалить {name}",
@@ -32,17 +33,16 @@
   "common.settings": "Настройки",
   "common.script": "Скрипт",
   "common.links": "Ссылки",
-
   "status.running": "Работает",
   "status.stopped": "Остановлен",
   "status.crashed": "Сбой",
   "status.busy": "Обработка…",
-
+  "status.claudeWaiting": "{status}, Claude ждёт вас",
+  "status.claudeWorking": "{status}, Claude работает",
   "phase.starting": "запуск…",
   "phase.stopping": "остановка…",
   "phase.restarting": "перезапуск…",
   "phase.working": "обработка…",
-
   "time.justNow": "только что",
   "time.minutesAgo": "{count} мин назад",
   "time.hoursAgo": "{count} ч назад",
@@ -51,20 +51,19 @@
   "time.duration": "{hours} ч {minutes} мин",
   "time.durationMinutes": "{minutes} мин",
   "time.lessThanMinute": "< 1 мин",
-
   "server.stopped": "остановлен",
   "server.stoppedOpenIn": "остановлен · открыт в {window}",
-
   "claude.finished": "Закончил",
   "claude.asking": "Задал вопрос",
   "claude.permission": "Просит разрешения",
   "claude.working": "Работает…",
-
-  "git.changed": { "one": "{count} изменение", "few": "{count} изменения", "many": "{count} изменений", "other": "{count} изменения" },
-
-
+  "git.changed": {
+    "one": "{count} изменение",
+    "few": "{count} изменения",
+    "many": "{count} изменений",
+    "other": "{count} изменения"
+  },
   "editor.fallback": "Редактор",
-
   "popover.noProjects": "Проектов пока нет",
   "popover.running": "Запущено: {count}",
   "popover.waiting": "Ждут вас: {count}",
@@ -73,7 +72,6 @@
   "popover.rowTitle": "Открыть {name} в редакторе — перетащите, чтобы изменить порядок",
   "popover.openInBrowserName": "Открыть {name} в браузере",
   "popover.empty": "Добавьте папку проекта, чтобы запускать его dev-сервер отсюда.",
-
   "switcher.label": "Перейти к проекту",
   "switcher.placeholder": "Перейти к проекту…",
   "switcher.foldersIn": "Папки в {folder}",
@@ -93,7 +91,6 @@
   "switcher.goToProject": "Перейти к проекту",
   "switcher.noLinkMatch": "Нет ссылок по запросу «{query}».",
   "switcher.noLinks": "Ссылок пока нет. Добавьте их в разделе «Ссылки» проекта.",
-
   "window.filters": "Фильтры",
   "window.filter.all": "Все проекты",
   "window.filter.running": "Запущенные",
@@ -104,9 +101,15 @@
   "window.col.branch": "Ветка",
   "window.col.server": "Сервер",
   "window.col.claude": "Claude",
+  "window.col.actions": "Действия",
   "window.rowTitle": "Дважды нажмите, чтобы открыть в редакторе — перетащите, чтобы изменить порядок",
   "window.showName": "Показать {name}",
-  "window.openTerminals": { "one": "{count} открытый терминал", "few": "{count} открытых терминала", "many": "{count} открытых терминалов", "other": "{count} открытого терминала" },
+  "window.openTerminals": {
+    "one": "{count} открытый терминал",
+    "few": "{count} открытых терминала",
+    "many": "{count} открытых терминалов",
+    "other": "{count} открытого терминала"
+  },
   "window.favouriteName": "Добавить {name} в избранное",
   "window.unfavouriteName": "Удалить {name} из избранного",
   "window.favourite": "В избранном",
@@ -115,7 +118,6 @@
   "window.emptyLine1": "Добавьте папку проекта или перетащите папки в это окно.",
   "window.emptyLine2": "Проекты, открытые в VS Code, появляются здесь сами.",
   "window.projectDetails": "Сведения о проекте",
-
   "detail.claudeWorking": "Claude работает",
   "detail.noSession": "Нет ожидающих сессий",
   "detail.claudeFinished": "Claude закончил ход",
@@ -153,11 +155,11 @@
   "detail.notRunning": "Не запущен. Запустите, чтобы увидеть здесь вывод.",
   "detail.noOutput": "Вывода пока нет.",
   "detail.noLinks": "Staging, продакшн, админка, трекер задач: другие адреса проекта в один клик.",
-
   "terminal.panel": "Терминалы {name}",
   "terminal.tabs": "Терминалы",
   "terminal.resize": "Изменить размер терминалов",
   "terminal.renameHint": "Дважды нажмите, чтобы переименовать",
+  "terminal.tabKeys": "Стрелки переключают вкладки. Return переходит в терминал, Delete закрывает вкладку, F2 переименовывает её.",
   "terminal.renameName": "Переименовать {name}",
   "terminal.newTab": "Новая вкладка",
   "terminal.newTabTitle": "Новая вкладка терминала (⌘T)",
@@ -166,7 +168,6 @@
   "terminal.expand": "Развернуть терминалы",
   "terminal.collapse": "Свернуть терминалы",
   "terminal.none": "В {name} нет терминалов.",
-
   "command.newTitle": "Новая команда",
   "command.editTitle": "Изменить команду",
   "command.name": "Название",
@@ -192,7 +193,6 @@
   "link.copyAddress": "Скопировать адрес",
   "link.copied": "Скопировано",
   "link.suggested": "Предложения:",
-
   "settings.sections": "Разделы настроек",
   "settings.close": "Закрыть настройки",
   "settings.general": "Основные",
@@ -247,7 +247,6 @@
   "settings.removeHook": "Удалить хук",
   "settings.updateHook": "Обновить хук",
   "settings.hookOutdated": "Есть обновление: с ним состояние Claude появляется здесь сразу, как только меняется.",
-
   "settings.about": "О программе",
   "settings.extInstalled": "Установлено · {version}",
   "settings.extMissing": "Не установлено",
@@ -266,7 +265,6 @@
   "about.support": "Поддержать Pitwall",
   "about.supportText": "Pitwall бесплатен. Если он экономит вам время, чашка кофе поможет ему жить дальше.",
   "about.coffee": "Угостить кофе",
-
   "day.nav": "Сегодня",
   "day.title": "Куда ушёл день?",
   "day.today": "Сегодня",
@@ -282,13 +280,29 @@
   "day.sessions": "Сессии Claude",
   "day.untitled": "Сессия без названия",
   "day.sessionTitle": "Нажмите, чтобы показать сессию в редакторе",
-  "day.turns": {"one": "{count} ход", "few": "{count} хода", "many": "{count} ходов", "other": "{count} хода"},
+  "day.turns": {
+    "one": "{count} ход",
+    "few": "{count} хода",
+    "many": "{count} ходов",
+    "other": "{count} хода"
+  },
   "day.commands": "Команды",
   "day.failed": "с ошибкой: {count}",
-  "day.commitCount": {"one": "{count} коммит", "few": "{count} коммита", "many": "{count} коммитов", "other": "{count} коммита"},
-  "day.crashCount": {"one": "{count} падение", "few": "{count} падения", "many": "{count} падений", "other": "{count} падения"},
+  "day.commitCount": {
+    "one": "{count} коммит",
+    "few": "{count} коммита",
+    "many": "{count} коммитов",
+    "other": "{count} коммита"
+  },
+  "day.crashCount": {
+    "one": "{count} падение",
+    "few": "{count} падения",
+    "many": "{count} падений",
+    "other": "{count} падения"
+  },
   "day.timeline": "Хронология",
   "day.laneTitle": "Дважды нажмите, чтобы открыть в редакторе",
+  "day.laneKeys": "Стрелки влево и вправо шаг за шагом проходят по дню проекта.",
   "day.focus": "Распределение времени",
   "day.legend.work": "Claude работает",
   "day.legend.wait": "Claude ждал вас",

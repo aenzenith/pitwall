@@ -13,10 +13,18 @@ const kind = computed(() => {
   if (props.project.status === "crashed") return "crash";
   return "idle";
 });
+
+/** What VoiceOver reads: the server's state, and Claude's when its corner dot shows. */
+const label = computed(() => {
+  const status = t(`status.${props.project.status}`);
+  if (props.project.claude) return t("status.claudeWaiting", { status });
+  if (props.project.claudeWorking) return t("status.claudeWorking", { status });
+  return status;
+});
 </script>
 
 <template>
-  <span class="status" :aria-label="t(`status.${project.status}`)">
+  <span class="status" role="img" :aria-label="label">
     <span :class="['dot', kind]"></span>
     <span v-if="project.claude" class="claude" :style="{ boxShadow: `0 0 0 2px ${ring ?? 'var(--bg-panel)'}` }"></span>
     <span v-else-if="project.claudeWorking" class="working" :style="{ boxShadow: `0 0 0 2px ${ring ?? 'var(--bg-panel)'}` }"></span>

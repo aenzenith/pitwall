@@ -10,6 +10,7 @@ import StatusIcon from "../components/StatusIcon.vue";
 import { claudeLine, gitLine, meta, shortcutLabel } from "../lib/format";
 import { t } from "../lib/i18n";
 import { useReorder } from "../lib/reorder";
+import { rowKeys } from "../lib/rows";
 import { api, now, snapshot } from "../lib/store";
 import type { Project } from "../lib/types";
 
@@ -37,6 +38,32 @@ function openRow(project: Project): void {
 
 function toggle(project: Project): void {
   void api.act(project.path, project.status === "running" ? "stop" : "start");
+}
+
+/** Pressed from the keyboard, the button turns busy (disabled) and would drop the focus: the row keeps it. */
+function toggleFrom(event: MouseEvent, project: Project): void {
+  toggle(project);
+  if (event.detail === 0) ((event.currentTarget as HTMLElement).closest("[data-path]") as HTMLElement | null)?.focus();
+}
+
+/** The row the keyboard is on: the list's one Tab stop (the first row until the arrows move it). */
+const focusedPath = ref<string | null>(null);
+const tabStop = computed(() => (projects.value.some((p) => p.path === focusedPath.value) ? focusedPath.value : (projects.value[0]?.path ?? null)));
+
+/** ↑/↓ move between rows, ↵ does what a click does, Space starts or stops. */
+function onListKey(event: KeyboardEvent): void {
+  const find = (path: string) => projects.value.find((p) => p.path === path);
+  rowKeys(event, {
+    move: (path) => (focusedPath.value = path),
+    enter: (path) => {
+      const project = find(path);
+      if (project) void (project.claude ? api.openClaude(project.path) : api.openEditor(project.path));
+    },
+    space: (path) => {
+      const project = find(path);
+      if (project && project.status !== "busy") toggle(project);
+    },
+  });
 }
 
 // The window is as tall as the content, up to MAX_HEIGHT; past that only the project list
@@ -71,6 +98,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
       <div class="titles">
         <div class="title">Pitwall</div>
         <div class="summary">{{ summary }}</div>
+        <!-- The list's keys, read with it; here rather than a child of the panel, which would count in its height. -->
+        <span id="rows-keys" class="sr-only">{{ t("common.rowKeys") }}</span>
       </div>
       <button
         type="button"
@@ -90,7 +119,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     </header>
 
     <section v-if="waiting.length" class="claude" :aria-label="t('popover.claudeWaiting')">
-      <div class="claude-label"><span class="claude-dot"></span>{{ t("popover.claudeWaiting") }}</div>
+      <div class="claude-label"><span class="claude-dot" aria-hidden="true"></span>{{ t("popover.claudeWaiting") }}</div>
       <button v-for="project in waiting" :key="project.path" type="button" class="claude-row" @click="api.openClaude(project.path)">
         <span class="claude-text">
           <span class="claude-name">{{ project.name }}</span>
@@ -102,47 +131,60 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
     <template v-if="projects.length">
       <div class="section-label label">{{ t("common.projects") }}</div>
-      <ul ref="list" :class="['list', reorder.listClass()]">
+      <!-- One Tab stop: ↑/↓ move between rows, ←/→ reach a row's buttons. -->
+      <ul
+        ref="list"
+        :class="['list', reorder.listClass()]"
+        role="grid"
+        :aria-label="t('common.projects')"
+        aria-describedby="rows-keys"
+        @keydown="onListKey"
+      >
         <li
           v-for="project in projects"
           :key="project.path"
+          role="row"
+          :tabindex="project.path === tabStop ? 0 : -1"
           :data-path="project.path"
           :class="['row', reorder.rowClass(project.path)]"
           :style="reorder.rowStyle(project.path)"
           :title="t('popover.rowTitle', { name: project.name })"
           @pointerdown="reorder.down($event, project.path)"
+          @focus="focusedPath = project.path"
           @click="openRow(project)"
         >
-          <StatusIcon :project="project" />
-          <div class="text">
+          <span class="cell-status" role="gridcell"><StatusIcon :project="project" /></span>
+          <div class="text" role="gridcell">
             <div class="name">{{ project.name }}</div>
             <div :class="['meta', { bad: project.status === 'crashed' }]">
               <Marquee :text="[meta(project, now), gitLine(project.git)].filter(Boolean).join(' · ')" />
             </div>
           </div>
-          <button
-            v-if="project.status === 'running'"
-            type="button"
-            class="icon"
-            data-no-drag
-            :aria-label="t('popover.openInBrowserName', { name: project.name })"
-            :title="t('common.openInBrowser')"
-            @click.stop="api.openBrowser(project.path)"
-          >
-            <Icon name="external" />
-          </button>
-          <button
-            type="button"
-            class="icon"
-            data-no-drag
-            :disabled="project.status === 'busy'"
-            :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
-            :title="t(project.status === 'running' ? 'common.stop' : 'common.start')"
-            @click.stop="toggle(project)"
-          >
-            <Spinner v-if="project.status === 'busy'" />
-            <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
-          </button>
+          <span class="cell-actions" role="gridcell" data-no-drag>
+            <button
+              v-if="project.status === 'running'"
+              type="button"
+              class="icon"
+              tabindex="-1"
+              :aria-label="t('popover.openInBrowserName', { name: project.name })"
+              :title="t('common.openInBrowser')"
+              @click.stop="api.openBrowser(project.path)"
+            >
+              <Icon name="external" />
+            </button>
+            <button
+              type="button"
+              class="icon"
+              tabindex="-1"
+              :disabled="project.status === 'busy'"
+              :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
+              :title="t(project.status === 'running' ? 'common.stop' : 'common.start')"
+              @click.stop="toggleFrom($event, project)"
+            >
+              <Spinner v-if="project.status === 'busy'" />
+              <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
+            </button>
+          </span>
         </li>
       </ul>
     </template>
@@ -335,6 +377,24 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
 .row:hover {
   background: var(--bg-hover);
+}
+
+/* The keyboard's row: the ring inside, so the list's edge never cuts it. */
+.row:focus-visible {
+  outline-offset: -2px;
+}
+
+.cell-status {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* The row's buttons, as far apart as the row's other parts. */
+.cell-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 /* Drag to reorder: the dragged row lifts and follows the pointer, the others slide aside to

@@ -238,7 +238,7 @@ function cancel(): void {
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #6c727c;
+  color: var(--text-faint);
 }
 
 .actions {

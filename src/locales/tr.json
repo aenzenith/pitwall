@@ -14,6 +14,7 @@
   "common.open": "Aç",
   "common.startName": "Başlat: {name}",
   "common.stopName": "Durdur: {name}",
+  "common.rowKeys": "Ok tuşları projeler ve düğmeleri arasında gezinir. Return projeyi açar, Boşluk başlatır ya da durdurur.",
   "common.runName": "Çalıştır: {name}",
   "common.editName": "Düzenle: {name}",
   "common.deleteName": "Sil: {name}",
@@ -32,17 +33,16 @@
   "common.settings": "Ayarlar",
   "common.script": "Script",
   "common.links": "Bağlantılar",
-
   "status.running": "Çalışıyor",
   "status.stopped": "Durdu",
   "status.crashed": "Çöktü",
   "status.busy": "İşleniyor…",
-
+  "status.claudeWaiting": "{status}, Claude seni bekliyor",
+  "status.claudeWorking": "{status}, Claude çalışıyor",
   "phase.starting": "başlatılıyor…",
   "phase.stopping": "durduruluyor…",
   "phase.restarting": "yeniden başlatılıyor…",
   "phase.working": "işleniyor…",
-
   "time.justNow": "az önce",
   "time.minutesAgo": "{count} dk önce",
   "time.hoursAgo": "{count} sa önce",
@@ -51,20 +51,17 @@
   "time.duration": "{hours} sa {minutes} dk",
   "time.durationMinutes": "{minutes} dk",
   "time.lessThanMinute": "< 1 dk",
-
   "server.stopped": "durdu",
   "server.stoppedOpenIn": "durdu · {window} içinde açık",
-
   "claude.finished": "Bitirdi",
   "claude.asking": "Soru sordu",
   "claude.permission": "İzin bekliyor",
   "claude.working": "Çalışıyor…",
-
-  "git.changed": { "one": "{count} değişiklik", "other": "{count} değişiklik" },
-
-
+  "git.changed": {
+    "one": "{count} değişiklik",
+    "other": "{count} değişiklik"
+  },
   "editor.fallback": "Editör",
-
   "popover.noProjects": "Henüz proje yok",
   "popover.running": "{count} çalışıyor",
   "popover.waiting": "{count} seni bekliyor",
@@ -73,7 +70,6 @@
   "popover.rowTitle": "{name} editörde açılır — sürükleyerek sırala",
   "popover.openInBrowserName": "Tarayıcıda aç: {name}",
   "popover.empty": "Dev sunucusunu buradan çalıştırmak için bir proje klasörü ekle.",
-
   "switcher.label": "Projeye git",
   "switcher.placeholder": "Projeye git…",
   "switcher.foldersIn": "{folder} içindeki klasörler",
@@ -93,7 +89,6 @@
   "switcher.goToProject": "Projeye git",
   "switcher.noLinkMatch": "“{query}” ile eşleşen bağlantı yok.",
   "switcher.noLinks": "Henüz bağlantı yok. Bir projenin Bağlantılar bölümünden ekleyebilirsin.",
-
   "window.filters": "Filtreler",
   "window.filter.all": "Tüm projeler",
   "window.filter.running": "Çalışanlar",
@@ -104,9 +99,13 @@
   "window.col.branch": "Dal",
   "window.col.server": "Sunucu",
   "window.col.claude": "Claude",
+  "window.col.actions": "İşlemler",
   "window.rowTitle": "Editörde açmak için çift tıkla — sürükleyerek sırala",
   "window.showName": "Göster: {name}",
-  "window.openTerminals": { "one": "{count} açık terminal", "other": "{count} açık terminal" },
+  "window.openTerminals": {
+    "one": "{count} açık terminal",
+    "other": "{count} açık terminal"
+  },
   "window.favouriteName": "Favorilere ekle: {name}",
   "window.unfavouriteName": "Favorilerden çıkar: {name}",
   "window.favourite": "Favori",
@@ -115,7 +114,6 @@
   "window.emptyLine1": "Bir proje klasörü ekle ya da klasörleri bu pencereye bırak.",
   "window.emptyLine2": "VS Code'da açık projeler kendiliğinden görünür.",
   "window.projectDetails": "Proje ayrıntıları",
-
   "detail.claudeWorking": "Claude çalışıyor",
   "detail.noSession": "Bekleyen oturum yok",
   "detail.claudeFinished": "Claude sırasını bitirdi",
@@ -153,11 +151,11 @@
   "detail.notRunning": "Çalışmıyor. Çıktıyı görmek için başlat.",
   "detail.noOutput": "Henüz çıktı yok.",
   "detail.noLinks": "Staging, canlı, yönetim paneli, iş takibi: projenin diğer adresleri tek tıkla elinde.",
-
   "terminal.panel": "{name} terminalleri",
   "terminal.tabs": "Terminaller",
   "terminal.resize": "Terminalleri yeniden boyutlandır",
   "terminal.renameHint": "Yeniden adlandırmak için çift tıkla",
+  "terminal.tabKeys": "Ok tuşları sekmeler arasında geçer. Return terminale geçer, Delete sekmeyi kapatır, F2 yeniden adlandırır.",
   "terminal.renameName": "Yeniden adlandır: {name}",
   "terminal.newTab": "Yeni sekme",
   "terminal.newTabTitle": "Yeni terminal sekmesi (⌘T)",
@@ -166,7 +164,6 @@
   "terminal.expand": "Terminalleri genişlet",
   "terminal.collapse": "Terminalleri daralt",
   "terminal.none": "{name} içinde terminal yok.",
-
   "command.newTitle": "Yeni komut",
   "command.editTitle": "Komutu düzenle",
   "command.name": "Ad",
@@ -192,7 +189,6 @@
   "link.copyAddress": "Adresi kopyala",
   "link.copied": "Kopyalandı",
   "link.suggested": "Öneriler:",
-
   "settings.sections": "Ayar bölümleri",
   "settings.close": "Ayarları kapat",
   "settings.general": "Genel",
@@ -247,7 +243,6 @@
   "settings.removeHook": "Hook'u kaldır",
   "settings.updateHook": "Hook'u güncelle",
   "settings.hookOutdated": "Bir güncelleme var: onunla Claude'un durumu değiştiği anda burada görünür.",
-
   "settings.about": "Hakkında",
   "settings.extInstalled": "Kurulu · {version}",
   "settings.extMissing": "Kurulu değil",
@@ -266,7 +261,6 @@
   "about.support": "Pitwall'a destek ol",
   "about.supportText": "Pitwall ücretsiz. Sana zaman kazandırıyorsa bir kahve, yaşamasına yardım eder.",
   "about.coffee": "Bana bir kahve ısmarla",
-
   "day.nav": "Bugün",
   "day.title": "Gün nereye gitti?",
   "day.today": "Bugün",
@@ -282,13 +276,20 @@
   "day.sessions": "Claude oturumları",
   "day.untitled": "Adsız oturum",
   "day.sessionTitle": "Oturumu editörde göstermek için tıkla",
-  "day.turns": {"other": "{count} tur"},
+  "day.turns": {
+    "other": "{count} tur"
+  },
   "day.commands": "Komutlar",
   "day.failed": "{count} başarısız",
-  "day.commitCount": {"other": "{count} commit"},
-  "day.crashCount": {"other": "{count} çökme"},
+  "day.commitCount": {
+    "other": "{count} commit"
+  },
+  "day.crashCount": {
+    "other": "{count} çökme"
+  },
   "day.timeline": "Zaman çizelgesi",
   "day.laneTitle": "Editörde açmak için çift tıkla",
+  "day.laneKeys": "Sol ve sağ ok tuşları projenin gününü adım adım gezer.",
   "day.focus": "Odak dağılımı",
   "day.legend.work": "Claude çalışıyor",
   "day.legend.wait": "Claude seni bekledi",

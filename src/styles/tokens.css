@@ -18,6 +18,12 @@
   --text-strong: #f2f3f5;
   --text-muted: #9aa0aa;
   --text-subtle: #8b919b;
+  /* The dimmest text (inactive tabs, placeholders, hour labels, empty values): 5.07:1 on
+     --bg-app, 4.84:1 on --bg-panel, 4.71:1 on a tile (#181b20), 4.55:1 on a hovered row (#1b1e24). */
+  --text-faint: #80868f;
+
+  /* Keyboard focus: neutral, never a state colour; 8.5:1 on --bg-app, 6.9:1 on #23272e. */
+  --focus-ring: #a9b0ba;
 
   --run: #73c991;
   --crash: #f14c4c;
@@ -160,9 +166,31 @@ body.grabbing * {
   cursor: grabbing !important;
 }
 
-button:focus-visible {
-  outline: 2px solid var(--claude-text);
+/* The keyboard's place: a neutral ring, shown for the keyboard only (:focus-visible), never for
+   a click. Text fields keep the system's own. Zero specificity, so a component can draw its own. */
+:where(button, a[href], select, summary, [tabindex], input[type="checkbox"], input[type="radio"]):focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
+}
+
+/* While the window is off screen (lib/store: visible), nothing animates. */
+html.paused *,
+html.paused *::before,
+html.paused *::after {
+  animation-play-state: paused !important;
+}
+
+/* For screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .section-label {

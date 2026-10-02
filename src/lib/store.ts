@@ -1,21 +1,59 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ref } from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ref, watch } from "vue";
 
 import type { DaySummary, ExtensionStatus, Folder, LinkSuggestion, ProjectSettings, Settings, Snapshot, TerminalView } from "./types";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
 
-/** Ticks so uptimes and "2 min ago" stay current. */
+/** Ticks so uptimes and "2 min ago" stay current; stands still while the window is hidden. */
 export const now = ref(Date.now());
+
+/**
+ * This window is on screen. It starts as the window says (`isVisible`, as windows start hidden
+ * and the core's first `visibility` event comes with the first show); after that, whichever says
+ * so last wins: the core's `visibility` event (sent as it shows or hides the window) or the
+ * page's own `visibilitychange`.
+ */
+export const visible = ref(true);
+
+let ticker: number | undefined;
+
+function runClock(on: boolean): void {
+  window.clearInterval(ticker);
+  ticker = undefined;
+  if (!on) return;
+  now.value = Date.now();
+  ticker = window.setInterval(() => (now.value = Date.now()), 10_000);
+}
+
+watch(visible, runClock);
 
 export async function connect(): Promise<void> {
   await listen<Snapshot>("state", (event) => {
     snapshot.value = event.payload;
   });
+  // This window's own: a plain listen() would also hear what the core sends the other windows.
+  const win = getCurrentWindow();
+  let told = 0;
+  const tell = (on: boolean): void => {
+    told++;
+    visible.value = on;
+  };
+  await win.listen<{ visible: boolean }>("visibility", (event) => tell(event.payload.visible));
+  document.addEventListener("visibilitychange", () => tell(!document.hidden));
+  // The starting state, unless an event already said otherwise while it was asked for.
+  const before = told;
+  try {
+    const shown = await win.isVisible();
+    if (told === before) visible.value = shown;
+  } catch {
+    // Kept as shown: better a clock that ticks unseen than one that stands still on screen.
+  }
   snapshot.value = await invoke<Snapshot>("get_state");
-  window.setInterval(() => (now.value = Date.now()), 10_000);
+  runClock(visible.value);
 }
 
 export type Action = "start" | "stop" | "restart";

@@ -131,16 +131,17 @@ function create(id: number): View {
 }
 
 /**
- * Puts the terminal into `host` and focuses it. With `fit` it is also sized to the host; a
- * collapsed panel passes false, so the shell isn't squeezed to its tab row.
+ * Puts the terminal into `host` and, unless `focus` is false (the keyboard is picking tabs),
+ * focuses it. With `fit` it is also sized to the host; a collapsed panel passes false, so the
+ * shell isn't squeezed to its tab row.
  */
-export function attach(id: number, host: HTMLElement, fit = true): void {
+export function attach(id: number, host: HTMLElement, fit = true, focus = true): void {
   const view = views.get(id) ?? create(id);
   if (view.element.parentElement !== host) {
     host.replaceChildren(view.element);
   }
   if (fit) fitView(id);
-  view.term.focus();
+  if (focus) view.term.focus();
 }
 
 export function focusView(id: number): void {

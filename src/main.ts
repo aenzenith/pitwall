@@ -6,7 +6,7 @@ import "@fontsource-variable/geist-mono";
 import "./styles/tokens.css";
 
 import { language } from "./lib/i18n";
-import { connect } from "./lib/store";
+import { connect, visible } from "./lib/store";
 import Popover from "./popover/Popover.vue";
 import Switcher from "./switcher/Switcher.vue";
 import WindowApp from "./window/WindowApp.vue";
@@ -18,6 +18,9 @@ document.documentElement.dataset.surface = label;
 
 // Screen readers, hyphenation and `text-transform` (the Turkish İ) follow the page language.
 watchEffect(() => (document.documentElement.lang = language.value));
+
+// Off screen, every CSS animation stands still (tokens.css: html.paused).
+watchEffect(() => document.documentElement.classList.toggle("paused", !visible.value));
 
 // No browser context menu (Reload, Inspect…) outside text fields and selectable output.
 document.addEventListener("contextmenu", (event) => {

@@ -103,23 +103,90 @@ function endRename(): void {
   if (id !== undefined) focusView(id);
 }
 
-/** Tabs answer Enter and Space like buttons. */
-function onTabKey(event: KeyboardEvent, id: number): void {
-  if (event.key === "Enter" || event.key === " ") {
-    event.preventDefault();
-    show(id);
-  }
+const tablist = ref<HTMLElement | null>(null);
+/** An arrow key picked the tab: the keyboard stays on the tabs instead of going to the shell. */
+let stayOnTabs = false;
+/** A tab closed from the keyboard: once it is gone, the focus goes to the tab shown next. */
+let refocus: number | null = null;
+
+function focusTab(id: number | undefined): void {
+  if (id !== undefined) tablist.value?.querySelector<HTMLElement>(`[data-tab="${id}"]`)?.focus();
 }
 
-// The shown terminal goes into the viewport; the others keep running out of sight.
+/**
+ * The tabs are one Tab stop: ←/→ (Home, End) pick the next tab and keep the focus on the tabs;
+ * ↵ and Space go into the shown terminal; Delete closes the tab, F2 renames it.
+ */
+function onTabKey(event: KeyboardEvent, id: number): void {
+  const list = terminals.value;
+  const at = list.findIndex((term) => term.id === id);
+  let to: number | undefined;
+  switch (event.key) {
+    case "ArrowRight":
+      to = list[(at + 1) % list.length]?.id;
+      break;
+    case "ArrowLeft":
+      to = list[(at - 1 + list.length) % list.length]?.id;
+      break;
+    case "Home":
+      to = list[0]?.id;
+      break;
+    case "End":
+      to = list[list.length - 1]?.id;
+      break;
+    case "Enter":
+    case " ":
+      event.preventDefault();
+      show(id);
+      focusView(id);
+      return;
+    case "Delete":
+    case "Backspace":
+      event.preventDefault();
+      refocus = id;
+      stayOnTabs = true;
+      close(id);
+      return;
+    case "F2": {
+      event.preventDefault();
+      const term = list[at];
+      if (term) renaming.value = { id: term.id, name: term.name };
+      return;
+    }
+    default:
+      return;
+  }
+  event.preventDefault();
+  if (to === undefined) return;
+  if (to !== active.value?.id) stayOnTabs = true;
+  show(to);
+  focusTab(to);
+}
+
+// The shown terminal goes into the viewport; the others keep running out of sight. It takes the
+// keyboard, unless the arrows on the tabs are picking it.
 watch(
   () => active.value?.id,
   async (id) => {
+    const focus = !stayOnTabs;
+    stayOnTabs = false;
     await nextTick();
-    if (id !== undefined && viewport.value) attach(id, viewport.value, !terminalCollapsed.value && !animating.value);
+    if (id !== undefined && viewport.value) attach(id, viewport.value, !terminalCollapsed.value && !animating.value, focus);
+    if (!focus) focusTab(id);
   },
   { immediate: true },
 );
+
+// A tab closed from the keyboard: the focus goes to the tab shown in its place (or, with none
+// left, to "New tab").
+watch(terminals, async (list) => {
+  if (refocus === null || list.some((term) => term.id === refocus)) return;
+  refocus = null;
+  stayOnTabs = false;
+  await nextTick();
+  if (active.value) focusTab(active.value.id);
+  else panel.value?.querySelector<HTMLElement>(".action")?.focus();
+});
 
 // No terminal opens on its own: a project starts with "No terminal in …" until you open one.
 
@@ -160,25 +227,46 @@ defineExpose({ openTerminal });
       @pointercancel="resizer.end"
       @keydown="resizer.nudge"
     ></div>
-    <div class="tabs" role="tablist" :aria-label="t('terminal.tabs')">
+    <div class="tabs">
       <span :class="['where', { divided: terminals.length }]" :title="project.path">{{ project.name }}</span>
-      <!-- Double-click a tab to rename it. -->
-      <div
-        v-for="term in terminals"
-        :key="term.id"
-        role="tab"
-        tabindex="0"
-        :aria-selected="active?.id === term.id"
-        :class="['tab', { on: active?.id === term.id }]"
-        :title="t('terminal.renameHint')"
-        @click="show(term.id)"
-        @dblclick="renaming = { id: term.id, name: term.name }"
-        @keydown="onTabKey($event, term.id)"
-      >
-        <ClaudeMark v-if="term.kind === 'claude'" :size="11" />
-        <Icon v-else name="terminal" :size="11" />
-        <span>{{ term.name }}</span>
-        <button type="button" class="x" :aria-label="t('common.closeName', { name: term.name })" :title="t('common.close')" @click.stop="close(term.id)">×</button>
+      <span id="terminal-tab-keys" class="sr-only">{{ t("terminal.tabKeys") }}</span>
+      <!-- Each tab and its close button side by side, never one inside the other; the list holds
+           tabs only, so the close button is the mouse's (the keyboard closes with Delete). One Tab
+           stop: the shown tab; ←/→ move. Double-click (or F2) renames. -->
+      <div v-if="terminals.length" ref="tablist" class="tablist" role="tablist" :aria-label="t('terminal.tabs')">
+        <div
+          v-for="term in terminals"
+          :key="term.id"
+          :class="['tab', { on: active?.id === term.id }]"
+          role="none"
+          :title="t('terminal.renameHint')"
+          @click="show(term.id)"
+          @dblclick="renaming = { id: term.id, name: term.name }"
+        >
+          <div
+            role="tab"
+            class="tab-label"
+            :data-tab="term.id"
+            :tabindex="active?.id === term.id ? 0 : -1"
+            :aria-selected="active?.id === term.id"
+            aria-keyshortcuts="Delete F2"
+            aria-describedby="terminal-tab-keys"
+            @keydown="onTabKey($event, term.id)"
+          >
+            <ClaudeMark v-if="term.kind === 'claude'" :size="11" />
+            <Icon v-else name="terminal" :size="11" />
+            <span>{{ term.name }}</span>
+          </div>
+          <button
+            type="button"
+            class="x"
+            tabindex="-1"
+            aria-hidden="true"
+            :title="t('common.close')"
+            @click.stop="close(term.id)"
+            @dblclick.stop
+          >×</button>
+        </div>
       </div>
       <!-- Left: the project and its tabs. Right: new tab buttons and collapse. -->
       <span class="grow"></span>
@@ -257,9 +345,13 @@ defineExpose({ openTerminal });
   background: #2f343d;
 }
 
-.grip:hover::after,
-.grip:focus-visible::after {
+.grip:hover::after {
   background: #4a515c;
+}
+
+/* The handle's own focus: the bar in the focus ring's colour. */
+.grip:focus-visible::after {
+  background: var(--focus-ring);
 }
 
 /* A fixed height: renaming a tab (its input) never pushes the terminal down. */
@@ -273,6 +365,13 @@ defineExpose({ openTerminal });
   min-width: 0;
 }
 
+.tablist {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The tab and its close button read as one: the hover, the colour and the hand are the pair's. */
 .tab {
   height: 22px;
   display: inline-flex;
@@ -281,13 +380,25 @@ defineExpose({ openTerminal });
   padding: 0 6px;
   border-radius: 6px;
   font-size: 12px;
-  color: #6c727c;
+  color: var(--text-faint);
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* The keyboard's tab: the ring goes round the pair, as the tab looks like one piece. */
+.tab-label:focus-visible {
   outline: none;
 }
 
-.tab:focus-visible {
-  box-shadow: 0 0 0 1px #3a3f48;
+.tab:has(> .tab-label:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
 }
 
 .tab:hover {
@@ -312,7 +423,7 @@ defineExpose({ openTerminal });
 
 .tab:hover .x,
 .tab.on .x {
-  color: #6c727c;
+  color: var(--text-faint);
 }
 
 .x:hover {

@@ -14,6 +14,7 @@
   "common.open": "開く",
   "common.startName": "{name}を起動",
   "common.stopName": "{name}を停止",
+  "common.rowKeys": "矢印キーでプロジェクトとそのボタンの間を移動します。returnでプロジェクトを開き、スペースで起動・停止します。",
   "common.runName": "{name}を実行",
   "common.editName": "{name}を編集",
   "common.deleteName": "{name}を削除",
@@ -32,17 +33,16 @@
   "common.settings": "設定",
   "common.script": "スクリプト",
   "common.links": "リンク",
-
   "status.running": "実行中",
   "status.stopped": "停止",
   "status.crashed": "クラッシュ",
   "status.busy": "処理中…",
-
+  "status.claudeWaiting": "{status}、Claudeが入力を待っています",
+  "status.claudeWorking": "{status}、Claudeが作業中",
   "phase.starting": "起動中…",
   "phase.stopping": "停止中…",
   "phase.restarting": "再起動中…",
   "phase.working": "処理中…",
-
   "time.justNow": "たった今",
   "time.minutesAgo": "{count}分前",
   "time.hoursAgo": "{count}時間前",
@@ -51,20 +51,16 @@
   "time.duration": "{hours} 時間 {minutes} 分",
   "time.durationMinutes": "{minutes} 分",
   "time.lessThanMinute": "1 分未満",
-
   "server.stopped": "停止",
   "server.stoppedOpenIn": "停止 · {window}で開いています",
-
   "claude.finished": "完了",
   "claude.asking": "質問あり",
   "claude.permission": "許可が必要",
   "claude.working": "作業中…",
-
-  "git.changed": { "other": "{count}件の変更" },
-
-
+  "git.changed": {
+    "other": "{count}件の変更"
+  },
   "editor.fallback": "エディタ",
-
   "popover.noProjects": "プロジェクトはまだありません",
   "popover.running": "実行中 {count}",
   "popover.waiting": "入力待ち {count}",
@@ -73,7 +69,6 @@
   "popover.rowTitle": "{name}をエディタで開く — ドラッグで並べ替え",
   "popover.openInBrowserName": "{name}をブラウザで開く",
   "popover.empty": "プロジェクトフォルダを追加すると、ここから開発サーバーを起動できます。",
-
   "switcher.label": "プロジェクトへ移動",
   "switcher.placeholder": "プロジェクトへ移動…",
   "switcher.foldersIn": "{folder}内のフォルダ",
@@ -93,7 +88,6 @@
   "switcher.goToProject": "プロジェクトへ移動",
   "switcher.noLinkMatch": "「{query}」に一致するリンクはありません。",
   "switcher.noLinks": "リンクはまだありません。プロジェクトの「リンク」から追加できます。",
-
   "window.filters": "フィルタ",
   "window.filter.all": "すべてのプロジェクト",
   "window.filter.running": "実行中",
@@ -104,9 +98,12 @@
   "window.col.branch": "ブランチ",
   "window.col.server": "サーバー",
   "window.col.claude": "Claude",
+  "window.col.actions": "操作",
   "window.rowTitle": "ダブルクリックしてエディタで開く — ドラッグで並べ替え",
   "window.showName": "{name}を表示",
-  "window.openTerminals": { "other": "{count}個のターミナルが開いています" },
+  "window.openTerminals": {
+    "other": "{count}個のターミナルが開いています"
+  },
   "window.favouriteName": "{name}をお気に入りに追加",
   "window.unfavouriteName": "{name}をお気に入りから削除",
   "window.favourite": "お気に入り",
@@ -115,7 +112,6 @@
   "window.emptyLine1": "プロジェクトフォルダを追加するか、このウインドウにフォルダをドロップしてください。",
   "window.emptyLine2": "VS Codeで開いているプロジェクトは自動的に表示されます。",
   "window.projectDetails": "プロジェクトの詳細",
-
   "detail.claudeWorking": "Claudeが作業中です",
   "detail.noSession": "入力待ちのセッションはありません",
   "detail.claudeFinished": "Claudeの応答が完了しました",
@@ -153,11 +149,11 @@
   "detail.notRunning": "実行されていません。起動するとここに出力が表示されます。",
   "detail.noOutput": "出力はまだありません。",
   "detail.noLinks": "ステージング、本番、管理画面、課題管理など、プロジェクトのほかのアドレスにワンクリックで。",
-
   "terminal.panel": "{name}のターミナル",
   "terminal.tabs": "ターミナル",
   "terminal.resize": "ターミナルのサイズを変更",
   "terminal.renameHint": "ダブルクリックで名前を変更",
+  "terminal.tabKeys": "矢印キーでタブを切り替えます。returnでターミナルへ移動し、deleteでタブを閉じ、F2で名前を変更します。",
   "terminal.renameName": "{name}の名前を変更",
   "terminal.newTab": "新規タブ",
   "terminal.newTabTitle": "新規ターミナルタブ（⌘T）",
@@ -166,7 +162,6 @@
   "terminal.expand": "ターミナルを展開",
   "terminal.collapse": "ターミナルを折りたたむ",
   "terminal.none": "{name}にはターミナルがありません。",
-
   "command.newTitle": "新規コマンド",
   "command.editTitle": "コマンドを編集",
   "command.name": "名前",
@@ -192,7 +187,6 @@
   "link.copyAddress": "アドレスをコピー",
   "link.copied": "コピーしました",
   "link.suggested": "候補:",
-
   "settings.sections": "設定のセクション",
   "settings.close": "設定を閉じる",
   "settings.general": "一般",
@@ -247,7 +241,6 @@
   "settings.removeHook": "フックを削除",
   "settings.updateHook": "フックを更新",
   "settings.hookOutdated": "更新があります。更新すると、Claude の状態が変わった瞬間にここへ表示されます。",
-
   "settings.about": "情報",
   "settings.extInstalled": "インストール済み · {version}",
   "settings.extMissing": "未インストール",
@@ -266,7 +259,6 @@
   "about.support": "Pitwallを支援",
   "about.supportText": "Pitwallは無料です。時間の節約に役立っているなら、コーヒー1杯の支援が開発を続ける力になります。",
   "about.coffee": "コーヒーをおごる",
-
   "day.nav": "今日",
   "day.title": "一日の振り返り",
   "day.today": "今日",
@@ -282,13 +274,20 @@
   "day.sessions": "Claude セッション",
   "day.untitled": "名前のないセッション",
   "day.sessionTitle": "クリックしてエディタでこのセッションを表示",
-  "day.turns": {"other": "{count} ターン"},
+  "day.turns": {
+    "other": "{count} ターン"
+  },
   "day.commands": "コマンド",
   "day.failed": "{count} 件失敗",
-  "day.commitCount": {"other": "{count} コミット"},
-  "day.crashCount": {"other": "{count} 回クラッシュ"},
+  "day.commitCount": {
+    "other": "{count} コミット"
+  },
+  "day.crashCount": {
+    "other": "{count} 回クラッシュ"
+  },
   "day.timeline": "タイムライン",
   "day.laneTitle": "ダブルクリックしてエディタで開く",
+  "day.laneKeys": "左右の矢印キーでプロジェクトの一日を順にたどります。",
   "day.focus": "時間の配分",
   "day.legend.work": "Claude 作業中",
   "day.legend.wait": "Claude があなたを待機",

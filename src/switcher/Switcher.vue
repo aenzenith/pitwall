@@ -639,7 +639,7 @@ input {
 }
 
 input::placeholder {
-  color: #6c727c;
+  color: var(--text-faint);
 }
 
 kbd {
@@ -789,7 +789,7 @@ kbd {
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 600;
-  color: #6c727c;
+  color: var(--text-faint);
 }
 
 .cmd-mark.running {

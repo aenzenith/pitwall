@@ -12,6 +12,7 @@ import { claudeState, gitLine, meta } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
 import { outputRequest } from "../lib/panel";
 import { useReorder } from "../lib/reorder";
+import { rowKeys } from "../lib/rows";
 import { api, now, snapshot } from "../lib/store";
 import type { Project } from "../lib/types";
 import DayView from "./DayView.vue";
@@ -71,6 +72,29 @@ function pick(id: Filter): void {
 
 function toggle(project: Project): void {
   void api.act(project.path, project.status === "running" ? "stop" : "start");
+}
+
+/** Pressed from the keyboard, the button turns busy (disabled) and would drop the focus: the row keeps it. */
+function toggleFrom(event: MouseEvent, project: Project): void {
+  toggle(project);
+  if (event.detail === 0) ((event.currentTarget as HTMLElement).closest("[data-path]") as HTMLElement | null)?.focus();
+}
+
+/** The table is one Tab stop: arrows move the selection, ↵ opens the editor, Space starts or stops. */
+function onTableKey(event: KeyboardEvent): void {
+  rowKeys(event, {
+    move: (path) => (selectedPath.value = path),
+    enter: (path) => void api.openEditor(path),
+    space: (path) => {
+      const project = rows.value.find((p) => p.path === path);
+      if (project && project.status !== "busy") toggle(project);
+    },
+  });
+}
+
+/** ↓ in the search box goes on to the selected row. */
+function focusSelected(): void {
+  tbody.value?.querySelector<HTMLElement>('[data-path][tabindex="0"]')?.focus();
 }
 
 /** In full screen the traffic lights are gone, and so is the room kept for them. */
@@ -170,24 +194,29 @@ function server(project: Project): string {
         <div class="toolbar" data-tauri-drag-region="deep">
           <div class="heading">{{ t(current.label) }}</div>
           <label class="sr" for="search">{{ t("common.searchProjects") }}</label>
-          <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" />
+          <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" @keydown.down.prevent="focusSelected" />
           <Spinner v-if="anyBusy" class="busy-spin" />
           <button type="button" class="control" :disabled="!projects.length || anyBusy" @click="api.startAll()">{{ t("common.startAll") }}</button>
           <button type="button" class="control" :disabled="!snapshot?.running || anyBusy" @click="api.stopAll()">{{ t("common.stopAll") }}</button>
         </div>
 
-        <div v-if="rows.length" class="table">
-          <div class="thead">
-            <span>{{ t("window.col.project") }}</span>
-            <span>{{ t("window.col.branch") }}</span>
-            <span>{{ t("window.col.server") }}</span>
-            <span>{{ t("window.col.claude") }}</span>
-            <span></span>
+        <span id="rows-keys" class="sr-only">{{ t("common.rowKeys") }}</span>
+        <!-- One Tab stop: the selected row takes the focus; ↑/↓ move it, ←/→ reach its buttons. -->
+        <div v-if="rows.length" class="table" role="grid" :aria-label="t(current.label)" aria-describedby="rows-keys">
+          <div class="thead" role="row">
+            <span role="columnheader">{{ t("window.col.project") }}</span>
+            <span role="columnheader">{{ t("window.col.branch") }}</span>
+            <span role="columnheader">{{ t("window.col.server") }}</span>
+            <span role="columnheader">{{ t("window.col.claude") }}</span>
+            <span role="columnheader" :aria-label="t('window.col.actions')"></span>
           </div>
-          <div ref="tbody" :class="['tbody', reorder.listClass()]">
+          <div ref="tbody" :class="['tbody', reorder.listClass()]" role="rowgroup" @keydown="onTableKey">
             <div
               v-for="project in rows"
               :key="project.path"
+              role="row"
+              :aria-selected="project.path === selectedPath"
+              :tabindex="project.path === selectedPath ? 0 : -1"
               :data-path="project.path"
               :class="['trow', { selected: project.path === selectedPath }, reorder.rowClass(project.path)]"
               :style="reorder.rowStyle(project.path)"
@@ -196,23 +225,24 @@ function server(project: Project): string {
               @click="select(project.path)"
               @dblclick="api.openEditor(project.path)"
             >
-              <button type="button" class="cell-project" :aria-label="t('window.showName', { name: project.name })" @click.stop="select(project.path)">
+              <span class="cell-project" role="gridcell">
                 <StatusIcon :project="project" ring="var(--bg-app)" />
                 <span class="names">
                   <span class="name">
                     <span class="name-text">{{ project.name }}</span>
-                    <span v-if="project.terminals.length" class="term-badge" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
+                    <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
                   </span>
                   <span class="path">{{ project.path }}</span>
                 </span>
-              </button>
-              <span :class="['cell-git', { dirty: project.git?.changes }]">{{ gitLine(project.git) || "—" }}</span>
-              <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]"><Marquee :text="server(project)" /></span>
-              <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]"><Marquee :text="claudeState(project, now) || '—'" /></span>
-              <span class="cell-actions" data-no-drag @click.stop @dblclick.stop>
+              </span>
+              <span :class="['cell-git', { dirty: project.git?.changes }]" role="gridcell">{{ gitLine(project.git) || "—" }}</span>
+              <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]" role="gridcell"><Marquee :text="server(project)" /></span>
+              <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]" role="gridcell"><Marquee :text="claudeState(project, now) || '—'" /></span>
+              <span class="cell-actions" role="gridcell" data-no-drag @click.stop @dblclick.stop>
                 <button
                   type="button"
                   class="icon"
+                  tabindex="-1"
                   :aria-label="t(project.favourite ? 'window.unfavouriteName' : 'window.favouriteName', { name: project.name })"
                   :title="t(project.favourite ? 'window.favourite' : 'window.addFavourite')"
                   @click="api.setFavourite(project.path, !project.favourite)"
@@ -222,9 +252,10 @@ function server(project: Project): string {
                 <button
                   type="button"
                   class="icon"
+                  tabindex="-1"
                   :disabled="project.status === 'busy'"
                   :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
-                  @click="toggle(project)"
+                  @click="toggleFrom($event, project)"
                 >
                   <Spinner v-if="project.status === 'busy'" />
                   <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
@@ -388,6 +419,10 @@ input[type="search"] {
   font-size: 13px;
 }
 
+input[type="search"]::placeholder {
+  color: var(--text-faint);
+}
+
 .control {
   height: 30px;
   padding: 0 12px;
@@ -456,6 +491,11 @@ input[type="search"] {
   cursor: pointer;
 }
 
+/* The keyboard's row: the ring inside, so neighbours and the list's edge never cut it. */
+.trow:focus-visible {
+  outline-offset: -2px;
+}
+
 .trow:hover {
   background: #1b1e24;
 }
@@ -510,9 +550,6 @@ input[type="search"] {
   gap: 10px;
   min-width: 0;
   padding: 2px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
 }
 
 .names {

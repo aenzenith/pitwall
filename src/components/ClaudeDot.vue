@@ -6,7 +6,13 @@ defineProps<{ live?: { phase: "waiting" | "working"; text: string } | null }>();
 </script>
 
 <template>
-  <span :class="['claude-dot', live?.phase ?? 'idle']" :title="live?.text || undefined" :aria-label="live?.text || undefined"></span>
+  <span
+    :class="['claude-dot', live?.phase ?? 'idle']"
+    :title="live?.text || undefined"
+    :role="live?.text ? 'img' : undefined"
+    :aria-label="live?.text || undefined"
+    :aria-hidden="live?.text ? undefined : 'true'"
+  ></span>
 </template>
 
 <style scoped>

@@ -14,6 +14,7 @@
   "common.open": "Abrir",
   "common.startName": "Iniciar {name}",
   "common.stopName": "Detener {name}",
+  "common.rowKeys": "Las flechas recorren los proyectos y sus botones. Retorno abre el proyecto; Espacio lo inicia o lo detiene.",
   "common.runName": "Ejecutar {name}",
   "common.editName": "Editar {name}",
   "common.deleteName": "Eliminar {name}",
@@ -32,17 +33,16 @@
   "common.settings": "Ajustes",
   "common.script": "Script",
   "common.links": "Enlaces",
-
   "status.running": "En ejecución",
   "status.stopped": "Detenido",
   "status.crashed": "Caído",
   "status.busy": "Procesando…",
-
+  "status.claudeWaiting": "{status}, Claude te está esperando",
+  "status.claudeWorking": "{status}, Claude está trabajando",
   "phase.starting": "iniciando…",
   "phase.stopping": "deteniendo…",
   "phase.restarting": "reiniciando…",
   "phase.working": "procesando…",
-
   "time.justNow": "hace un momento",
   "time.minutesAgo": "hace {count} min",
   "time.hoursAgo": "hace {count} h",
@@ -51,20 +51,18 @@
   "time.duration": "{hours} h {minutes} min",
   "time.durationMinutes": "{minutes} min",
   "time.lessThanMinute": "< 1 min",
-
   "server.stopped": "detenido",
   "server.stoppedOpenIn": "detenido · abierto en {window}",
-
   "claude.finished": "Terminó",
   "claude.asking": "Hizo una pregunta",
   "claude.permission": "Necesita tu permiso",
   "claude.working": "Trabajando…",
-
-  "git.changed": { "one": "{count} cambio", "many": "{count} cambios", "other": "{count} cambios" },
-
-
+  "git.changed": {
+    "one": "{count} cambio",
+    "many": "{count} cambios",
+    "other": "{count} cambios"
+  },
   "editor.fallback": "Editor",
-
   "popover.noProjects": "Aún no hay proyectos",
   "popover.running": "{count} en ejecución",
   "popover.waiting": "{count} esperándote",
@@ -73,7 +71,6 @@
   "popover.rowTitle": "Abrir {name} en el editor — arrastra para reordenar",
   "popover.openInBrowserName": "Abrir {name} en el navegador",
   "popover.empty": "Agrega una carpeta de proyecto para iniciar su servidor de desarrollo desde aquí.",
-
   "switcher.label": "Ir a un proyecto",
   "switcher.placeholder": "Ir a un proyecto…",
   "switcher.foldersIn": "Carpetas en {folder}",
@@ -93,7 +90,6 @@
   "switcher.goToProject": "Ir al proyecto",
   "switcher.noLinkMatch": "Ningún enlace coincide con «{query}».",
   "switcher.noLinks": "Aún no hay enlaces. Añádelos en Enlaces de un proyecto.",
-
   "window.filters": "Filtros",
   "window.filter.all": "Todos los proyectos",
   "window.filter.running": "En ejecución",
@@ -104,9 +100,14 @@
   "window.col.branch": "Rama",
   "window.col.server": "Servidor",
   "window.col.claude": "Claude",
+  "window.col.actions": "Acciones",
   "window.rowTitle": "Haz doble clic para abrir en el editor — arrastra para reordenar",
   "window.showName": "Mostrar {name}",
-  "window.openTerminals": { "one": "{count} terminal abierta", "many": "{count} terminales abiertas", "other": "{count} terminales abiertas" },
+  "window.openTerminals": {
+    "one": "{count} terminal abierta",
+    "many": "{count} terminales abiertas",
+    "other": "{count} terminales abiertas"
+  },
   "window.favouriteName": "Agregar {name} a favoritos",
   "window.unfavouriteName": "Quitar {name} de favoritos",
   "window.favourite": "Favorito",
@@ -115,7 +116,6 @@
   "window.emptyLine1": "Agrega una carpeta de proyecto o arrastra carpetas a esta ventana.",
   "window.emptyLine2": "Los proyectos abiertos en VS Code aparecen automáticamente.",
   "window.projectDetails": "Detalles del proyecto",
-
   "detail.claudeWorking": "Claude está trabajando",
   "detail.noSession": "Ninguna sesión en espera",
   "detail.claudeFinished": "Claude terminó su turno",
@@ -153,11 +153,11 @@
   "detail.notRunning": "No está en ejecución. Inícialo para ver aquí la salida.",
   "detail.noOutput": "Aún no hay salida.",
   "detail.noLinks": "Staging, producción, el panel de administración, el gestor de incidencias: las otras direcciones del proyecto, a un clic.",
-
   "terminal.panel": "Terminales de {name}",
   "terminal.tabs": "Terminales",
   "terminal.resize": "Cambiar el tamaño de las terminales",
   "terminal.renameHint": "Haz doble clic para renombrar",
+  "terminal.tabKeys": "Las flechas cambian de pestaña. Retorno va al terminal, Borrar cierra la pestaña y F2 le cambia el nombre.",
   "terminal.renameName": "Renombrar {name}",
   "terminal.newTab": "Nueva pestaña",
   "terminal.newTabTitle": "Nueva pestaña de terminal (⌘T)",
@@ -166,7 +166,6 @@
   "terminal.expand": "Expandir las terminales",
   "terminal.collapse": "Contraer las terminales",
   "terminal.none": "No hay terminales en {name}.",
-
   "command.newTitle": "Nuevo comando",
   "command.editTitle": "Editar comando",
   "command.name": "Nombre",
@@ -192,7 +191,6 @@
   "link.copyAddress": "Copiar dirección",
   "link.copied": "Copiado",
   "link.suggested": "Sugerencias:",
-
   "settings.sections": "Secciones de ajustes",
   "settings.close": "Cerrar ajustes",
   "settings.general": "General",
@@ -247,7 +245,6 @@
   "settings.removeHook": "Quitar hook",
   "settings.updateHook": "Actualizar hook",
   "settings.hookOutdated": "Hay una actualización: con ella, el estado de Claude aparece aquí en cuanto cambia.",
-
   "settings.about": "Acerca de",
   "settings.extInstalled": "Instalada · {version}",
   "settings.extMissing": "No instalada",
@@ -266,7 +263,6 @@
   "about.support": "Apoya a Pitwall",
   "about.supportText": "Pitwall es gratis. Si te ahorra tiempo, un café ayuda a que siga adelante.",
   "about.coffee": "Invítame a un café",
-
   "day.nav": "Hoy",
   "day.title": "¿A dónde se fue el día?",
   "day.today": "Hoy",
@@ -282,13 +278,23 @@
   "day.sessions": "Sesiones de Claude",
   "day.untitled": "Sesión sin nombre",
   "day.sessionTitle": "Haz clic para mostrar esta sesión en el editor",
-  "day.turns": {"one": "{count} turno", "other": "{count} turnos"},
+  "day.turns": {
+    "one": "{count} turno",
+    "other": "{count} turnos"
+  },
   "day.commands": "Comandos",
   "day.failed": "{count} con error",
-  "day.commitCount": {"one": "{count} commit", "other": "{count} commits"},
-  "day.crashCount": {"one": "{count} caída", "other": "{count} caídas"},
+  "day.commitCount": {
+    "one": "{count} commit",
+    "other": "{count} commits"
+  },
+  "day.crashCount": {
+    "one": "{count} caída",
+    "other": "{count} caídas"
+  },
   "day.timeline": "Línea de tiempo",
   "day.laneTitle": "Haz doble clic para abrir en el editor",
+  "day.laneKeys": "Las flechas izquierda y derecha recorren el día del proyecto paso a paso.",
   "day.focus": "Reparto del tiempo",
   "day.legend.work": "Claude trabajando",
   "day.legend.wait": "Claude te esperó",

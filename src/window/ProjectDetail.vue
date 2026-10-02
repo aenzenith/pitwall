@@ -1158,7 +1158,7 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 600;
-  color: #6c727c;
+  color: var(--text-faint);
 }
 
 .mark.running {
@@ -1476,7 +1476,7 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
   border: 0;
   background: transparent;
   font-size: 12px;
-  color: #6c727c;
+  color: var(--text-faint);
   white-space: nowrap;
 }
 

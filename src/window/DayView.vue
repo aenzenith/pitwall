@@ -6,7 +6,7 @@ import ClaudeMark from "../components/ClaudeMark.vue";
 import Icon from "../components/Icon.vue";
 import { claudeLine, turnLine } from "../lib/format";
 import { language, t } from "../lib/i18n";
-import { api, now, snapshot } from "../lib/store";
+import { api, now, snapshot, visible } from "../lib/store";
 import type { DayProject, DaySession, DaySpan, DaySummary } from "../lib/types";
 
 const HOUR = 3_600_000;
@@ -16,7 +16,8 @@ const REFRESH_MS = 30_000;
 const MIN_HOURS = 8;
 
 type Tip = { title: string; detail: string; tone: "claude" | "server" | "crash" | "plain" };
-type Block = { key: string; kind: "server" | "work" | "wait" | "commit" | "crash"; style: Record<string, string>; text: string; tip: Tip };
+/** `at`: when it starts, the order the keyboard steps through a lane in. */
+type Block = { key: string; kind: "server" | "work" | "wait" | "commit" | "crash"; at: number; style: Record<string, string>; text: string; tip: Tip };
 
 const day = ref<DaySummary | null>(null);
 /** The day shown, `YYYY-MM-DD`; null is today. */
@@ -24,6 +25,12 @@ const date = ref<string | null>(null);
 const selectedPath = ref<string | null>(null);
 const tip = ref<(Tip & { x: number; y: number }) | null>(null);
 const tipEl = ref<HTMLElement | null>(null);
+/** The bar of where the time went; its parts anchor the legend's tooltips. */
+const splitEl = ref<HTMLElement | null>(null);
+/** What the keyboard just showed, read out by VoiceOver (a polite live region). */
+const announced = ref("");
+/** The lane and block the arrows are on. */
+let stepping: { path: string; at: number } | null = null;
 
 let asked = 0;
 
@@ -221,7 +228,7 @@ function blocks(project: DayProject): Block[] {
   const range = (span: DaySpan): string => `${clock(span.start)} – ${clock(span.end)}`;
 
   project.server.forEach((span, i) =>
-    list.push({ key: `s${i}`, kind: "server", style: place(span.start, span.end), text: "", tip: { title: t("day.tip.server", { duration: duration(span.end - span.start) }), detail: range(span), tone: "server" } }),
+    list.push({ key: `s${i}`, kind: "server", at: span.start, style: place(span.start, span.end), text: "", tip: { title: t("day.tip.server", { duration: duration(span.end - span.start) }), detail: range(span), tone: "server" } }),
   );
 
   // A session's name on the first of its blocks in a row; the next blocks are the same work.
@@ -233,6 +240,7 @@ function blocks(project: DayProject): Block[] {
     list.push({
       key: `w${i}`,
       kind: "work",
+      at: span.start,
       style: place(span.start, span.end),
       text,
       tip: { title: t("day.tip.work", { duration: duration(span.end - span.start) }), detail: title ? `${range(span)} · ${title}` : range(span), tone: "claude" },
@@ -245,6 +253,7 @@ function blocks(project: DayProject): Block[] {
     list.push({
       key: `a${i}`,
       kind: "wait",
+      at: span.start,
       style: place(span.start, span.end),
       text: minutes >= 1 ? t("time.durationMinutes", { minutes }) : "",
       tip: { title: t("day.tip.wait", { duration: duration(span.end - span.start) }), detail: title ? `${range(span)} · ${title}` : range(span), tone: "claude" },
@@ -252,11 +261,11 @@ function blocks(project: DayProject): Block[] {
   });
 
   project.commits.forEach((commit, i) =>
-    list.push({ key: `c${i}`, kind: "commit", style: { left: `${pct(commit.at)}%` }, text: "", tip: { title: t("day.tip.commit", { time: clock(commit.at) }), detail: commit.subject, tone: "plain" } }),
+    list.push({ key: `c${i}`, kind: "commit", at: commit.at, style: { left: `${pct(commit.at)}%` }, text: "", tip: { title: t("day.tip.commit", { time: clock(commit.at) }), detail: commit.subject, tone: "plain" } }),
   );
 
   project.crashes.forEach((at, i) =>
-    list.push({ key: `x${i}`, kind: "crash", style: { left: `${pct(at)}%` }, text: "✕", tip: { title: t("day.tip.crash", { time: clock(at) }), detail: "", tone: "crash" } }),
+    list.push({ key: `x${i}`, kind: "crash", at, style: { left: `${pct(at)}%` }, text: "✕", tip: { title: t("day.tip.crash", { time: clock(at) }), detail: "", tone: "crash" } }),
   );
 
   return list;
@@ -376,7 +385,12 @@ function share(part: number, session: DaySession): string {
 /* ---------- tooltip ---------- */
 
 function showTip(event: PointerEvent, shown: Tip): void {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  showTipAt(event.currentTarget as HTMLElement, shown);
+}
+
+/** The tooltip over `element`; the keyboard's way to it as well as the pointer's. */
+function showTipAt(element: Element, shown: Tip): void {
+  const rect = element.getBoundingClientRect();
   tip.value = { ...shown, x: rect.left + rect.width / 2, y: rect.top };
   void nextTick(() => {
     // Kept inside the window.
@@ -389,7 +403,67 @@ function showTip(event: PointerEvent, shown: Tip): void {
 
 function hideTip(): void {
   tip.value = null;
+  announced.value = "";
+  stepping = null;
 }
+
+/* ---------- the keyboard ---------- */
+
+function announce(shown: Tip): void {
+  announced.value = [shown.title, shown.detail].filter(Boolean).join(" ");
+}
+
+/** A legend entry focused from the keyboard: the tooltip of its part of the bar. */
+function focusPart(event: FocusEvent, part: { path: string; tip: Tip }): void {
+  if (!(event.currentTarget as HTMLElement).matches(":focus-visible")) return;
+  const element = Array.from(splitEl.value?.children ?? []).find((child) => (child as HTMLElement).dataset.part === part.path);
+  if (element) showTipAt(element, part.tip);
+}
+
+/** On a lane, ←/→ (Home, End) step through what happened on it, oldest first, each with its tooltip; Esc puts it away. */
+function onLaneKey(event: KeyboardEvent, lane: { project: DayProject; blocks: Block[] }): void {
+  if (event.key === "Escape") {
+    if (tip.value) {
+      event.preventDefault();
+      hideTip();
+    }
+    return;
+  }
+  if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+  const steps = [...lane.blocks].sort((a, b) => a.at - b.at);
+  if (!steps.length) return;
+  event.preventDefault();
+  const last = steps.length - 1;
+  const from = stepping?.path === lane.project.path ? stepping.at : -1;
+  const at =
+    event.key === "Home" ? 0 : event.key === "End" ? last : event.key === "ArrowRight" ? Math.min(last, from + 1) : from < 0 ? last : Math.max(0, from - 1);
+  const block = steps[at];
+  const element = (event.currentTarget as HTMLElement).querySelector(`[data-block="${block.key}"]`);
+  if (!element) return;
+  showTipAt(element, block.tip);
+  announce(block.tip);
+  stepping = { path: lane.project.path, at };
+}
+
+/** The two day tabs are one Tab stop: ←/→ (Home, End) pick and focus the other. */
+const dayTabs = ["yesterday", "today"] as const;
+const dayTab = computed(() => (isYesterday.value ? "yesterday" : "today"));
+
+function pickDay(which: (typeof dayTabs)[number]): void {
+  date.value = which === "today" ? null : yesterday();
+}
+
+function onDayTabKey(event: KeyboardEvent): void {
+  const at = dayTabs.indexOf((event.target as HTMLElement).dataset.day as (typeof dayTabs)[number]);
+  if (at < 0) return;
+  const n = dayTabs.length;
+  const to = ({ ArrowRight: (at + 1) % n, ArrowLeft: (at - 1 + n) % n, Home: 0, End: n - 1 } as Record<string, number>)[event.key];
+  if (to === undefined) return;
+  event.preventDefault();
+  pickDay(dayTabs[to]);
+  ((event.currentTarget as HTMLElement).querySelector(`[data-day="${dayTabs[to]}"]`) as HTMLElement | null)?.focus();
+}
+
 
 /* ---------- life ---------- */
 
@@ -402,9 +476,14 @@ watch(date, () => {
 
 onMounted(() => {
   void load();
+  // Today keeps up while the window is on screen; off screen it waits, and catches up on return.
   timer = window.setInterval(() => {
-    if (!day.value || day.value.today) void load();
+    if (visible.value && (!day.value || day.value.today)) void load();
   }, REFRESH_MS);
+});
+
+watch(visible, (on) => {
+  if (on && (!day.value || day.value.today)) void load();
 });
 
 onBeforeUnmount(() => {
@@ -426,9 +505,29 @@ onBeforeUnmount(() => {
           <button type="button" class="arrow" :aria-label="t('day.previous')" :title="t('day.previous')" @click="previous">
             <Icon name="back" :size="14" />
           </button>
-          <div role="tablist" class="tabs">
-            <button type="button" role="tab" :aria-selected="isYesterday" :class="{ on: isYesterday }" @click="date = yesterday()">{{ t("day.yesterday") }}</button>
-            <button type="button" role="tab" :aria-selected="date === null" :class="{ on: date === null }" @click="date = null">{{ t("day.today") }}</button>
+          <div role="tablist" class="tabs" @keydown="onDayTabKey">
+            <button
+              type="button"
+              role="tab"
+              data-day="yesterday"
+              :tabindex="dayTab === 'yesterday' ? 0 : -1"
+              :aria-selected="isYesterday"
+              :class="{ on: isYesterday }"
+              @click="pickDay('yesterday')"
+            >
+              {{ t("day.yesterday") }}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              data-day="today"
+              :tabindex="dayTab === 'today' ? 0 : -1"
+              :aria-selected="date === null"
+              :class="{ on: date === null }"
+              @click="pickDay('today')"
+            >
+              {{ t("day.today") }}
+            </button>
           </div>
           <button type="button" class="arrow" :aria-label="t('day.next')" :title="t('day.next')" :disabled="!day || day.today" @click="next">
             <Icon name="chevron" :size="14" />
@@ -448,26 +547,39 @@ onBeforeUnmount(() => {
 
             <!-- Where the time went: each project's share, in its colour. -->
             <template v-if="split.length">
-              <div class="split" :aria-label="t('day.focus')">
+              <!-- The bar is the pointer's; the keyboard and VoiceOver use the legend below, which
+                   picks the same projects and shows the same tooltips. -->
+              <div ref="splitEl" class="split" aria-hidden="true">
                 <span
                   v-for="part in split"
                   :key="part.path"
                   class="part"
+                  :data-part="part.path"
                   :style="{ flexGrow: part.grow, background: part.color }"
                   @pointerenter="showTip($event, part.tip)"
                   @pointerleave="hideTip"
                   @click="selectedPath = part.path"
                 ></span>
               </div>
-              <div class="split-legend">
-                <button v-for="part in split" :key="part.path" type="button" :class="{ on: part.path === selected?.path }" @click="selectedPath = part.path">
+              <div class="split-legend" role="group" :aria-label="t('day.focus')">
+                <button
+                  v-for="part in split"
+                  :key="part.path"
+                  type="button"
+                  :class="{ on: part.path === selected?.path }"
+                  :aria-label="`${part.tip.title} ${part.tip.detail}`"
+                  :aria-pressed="part.path === selected?.path"
+                  @click="selectedPath = part.path"
+                  @focus="focusPart($event, part)"
+                  @blur="hideTip"
+                >
                   <i :style="{ background: part.color }"></i>{{ part.name }}<span class="share">{{ part.share }}</span>
                 </button>
               </div>
             </template>
           </div>
 
-          <div class="timeline" :aria-label="t('day.timeline')">
+          <div class="timeline" role="group" :aria-label="t('day.timeline')">
             <div ref="axis" class="axis">
               <span v-for="tick in ticks" :key="tick.at" class="tick" :style="{ left: tick.left }">{{ tick.label }}</span>
               <span v-if="nowLeft" class="now-pill" :style="{ left: nowLeft }"><i></i>{{ clock(day.now) }}</span>
@@ -479,8 +591,12 @@ onBeforeUnmount(() => {
                 :key="lane.project.path"
                 type="button"
                 :class="['lane', { on: lane.project.path === selected?.path }]"
+                :aria-pressed="lane.project.path === selected?.path"
+                :aria-describedby="lane.blocks.length ? 'lane-keys' : undefined"
                 @click="selectedPath = lane.project.path"
                 @dblclick="api.openEditor(lane.project.path)"
+                @keydown="onLaneKey($event, lane)"
+                @blur="hideTip"
               >
                 <!-- The hint sits on the name only: the blocks have their own tooltips. -->
                 <span class="label" :title="t('day.laneTitle')">
@@ -490,11 +606,13 @@ onBeforeUnmount(() => {
                   </span>
                   <span class="lane-total under">{{ lane.total }}</span>
                 </span>
-                <span class="track">
+                <!-- Drawn for the eye; VoiceOver hears each block as the arrows reach it. -->
+                <span class="track" aria-hidden="true">
                   <span v-for="tick in ticks" :key="tick.at" :class="['grid', { major: tick.major }]" :style="{ left: tick.left }"></span>
                   <span
                     v-for="block in lane.blocks"
                     :key="block.key"
+                    :data-block="block.key"
                     :class="['block', block.kind]"
                     :style="block.style"
                     @pointerenter="showTip($event, block.tip)"
@@ -513,7 +631,7 @@ onBeforeUnmount(() => {
             <span><i class="key wait"></i>{{ t("day.legend.wait") }}</span>
             <span><i class="key server"></i>{{ t("day.legend.server") }}</span>
             <span><i class="key commit"></i>{{ t("day.legend.commit") }}</span>
-            <span><i class="key crash">✕</i>{{ t("day.legend.crash") }}</span>
+            <span><i class="key crash" aria-hidden="true">✕</i>{{ t("day.legend.crash") }}</span>
           </div>
         </template>
 
@@ -557,7 +675,8 @@ onBeforeUnmount(() => {
               tabindex="0"
               :title="t('day.sessionTitle')"
               @click="api.revealClaude(selected.path, session.id)"
-              @keydown.enter="api.revealClaude(selected.path, session.id)"
+              @keydown.enter.prevent="api.revealClaude(selected.path, session.id)"
+              @keydown.space.prevent="api.revealClaude(selected.path, session.id)"
             >
               <div class="session-top">
                 <ClaudeDot :live="liveSessions.get(session.id)" />
@@ -594,7 +713,10 @@ onBeforeUnmount(() => {
       </template>
     </aside>
 
-    <div v-if="tip" ref="tipEl" class="tip" :style="{ left: `${tip.x}px`, top: `${tip.y}px` }">
+    <span id="lane-keys" class="sr-only">{{ t("day.laneKeys") }}</span>
+    <div class="sr-only" aria-live="polite">{{ announced }}</div>
+
+    <div v-if="tip" ref="tipEl" class="tip" role="tooltip" :style="{ left: `${tip.x}px`, top: `${tip.y}px` }">
       <span :class="['tip-title', tip.tone]">{{ tip.title }}</span>
       <span v-if="tip.detail" class="tip-detail">{{ tip.detail }}</span>
     </div>
@@ -784,7 +906,7 @@ onBeforeUnmount(() => {
 }
 
 .share {
-  color: #6c727c;
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
@@ -826,7 +948,7 @@ onBeforeUnmount(() => {
   transform: translateX(-50%);
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #6c727c;
+  color: var(--text-faint);
   white-space: nowrap;
 }
 
@@ -901,6 +1023,11 @@ onBeforeUnmount(() => {
 
 .lane.on {
   background: #181b20;
+}
+
+/* The ring inside: the list clips anything past its sides. */
+.lane:focus-visible {
+  outline-offset: -2px;
 }
 
 .label {
@@ -1266,7 +1393,7 @@ onBeforeUnmount(() => {
 }
 
 .tile-value.none {
-  color: #5c626c;
+  color: var(--text-faint);
 }
 
 .tile-note {
@@ -1301,8 +1428,7 @@ onBeforeUnmount(() => {
 }
 
 .session:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px #3a3f48;
+  outline-offset: 0;
 }
 
 .session-top {
