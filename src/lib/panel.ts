@@ -21,6 +21,13 @@ export const outputShown = ref(false);
  */
 export const outputRequest = ref<{ path: string; job: string } | null>(null);
 
+/**
+ * A Claude session in one of Pitwall's terminals was brought up (`reveal-terminal`): the window
+ * selects that project, opens its terminal panel on that tab and focuses it. Whoever shows it
+ * clears it; `at` lets one that never finds its tab lapse.
+ */
+export const terminalRequest = ref<{ path: string; id: number; at: number } | null>(null);
+
 /** A collapsed panel keeps only its handle and tab row; its height waits for its return. */
 export const COLLAPSED_HEIGHT = 42;
 export const outputCollapsed = ref(false);

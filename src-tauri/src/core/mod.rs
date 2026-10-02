@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::claude::{ClaudeWatch, SessionPhase, Turn};
+use crate::claude::{ClaudeWatch, SessionPhase, SessionState, Turn};
 use crate::git::GitInfo;
 use crate::hooks::ClaudeHook;
 use crate::i18n::{self, t};
@@ -38,6 +38,7 @@ mod projects;
 mod reveal;
 mod routing;
 mod servers;
+mod sessions;
 mod snapshot;
 mod supervise;
 mod terminal;
@@ -47,6 +48,7 @@ pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
 pub use projects::Folder;
 pub use routing::Action;
+pub use sessions::SessionsView;
 pub use snapshot::Snapshot;
 use jobs::{job_key, Job, JobResult};
 use output::Outbox;
@@ -82,6 +84,8 @@ pub enum CoreEvent {
     Terminal { id: u64, seq: u64, data: String },
     /// A project terminal ended.
     TerminalExit { id: u64 },
+    /// Show this terminal in the main window: a Claude session runs in it.
+    RevealTerminal { path: String, id: u64 },
 }
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
@@ -116,6 +120,9 @@ struct Inner {
     working: HashSet<String>,
     /// Sessions working or waiting on you, per project.
     claude_sessions: HashMap<String, Vec<LiveSession>>,
+    /// Every session of the last scan, listed projects' and the hook's others, for the
+    /// Sessions page.
+    scanned: Vec<SessionState>,
     git: HashMap<String, GitInfo>,
     claude_hook: bool,
     claude_hook_outdated: bool,
@@ -148,6 +155,8 @@ pub struct Core {
     terminals: Mutex<HashMap<u64, terminal::Session>>,
     /// What the day's timeline has written down last.
     activity: Mutex<activity::Recorder>,
+    /// What the Sessions page keeps between two requests.
+    sessions: Mutex<sessions::SessionsCache>,
     reservations: Mutex<Reservations>,
     claude: Mutex<ClaudeWatch>,
     hook: ClaudeHook,
@@ -192,6 +201,7 @@ impl Core {
             }),
             terminals: Mutex::new(HashMap::new()),
             activity: Mutex::new(activity::Recorder::default()),
+            sessions: Mutex::new(sessions::SessionsCache::default()),
             reservations: Mutex::new(Reservations::default()),
             claude: Mutex::new(claude),
             hook,

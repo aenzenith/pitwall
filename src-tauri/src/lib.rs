@@ -17,6 +17,7 @@ mod ports;
 mod process;
 mod registry;
 mod resolve;
+mod sessions;
 mod settings;
 mod sound;
 mod spend;
@@ -46,6 +47,7 @@ pub const SWITCHER: &str = "switcher";
 pub struct AppState {
     pub core: Arc<Core>,
     pub fuel: fuel::Fuel,
+    pub sessions: sessions::Sessions,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -53,6 +55,13 @@ struct TerminalData {
     id: u64,
     seq: u64,
     data: String,
+}
+
+/// A terminal for the main window to show (`reveal-terminal`).
+#[derive(Clone, serde::Serialize)]
+struct TerminalReveal {
+    path: String,
+    id: u64,
 }
 
 /// Lines of output, batched per project and command (see `core::output::OUTPUT_BATCH`).
@@ -105,6 +114,11 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         }
         CoreEvent::TerminalExit { id } => {
             let _ = app.emit_to(MAIN, "terminal-exit", id);
+        }
+        // Held for the main window's page until it listens (`windows::FOR_MAIN`).
+        CoreEvent::RevealTerminal { path, id } => {
+            tray::show_main(app);
+            let _ = app.emit("reveal-terminal", TerminalReveal { path, id });
         }
     }
 }
@@ -234,8 +248,9 @@ pub fn run() {
             );
 
             let fuel = fuel::Fuel::new(app.handle(), home.join(".claude").join("projects"));
-            app.manage(AppState { core: Arc::clone(&core), fuel });
+            app.manage(AppState { core: Arc::clone(&core), fuel, sessions: sessions::Sessions::default() });
             fuel::Fuel::start(app.handle());
+            sessions::Sessions::start(app.handle());
 
             core.reap_orphans();
             core.record_app("start");
@@ -332,6 +347,7 @@ pub fn run() {
             commands::extension_status,
             commands::open_extension_page,
             commands::day_summary,
+            commands::claude_sessions,
             commands::play_sound,
             commands::open_terminal,
             commands::rename_terminal,

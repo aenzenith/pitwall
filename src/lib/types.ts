@@ -202,3 +202,62 @@ export type SpendToday = {
 
 /** The Fuel page's data, pushed to the main window as `fuel`. */
 export type Fuel = { limits: UsageState; today: SpendToday | null };
+
+/* ---------- Sessions: every Claude Code session today, live (claude_sessions, event `sessions`) ---------- */
+
+/**
+ * Where a session runs: one of Pitwall's own terminals (its id), a VS Code window's Claude Code
+ * tab or terminal (the window's name), a terminal app (`iTerm2`, `Ghostty`… from an allowlist;
+ * null when not named), something else (`entrypoint`: `sdk-ts`, `claude-desktop`…), or unknown
+ * (no sessions folder, no process table: Windows).
+ */
+export type SessionOrigin =
+  | { kind: "pitwall"; terminal: number }
+  | { kind: "vscodeTab"; window: string }
+  | { kind: "vscodeTerminal"; window: string }
+  | { kind: "terminal"; app: string | null }
+  /** `claude-vscode`: a Claude Code tab in an editor window without the extension. */
+  | { kind: "other"; entrypoint: string | null }
+  | { kind: "unknown" };
+
+/** A stretch of a session's day: Claude working, or waiting on you. */
+export type SessionSpan = { start: number; end: number; kind: "work" | "wait" };
+
+export type SessionRow = {
+  /** The session id (its log's name, a UUID). */
+  id: string;
+  /** The listed project it runs in; null for a folder outside the listed projects. */
+  path: string | null;
+  /** The folder it runs in. */
+  folder: string;
+  /** The project's name, or the folder's. */
+  project: string;
+  /** Its name (`custom-title`, else `ai-title`); never message text. */
+  title: string | null;
+  /** `idle`: open, nothing going on and nothing unseen; `ended`: its process is gone. */
+  phase: "working" | "waiting" | "idle" | "ended";
+  /** While waiting: on what, since when (a permission wait the hook didn't name has no `tool`). */
+  turn: Turn | null;
+  /** A permission wait: the tool's name (`Bash`); never its input. */
+  tool: string | null;
+  /** In this phase since (an ended one: when it ended); null when not known. */
+  since: number | null;
+  /** Its process runs; null when that can't be told. */
+  running: boolean | null;
+  origin: SessionOrigin;
+  /** Its part in today: time worked and waited on you, turns, and when; listed projects only. */
+  today: { work: number; wait: number; turns: number; spans: SessionSpan[] } | null;
+  /** Today's tokens (subagents' included), priced as the API would; `priced`: every model had a price. */
+  spend: { tokens: TokenCounts; costUsd: number; priced: boolean; models: string[] } | null;
+  /** Subagents it ran today. */
+  subagents: number;
+};
+
+/**
+ * The Sessions page, its rows in the core's order (waiting, working oldest first, idle, ended
+ * newest first). `hook`: Claude Code's hook is installed (live state, permission waits);
+ * `unlisted`: the rows in folders outside the listed projects (`path` null). Sent as `sessions`
+ * to the main window once the page has asked for it, while the window is on screen; times that
+ * only grow (today's) come again at most every 30 s.
+ */
+export type SessionsView = { now: number; hook: boolean; sessions: SessionRow[]; unlisted: number };

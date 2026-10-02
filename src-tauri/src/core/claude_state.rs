@@ -21,6 +21,14 @@ impl Core {
             if let Some(sessions) = inner.claude_sessions.get_mut(path) {
                 sessions.retain(|session| session.phase != SessionPhase::Waiting);
             }
+            // The Sessions page's too, a folder that isn't listed included, until the next scan.
+            for session in inner.scanned.iter_mut().filter(|session| session.phase == SessionPhase::Waiting) {
+                let here = if session.path.is_empty() { session.folder.as_deref().is_some_and(|folder| same_path(folder, path)) } else { session.path == path };
+                if here {
+                    session.phase = SessionPhase::Idle;
+                    session.turn = None;
+                }
+            }
         }
         self.notify();
     }
@@ -49,6 +57,7 @@ impl Core {
                 inner.waiting = scan.waiting;
                 inner.working = scan.working;
                 inner.claude_sessions = live_sessions(&scan.sessions);
+                inner.scanned = scan.sessions.iter().chain(&scan.others).cloned().collect();
                 (announce, build_snapshot(&inner).projects)
             };
             // Still under the watch's lock: two refreshes never write the timeline out of order.

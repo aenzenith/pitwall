@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ref, watch } from "vue";
 
-import type { DaySummary, ExtensionStatus, Folder, Fuel, LinkSuggestion, ProjectSettings, Settings, Snapshot, TerminalView } from "./types";
+import type { DaySummary, ExtensionStatus, Folder, Fuel, LinkSuggestion, ProjectSettings, SessionsView, Settings, Snapshot, TerminalView } from "./types";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -80,6 +80,39 @@ export async function connectFuel(): Promise<UnlistenFn> {
   return unlisten;
 }
 
+/** Every Claude Code session today: the Sessions page's, and its sidebar count's. */
+export const sessions = ref<SessionsView | null>(null);
+
+/** Asks the core for the sessions; one that doesn't answer (yet) leaves them as they were. */
+export async function loadSessions(): Promise<void> {
+  try {
+    sessions.value = await api.claudeSessions();
+  } catch {
+    // Kept as it was (null shows as loading); the next `sessions` event fills it.
+  }
+}
+
+/**
+ * The main window's: hears `sessions` (sent to this window only, on every change) and asks for
+ * the current state.
+ */
+export async function connectSessions(): Promise<UnlistenFn> {
+  let heard = 0;
+  const unlisten = await getCurrentWindow().listen<SessionsView>("sessions", (event) => {
+    heard++;
+    sessions.value = event.payload;
+  });
+  const before = heard;
+  try {
+    const view = await api.claudeSessions();
+    // An event that came in meanwhile is newer.
+    if (heard === before) sessions.value = view;
+  } catch {
+    // Kept as loading; the next `sessions` event fills it.
+  }
+  return unlisten;
+}
+
 export type Action = "start" | "stop" | "restart";
 
 export const api = {
@@ -110,6 +143,8 @@ export const api = {
   openEditor: (path: string) => invoke("open_editor", { path }),
   openClaude: (path: string) => invoke("open_claude", { path }),
   revealClaude: (path: string, session: string) => invoke("reveal_claude", { path, session }),
+  /** Every Claude Code session today (the Sessions page). */
+  claudeSessions: () => invoke<SessionsView>("claude_sessions"),
   markSeen: (path: string) => invoke("mark_seen", { path }),
   setSettings: (settings: Settings) => invoke("set_settings", { settings }),
   setProjectSettings: (path: string, settings: ProjectSettings) => invoke("set_project_settings", { path, settings }),

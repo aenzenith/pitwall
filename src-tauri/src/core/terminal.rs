@@ -245,6 +245,11 @@ impl Core {
         }
     }
 
+    /// Every terminal's shell: its pid, the terminal's id and its project.
+    pub(super) fn terminal_shells(&self) -> Vec<(u32, u64, String)> {
+        self.terminal_sessions().iter().filter_map(|(id, session)| Some((session.pid?, *id, session.path.clone()))).collect()
+    }
+
     /// Every terminal's shell, for shutdown.
     pub(super) fn terminal_pids(&self) -> Vec<u32> {
         self.terminal_sessions().values().filter_map(|session| session.pid).collect()

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// Inline stroke icons; currentColor follows the button.
+// Inline stroke icons; currentColor follows the button. `spark` is Claude's (components/ClaudeMark),
+// its rays shortened to fit the icons' stroke.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "spark" | "sparkles" | "lock";
     size?: number;
   }>(),
   { size: 15 },
@@ -40,6 +41,9 @@ withDefaults(
     <path v-else-if="name === 'pulse'" d="M3 12h4l2.5-6 5 12 2.5-6h4" />
     <g v-else-if="name === 'chat'"><path d="M5.5 5h13a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5V17h-1a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8.5 11h.01M12 11h.01M15.5 11h.01" /></g>
     <g v-else-if="name === 'fuel'"><path d="M4.5 20V5.5a2 2 0 0 1 2-2h5.5a2 2 0 0 1 2 2V20" /><path d="M3 20h12.5M4.5 10h9.5" /><path d="M14 8.5h1.5a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 0 3 0V8.5L18.5 6" /></g>
+    <path v-else-if="name === 'spark'" d="M12 12V3.1M12 12l3.3-6.2M12 12l7.4-4.3M12 12l7.3.3M12 12l7.8 4.1M12 12l3.2 6M12 12l-.3 8.7M12 12l-3.6 6.2M12 12l-7.7 4.4M12 12l-7-.3M12 12 4.6 7.8M12 12 8.3 5.2" />
+    <g v-else-if="name === 'sparkles'"><path d="M10 4.5c.6 3.9 2.6 5.9 6.5 6.5-3.9.6-5.9 2.6-6.5 6.5-.6-3.9-2.6-5.9-6.5-6.5 3.9-.6 5.9-2.6 6.5-6.5z" /><path d="M18.5 3v4.5M16.25 5.25h4.5" /><path d="M18.5 16.5v3.5M16.75 18.25h3.5" /></g>
+    <g v-else-if="name === 'lock'"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></g>
     <path v-else-if="name === 'folder'" d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
   </svg>
 </template>

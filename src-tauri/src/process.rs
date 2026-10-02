@@ -280,22 +280,36 @@ fn boot_seconds(stat: &str) -> Option<u64> {
     stat.lines().find_map(|line| line.strip_prefix("btime "))?.trim().parse().ok()
 }
 
-/// Every process's parent and command line, by pid; `None` when the table can't be read. The
-/// executable's name stands in for a command line that can't be read.
-pub fn process_table() -> Option<HashMap<u32, (u32, String)>> {
+/// One process of `process_table`. Its command line stays in memory: callers only test it, and
+/// never show or keep it (a `claude "…"` carries the prompt).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessInfo {
+    pub parent: u32,
+    /// The command line; the executable's name when it can't be read.
+    pub line: String,
+    /// The executable's name (`iTerm2`, `tmux`, `WindowsTerminal.exe`).
+    pub name: String,
+    /// The program as it was started (the first argument), empty when it can't be read.
+    pub program: String,
+}
+
+/// Every process's parent, command line and name, by pid; `None` when the table can't be read.
+pub fn process_table() -> Option<HashMap<u32, ProcessInfo>> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
     let mut system = System::new();
     system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always).without_tasks());
 
-    let table: HashMap<u32, (u32, String)> = system
+    let table: HashMap<u32, ProcessInfo> = system
         .processes()
         .iter()
         .map(|(pid, process)| {
             let parent = process.parent().map_or(0, |parent| parent.as_u32());
             let args: Vec<String> = process.cmd().iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
-            let line = if args.is_empty() { process.name().to_string_lossy().into_owned() } else { args.join(" ") };
-            (pid.as_u32(), (parent, line))
+            let name = process.name().to_string_lossy().into_owned();
+            let line = if args.is_empty() { name.clone() } else { args.join(" ") };
+            let program = args.into_iter().next().unwrap_or_default();
+            (pid.as_u32(), ProcessInfo { parent, line, name, program })
         })
         .collect();
 

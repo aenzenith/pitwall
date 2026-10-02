@@ -245,6 +245,19 @@ pub struct SpendToday {
     pub unpriced_models: Vec<String>,
 }
 
+/// One session's share of today, for the Sessions page. Its subagents' use is in it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSpend {
+    pub tokens: TokenTotals,
+    /// Its priced models only.
+    pub cost_usd: f64,
+    /// Every model it used has a price: the cost is complete.
+    pub priced: bool,
+    /// The models it used, the costliest first.
+    pub models: Vec<String>,
+}
+
 /// One API response's counts, as found on a line.
 #[derive(Clone, Copy)]
 struct Entry<'a> {
@@ -299,6 +312,8 @@ fn hash(parts: &[&str]) -> u64 {
 struct Counted {
     /// Index into `Spend::models`.
     model: usize,
+    /// Index into `Spend::sessions`.
+    session: usize,
     tokens: Tokens,
     fast: bool,
     sidechain: bool,
@@ -329,6 +344,8 @@ pub struct Spend {
     /// Keys of responses logged before today: a copy written today isn't new use either.
     earlier: HashSet<u64>,
     models: Vec<Model>,
+    /// Session ids of today's responses.
+    sessions: Vec<String>,
 }
 
 // The caller moves it to a worker thread.
@@ -351,6 +368,7 @@ impl Spend {
             parents: HashSet::new(),
             earlier: HashSet::new(),
             models: Vec::new(),
+            sessions: Vec::new(),
         };
         spend.begin_day(now_ms());
         spend
@@ -387,6 +405,7 @@ impl Spend {
         self.parents.clear();
         self.earlier.clear();
         self.models.clear();
+        self.sessions.clear();
     }
 
     /// Streams the log from where the last look stopped, line by line. A log that shrank is
@@ -404,8 +423,9 @@ impl Spend {
             return;
         }
 
-        // Lines carry their session id; the file name stands in for one that doesn't.
-        let fallback = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+        // Lines carry their session id; the file name stands in for one that doesn't, and for a
+        // subagent's log (`<session>/subagents/agent-….jsonl`) its session's folder.
+        let fallback = log_session(path);
         let mut offset = from;
         let mut line = Vec::new();
 
@@ -537,7 +557,8 @@ impl Spend {
         }
 
         let model = self.model(entry.model);
-        self.counted.insert(key, Counted { model, tokens: entry.tokens, fast: entry.fast, sidechain: entry.sidechain });
+        let session = self.session(entry.session);
+        self.counted.insert(key, Counted { model, session, tokens: entry.tokens, fast: entry.fast, sidechain: entry.sidechain });
 
         if let (Some(route), true) = (route, entry.sidechain) {
             let keys = self.replays.entry(route).or_default();
@@ -561,6 +582,47 @@ impl Spend {
             self.models.push(Model { id: id.to_string(), price: price_of(id) });
             self.models.len() - 1
         })
+    }
+
+    fn session(&mut self, id: &str) -> usize {
+        self.sessions.iter().position(|session| session == id).unwrap_or_else(|| {
+            self.sessions.push(id.to_string());
+            self.sessions.len() - 1
+        })
+    }
+
+    /// Today as of the last refresh, per session id.
+    pub fn by_session(&self) -> HashMap<String, SessionSpend> {
+        // Per session, per model: tokens and cost.
+        let mut parts: HashMap<(usize, usize), (TokenTotals, f64)> = HashMap::new();
+        for counted in self.counted.values() {
+            let part = parts.entry((counted.session, counted.model)).or_default();
+            part.0.add(&counted.tokens);
+            if let Some(price) = self.models[counted.model].price {
+                part.1 += price.cost(&counted.tokens, counted.fast);
+            }
+        }
+
+        // The costliest model first in each session's list.
+        let mut parts: Vec<((usize, usize), (TokenTotals, f64))> = parts.into_iter().filter(|(_, (tokens, _))| tokens.total > 0).collect();
+        parts.sort_by(|(a, x), (b, y)| y.1.total_cmp(&x.1).then(y.0.total.cmp(&x.0.total)).then(self.models[a.1].id.cmp(&self.models[b.1].id)));
+
+        let mut found: HashMap<String, SessionSpend> = HashMap::new();
+        for ((session, model), (tokens, cost)) in parts {
+            let spend = found
+                .entry(self.sessions[session].clone())
+                .or_insert_with(|| SessionSpend { tokens: TokenTotals::default(), cost_usd: 0.0, priced: true, models: Vec::new() });
+            spend.tokens.input += tokens.input;
+            spend.tokens.output += tokens.output;
+            spend.tokens.cache_write += tokens.cache_write;
+            spend.tokens.cache_read += tokens.cache_read;
+            spend.tokens.total += tokens.total;
+            spend.cost_usd += cost;
+            spend.priced &= self.models[model].price.is_some();
+            spend.models.push(self.models[model].id.clone());
+        }
+
+        found
     }
 
     /// Today as of the last refresh.
@@ -595,6 +657,17 @@ impl Spend {
 
         SpendToday { date: self.date.clone(), tokens, cost_usd: rows.iter().map(|row| row.cost_usd).sum(), models: rows, unpriced_models }
     }
+}
+
+/// The session a log belongs to by its path: its file name, or for a subagent's log
+/// (`<session>/subagents/agent-….jsonl`) its session's folder.
+fn log_session(path: &Path) -> String {
+    let parent = path.parent();
+    let session = match parent.and_then(Path::file_name) {
+        Some(name) if name == "subagents" => parent.and_then(Path::parent).and_then(Path::file_name),
+        _ => path.file_stem(),
+    };
+    session.map(|name| name.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
 /// Every `.jsonl` under `dir`, at any depth (subagents log into `<session>/subagents/`),
@@ -756,6 +829,51 @@ mod tests {
         assert_eq!(today.tokens.cache_read, 0, "the sidechain replay went");
         assert_eq!(today.tokens.total, 187);
         assert_eq!(today.models.len(), 3, "the synthetic reply isn't a model");
+    }
+
+    /// Each session gets its own tokens and cost, its subagents' included: their lines carry the
+    /// session's id, or in an older log only the folder they're in tells it.
+    #[test]
+    fn tokens_go_to_their_session_subagents_included() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("-Users-me-paddock");
+        let now = now_ms();
+        let opus = "claude-opus-5-5";
+        let usage = |input: u64, output: u64| json!({ "input_tokens": input, "output_tokens": output });
+        let anonymous = |mut line: Value| {
+            line.as_object_mut().unwrap().remove("sessionId");
+            line
+        };
+
+        write(&project.join("s1.jsonl"), &[reply(now, "s1", "m1", "r1", opus, usage(1_000_000, 0))]);
+        write(
+            &project.join("s1/subagents/agent-a.jsonl"),
+            &[
+                sidechain(reply(now, "s1", "m2", "r2", "claude-haiku-4-5", usage(0, 1_000_000))),
+                sidechain(anonymous(reply(now, "s1", "m3", "r3", "claude-haiku-4-5", usage(10, 0)))),
+            ],
+        );
+        write(&project.join("s2.jsonl"), &[anonymous(reply(now, "s2", "m4", "r4", "claude-opus-5-6", usage(7, 0)))]);
+
+        let mut spend = Spend::new(tmp.path().to_path_buf());
+        spend.refresh_at(now);
+        let sessions = spend.by_session();
+
+        let mut ids: Vec<&String> = sessions.keys().collect();
+        ids.sort();
+        assert_eq!(ids, ["s1", "s2"], "a subagent's log is no session of its own");
+
+        let s1 = &sessions["s1"];
+        assert_eq!((s1.tokens.input, s1.tokens.output, s1.tokens.total), (1_000_010, 1_000_000, 2_000_010));
+        assert!(close(s1.cost_usd, 4.0 + 5.0 + 0.00001), "{}", s1.cost_usd);
+        assert!(s1.priced);
+        assert_eq!(s1.models, ["claude-haiku-4-5", opus], "the costliest first");
+
+        let s2 = &sessions["s2"];
+        assert_eq!((s2.tokens.total, s2.cost_usd, s2.priced), (7, 0.0, false), "a model without a price leaves the cost incomplete");
+
+        let total: u64 = sessions.values().map(|session| session.tokens.total).sum();
+        assert_eq!(total, spend.today().tokens.total, "every token is some session's");
     }
 
     #[test]

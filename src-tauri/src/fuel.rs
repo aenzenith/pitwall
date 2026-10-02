@@ -12,7 +12,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::i18n::t;
-use crate::spend::{Spend, SpendToday};
+use crate::spend::{SessionSpend, Spend, SpendToday};
 use crate::usage::{Status, UsageState, UsageWatch};
 use crate::{AppState, MAIN};
 
@@ -39,6 +39,8 @@ pub struct Fuel {
     spend: Mutex<Spend>,
     /// Today's numbers as of the last read, so asking for them never waits on a read.
     today: Mutex<Option<SpendToday>>,
+    /// The same per session, for the Sessions page.
+    sessions: Mutex<HashMap<String, SessionSpend>>,
     /// The reset of each limit already notified about: one notification per window.
     alerted: Mutex<HashMap<String, Option<i64>>>,
 }
@@ -57,7 +59,18 @@ impl Fuel {
             }
         });
 
-        Self { usage, spend: Mutex::new(Spend::new(claude_projects)), today: Mutex::new(None), alerted: Mutex::new(HashMap::new()) }
+        Self {
+            usage,
+            spend: Mutex::new(Spend::new(claude_projects)),
+            today: Mutex::new(None),
+            sessions: Mutex::new(HashMap::new()),
+            alerted: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Today's tokens and cost per session, as of the last read.
+    pub fn sessions(&self) -> HashMap<String, SessionSpend> {
+        lock(&self.sessions).clone()
     }
 
     pub fn view(&self) -> FuelView {
@@ -89,11 +102,12 @@ impl Fuel {
 
     /// Reads today's new log lines; tells the page when the totals moved.
     fn read_spend(&self, app: &AppHandle) {
-        let today = {
+        let (today, sessions) = {
             let mut spend = lock(&self.spend);
             spend.refresh();
-            spend.today()
+            (spend.today(), spend.by_session())
         };
+        *lock(&self.sessions) = sessions;
 
         let changed = {
             let mut cached = lock(&self.today);

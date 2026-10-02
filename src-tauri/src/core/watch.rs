@@ -1,5 +1,6 @@
 //! File-system events instead of timers for what Pitwall reads off the disk: Claude Code's
-//! session logs, the hook's event files and each listed project's Git state (FSEvents on macOS,
+//! session logs and running sessions, the hook's event files and each listed project's Git
+//! state (FSEvents on macOS,
 //! through `notify`). Changes are gathered for a moment and handled on a thread of their own;
 //! the slow safety poll (`POLL_EVERY`) reads everything again in case some were missed (sleep,
 //! network volumes).
@@ -32,6 +33,8 @@ pub(super) struct Watch {
 struct Routes {
     logs: Option<PathBuf>,
     events: Option<PathBuf>,
+    /// Claude Code's running sessions (`~/.claude/sessions`).
+    sessions: Option<PathBuf>,
     /// A project's Git folder, and the project.
     git: Vec<(PathBuf, String)>,
 }
@@ -41,6 +44,8 @@ struct Changes {
     /// Session logs: (folder under the projects folder, file name).
     logs: HashSet<(String, String)>,
     events: bool,
+    /// A running session started, changed or ended.
+    sessions: bool,
     /// Projects whose Git state changed.
     git: HashSet<String>,
     /// Events were dropped: read everything again.
@@ -57,6 +62,11 @@ impl Routes {
                     changes.logs.insert((dir.to_string(), file.to_string()));
                 }
             }
+            return;
+        }
+
+        if self.sessions.as_ref().is_some_and(|dir| path.starts_with(dir)) {
+            changes.sessions = true;
             return;
         }
 
@@ -191,6 +201,7 @@ impl Core {
             Ok(claude) => (claude.root().to_path_buf(), claude.events_dir().to_path_buf()),
             Err(_) => return,
         };
+        let sessions = self.sessions_dir();
         let mut slot = self.watch_slot();
         let Some(watch) = slot.as_mut() else {
             return;
@@ -201,7 +212,8 @@ impl Core {
         let mut add: Vec<(PathBuf, RecursiveMode)> = Vec::new();
         let mut remove: Vec<PathBuf> = Vec::new();
 
-        for (dir, mode) in [(logs.clone(), RecursiveMode::Recursive), (events.clone(), RecursiveMode::NonRecursive)] {
+        let claude_dirs = [(Some(logs.clone()), RecursiveMode::Recursive), (Some(events.clone()), RecursiveMode::NonRecursive), (sessions.clone(), RecursiveMode::NonRecursive)];
+        for (dir, mode) in claude_dirs.into_iter().filter_map(|(dir, mode)| Some((dir?, mode))) {
             if !watch.claude.contains(&dir) && dir.is_dir() {
                 add.push((dir, mode));
             }
@@ -231,7 +243,7 @@ impl Core {
             let _ = batch.remove(dir);
         }
         for (dir, mode) in &add {
-            if batch.add(dir, *mode).is_ok() && (dir == &logs || dir == &events) {
+            if batch.add(dir, *mode).is_ok() && (dir == &logs || dir == &events || Some(dir) == sessions.as_ref()) {
                 watch.claude.push(dir.clone());
             }
         }
@@ -240,6 +252,7 @@ impl Core {
         let mut routes = watch.routes.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         routes.logs = watch.claude.contains(&logs).then(|| canonical(&logs));
         routes.events = watch.claude.contains(&events).then(|| canonical(&events));
+        routes.sessions = sessions.filter(|dir| watch.claude.contains(dir)).map(|dir| canonical(&dir));
         routes.git = watch.git.iter().filter_map(|(project, dirs)| Some((canonical(dirs.first()?), project.clone()))).collect();
     }
 
@@ -279,6 +292,10 @@ impl Core {
     }
 
     fn apply_changes(self: &Arc<Self>, changes: Changes) {
+        if changes.sessions || changes.rescan {
+            self.sessions_changed();
+        }
+
         let claude_changed = changes.rescan || changes.events || !changes.logs.is_empty();
         let mut git: Vec<String> = changes.git.into_iter().collect();
 

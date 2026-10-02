@@ -60,12 +60,24 @@ pub enum SessionPhase {
 pub struct SessionState {
     /// The session log's file name, without `.jsonl`.
     pub id: String,
-    /// The listed project it belongs to.
+    /// The listed project it belongs to; empty for a session elsewhere (`ScanResult::others`).
     pub path: String,
+    /// The folder it runs in, as its log or the hook says.
+    pub folder: Option<String>,
     pub title: Option<String>,
     pub phase: SessionPhase,
     /// While it waits on you: the turn it waits with.
     pub turn: Option<Turn>,
+    /// When its phase began: the hook's event, else the turn it waits with.
+    pub since: Option<u64>,
+    /// Its hook events decide where it stands (else its log does).
+    pub hooked: bool,
+    /// The hook heard it end (`SessionEnd`).
+    pub ended: bool,
+    /// While it waits on a permission prompt: the tool's name, when the hook told it.
+    pub tool: Option<String>,
+    /// Subagents that ran tools in its current turn, as the hook heard them.
+    pub subagents: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -282,6 +294,8 @@ pub struct ScanResult {
     pub working: HashSet<String>,
     /// Every session changed lately, with its name and where it stands.
     pub sessions: Vec<SessionState>,
+    /// Sessions the hook reported in folders that aren't listed (`path` empty).
+    pub others: Vec<SessionState>,
 }
 
 /// One event from the hook script (see hooks.rs). Only these fields are ever written; never
@@ -298,6 +312,8 @@ struct HookEvent {
     notification_type: Option<String>,
     /// Why a session started: `startup` | `resume` | `clear` | `compact`.
     source: Option<String>,
+    /// The tool a permission dialog is for, or that just ran, by name only.
+    tool_name: Option<String>,
     /// When it happened: the file's modification time.
     at: u64,
 }
@@ -335,6 +351,7 @@ impl HookEvent {
                 "transcript_path" => event.transcript_path = value,
                 "notification_type" => event.notification_type = value,
                 "source" => event.source = value,
+                "tool_name" => event.tool_name = value.filter(|name| is_tool_name(name)),
                 _ => {}
             }
         }
@@ -355,6 +372,12 @@ impl HookEvent {
             ..HookEvent::default()
         })
     }
+}
+
+/// A tool's name as Claude Code gives it (`Bash`, `mcp__github__create_issue`); anything else is
+/// dropped, so nothing but a name ever reaches the screen.
+fn is_tool_name(name: &str) -> bool {
+    name.len() <= 128 && name.chars().all(|c| c.is_ascii_alphanumeric() || "_-.:".contains(c))
 }
 
 /// Where a session stands by its hook events.
@@ -384,11 +407,31 @@ struct HookSession {
     threads: HashMap<String, u64>,
     /// Threads that kept running while the open prompt waited: their tool calls don't answer it.
     busy: HashSet<String>,
+    /// The thread whose permission dialog is open, when `PermissionRequest` said so: only its
+    /// tool call answers it.
+    asker: Option<String>,
+    /// The open permission dialog's tool.
+    tool: Option<String>,
 }
 
 impl HookSession {
     fn new(at: u64) -> Self {
-        Self { cwd: None, transcript: None, phase: HookPhase::Log, since: at, last: at, threads: HashMap::new(), busy: HashSet::new() }
+        Self {
+            cwd: None,
+            transcript: None,
+            phase: HookPhase::Log,
+            since: at,
+            last: at,
+            threads: HashMap::new(),
+            busy: HashSet::new(),
+            asker: None,
+            tool: None,
+        }
+    }
+
+    /// Subagents that ran tools in the current turn.
+    fn subagents(&self) -> u32 {
+        self.threads.keys().filter(|thread| !thread.is_empty()).count() as u32
     }
 
     fn apply(&mut self, event: &HookEvent) {
@@ -409,9 +452,22 @@ impl HookSession {
             "UserPromptSubmit" => Some(HookPhase::Working),
             // Installed only for the tools that ask: AskUserQuestion, ExitPlanMode.
             "PreToolUse" => Some(HookPhase::Waiting(TurnKind::Asking)),
+            // The dialog opened this moment, for this thread.
+            "PermissionRequest" => {
+                self.asker = Some(thread.clone());
+                self.tool = event.tool_name.clone();
+                Some(HookPhase::Waiting(TurnKind::Permission))
+            }
             "PostToolUse" => {
                 self.threads.insert(thread.clone(), event.at);
+                let asker = self.asker.as_ref().filter(|_| self.phase == HookPhase::Waiting(TurnKind::Permission));
                 match self.phase {
+                    // The thread that asked ran its tool: answered. Another thread's tool call,
+                    // or another tool the same message ran beside it, ran beside the open dialog.
+                    _ if asker.is_some() => {
+                        let same_tool = event.tool_name.is_none() || self.tool.is_none() || event.tool_name == self.tool;
+                        (asker == Some(&thread) && same_tool).then_some(HookPhase::Working)
+                    }
                     // A finished tool call answers the prompt, unless its thread kept running
                     // while the prompt was open (a parallel subagent).
                     _ if prompt_open => (!self.busy.contains(&thread)).then_some(HookPhase::Working),
@@ -423,6 +479,8 @@ impl HookSession {
                 }
             }
             "Notification" => match event.notification_type.as_deref() {
+                // The dialog `PermissionRequest` already reported, 6 s on.
+                Some("permission_prompt") if self.asker.is_some() && self.phase == HookPhase::Waiting(TurnKind::Permission) => None,
                 Some("permission_prompt") => {
                     // The waiting thread can't finish a tool call while its prompt is open.
                     let opened = event.at.saturating_sub(PROMPT_NOTICE_MS);
@@ -441,6 +499,12 @@ impl HookSession {
         if let Some(phase) = next {
             if phase != HookPhase::Waiting(TurnKind::Permission) {
                 self.busy.clear();
+                self.asker = None;
+                self.tool = None;
+            } else if event.event != "PermissionRequest" {
+                // Reported by `Notification`: which thread asked, and for what, is unknown.
+                self.asker = None;
+                self.tool = None;
             }
             if matches!(phase, HookPhase::Idle | HookPhase::Ended | HookPhase::Waiting(TurnKind::Finished)) {
                 self.threads.clear();
@@ -469,6 +533,8 @@ impl HookSession {
                 if written > self.since + ANSWER_SLACK_MS {
                     self.phase = HookPhase::Log;
                     self.busy.clear();
+                    self.asker = None;
+                    self.tool = None;
                     return None;
                 }
 
@@ -492,7 +558,7 @@ fn modified_ms(path: &Path) -> Option<u64> {
 
 /// `cwd` is the project's folder or under it; on Windows in any letter case and with either
 /// separator (see `path_key`).
-fn inside(cwd: &str, folder_path: &str) -> bool {
+pub(crate) fn inside(cwd: &str, folder_path: &str) -> bool {
     let cwd = path_key(cwd);
     let folder = path_key(folder_path);
     *cwd == *folder || cwd.starts_with(&format!("{folder}{MAIN_SEPARATOR}"))
@@ -535,6 +601,9 @@ pub struct ClaudeWatch {
     logs: HashMap<String, HashMap<String, Log>>,
     /// Sessions the hook reported, by session id.
     hooked: HashMap<String, HookSession>,
+    /// Logs of sessions outside the listed projects, read only for their state and name when
+    /// asked (`peek`): by session id, with when they were last asked for.
+    extra: HashMap<String, (u64, Log)>,
     /// The projects listed now.
     listed: Vec<String>,
     /// A full scan ran; nothing is known before.
@@ -550,6 +619,7 @@ impl ClaudeWatch {
             events_dir: registry_dir.join("claude-events"),
             logs: HashMap::new(),
             hooked: HashMap::new(),
+            extra: HashMap::new(),
             listed: Vec::new(),
             ready: false,
         }
@@ -788,7 +858,8 @@ impl ClaudeWatch {
     }
 
     /// Where every session of the listed projects stands, from what was read so far: the
-    /// hook's events where it reported, else the log's last lines. Only the seen book is read.
+    /// hook's events where it reported, else the log's last lines; and the sessions the hook
+    /// reported elsewhere. Only the seen book is read.
     pub fn evaluate(&mut self) -> ScanResult {
         let book = self.read_seen_everywhere();
         let now = now_ms();
@@ -796,7 +867,8 @@ impl ClaudeWatch {
         let mut result = ScanResult::default();
 
         self.hooked.retain(|_, session| now.saturating_sub(session.last) < EVENT_MAX_AGE_MS);
-        let Self { logs, hooked, listed, .. } = self;
+        self.extra.retain(|_, (asked, _)| now.saturating_sub(*asked) < EXTRA_MAX_AGE_MS);
+        let Self { logs, hooked, listed, extra, .. } = self;
 
         for folder_path in listed.iter() {
             let baseline = book.seen(folder_path).unwrap_or(book.since);
@@ -817,20 +889,18 @@ impl ClaudeWatch {
                         }
                     }
 
-                    let hook = hooked.get_mut(id);
-                    if hook.as_ref().map_or(0, |h| h.last).max(log.modified_ms) <= since {
+                    if hooked.get(id).map_or(0, |h| h.last).max(log.modified_ms) <= since {
                         continue;
                     }
 
-                    let (phase, turn) = match hook.and_then(|h| h.state(log.modified_ms, baseline, recent)) {
+                    let (phase, turn) = match hooked.get_mut(id).and_then(|h| h.state(log.modified_ms, baseline, recent)) {
                         Some(state) => state,
                         None => match &log.verdict {
                             Some(verdict) if log.modified_ms > since => log_state(verdict, log.modified_ms, baseline, recent),
                             _ => continue,
                         },
                     };
-                    let title = log.verdict.as_ref().and_then(|v| v.title.clone());
-                    states.push(SessionState { id: id.clone(), path: folder_path.clone(), title, phase, turn });
+                    states.push(session_state(id, folder_path, Some(log), hooked.get(id), phase, turn));
                 }
             }
 
@@ -840,17 +910,16 @@ impl ClaudeWatch {
                     continue;
                 }
 
-                let log_dir = session.transcript.as_deref().and_then(Path::parent).and_then(Path::file_name).map(|dir| dir.to_string_lossy().into_owned());
+                let log_dir = log_folder(session);
                 let by_cwd = session.cwd.as_deref().is_some_and(|cwd| inside(cwd, folder_path));
                 if !by_cwd && log_dir.as_deref().is_none_or(|dir| dir_match(dir, &encoded) != Some(true)) {
                     continue;
                 }
 
                 let log = log_dir.as_deref().and_then(|dir| logs.get(dir)).and_then(|sessions| sessions.get(id));
-                let title = log.and_then(|log| log.verdict.as_ref()).and_then(|v| v.title.clone());
 
                 if let Some((phase, turn)) = session.state(log.map_or(0, |log| log.modified_ms), baseline, recent) {
-                    states.push(SessionState { id: id.clone(), path: folder_path.clone(), title, phase, turn });
+                    states.push(session_state(id, folder_path, log, Some(&*session), phase, turn));
                 }
             }
 
@@ -870,7 +939,118 @@ impl ClaudeWatch {
             result.sessions.extend(states);
         }
 
+        // Sessions in folders that aren't listed: the hook tells where they run; their own log,
+        // as last asked for (`peek`, by the Sessions page), what the hook leaves open. Only its
+        // modification time is read here.
+        for (id, session) in hooked.iter_mut() {
+            let Some(cwd) = session.cwd.clone() else {
+                continue;
+            };
+            let log_dir = log_folder(session);
+            let listed_here = listed.iter().any(|folder| {
+                inside(&cwd, folder) || log_dir.as_deref().is_some_and(|dir| dir_match(dir, &path_key(&encode_project_path(folder))) == Some(true))
+            });
+            if listed_here || result.sessions.iter().any(|state| &state.id == id) {
+                continue;
+            }
+
+            let baseline = book.seen(&cwd).unwrap_or(book.since);
+            let log = extra.get(id).map(|(_, log)| log);
+            let logged = session.transcript.as_deref().and_then(modified_ms).unwrap_or(0);
+            let (phase, turn) = match session.state(logged, baseline, recent) {
+                Some(state) => state,
+                None => match log.and_then(|log| log.verdict.as_ref()) {
+                    Some(verdict) => log_state(verdict, logged, baseline, recent),
+                    None => (SessionPhase::Idle, None),
+                },
+            };
+            result.others.push(session_state(id, "", log, Some(&*session), phase, turn));
+        }
+        result.others.sort_by(|a, b| a.id.cmp(&b.id));
+
         result
+    }
+
+    /// A session's log as last read, for its name and when it was last written: a listed
+    /// project's from the scan, else its own file, read again only once it changed. That file is
+    /// the one the hook named (under the projects folder only), else
+    /// `<projects>/<folder, encoded>/<id>.jsonl`. `id` must be a session id (a UUID); it becomes
+    /// a file name.
+    pub fn peek(&mut self, id: &str, folder: &str) -> Option<Peek> {
+        if let Some(log) = self.logs.values().find_map(|sessions| sessions.get(id)) {
+            return Some(Peek::of(log));
+        }
+
+        let named = self.hooked.get(id).and_then(|session| session.transcript.clone());
+        let file = named
+            .filter(|file| {
+                let plain = file.components().all(|part| !matches!(part, std::path::Component::ParentDir));
+                plain && file.starts_with(&self.root) && file.extension().is_some_and(|ext| ext == "jsonl")
+            })
+            .unwrap_or_else(|| self.root.join(encode_project_path(folder)).join(format!("{id}.jsonl")));
+        peek_file(&mut self.extra, id, &file, now_ms()).map(Peek::of)
+    }
+}
+
+/// What `peek` tells of a session's log.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Peek {
+    pub title: Option<String>,
+    /// When the log was last written.
+    pub modified: u64,
+}
+
+impl Peek {
+    fn of(log: &Log) -> Self {
+        Self { title: log.verdict.as_ref().and_then(|v| v.title.clone()), modified: log.modified_ms }
+    }
+}
+
+/// Logs of other sessions are forgotten once nobody asked for them this long.
+const EXTRA_MAX_AGE_MS: u64 = 5 * 60 * 1000;
+
+/// The folder under the projects folder a hooked session logs into, from its transcript path.
+fn log_folder(session: &HookSession) -> Option<String> {
+    session.transcript.as_deref().and_then(Path::parent).and_then(Path::file_name).map(|dir| dir.to_string_lossy().into_owned())
+}
+
+/// A log outside the scan, read again only when it changed.
+fn peek_file<'a>(extra: &'a mut HashMap<String, (u64, Log)>, id: &str, file: &Path, now: u64) -> Option<&'a Log> {
+    let Ok(meta) = fs::metadata(file) else {
+        extra.remove(id);
+        return None;
+    };
+    let modified = meta.modified().ok()?;
+    let fresh = extra.get(id).is_some_and(|(_, log)| log.modified == modified && log.size == meta.len());
+
+    if !fresh {
+        let verdict = read_file_tail(file, meta.len());
+        extra.insert(id.to_string(), (now, Log { modified, modified_ms: system_ms(modified), size: meta.len(), verdict }));
+    }
+
+    let entry = extra.get_mut(id)?;
+    entry.0 = now;
+    Some(&entry.1)
+}
+
+/// A session as the scan reports it, from its log and its hook events.
+fn session_state(id: &str, path: &str, log: Option<&Log>, hook: Option<&HookSession>, phase: SessionPhase, turn: Option<Turn>) -> SessionState {
+    let verdict = log.and_then(|log| log.verdict.as_ref());
+    let decided = hook.filter(|hook| hook.phase != HookPhase::Log);
+    let permission = turn.is_some_and(|turn| turn.kind == TurnKind::Permission);
+
+    SessionState {
+        id: id.to_string(),
+        path: path.to_string(),
+        folder: verdict.and_then(|v| v.cwd.clone()).or_else(|| hook.and_then(|h| h.cwd.clone())),
+        title: verdict.and_then(|v| v.title.clone()),
+        phase,
+        turn,
+        since: decided.map(|hook| hook.since).or(turn.map(|turn| turn.at)),
+        hooked: decided.is_some(),
+        ended: hook.is_some_and(|hook| hook.phase == HookPhase::Ended),
+        tool: hook.filter(|_| permission).and_then(|hook| hook.tool.clone()),
+        subagents: hook.map_or(0, HookSession::subagents),
     }
 }
 
@@ -1007,6 +1187,70 @@ mod tests {
         assert_eq!(phase, SessionPhase::Idle, "gone, and its older turn in the log doesn't come back");
         assert!(result.waiting.is_empty() && result.working.is_empty());
         assert_eq!(fs::read_dir(&events).unwrap().count(), 0, "applied events are deleted");
+    }
+
+    /// A permission dialog waits from the moment it opens, with its tool's name; only the
+    /// asking thread's tool call answers it, and the late `Notification` for it changes nothing.
+    #[test]
+    fn a_permission_request_waits_at_once_until_its_tool_runs() {
+        use std::time::Duration;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let claude = tmp.path().join("claude");
+        let registry = tmp.path().join("registry");
+        let events = registry.join("claude-events");
+        let project = "/Users/me/projects/paddock";
+        let transcript = claude.join(encode_project_path(project)).join("s1.jsonl");
+        let base = SystemTime::now() - Duration::from_secs(60);
+        let at = |seconds: u64| base + Duration::from_secs(seconds);
+
+        fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+        fs::create_dir_all(&events).unwrap();
+        fs::write(registry.join("claude-seen.json"), r#"{"since":0,"paths":{}}"#).unwrap();
+        fs::write(&transcript, "{}\n").unwrap();
+        File::options().write(true).open(&transcript).unwrap().set_modified(base).unwrap();
+
+        let mut watch = ClaudeWatch::new(claude, &registry);
+        let paths = vec![project.to_string()];
+        let common = format!("session_id=s1\ncwd={project}\ntranscript_path={}\n", transcript.display());
+        let mut step = |name: &str, seconds: u64, lines: String| {
+            let file = events.join(format!("{name}.event"));
+            fs::write(&file, lines).unwrap();
+            File::options().write(true).open(&file).unwrap().set_modified(at(seconds)).unwrap();
+            let result = watch.scan(&paths);
+            result.sessions.into_iter().find(|s| s.id == "s1").expect("the session is listed")
+        };
+
+        let session = step("1", 1, format!("event=UserPromptSubmit\n{common}"));
+        assert_eq!((session.phase, session.since), (SessionPhase::Working, Some(system_ms(at(1)))));
+
+        let session = step("2", 5, format!("event=PermissionRequest\ntool_name=Bash\n{common}"));
+        assert_eq!(session.phase, SessionPhase::Waiting);
+        assert_eq!(session.turn, Some(Turn { kind: TurnKind::Permission, at: system_ms(at(5)) }), "no 6 s wait for the notification");
+        assert_eq!(session.tool.as_deref(), Some("Bash"));
+
+        // A subagent's tool call, and another tool of the same message, ran beside the dialog;
+        // the notification comes 6 s on.
+        let session = step("3", 7, "event=PostToolUse\nsession_id=s1\nagent_id=a1\ntool_name=Bash\n".into());
+        assert_eq!((session.phase, session.tool.as_deref()), (SessionPhase::Waiting, Some("Bash")));
+        let session = step("3b", 8, "event=PostToolUse\nsession_id=s1\ntool_name=Read\n".into());
+        assert_eq!((session.phase, session.tool.as_deref()), (SessionPhase::Waiting, Some("Bash")));
+        let session = step("4", 11, format!("event=Notification\nnotification_type=permission_prompt\n{common}"));
+        assert_eq!(session.turn.map(|turn| turn.at), Some(system_ms(at(5))), "still waiting since the dialog opened");
+        assert_eq!(session.tool.as_deref(), Some("Bash"));
+        assert_eq!(session.subagents, 1);
+
+        // Allowed: the tool ran.
+        let session = step("5", 14, "event=PostToolUse\nsession_id=s1\ntool_name=Bash\n".into());
+        assert_eq!((session.phase, session.turn, session.tool), (SessionPhase::Working, None, None));
+
+        let session = step("6", 20, format!("event=Stop\n{common}"));
+        assert_eq!(session.turn, Some(Turn { kind: TurnKind::Finished, at: system_ms(at(20)) }));
+        assert_eq!((session.tool, session.subagents), (None, 0));
+
+        // A name that isn't a tool's never gets through.
+        let session = step("7", 25, format!("event=PermissionRequest\ntool_name=rm -rf /\n{common}"));
+        assert_eq!((session.turn.map(|turn| turn.kind), session.tool), (Some(TurnKind::Permission), None));
     }
 
     #[test]

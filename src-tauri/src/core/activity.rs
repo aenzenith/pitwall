@@ -60,6 +60,39 @@ struct Seen {
     phase: SessionPhase,
     title: Option<String>,
     path: String,
+    /// When it was first seen in this phase.
+    since: u64,
+}
+
+/// What the recorder last saw of a session: its name and since when it is in its phase.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Sighting {
+    pub phase: SessionPhase,
+    pub title: Option<String>,
+    pub since: u64,
+}
+
+/// One session's day, from the day's file alone (no git), for the Sessions page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct SessionDay {
+    /// The project it was written down under.
+    pub path: String,
+    pub title: Option<String>,
+    pub work: u64,
+    pub wait: u64,
+    pub turns: u32,
+    /// Its working and waiting spans, the earliest first: (start, end, working).
+    pub spans: Vec<(u64, u64, bool)>,
+    /// The end of its last span.
+    pub end: u64,
+}
+
+/// The day files' events as last read, by the files' size and modification time: read again
+/// only when one changed.
+#[derive(Default)]
+pub(super) struct DayCache {
+    stamps: Vec<(String, Option<(std::time::SystemTime, u64)>)>,
+    events: Vec<Event>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -192,7 +225,8 @@ impl Core {
                 if changed {
                     events.push(Event { session: Some(session.id.clone()), title: title.clone(), ..Event::new(now, &session.path, "claude", phase_name(session.phase)) });
                 }
-                recorder.sessions.insert(session.id.clone(), Seen { phase: session.phase, title, path: session.path.clone() });
+                let since = before.filter(|seen| seen.phase == session.phase).map_or(now, |seen| seen.since);
+                recorder.sessions.insert(session.id.clone(), Seen { phase: session.phase, title, path: session.path.clone(), since });
             }
 
             recorder.sessions.retain(|id, seen| {
@@ -223,6 +257,15 @@ impl Core {
         for event in &events {
             self.record(event);
         }
+    }
+
+    /// What the recorder last saw of each session it follows (those of the listed projects).
+    pub(super) fn sightings(&self) -> HashMap<String, Sighting> {
+        self.recorder()
+            .sessions
+            .iter()
+            .map(|(id, seen)| (id.clone(), Sighting { phase: seen.phase, title: seen.title.clone(), since: seen.since }))
+            .collect()
     }
 
     /// Our own server crashed; it may be running again before the next heartbeat looks.
@@ -278,89 +321,7 @@ impl Core {
         events.extend(self.read_day(&day_name(start)));
         events.sort_by_key(|event| event.t);
 
-        let mut day = Day { start, until, projects: BTreeMap::new() };
-        let mut sessions: HashMap<String, Open> = HashMap::new();
-        let mut servers: HashMap<String, u64> = HashMap::new();
-        let mut commands: HashSet<(String, String)> = HashSet::new();
-
-        for event in events.iter().filter(|event| event.t < until) {
-            let counts = event.t >= start;
-
-            match event.kind.as_str() {
-                "claude" => {
-                    let Some(id) = event.session.as_deref() else {
-                        continue;
-                    };
-                    let phase = match event.state.as_str() {
-                        "working" => SessionPhase::Working,
-                        "waiting" => SessionPhase::Waiting,
-                        _ => SessionPhase::Idle,
-                    };
-
-                    // The same state again only brings a new name.
-                    if sessions.get(id).is_none_or(|open| open.phase != phase) {
-                        if let Some(open) = sessions.remove(id) {
-                            day.close_session(id, &open, event.t);
-                            if open.phase == SessionPhase::Working && counts {
-                                day.project(&open.path).session(id).turns += 1;
-                            }
-                        }
-                        if phase != SessionPhase::Idle {
-                            sessions.insert(id.to_string(), Open { path: event.path.clone(), phase, since: event.t });
-                        }
-                    }
-                    if let Some(title) = &event.title {
-                        day.project(&event.path).session(id).title = Some(title.clone());
-                    }
-                }
-                "server" => {
-                    if let Some(since) = servers.remove(&event.path) {
-                        day.close_server(&event.path, since, event.t);
-                    }
-                    match event.state.as_str() {
-                        "running" => {
-                            servers.insert(event.path.clone(), event.t);
-                        }
-                        "crashed" if counts => day.project(&event.path).crashes.push(event.t),
-                        _ => {}
-                    }
-                }
-                "command" => {
-                    let Some(name) = &event.name else {
-                        continue;
-                    };
-                    let key = (event.path.clone(), name.clone());
-                    // A run that never got going (refused, could not start) ends without a start.
-                    let started = if event.state == "running" { !commands.insert(key) } else { commands.remove(&key) };
-                    if counts {
-                        let command = day.project(&event.path).command(name);
-                        if !started {
-                            command.runs += 1;
-                        }
-                        if event.state == "failed" {
-                            command.failed += 1;
-                        }
-                    }
-                }
-                "app" => {
-                    for (id, open) in sessions.drain() {
-                        day.close_session(&id, &open, event.t);
-                    }
-                    for (path, since) in servers.drain() {
-                        day.close_server(&path, since, event.t);
-                    }
-                    commands.clear();
-                }
-                _ => {}
-            }
-        }
-
-        for (id, open) in sessions.drain() {
-            day.close_session(&id, &open, until);
-        }
-        for (path, since) in servers.drain() {
-            day.close_server(&path, since, until);
-        }
+        let mut day = fold_day(&events, start, until);
 
         // Commits of every listed project, and of any that only shows up in the activity.
         let names: HashMap<String, String> = self.snapshot().projects.into_iter().map(|p| (p.path, p.name)).collect();
@@ -391,6 +352,156 @@ impl Core {
 
         DaySummary { date: day_name(start), start, end, today: (start..end).contains(&now), now, projects }
     }
+}
+
+impl Core {
+    /// Today's Claude sessions, by id, from the day's file alone: no git, and the file is parsed
+    /// again only once it changed (`cache`).
+    pub(super) fn day_sessions(&self, cache: &mut DayCache) -> HashMap<String, SessionDay> {
+        let now = now_ms();
+        let Some((start, _)) = day_bounds(&day_name(now)) else {
+            return HashMap::new();
+        };
+        let Some(dir) = self.activity_dir() else {
+            return HashMap::new();
+        };
+
+        let days = [day_name(start.saturating_sub(1)), day_name(start)];
+        let stamps: Vec<(String, Option<(std::time::SystemTime, u64)>)> = days
+            .iter()
+            .map(|day| {
+                let meta = fs::metadata(dir.join(format!("{day}.jsonl"))).ok();
+                (day.clone(), meta.and_then(|meta| Some((meta.modified().ok()?, meta.len()))))
+            })
+            .collect();
+
+        if cache.stamps != stamps {
+            let mut events: Vec<Event> = days.iter().flat_map(|day| self.read_day(day)).collect();
+            events.sort_by_key(|event| event.t);
+            *cache = DayCache { stamps, events };
+        }
+
+        let day = fold_day(&cache.events, start, now.max(start));
+        let mut found = HashMap::new();
+
+        for (path, built) in day.projects {
+            for session in built.sessions.into_iter().filter(|s| s.work + s.wait > 0) {
+                let mut spans: Vec<(u64, u64, bool)> = built
+                    .work
+                    .iter()
+                    .map(|span| (span, true))
+                    .chain(built.wait.iter().map(|span| (span, false)))
+                    .filter(|(span, _)| span.session.as_deref() == Some(session.id.as_str()))
+                    .map(|(span, working)| (span.start, span.end, working))
+                    .collect();
+                spans.sort_unstable();
+
+                let day = SessionDay {
+                    path: path.clone(),
+                    title: session.title,
+                    work: session.work,
+                    wait: session.wait,
+                    turns: session.turns,
+                    spans,
+                    end: session.end,
+                };
+                found.insert(session.id, day);
+            }
+        }
+
+        found
+    }
+}
+
+/// The day's Claude, server and command events folded into each project's spans, cut to the
+/// day (`start`) and to `until`; what was already going on at midnight comes from the day
+/// before. Commits aren't in it.
+fn fold_day(events: &[Event], start: u64, until: u64) -> Day {
+    let mut day = Day { start, until, projects: BTreeMap::new() };
+    let mut sessions: HashMap<String, Open> = HashMap::new();
+    let mut servers: HashMap<String, u64> = HashMap::new();
+    let mut commands: HashSet<(String, String)> = HashSet::new();
+
+    for event in events.iter().filter(|event| event.t < until) {
+        let counts = event.t >= start;
+
+        match event.kind.as_str() {
+            "claude" => {
+                let Some(id) = event.session.as_deref() else {
+                    continue;
+                };
+                let phase = match event.state.as_str() {
+                    "working" => SessionPhase::Working,
+                    "waiting" => SessionPhase::Waiting,
+                    _ => SessionPhase::Idle,
+                };
+
+                // The same state again only brings a new name.
+                if sessions.get(id).is_none_or(|open| open.phase != phase) {
+                    if let Some(open) = sessions.remove(id) {
+                        day.close_session(id, &open, event.t);
+                        if open.phase == SessionPhase::Working && counts {
+                            day.project(&open.path).session(id).turns += 1;
+                        }
+                    }
+                    if phase != SessionPhase::Idle {
+                        sessions.insert(id.to_string(), Open { path: event.path.clone(), phase, since: event.t });
+                    }
+                }
+                if let Some(title) = &event.title {
+                    day.project(&event.path).session(id).title = Some(title.clone());
+                }
+            }
+            "server" => {
+                if let Some(since) = servers.remove(&event.path) {
+                    day.close_server(&event.path, since, event.t);
+                }
+                match event.state.as_str() {
+                    "running" => {
+                        servers.insert(event.path.clone(), event.t);
+                    }
+                    "crashed" if counts => day.project(&event.path).crashes.push(event.t),
+                    _ => {}
+                }
+            }
+            "command" => {
+                let Some(name) = &event.name else {
+                    continue;
+                };
+                let key = (event.path.clone(), name.clone());
+                // A run that never got going (refused, could not start) ends without a start.
+                let started = if event.state == "running" { !commands.insert(key) } else { commands.remove(&key) };
+                if counts {
+                    let command = day.project(&event.path).command(name);
+                    if !started {
+                        command.runs += 1;
+                    }
+                    if event.state == "failed" {
+                        command.failed += 1;
+                    }
+                }
+            }
+            "app" => {
+                for (id, open) in sessions.drain() {
+                    day.close_session(&id, &open, event.t);
+                }
+                for (path, since) in servers.drain() {
+                    day.close_server(&path, since, event.t);
+                }
+                commands.clear();
+            }
+            _ => {}
+        }
+    }
+
+    for (id, open) in sessions.drain() {
+        day.close_session(&id, &open, until);
+    }
+    for (path, since) in servers.drain() {
+        day.close_server(&path, since, until);
+    }
+
+    day
 }
 
 /// A Claude session's state since it was written down.

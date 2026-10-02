@@ -14,9 +14,11 @@ import { api, snapshot } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings } from "../lib/types";
 
-const emit = defineEmits<{ close: [] }>();
-
 type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "about";
+
+/** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's). */
+const props = defineProps<{ startTab?: Tab }>();
+const emit = defineEmits<{ close: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
 const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" }> = [
@@ -56,7 +58,7 @@ function soundName(id: string): string {
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
-const tab = ref<Tab>("general");
+const tab = ref<Tab>(props.startTab ?? "general");
 /** The rail top to bottom: the sections, then About. */
 const railOrder: Tab[] = [...tabs.map((section) => section.id), "about"];
 

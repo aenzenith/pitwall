@@ -36,10 +36,13 @@ const INPUT_LIMIT: u64 = 64 << 20;
 
 /// The events Pitwall listens to, with their matcher (`None`: the event takes none). A tool
 /// call that finishes after a prompt answers it; `PreToolUse` only for the tools that ask.
-const EVENTS: [(&str, Option<&str>); 7] = [
+/// `PermissionRequest` comes the moment a permission dialog opens, with the tool's name;
+/// `Notification` reports the same dialog only 6 s later and stays for older Claude Codes.
+const EVENTS: [(&str, Option<&str>); 8] = [
     ("SessionStart", Some("")),
     ("UserPromptSubmit", None),
     ("PreToolUse", Some("AskUserQuestion|ExitPlanMode")),
+    ("PermissionRequest", Some("")),
     ("PostToolUse", Some("")),
     ("Notification", Some("")),
     ("Stop", None),
@@ -51,12 +54,14 @@ const EVENTS: [(&str, Option<&str>); 7] = [
 /// prompt, messages and tool input never reach the disk. `@EVENTS@` is the events folder.
 const SCRIPT: &str = r#"#!/bin/sh
 # Pitwall: Claude Code hook, run as `claude-hook.sh <event>`. Notes for the Pitwall app which
-# session changed state and where; never the prompt, a message or a tool's input. Prints
-# nothing and always exits 0, so it can't affect Claude.
+# session changed state and where; never the prompt, a message or a tool's input (of a
+# permission request only the tool's name). Prints nothing and always exits 0, so it can't
+# affect Claude: a permission dialog stays Claude's own.
 dir=@EVENTS@
 input=$(cat)
 case "$1" in
-  PostToolUse) keys="session_id agent_id" ;;
+  PostToolUse) keys="session_id agent_id tool_name" ;;
+  PermissionRequest) keys="session_id agent_id tool_name cwd transcript_path" ;;
   SessionEnd) keys="session_id" ;;
   SessionStart) keys="session_id source cwd transcript_path" ;;
   Notification) keys="session_id notification_type cwd transcript_path" ;;
@@ -179,6 +184,10 @@ struct HookInput {
     notification_type: Option<String>,
     #[serde(deserialize_with = "scalar")]
     source: Option<String>,
+    /// The tool of a permission request or a finished tool call, by name only (`Bash`, `Edit`);
+    /// never its input or output.
+    #[serde(deserialize_with = "scalar")]
+    tool_name: Option<String>,
 }
 
 impl HookInput {
@@ -190,6 +199,7 @@ impl HookInput {
             "transcript_path" => self.transcript_path.as_deref(),
             "notification_type" => self.notification_type.as_deref(),
             "source" => self.source.as_deref(),
+            "tool_name" => self.tool_name.as_deref(),
             _ => None,
         }
     }
@@ -210,7 +220,8 @@ fn scalar<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, 
 /// event Pitwall doesn't listen to.
 fn event_keys(event: &str) -> Option<&'static [&'static str]> {
     let keys: &[&str] = match event {
-        "PostToolUse" => &["session_id", "agent_id"],
+        "PostToolUse" => &["session_id", "agent_id", "tool_name"],
+        "PermissionRequest" => &["session_id", "agent_id", "tool_name", "cwd", "transcript_path"],
         "SessionEnd" => &["session_id"],
         "SessionStart" => &["session_id", "source", "cwd", "transcript_path"],
         "Notification" => &["session_id", "notification_type", "cwd", "transcript_path"],
@@ -682,6 +693,14 @@ mod tests {
         assert!(!legacy.exists());
         assert_eq!(hook.status(), HookStatus { installed: true, outdated: false });
 
+        // An install from before an event was added (`PermissionRequest`) is outdated too.
+        let mut settings = read(&hook);
+        settings["hooks"].as_object_mut().unwrap().remove("PermissionRequest");
+        hook.write_settings(&settings).unwrap();
+        assert!(hook.status().outdated);
+        hook.install().unwrap();
+        assert_eq!(hook.status(), HookStatus { installed: true, outdated: false });
+
         // A script left from an older version is outdated too, though every entry is there.
         fs::write(&hook.script_file, "#!/bin/sh\ncat > \"$HOME/.pitwall/claude-events/x.json\"\n").unwrap();
         assert!(hook.status().outdated);
@@ -843,18 +862,31 @@ mod tests {
 
         let mut tool = base("PostToolUse");
         tool["agent_id"] = "a1".into();
+        tool["tool_name"] = "Bash".into();
         tool["tool_input"] = json!({ "command": secret, "session_id": "nested" });
         tool["tool_response"] = json!({ "stdout": secret, "stderr": null });
         let written = noted(&hook, "PostToolUse", &tool);
-        assert_eq!(written, "event=PostToolUse\nsession_id=9bb85e86\nagent_id=a1\n");
+        assert_eq!(written, "event=PostToolUse\nsession_id=9bb85e86\nagent_id=a1\ntool_name=Bash\n");
 
         let mut stop = base("Stop");
         stop["last_assistant_message"] = secret.into();
         assert!(!noted(&hook, "Stop", &stop).contains("SECRET"));
 
+        // A permission dialog: the tool's name only, never what it would run or the
+        // suggestions built from it.
+        let mut permission = base("PermissionRequest");
+        permission["agent_id"] = "a1".into();
+        permission["tool_name"] = "Bash".into();
+        permission["tool_input"] = json!({ "command": secret, "description": secret, "tool_name": "nested" });
+        permission["permission_suggestions"] = json!([{ "type": "addRules", "rules": [{ "toolName": "Bash", "ruleContent": secret }] }]);
+        assert_eq!(
+            noted(&hook, "PermissionRequest", &permission),
+            "event=PermissionRequest\nsession_id=9bb85e86\nagent_id=a1\ntool_name=Bash\ncwd=/Users/me/my project\ntranscript_path=/Users/me/.claude/projects/-p/9bb85e86.jsonl\n"
+        );
+
         // A tool's output runs to megabytes (an image read); the event still gets its keys.
         tool["tool_response"] = json!({ "file": { "base64": "A".repeat(3 << 20) } });
-        assert_eq!(noted(&hook, "PostToolUse", &tool), "event=PostToolUse\nsession_id=9bb85e86\nagent_id=a1\n");
+        assert_eq!(noted(&hook, "PostToolUse", &tool), "event=PostToolUse\nsession_id=9bb85e86\nagent_id=a1\ntool_name=Bash\n");
 
         // Events Pitwall doesn't listen to leave nothing.
         assert!(note_event(&hook.events_dir, "PreCompact", prompt.to_string().as_bytes()).is_none());

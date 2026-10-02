@@ -130,6 +130,18 @@ pub async fn day_summary(state: State<'_, AppState>, date: Option<String>) -> Re
     tauri::async_runtime::spawn_blocking(move || core.day_summary(date.as_deref())).await.map_err(|error| error.to_string())
 }
 
+/// The Sessions page: every Claude session Pitwall knows of. From the first call on, the main
+/// window also gets `sessions` (the same) whenever it changes.
+#[tauri::command]
+pub async fn claude_sessions(app: AppHandle) -> Result<crate::core::SessionsView, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state.sessions.ask(&app)
+    })
+    .await
+    .map_err(|error| error.to_string())
+}
+
 /* ---------- project terminals ---------- */
 
 #[tauri::command]
@@ -213,6 +225,8 @@ pub fn open_claude(app: AppHandle, state: State<'_, AppState>, path: String) {
     state.core.open_editor(&path);
 }
 
+/// Brings a Claude session up where it runs: `path` is its project, or the folder it runs in when
+/// that isn't listed.
 #[tauri::command]
 pub fn reveal_claude(app: AppHandle, state: State<'_, AppState>, path: String, session: String) {
     step_aside(&app);

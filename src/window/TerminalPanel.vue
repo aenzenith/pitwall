@@ -13,6 +13,7 @@ import {
   outputShown,
   terminalCollapsed,
   terminalHeight,
+  terminalRequest,
   useResizer,
 } from "../lib/panel";
 import { api } from "../lib/store";
@@ -22,6 +23,8 @@ import RenameDialog from "./RenameDialog.vue";
 
 /** Room above the panel that always stays: the toolbar (56) and the table header (38). */
 const HEADER = 94;
+/** How long a `reveal-terminal` request waits for its project and tab to show up. */
+const REQUEST_MS = 5_000;
 
 const props = defineProps<{ project: Project }>();
 
@@ -188,6 +191,31 @@ watch(terminals, async (list) => {
   if (active.value) focusTab(active.value.id);
   else panel.value?.querySelector<HTMLElement>(".action")?.focus();
 });
+
+// A Claude session in one of these terminals was brought up (`reveal-terminal`, lib/panel:
+// terminalRequest): its tab, the panel open, the keyboard in the shell. A request waits a moment
+// for its project and tab to arrive, then lapses.
+watch(
+  () => [terminalRequest.value, props.project.path, terminals.value] as const,
+  async ([request, path, list]) => {
+    if (!request) return;
+    if (Date.now() - request.at > REQUEST_MS) {
+      terminalRequest.value = null;
+      return;
+    }
+    if (request.path !== path || !list.some((term) => term.id === request.id)) return;
+    terminalRequest.value = null;
+    if (terminalCollapsed.value) toggleCollapsed();
+    const shown = active.value?.id === request.id;
+    show(request.id);
+    // Already the shown tab: the watch on it won't run, so the keyboard goes there from here.
+    if (shown) {
+      await nextTick();
+      focusView(request.id);
+    }
+  },
+  { immediate: true },
+);
 
 // No terminal opens on its own: a project starts with "No terminal in …" until you open one.
 

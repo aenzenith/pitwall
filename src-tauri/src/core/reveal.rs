@@ -1,27 +1,17 @@
-//! A click on a Claude session in the day view brings it up where it runs. The project's
+//! A click on a Claude session (the day view, the Sessions page) brings it up where it runs. In
+//! one of Pitwall's own terminals, the main window shows that terminal. Elsewhere the project's
 //! window comes to the front, and that window's extension (a `reveal-claude` command) shows the
 //! Claude Code tab or the terminal the session runs in; a finished session opens again in a
 //! Claude Code tab. Anything that can't be proven safe only brings the window up: a session
 //! opened a second time would have two processes writing one log.
 //!
-//! Claude Code keeps `~/.claude/sessions/<pid>.json` while a session runs. Only `pid`,
-//! `sessionId` and `entrypoint` are read from it.
+//! Which sessions run, and under which processes, comes from Claude Code's
+//! `~/.claude/sessions/<pid>.json` (see `sessions.rs` for what is read of it).
 
 use super::*;
 
 /// How long a finished session waits for its project's window to open and take the command.
 const WINDOW_WAIT: Duration = Duration::from_secs(15);
-/// The longest chain of parent processes followed.
-const LINEAGE_MAX: usize = 32;
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionFile {
-    pid: u32,
-    session_id: String,
-    #[serde(default)]
-    entrypoint: Option<String>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Liveness {
@@ -89,22 +79,9 @@ pub(super) fn plan_reveal(path: &str, liveness: &Liveness, peers: &[WindowRecord
     }
 }
 
-/// The process and its parents, nearest first.
-fn lineage(table: &HashMap<u32, (u32, String)>, pid: u32) -> Vec<u32> {
-    let mut chain = vec![pid];
-
-    while let Some(&(parent, _)) = chain.last().and_then(|pid| table.get(pid)) {
-        if parent <= 1 || chain.contains(&parent) || chain.len() >= LINEAGE_MAX {
-            break;
-        }
-        chain.push(parent);
-    }
-
-    chain
-}
-
 impl Core {
-    /// Brings a Claude session up where it runs (see the top of this file).
+    /// Brings a Claude session up where it runs (see the top of this file). `path` is its
+    /// project, or the folder it runs in when that isn't listed.
     pub fn reveal_claude(self: &Arc<Self>, path: &str, session: &str) {
         self.mark_seen(path);
 
@@ -116,6 +93,14 @@ impl Core {
 
     fn reveal_now(&self, path: &str, session: &str) {
         let liveness = if is_session_id(session) { self.liveness(session) } else { Liveness::Unknown };
+
+        // One of our own terminals: the window shows it.
+        if let Liveness::Running { lineage, .. } = &liveness {
+            if let Some((id, path)) = self.pitwall_terminal(lineage) {
+                self.emit(CoreEvent::RevealTerminal { path, id });
+                return;
+            }
+        }
 
         match plan_reveal(path, &liveness, &self.registry.read_peers()) {
             Reveal::Command { target, raise, terminal } => {
@@ -147,37 +132,12 @@ impl Core {
     }
 
     fn liveness(&self, session: &str) -> Liveness {
-        let Some(claude_root) = self.cfg.claude_dir.parent() else {
-            return Liveness::Unknown;
-        };
-        let sessions_dir = claude_root.join("sessions");
-
-        if !sessions_dir.is_dir() {
-            return Liveness::Unknown;
-        }
-
-        let Some(table) = process::process_table() else {
+        let Some(running) = self.read_running() else {
             return Liveness::Unknown;
         };
 
-        let files = fs::read_dir(&sessions_dir).map(|entries| entries.flatten().map(|entry| entry.path()).collect::<Vec<_>>()).unwrap_or_default();
-
-        for file in files.iter().filter(|file| file.extension().is_some_and(|ext| ext == "json")) {
-            let Some(record) = fs::read_to_string(file).ok().and_then(|text| serde_json::from_str::<SessionFile>(&text).ok()) else {
-                continue;
-            };
-
-            if record.session_id != session {
-                continue;
-            }
-
-            // A file left behind by a process that died: its pid is gone or belongs to something
-            // else now. A Claude process that took the pid over writes the same file name.
-            let running = table.get(&record.pid).is_some_and(|(_, args)| args.to_lowercase().contains("claude"));
-
-            if running {
-                return Liveness::Running { entrypoint: record.entrypoint, lineage: lineage(&table, record.pid) };
-            }
+        if let Some(run) = running.get(session) {
+            return Liveness::Running { entrypoint: run.entrypoint.clone(), lineage: run.lineage.clone() };
         }
 
         match self.log_modified(session) {

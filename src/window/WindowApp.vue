@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
 import Marquee from "../components/Marquee.vue";
@@ -12,15 +12,16 @@ import { claudeState, gitLine, meta } from "../lib/format";
 import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t, type Key } from "../lib/i18n";
-import { outputRequest } from "../lib/panel";
+import { outputRequest, terminalRequest } from "../lib/panel";
 import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
-import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
+import { api, connectFuel, connectSessions, fuel, loadSessions, now, snapshot, visible } from "../lib/store";
 import type { Project } from "../lib/types";
 import DayView from "./DayView.vue";
 import FuelView from "./FuelView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
+import SessionsView from "./SessionsView.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
 
@@ -34,8 +35,8 @@ const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "star" |
 ];
 
 const filter = ref<Filter>("all");
-/** The project list, the day's timeline, or Claude's fuel. */
-const view = ref<"projects" | "day" | "fuel">("projects");
+/** The project list, the day's timeline, Claude's sessions, or Claude's fuel. */
+const view = ref<"projects" | "day" | "sessions" | "fuel">("projects");
 
 /** The sidebar's "26% left" beside Fuel: the session's share left, red when low, grey when stale. */
 const fuelBadge = computed(() => {
@@ -46,14 +47,36 @@ const fuelBadge = computed(() => {
 });
 
 let unlistenFuel: (() => void) | null = null;
+let unlistenSessions: (() => void) | null = null;
 
-// Fuel's data comes to this window from the start: the sidebar badge shows it on every page.
+// Fuel's data comes to this window from the start: the sidebar shows it on every page.
 onMounted(async () => {
   unlistenFuel = await connectFuel();
 });
 
-onBeforeUnmount(() => unlistenFuel?.());
+// The sessions' only once their page is first opened: until then the core doesn't work them out.
+watch(view, async (shown) => {
+  if (shown === "sessions" && !unlistenSessions) unlistenSessions = await connectSessions();
+});
+
+onBeforeUnmount(() => {
+  unlistenFuel?.();
+  unlistenSessions?.();
+});
+
+// The core sends `sessions` only while this window is on screen: back on screen, the page catches
+// up if it is shown.
+watch(visible, (on) => {
+  if (on && view.value === "sessions") void loadSessions();
+});
 const settingsOpen = ref(false);
+/** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's. */
+const settingsTab = ref<"claude" | undefined>(undefined);
+
+function openSettings(tab?: "claude"): void {
+  settingsTab.value = tab;
+  settingsOpen.value = true;
+}
 const query = ref("");
 const selectedPath = ref<string | null>(null);
 const tbody = ref<HTMLElement | null>(null);
@@ -137,6 +160,7 @@ function onKey(event: KeyboardEvent): void {
 let unlistenReveal: UnlistenFn | null = null;
 let unlistenProject: UnlistenFn | null = null;
 let unlistenFuelReveal: UnlistenFn | null = null;
+let unlistenTerminal: UnlistenFn | null = null;
 
 /** From the switcher (⌘↵ on a link): select the project, even if a filter or search hid it. */
 function revealProject(path: string): void {
@@ -154,12 +178,28 @@ function revealOutput(path: string, job: string): void {
   outputRequest.value = { path, job };
 }
 
+/** A Claude session in one of Pitwall's terminals brought up: the project, its terminal panel
+ * open on that tab, the keyboard in it (TerminalPanel takes the request). */
+function revealTerminal(path: string, id: number): void {
+  revealProject(path);
+  terminalRequest.value = { path, id, at: Date.now() };
+}
+
+/** The Sessions page's "Open a Claude terminal": one, in the project selected in the list. */
+async function openClaudeTerminal(): Promise<void> {
+  view.value = "projects";
+  await nextTick();
+  void terminalPanel.value?.openTerminal(true);
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", onKey);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
   unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
   // A click on the 90 % notification: the Fuel page.
   unlistenFuelReveal = await listen("reveal-fuel", () => (view.value = "fuel"));
+  // Bringing up a Claude session that runs in one of Pitwall's terminals: that terminal.
+  unlistenTerminal = await listen<{ path: string; id: number }>("reveal-terminal", (event) => revealTerminal(event.payload.path, event.payload.id));
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
   void api.windowReady();
   const win = getCurrentWindow();
@@ -175,6 +215,7 @@ onBeforeUnmount(() => {
   unlistenReveal?.();
   unlistenProject?.();
   unlistenFuelReveal?.();
+  unlistenTerminal?.();
   unlistenResize?.();
 });
 
@@ -206,6 +247,9 @@ function server(project: Project): string {
       </nav>
       <div class="nav today">
         <button type="button" :class="{ on: view === 'day' }" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
+        <button type="button" :class="{ on: view === 'sessions' }" @click="view = 'sessions'">
+          <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
+        </button>
         <button type="button" :class="{ on: view === 'fuel' }" @click="view = 'fuel'">
           <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
           <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
@@ -214,12 +258,19 @@ function server(project: Project): string {
       <div class="grow"></div>
       <div class="nav">
         <button type="button" @click="api.pickFolder()"><Icon name="plus" /> {{ t("window.addProject") }}</button>
-        <button type="button" :class="{ on: settingsOpen }" @click="settingsOpen = true"><Icon name="settings" /> {{ t("common.settings") }}</button>
+        <button type="button" :class="{ on: settingsOpen }" @click="openSettings()"><Icon name="settings" /> {{ t("common.settings") }}</button>
       </div>
     </aside>
 
     <DayView v-if="view === 'day'" />
     <FuelView v-else-if="view === 'fuel'" />
+    <SessionsView
+      v-else-if="view === 'sessions'"
+      :claude-project="selected?.name ?? null"
+      @open-project="revealProject"
+      @open-settings="openSettings('claude')"
+      @open-claude="openClaudeTerminal"
+    />
 
     <template v-else>
       <main class="main">
@@ -319,7 +370,7 @@ function server(project: Project): string {
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
     </template>
 
-    <SettingsView v-if="settingsOpen" @close="settingsOpen = false" />
+    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" />
   </div>
 </template>
 
@@ -421,6 +472,7 @@ function server(project: Project): string {
   color: var(--claude-text);
   white-space: nowrap;
 }
+
 
 .fuel-badge.low {
   color: var(--crash-text);
