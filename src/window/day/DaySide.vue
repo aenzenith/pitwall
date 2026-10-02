@@ -2,7 +2,6 @@
 import { computed } from "vue";
 
 import ClaudeDot from "../../components/ClaudeDot.vue";
-import ClaudeMark from "../../components/ClaudeMark.vue";
 import { bounds, clock, clockRange, duration, projectTiles, sessionShare, type Live } from "../../lib/day";
 import { turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
@@ -59,7 +58,7 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
         </div>
 
         <section v-if="selected.sessions.length" class="group">
-          <span class="section-label group-title"><ClaudeMark :size="12" />{{ t("day.sessions") }}</span>
+          <span class="section-label group-title">{{ t("day.sessions") }}</span>
           <div
             v-for="session in selected.sessions"
             :key="session.id"
