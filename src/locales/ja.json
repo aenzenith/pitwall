@@ -232,6 +232,7 @@
   "day.commits": "コミット",
   "day.sessions": "Claude セッション",
   "day.untitled": "名前のないセッション",
+  "day.sessionTitle": "クリックしてエディタでこのセッションを表示",
   "day.turns": {"other": "{count} ターン"},
   "day.commands": "コマンド",
   "day.failed": "{count} 件失敗",

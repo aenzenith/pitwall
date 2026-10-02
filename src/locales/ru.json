@@ -232,6 +232,7 @@
   "day.commits": "Коммиты",
   "day.sessions": "Сессии Claude",
   "day.untitled": "Сессия без названия",
+  "day.sessionTitle": "Нажмите, чтобы показать сессию в редакторе",
   "day.turns": {"one": "{count} ход", "few": "{count} хода", "many": "{count} ходов", "other": "{count} хода"},
   "day.commands": "Команды",
   "day.failed": "с ошибкой: {count}",

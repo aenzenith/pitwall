@@ -173,6 +173,12 @@ pub fn open_claude(app: AppHandle, state: State<'_, AppState>, path: String) {
 }
 
 #[tauri::command]
+pub fn reveal_claude(app: AppHandle, state: State<'_, AppState>, path: String, session: String) {
+    step_aside(&app);
+    state.core.reveal_claude(&path, &session);
+}
+
+#[tauri::command]
 pub fn mark_seen(state: State<'_, AppState>, path: String) {
     state.core.mark_seen(&path);
 }

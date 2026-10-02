@@ -49,6 +49,13 @@ pub struct WindowRecord {
     /// Folders this participant owns even when stopped. Missing in old extension versions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roots: Option<Vec<String>>,
+    /// Commands it takes besides start/stop/restart. Old extension versions treat an unknown
+    /// command as `start`, so a new one goes only to participants that list it here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub features: Option<Vec<String>>,
+    /// Shell pids of its terminals, to find the one a Claude session runs in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminals: Option<Vec<u32>>,
 }
 
 impl WindowRecord {
@@ -63,17 +70,33 @@ impl WindowRecord {
     pub fn has_root(&self, folder_path: &str) -> bool {
         self.roots.as_ref().is_some_and(|roots| roots.iter().any(|root| root == folder_path))
     }
+
+    pub fn takes(&self, feature: &str) -> bool {
+        self.features.as_ref().is_some_and(|features| features.iter().any(|f| f == feature))
+    }
+
+    /// The pid of the process that writes this record: ids are `<pid>-<time>`, both base 36.
+    pub fn pid(&self) -> Option<u32> {
+        let (pid, _) = self.window_id.split_once('-')?;
+        u32::from_str_radix(pid, 36).ok()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteCommand {
     pub target: String,
-    /// `start` | `stop` | `restart`
+    /// `start` | `stop` | `restart` | `reveal-claude`
     pub action: String,
     pub folder_path: String,
     pub issued_by: String,
     pub issued_at: u64,
+    /// `reveal-claude`: the session to bring up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// `reveal-claude`: the shell pid of the terminal it runs in, when it runs in one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_pid: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,7 +123,7 @@ pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-fn base36(mut value: u64) -> String {
+pub(crate) fn base36(mut value: u64) -> String {
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut out = Vec::new();
 
@@ -214,6 +237,8 @@ impl Registry {
             updated_at: now_ms(),
             projects,
             roots: Some(Vec::new()),
+            features: None,
+            terminals: None,
         };
 
         if let Ok(json) = serde_json::to_string(&record) {
@@ -246,13 +271,32 @@ impl Registry {
     }
 
     pub fn send(&self, target: &str, action: &str, folder_path: &str) {
-        let command = RemoteCommand {
+        self.deliver(self.command(target, action, folder_path));
+    }
+
+    /// Asks a participant that takes `reveal-claude` to bring a Claude session up.
+    pub fn send_reveal(&self, target: &str, folder_path: &str, session_id: &str, terminal_pid: Option<u32>) {
+        self.deliver(RemoteCommand {
+            session_id: Some(session_id.to_string()),
+            terminal_pid,
+            ..self.command(target, "reveal-claude", folder_path)
+        });
+    }
+
+    fn command(&self, target: &str, action: &str, folder_path: &str) -> RemoteCommand {
+        RemoteCommand {
             target: target.to_string(),
             action: action.to_string(),
             folder_path: folder_path.to_string(),
             issued_by: self.id.clone(),
             issued_at: now_ms(),
-        };
+            session_id: None,
+            terminal_pid: None,
+        }
+    }
+
+    fn deliver(&self, command: RemoteCommand) {
+        let target = command.target.as_str();
         let dir = self.peer_dirs.lock().ok().and_then(|known| known.get(target).cloned()).unwrap_or_else(|| self.dir.clone());
         let file = dir.join("commands").join(format!("{}__{}-{}.json", target, now_ms(), base36(now_ms() % 1_000_000)));
 
@@ -409,7 +453,7 @@ mod tests {
     use super::*;
 
     fn record(id: &str, updated_at: u64, projects: Vec<ProjectState>, roots: Option<Vec<String>>) -> WindowRecord {
-        WindowRecord { window_id: id.into(), title: id.into(), updated_at, projects, roots }
+        WindowRecord { window_id: id.into(), title: id.into(), updated_at, projects, roots, features: None, terminals: None }
     }
 
     fn project(path: &str, running: bool) -> ProjectState {

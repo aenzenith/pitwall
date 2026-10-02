@@ -312,6 +312,7 @@ pub fn run() {
             commands::open_browser,
             commands::open_editor,
             commands::open_claude,
+            commands::reveal_claude,
             commands::mark_seen,
             commands::set_settings,
             commands::set_project_settings,

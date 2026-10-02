@@ -232,6 +232,7 @@
   "day.commits": "Commits",
   "day.sessions": "Claude sessions",
   "day.untitled": "Untitled session",
+  "day.sessionTitle": "Click to show this session in the editor",
   "day.turns": {"one": "{count} turn", "other": "{count} turns"},
   "day.commands": "Commands",
   "day.failed": "{count} failed",

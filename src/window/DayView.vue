@@ -549,7 +549,16 @@ onBeforeUnmount(() => {
 
           <section v-if="selected.sessions.length" class="group">
             <span class="caps group-title"><ClaudeMark :size="12" />{{ t("day.sessions") }}</span>
-            <div v-for="session in selected.sessions" :key="session.id" class="session">
+            <div
+              v-for="session in selected.sessions"
+              :key="session.id"
+              class="session"
+              role="button"
+              tabindex="0"
+              :title="t('day.sessionTitle')"
+              @click="api.revealClaude(selected.path, session.id)"
+              @keydown.enter="api.revealClaude(selected.path, session.id)"
+            >
               <div class="session-top">
                 <ClaudeDot :live="liveSessions.get(session.id)" />
                 <span :class="['session-name', { untitled: !session.title }]" :title="session.title ?? ''">{{ session.title || t("day.untitled") }}</span>
@@ -1276,6 +1285,19 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  /* Clickable as a whole: the hover background reaches past the text a little. */
+  margin: 0 -6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.session:hover {
+  background: var(--bg-hover);
+}
+
+.session:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px #3a3f48;
 }
 
 .session-top {

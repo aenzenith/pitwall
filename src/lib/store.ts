@@ -41,6 +41,7 @@ export const api = {
   openBrowser: (path: string) => invoke("open_browser", { path }),
   openEditor: (path: string) => invoke("open_editor", { path }),
   openClaude: (path: string) => invoke("open_claude", { path }),
+  revealClaude: (path: string, session: string) => invoke("reveal_claude", { path, session }),
   markSeen: (path: string) => invoke("mark_seen", { path }),
   setSettings: (settings: Settings) => invoke("set_settings", { settings }),
   setProjectSettings: (path: string, settings: ProjectSettings) => invoke("set_project_settings", { path, settings }),

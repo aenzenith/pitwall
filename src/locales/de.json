@@ -232,6 +232,7 @@
   "day.commits": "Commits",
   "day.sessions": "Claude-Sitzungen",
   "day.untitled": "Unbenannte Sitzung",
+  "day.sessionTitle": "Zum Anzeigen der Sitzung im Editor klicken",
   "day.turns": {"one": "{count} Runde", "other": "{count} Runden"},
   "day.commands": "Befehle",
   "day.failed": "{count} fehlgeschlagen",

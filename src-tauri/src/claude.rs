@@ -244,7 +244,7 @@ struct Cached {
 }
 
 /// A session counts as working while its log changed this recently and the turn isn't over.
-const WORKING_WINDOW_MS: u64 = 5 * 60 * 1000;
+pub(crate) const WORKING_WINDOW_MS: u64 = 5 * 60 * 1000;
 /// Hook events nobody resolved are dropped after a day.
 const EVENT_MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
 

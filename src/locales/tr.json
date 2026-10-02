@@ -232,6 +232,7 @@
   "day.commits": "Commit",
   "day.sessions": "Claude oturumları",
   "day.untitled": "Adsız oturum",
+  "day.sessionTitle": "Oturumu editörde göstermek için tıkla",
   "day.turns": {"other": "{count} tur"},
   "day.commands": "Komutlar",
   "day.failed": "{count} başarısız",

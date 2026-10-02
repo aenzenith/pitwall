@@ -95,6 +95,8 @@ fn fake_window(dir: &Path, id: &str, project: &str, running: bool, root: bool) {
             output: None,
         }],
         roots: Some(if root { vec![project.into()] } else { vec![] }),
+        features: None,
+        terminals: None,
     };
     fs::write(dir.join("windows").join(format!("{id}.json")), serde_json::to_string(&record).unwrap()).unwrap();
 }

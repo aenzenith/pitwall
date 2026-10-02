@@ -232,6 +232,7 @@
   "day.commits": "提交",
   "day.sessions": "Claude 会话",
   "day.untitled": "未命名会话",
+  "day.sessionTitle": "单击在编辑器中显示此会话",
   "day.turns": {"other": "{count} 轮"},
   "day.commands": "命令",
   "day.failed": "{count} 次失败",

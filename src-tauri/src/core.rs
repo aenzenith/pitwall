@@ -33,6 +33,8 @@ use crate::settings::{ProjectSettings, Settings};
 mod activity;
 #[path = "jobs.rs"]
 mod jobs;
+#[path = "reveal.rs"]
+mod reveal;
 #[path = "terminal.rs"]
 mod terminal;
 pub use activity::DaySummary;
