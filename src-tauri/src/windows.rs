@@ -19,7 +19,7 @@ const FALLBACK: Duration = Duration::from_secs(3);
 
 /// Events the switcher sends the main window just before opening it. If the window's page isn't
 /// listening yet they would be lost, so the last one waits here and is sent again once it is.
-const FOR_MAIN: [&str; 2] = ["reveal-project", "reveal-output"];
+const FOR_MAIN: [&str; 3] = ["reveal-project", "reveal-output", "reveal-fuel"];
 
 struct Pages {
     /// Windows whose page is up and listening.

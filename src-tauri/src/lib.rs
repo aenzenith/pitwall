@@ -3,6 +3,7 @@ mod claude;
 mod commands;
 mod core;
 mod extension;
+mod fuel;
 mod git;
 mod hooks;
 mod i18n;
@@ -15,7 +16,9 @@ mod registry;
 mod resolve;
 mod settings;
 mod sound;
+mod spend;
 mod tray;
+mod usage;
 mod windows;
 
 use std::path::PathBuf;
@@ -36,6 +39,7 @@ pub const SWITCHER: &str = "switcher";
 
 pub struct AppState {
     pub core: Arc<Core>,
+    pub fuel: fuel::Fuel,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -101,7 +105,7 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
 
 /// A system notification; clicking it opens the project and counts the turn as seen.
 #[cfg(target_os = "macos")]
-fn notify(app: &AppHandle, path: String, title: String, body: String) {
+pub(crate) fn notify(app: &AppHandle, path: String, title: String, body: String) {
     let image = claude_mark(app);
     notify::post(path, title, body, image.as_deref().map(std::path::Path::new));
 }
@@ -127,7 +131,7 @@ pub fn copy_text(app: &AppHandle, text: String) {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn notify(_app: &AppHandle, _path: String, _title: String, _body: String) {}
+pub(crate) fn notify(_app: &AppHandle, _path: String, _title: String, _body: String) {}
 
 /// Claude's spark beside the notification text. The API takes a file, so the bundled image is
 /// written to the cache folder (again when it changed).
@@ -206,7 +210,11 @@ pub fn run() {
             {
                 let clicks = app.handle().clone();
                 notify::start(is_bundled(), move |path| {
-                    if let Some(state) = clicks.try_state::<AppState>() {
+                    // The Fuel page's notification opens that page.
+                    if path == fuel::NOTIFICATION_ID {
+                        tray::show_main(&clicks);
+                        let _ = clicks.emit("reveal-fuel", ());
+                    } else if let Some(state) = clicks.try_state::<AppState>() {
                         state.core.open_claude(&path);
                     }
                 });
@@ -226,7 +234,9 @@ pub fn run() {
                 Arc::new(move |event| handle_event(&handle, event)),
             );
 
-            app.manage(AppState { core: Arc::clone(&core) });
+            let fuel = fuel::Fuel::new(app.handle(), home.join(".claude").join("projects"));
+            app.manage(AppState { core: Arc::clone(&core), fuel });
+            fuel::Fuel::start(app.handle());
 
             core.reap_orphans();
             core.record_app("start");
@@ -346,6 +356,8 @@ pub fn run() {
             commands::hide_popover,
             commands::hide_switcher,
             commands::window_ready,
+            commands::fuel_state,
+            commands::refresh_fuel,
             commands::install_claude_hook,
             commands::uninstall_claude_hook,
             commands::open_link,

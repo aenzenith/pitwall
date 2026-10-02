@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel";
     size?: number;
   }>(),
   { size: 15 },
@@ -39,6 +39,7 @@ withDefaults(
     <g v-else-if="name === 'grid'"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></g>
     <path v-else-if="name === 'pulse'" d="M3 12h4l2.5-6 5 12 2.5-6h4" />
     <g v-else-if="name === 'chat'"><path d="M5.5 5h13a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5V17h-1a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8.5 11h.01M12 11h.01M15.5 11h.01" /></g>
+    <g v-else-if="name === 'fuel'"><path d="M4.5 20V5.5a2 2 0 0 1 2-2h5.5a2 2 0 0 1 2 2V20" /><path d="M3 20h12.5M4.5 10h9.5" /><path d="M14 8.5h1.5a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 0 3 0V8.5L18.5 6" /></g>
     <path v-else-if="name === 'folder'" d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
   </svg>
 </template>

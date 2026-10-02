@@ -79,6 +79,8 @@ export type Settings = {
   editor: string;
   openUrlOnStart: boolean;
   notify: boolean;
+  /** Notify when the session or weekly limit passes 90 %. */
+  fuelAlert: boolean;
   /** Which of Pitwall's sounds each event plays (src-tauri/sounds); "" for none. */
   sounds: { claudeFinished: string; claudeAsking: string; serverCrashed: string; serverReady: string; commandDone: string };
   launchAtLogin: boolean;
@@ -139,3 +141,64 @@ export type DayProject = {
 
 /** One day: what Pitwall wrote down while it ran, and the commits made. */
 export type DaySummary = { date: string; start: number; end: number; today: boolean; now: number; projects: DayProject[] };
+
+/* ---------- Fuel: Claude's plan limits (src-tauri/src/usage.rs) and today's spend (spend.rs) ---------- */
+
+/** One limit. `five_hour` is the session, `seven_day` the week across models; then each model's
+ * week (`seven_day_opus`, `seven_day_sonnet`…) and others the API adds. */
+export type UsageWindow = {
+  id: string;
+  /** The model's name as the API writes it ("Fable 5"), for limits from its `limits` list. */
+  name: string | null;
+  /** Percent used, 0–100; above 100 when over the limit. */
+  used: number;
+  /** In ms; null while the window hasn't started. */
+  resetsAt: number | null;
+};
+
+/** Extra Usage, the pay-as-you-go spend past the plan's limits; amounts in the currency's main unit. */
+export type UsageExtra = {
+  enabled: boolean;
+  /** Spent this month. */
+  usedCredits: number;
+  /** The monthly cap; null without one. */
+  monthlyLimit: number | null;
+  /** Percent of the cap spent; null without a cap. */
+  used: number | null;
+  /** ISO 4217, e.g. `USD`. */
+  currency: string | null;
+};
+
+export type UsageError = "network" | "timeout" | "forbidden" | "server" | "http" | "badResponse" | "credentials" | "keychain";
+
+export type UsageState = {
+  status: "ready" | "loading" | "signedOut" | "expired" | "rateLimited" | "error";
+  /** The last good reading, kept through later failures. */
+  usage: { windows: UsageWindow[]; extra: UsageExtra | null } | null;
+  /** The plan Claude Code signed in with: `Pro`, `Max 5x`, `Team`… */
+  plan: string | null;
+  /** When `usage` was read, in ms. */
+  fetchedAt: number | null;
+  /** While rate limited: when the core asks again, in ms. */
+  retryAt: number | null;
+  /** With `error`: what went wrong. */
+  error: UsageError | null;
+};
+
+export type TokenCounts = { input: number; output: number; cacheWrite: number; cacheRead: number; total: number };
+
+/** Today's tokens from Claude Code's logs, priced as the API would charge them. */
+export type SpendToday = {
+  /** `YYYY-MM-DD`, local. */
+  date: string;
+  tokens: TokenCounts;
+  /** Priced models only. */
+  costUsd: number;
+  /** The costliest first. */
+  models: Array<{ model: string; tokens: TokenCounts; costUsd: number; priced: boolean }>;
+  /** Used today without a known price: their tokens count, their cost doesn't. */
+  unpricedModels: string[];
+};
+
+/** The Fuel page's data, pushed to the main window as `fuel`. */
+export type Fuel = { limits: UsageState; today: SpendToday | null };

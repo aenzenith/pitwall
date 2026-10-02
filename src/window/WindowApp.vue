@@ -9,14 +9,16 @@ import Spinner from "../components/Spinner.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { claudeState, gitLine, meta } from "../lib/format";
+import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
-import { t, type Key } from "../lib/i18n";
+import { language, t, type Key } from "../lib/i18n";
 import { outputRequest } from "../lib/panel";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
-import { api, now, snapshot } from "../lib/store";
+import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
 import type { Project } from "../lib/types";
 import DayView from "./DayView.vue";
+import FuelView from "./FuelView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
@@ -31,8 +33,25 @@ const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "star" |
 ];
 
 const filter = ref<Filter>("all");
-/** The project list, or the day's timeline. */
-const view = ref<"projects" | "day">("projects");
+/** The project list, the day's timeline, or Claude's fuel. */
+const view = ref<"projects" | "day" | "fuel">("projects");
+
+/** The sidebar's "26% left" beside Fuel: the session's share left, red when low, grey when stale. */
+const fuelBadge = computed(() => {
+  const limits = fuel.value?.limits;
+  const session = sessionWindow(fuel.value, now.value);
+  if (!limits || !session) return null;
+  return { text: t("fuel.left", { value: percentText(left(session.used), language.value) }), low: isLow(session.used), stale: isStale(limits) };
+});
+
+let unlistenFuel: (() => void) | null = null;
+
+// Fuel's data comes to this window from the start: the sidebar badge shows it on every page.
+onMounted(async () => {
+  unlistenFuel = await connectFuel();
+});
+
+onBeforeUnmount(() => unlistenFuel?.());
 const settingsOpen = ref(false);
 const query = ref("");
 const selectedPath = ref<string | null>(null);
@@ -116,6 +135,7 @@ function onKey(event: KeyboardEvent): void {
 
 let unlistenReveal: UnlistenFn | null = null;
 let unlistenProject: UnlistenFn | null = null;
+let unlistenFuelReveal: UnlistenFn | null = null;
 
 /** From the switcher (⌘↵ on a link): select the project, even if a filter or search hid it. */
 function revealProject(path: string): void {
@@ -137,6 +157,8 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
   unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
+  // A click on the 90 % notification: the Fuel page.
+  unlistenFuelReveal = await listen("reveal-fuel", () => (view.value = "fuel"));
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
   void api.windowReady();
   const win = getCurrentWindow();
@@ -151,6 +173,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   unlistenReveal?.();
   unlistenProject?.();
+  unlistenFuelReveal?.();
   unlistenResize?.();
 });
 
@@ -181,6 +204,10 @@ function server(project: Project): string {
       </nav>
       <div class="nav today">
         <button type="button" :class="{ on: view === 'day' }" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
+        <button type="button" :class="{ on: view === 'fuel' }" @click="view = 'fuel'">
+          <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
+          <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
+        </button>
       </div>
       <div class="grow"></div>
       <div class="nav">
@@ -190,6 +217,7 @@ function server(project: Project): string {
     </aside>
 
     <DayView v-if="view === 'day'" />
+    <FuelView v-else-if="view === 'fuel'" />
 
     <template v-else>
       <main class="main">
@@ -371,6 +399,31 @@ function server(project: Project): string {
 
 .today {
   margin-top: 12px;
+}
+
+/* A long name gives way; the badge beside it never does. */
+.nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Claude's: the session's share left, beside Fuel. */
+.fuel-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--claude-text);
+  white-space: nowrap;
+}
+
+.fuel-badge.low {
+  color: var(--crash-text);
+}
+
+.fuel-badge.stale {
+  color: var(--text-subtle);
 }
 
 .grow {

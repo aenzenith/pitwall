@@ -73,6 +73,7 @@ const form = reactive<Settings>({
   editor: "vscode",
   openUrlOnStart: false,
   notify: true,
+  fuelAlert: true,
   sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "", commandDone: "" },
   launchAtLogin: false,
   shortcut: true,
@@ -361,6 +362,11 @@ async function save(): Promise<void> {
           <label class="check">
             <input v-model="form.notify" type="checkbox" />
             <span>{{ t("settings.notify") }}</span>
+          </label>
+          <!-- The Fuel page's chip turns the same one on and off. -->
+          <label class="check">
+            <input v-model="form.fuelAlert" type="checkbox" />
+            <span>{{ t("settings.fuelAlert") }}</span>
           </label>
           <div class="hook">
             <div class="hook-text">

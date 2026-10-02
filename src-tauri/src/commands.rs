@@ -308,6 +308,19 @@ pub fn window_ready(window: tauri::WebviewWindow) {
     crate::windows::ready(window.app_handle(), window.label());
 }
 
+/// The Fuel page: Claude's plan limits and today's tokens, as last read.
+#[tauri::command]
+pub fn fuel_state(state: State<'_, AppState>) -> crate::fuel::FuelView {
+    state.fuel.view()
+}
+
+/// The Fuel page opened, or its refresh button: read again (`force` skips the 15-minute wait, not
+/// the minute between two requests).
+#[tauri::command]
+pub fn refresh_fuel(app: AppHandle, state: State<'_, AppState>, force: bool) {
+    state.fuel.refresh(&app, force);
+}
+
 /// Esc in the popover: close it and go back to the app from before.
 #[tauri::command]
 pub fn hide_popover(app: AppHandle) {

@@ -100,6 +100,8 @@ pub struct Settings {
     /// The folder whose subfolders the quick switcher searches when no project matches.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub projects_dir: Option<String>,
+    /// A notification when Claude's session or weekly limit passes 90 %.
+    pub fuel_alert: bool,
 }
 
 impl Default for Settings {
@@ -118,6 +120,7 @@ impl Default for Settings {
             projects: BTreeMap::new(),
             order: Vec::new(),
             projects_dir: None,
+            fuel_alert: true,
         }
     }
 }

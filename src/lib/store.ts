@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ref, watch } from "vue";
 
-import type { DaySummary, ExtensionStatus, Folder, LinkSuggestion, ProjectSettings, Settings, Snapshot, TerminalView } from "./types";
+import type { DaySummary, ExtensionStatus, Folder, Fuel, LinkSuggestion, ProjectSettings, Settings, Snapshot, TerminalView } from "./types";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -56,6 +56,30 @@ export async function connect(): Promise<void> {
   runClock(visible.value);
 }
 
+/** Claude's plan limits and today's tokens: the Fuel page's, and its sidebar badge's. */
+export const fuel = ref<Fuel | null>(null);
+
+/**
+ * The main window's: hears `fuel` (sent to this window only) and asks for the current state. A
+ * core that doesn't answer leaves it null, which shows as loading.
+ */
+export async function connectFuel(): Promise<UnlistenFn> {
+  let heard = 0;
+  const unlisten = await getCurrentWindow().listen<Fuel>("fuel", (event) => {
+    heard++;
+    fuel.value = event.payload;
+  });
+  const before = heard;
+  try {
+    const state = await invoke<Fuel>("fuel_state");
+    // An event that came in meanwhile is newer.
+    if (heard === before) fuel.value = state;
+  } catch {
+    // Kept as loading; the next `fuel` event fills it.
+  }
+  return unlisten;
+}
+
 export type Action = "start" | "stop" | "restart";
 
 export const api = {
@@ -106,5 +130,7 @@ export const api = {
   installClaudeHook: () => invoke("install_claude_hook"),
   uninstallClaudeHook: () => invoke("uninstall_claude_hook"),
   openLink: (link: "site" | "coffee") => invoke("open_link", { link }),
+  /** Asks the core to read the limits again (`force`: past the background pace; it still throttles). */
+  refreshFuel: (force: boolean) => invoke("refresh_fuel", { force }),
   quit: () => invoke("quit"),
 };
