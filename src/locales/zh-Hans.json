@@ -199,7 +199,6 @@
   "settings.editor": "编辑器",
   "settings.claude": "Claude",
   "settings.sounds": "声音",
-  "settings.soundsHint": "这些声音由 Pitwall 自己播放；macOS 通知保持静音。",
   "settings.soundsClaudeOff": "Claude 的声音随通知一起播放，而通知已关闭（Claude 标签页）。",
   "settings.language": "语言",
   "settings.languageSystem": "跟随系统（{language}）",

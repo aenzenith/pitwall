@@ -199,7 +199,6 @@
   "settings.editor": "Editör",
   "settings.claude": "Claude",
   "settings.sounds": "Sesler",
-  "settings.soundsHint": "Bu sesleri Pitwall kendisi çalar; macOS bildirimi sessiz kalır.",
   "settings.soundsClaudeOff": "Claude sesleri bildirimleriyle birlikte çalar; bildirimler kapalı (Claude sekmesi).",
   "settings.language": "Dil",
   "settings.languageSystem": "Sistem ({language})",

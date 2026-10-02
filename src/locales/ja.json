@@ -199,7 +199,6 @@
   "settings.editor": "エディタ",
   "settings.claude": "Claude",
   "settings.sounds": "サウンド",
-  "settings.soundsHint": "Pitwall が自分で再生します。macOS の通知は無音のままです。",
   "settings.soundsClaudeOff": "Claude のサウンドは通知と一緒に鳴りますが、通知はオフです（Claude タブ）。",
   "settings.language": "言語",
   "settings.languageSystem": "システム（{language}）",

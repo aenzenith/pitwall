@@ -199,7 +199,6 @@
   "settings.editor": "Editor",
   "settings.claude": "Claude",
   "settings.sounds": "Sounds",
-  "settings.soundsHint": "Pitwall plays these itself; the macOS notification stays silent.",
   "settings.soundsClaudeOff": "Claude's sounds come with its notifications, which are off (Claude tab).",
   "settings.language": "Language",
   "settings.languageSystem": "System ({language})",

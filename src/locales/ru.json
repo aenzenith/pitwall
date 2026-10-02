@@ -199,7 +199,6 @@
   "settings.editor": "Редактор",
   "settings.claude": "Claude",
   "settings.sounds": "Звуки",
-  "settings.soundsHint": "Pitwall проигрывает их сам; уведомление macOS остаётся беззвучным.",
   "settings.soundsClaudeOff": "Звуки Claude звучат вместе с его уведомлениями, а они выключены (вкладка Claude).",
   "settings.language": "Язык",
   "settings.languageSystem": "Системный ({language})",

@@ -2,6 +2,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 
+import ClaudeMark from "../components/ClaudeMark.vue";
 import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Rich from "../components/Rich.vue";
@@ -15,12 +16,13 @@ const emit = defineEmits<{ close: [] }>();
 
 type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "about";
 
-const tabs: Array<{ id: Tab; label: Key }> = [
-  { id: "general", label: "settings.general" },
-  { id: "servers", label: "settings.servers" },
-  { id: "editor", label: "settings.editor" },
-  { id: "claude", label: "settings.claude" },
-  { id: "sounds", label: "settings.sounds" },
+/** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
+const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" }> = [
+  { id: "general", label: "settings.general", icon: "settings" },
+  { id: "servers", label: "settings.servers", icon: "server" },
+  { id: "editor", label: "settings.editor", icon: "editor" },
+  { id: "claude", label: "settings.claude", icon: "claude" },
+  { id: "sounds", label: "settings.sounds", icon: "speaker" },
 ];
 
 /** Pitwall's sounds (src-tauri/sounds). */
@@ -230,10 +232,15 @@ async function save(): Promise<void> {
           :class="{ on: tab === section.id }"
           @click="tab = section.id"
         >
+          <span class="tab-icon">
+            <ClaudeMark v-if="section.icon === 'claude'" :size="14" color="currentColor" />
+            <Icon v-else :name="section.icon" :size="15" />
+          </span>
           {{ t(section.label) }}
         </button>
         <div class="grow"></div>
         <button type="button" role="tab" :aria-selected="tab === 'about'" :class="{ on: tab === 'about' }" @click="tab = 'about'">
+          <span class="tab-icon"><Icon name="info" :size="15" /></span>
           {{ t("settings.about") }}
         </button>
       </nav>
@@ -294,7 +301,6 @@ async function save(): Promise<void> {
 
         <!-- Picking a sound plays it; the button plays it again. -->
         <fieldset v-show="tab === 'sounds'" :aria-label="t('settings.sounds')">
-          <small class="hint">{{ t("settings.soundsHint") }}</small>
           <div v-for="event in soundEvents" :key="event.id" class="sound-row">
             <label :for="`sound-${event.id}`">{{ t(event.label) }}</label>
             <select
@@ -514,6 +520,9 @@ async function save(): Promise<void> {
 
 .rail button {
   height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 0 10px;
   border: 0;
   border-radius: var(--radius-control);
@@ -534,6 +543,19 @@ async function save(): Promise<void> {
 
 .rail .grow {
   flex-grow: 1;
+}
+
+/* One width for every icon, so the labels line up. */
+.tab-icon {
+  width: 16px;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+
+.rail button.on .tab-icon {
+  color: var(--text-strong);
 }
 
 .body {

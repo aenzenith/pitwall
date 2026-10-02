@@ -199,7 +199,6 @@
   "settings.editor": "Editor",
   "settings.claude": "Claude",
   "settings.sounds": "Töne",
-  "settings.soundsHint": "Pitwall spielt sie selbst ab; die macOS-Mitteilung bleibt stumm.",
   "settings.soundsClaudeOff": "Claudes Töne kommen mit seinen Mitteilungen, und die sind aus (Tab Claude).",
   "settings.language": "Sprache",
   "settings.languageSystem": "System ({language})",
