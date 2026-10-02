@@ -9,6 +9,7 @@ import Spinner from "../components/Spinner.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { claudeState, gitLine, meta } from "../lib/format";
+import { searchProjects } from "../lib/fuzzy";
 import { t, type Key } from "../lib/i18n";
 import { outputRequest } from "../lib/panel";
 import { useReorder } from "../lib/reorder";
@@ -47,7 +48,9 @@ const anyBusy = computed(() => projects.value.some((p) => p.status === "busy"));
 const current = computed(() => filters.find((f) => f.id === filter.value) ?? filters[0]);
 const rows = computed(() => {
   const q = query.value.trim().toLowerCase();
-  return projects.value.filter((p) => current.value.test(p) && (!q || p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q)));
+  const shown = projects.value.filter((p) => current.value.test(p));
+  // Searching: the quick switcher's fuzzy match and order (lib/fuzzy); else the list's own order.
+  return q ? searchProjects(shown, q).map((match) => match.project) : shown;
 });
 const selected = computed(() => projects.value.find((p) => p.path === selectedPath.value) ?? null);
 

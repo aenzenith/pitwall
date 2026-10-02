@@ -1,0 +1,148 @@
+/* The project details' shared pieces: icon buttons, controls, the sections and their heads.
+   Each detail component takes this as its first scoped style (`<style scoped src>`), so its own
+   rules come after these and win where they meet. */
+
+.icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.icon.small {
+  width: 26px;
+  height: 26px;
+}
+
+.icon:hover:not(:disabled) {
+  background: #262a33;
+  color: var(--text-strong);
+}
+
+.icon:disabled {
+  opacity: 0.4;
+}
+
+.control {
+  height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-size: 13px;
+}
+
+.control:hover:not(:disabled) {
+  background: #2c3039;
+}
+
+.control:disabled {
+  opacity: 0.6;
+}
+
+.control.primary {
+  background: #2a3a30;
+  border-color: #3d5446;
+  color: #cdebd8;
+}
+
+.control.primary:hover {
+  background: #33473a;
+}
+
+.control.start {
+  background: #1d2a22;
+  border-color: #2d4537;
+  color: #b9e6c9;
+}
+
+.control.stop {
+  background: #2a1b1b;
+  border-color: #4a2b2b;
+  color: #f2b8b8;
+}
+
+.control.busy {
+  color: var(--text-muted);
+}
+
+.control.square {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.control.link {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.control.fixed {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.block {
+  flex-shrink: 0;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* A section's label with its "Add" button (links, commands). */
+.commands-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.commands-head .section-label {
+  flex-grow: 1;
+}
+
+.text-button {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.text-button:hover {
+  background: #262a33;
+  color: var(--text-strong);
+}
+
+.empty-commands {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* A command's name over its command line (the commands section, the settings pane). */
+.cmd-name {
+  font-weight: 500;
+}
+
+.cmd-line {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

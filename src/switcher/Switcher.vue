@@ -4,12 +4,14 @@ import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import Highlight from "../components/Highlight.vue";
 import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Marquee from "../components/Marquee.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
+import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
 import { api, now, snapshot } from "../lib/store";
 import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
@@ -17,7 +19,6 @@ import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
 const WIDTH = 640;
 const MAX_HEIGHT = 540;
 
-type Match = { project: Project; score: number; hits: Set<number> };
 type FolderMatch = { folder: Folder; score: number; hits: Set<number> };
 type CommandMatch = { project: Project; command: CommandView; score: number; hits: Set<number> };
 type LinkMatch = { project: Project; link: ProjectLink; score: number; hits: Set<number> };
@@ -59,59 +60,11 @@ function conceal(): void {
   shown.value = false;
 }
 
-/** Fuzzy: every query character in order; runs, word starts and prefixes score higher. */
-function fuzzy(text: string, q: string): { score: number; hits: number[] } | null {
-  const lower = text.toLowerCase();
-  const hits: number[] = [];
-  let from = 0;
-  let last = -2;
-  let score = 0;
-
-  for (const ch of q) {
-    const i = lower.indexOf(ch, from);
-    if (i < 0) return null;
-    score += i === last + 1 ? 3 : 1;
-    if (i === 0 || /[-_ ./]/.test(lower[i - 1])) score += 2;
-    hits.push(i);
-    last = i;
-    from = i + 1;
-  }
-
-  if (lower.startsWith(q)) score += 8;
-  return { score: score - lower.length * 0.01, hits };
-}
-
-function rank(p: Project): number {
-  if (p.claude) return 0;
-  if (p.claudeWorking) return 1;
-  if (p.status === "running" || p.status === "busy") return 2;
-  return 3;
-}
-
-const matches = computed<Match[]>(() => {
+const matches = computed<ProjectMatch[]>(() => {
   const projects = snapshot.value?.projects ?? [];
   const q = query.value.trim().toLowerCase();
-
-  if (!q) {
-    return [...projects]
-      .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
-      .map((project) => ({ project, score: 0, hits: new Set<number>() }));
-  }
-
-  const found: Match[] = [];
-
-  for (const project of projects) {
-    const byName = fuzzy(project.name, q);
-    const byBranch = project.git ? fuzzy(project.git.branch, q) : null;
-    const byPath = fuzzy(project.path, q);
-    const best = Math.max(byName?.score ?? -Infinity, (byBranch?.score ?? -Infinity) * 0.6, (byPath?.score ?? -Infinity) * 0.4);
-
-    if (best > -Infinity) {
-      found.push({ project, score: best - rank(project) * 0.5, hits: new Set(byName?.hits ?? []) });
-    }
-  }
-
-  return found.sort((a, b) => b.score - a.score);
+  if (!q) return byRank(projects).map((project) => ({ project, score: 0, hits: new Set<number>() }));
+  return searchProjects(projects, q);
 });
 
 /** Subfolders of the projects folder (Settings), read each time the switcher opens. */
@@ -250,11 +203,6 @@ const confirming = ref<string | null>(null);
 
 async function loadFolders(): Promise<void> {
   folders.value = await api.projectFolders();
-}
-
-
-function segments(name: string, hits: Set<number>): Array<{ text: string; hit: boolean }> {
-  return [...name].map((ch, i) => ({ text: ch, hit: hits.has(i) }));
 }
 
 function detail(p: Project): string {
@@ -482,7 +430,7 @@ onBeforeUnmount(() => {
             <StatusIcon :project="item.project" :ring="i === index ? '#23272f' : 'var(--bg-panel)'" />
             <div class="text">
               <div class="name">
-                <span v-for="(seg, j) in segments(item.project.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+                <Highlight :text="item.project.name" :hits="item.hits" />
               </div>
               <div :class="['meta', { bad: item.project.status === 'crashed' }]"><Marquee :text="detail(item.project)" /></div>
             </div>
@@ -499,7 +447,7 @@ onBeforeUnmount(() => {
             </span>
             <div class="text">
               <div class="name">
-                <span v-for="(seg, j) in segments(item.command.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+                <Highlight :text="item.command.name" :hits="item.hits" />
               </div>
               <div v-if="confirming === item.key" class="meta confirm">{{ t("switcher.confirmAgain", { name: item.command.name }) }}</div>
               <div v-else class="meta"><Marquee :text="`${item.project.name}  ·  ${item.command.command}`" /></div>
@@ -512,7 +460,7 @@ onBeforeUnmount(() => {
             <div class="text">
               <div class="name">
                 <span class="link-project">{{ item.project.name }} › </span>
-                <span v-for="(seg, j) in segments(item.link.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+                <Highlight :text="item.link.name" :hits="item.hits" />
               </div>
               <div class="meta"><Marquee :text="bareUrl(item.link.url)" /></div>
             </div>
@@ -522,7 +470,7 @@ onBeforeUnmount(() => {
             <span class="folder-icon"><Icon name="folder" :size="16" /></span>
             <div class="text">
               <div class="name">
-                <span v-for="(seg, j) in segments(item.folder.name, item.hits)" :key="j" :class="{ hit: seg.hit }">{{ seg.text }}</span>
+                <Highlight :text="item.folder.name" :hits="item.hits" />
               </div>
               <div class="meta">{{ item.folder.path }}</div>
             </div>
@@ -694,11 +642,6 @@ kbd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.name .hit {
-  color: var(--run);
-  font-weight: 600;
 }
 
 .meta {
