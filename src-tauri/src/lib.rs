@@ -49,7 +49,7 @@ struct TerminalData {
     data: String,
 }
 
-/// Lines of output, batched per project and command (see `core::OUTPUT_BATCH`).
+/// Lines of output, batched per project and command (see `core::output::OUTPUT_BATCH`).
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OutputBatch {
@@ -215,7 +215,7 @@ pub fn run() {
                         tray::show_main(&clicks);
                         let _ = clicks.emit("reveal-fuel", ());
                     } else if let Some(state) = clicks.try_state::<AppState>() {
-                        state.core.open_claude(&path);
+                        state.core.open_editor(&path);
                     }
                 });
             }

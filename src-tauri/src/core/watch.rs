@@ -4,11 +4,13 @@
 //! the slow safety poll (`POLL_EVERY`) reads everything again in case some were missed (sleep,
 //! network volumes).
 
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 
 use notify::{EventKind, RecursiveMode, Watcher as _};
 
 use super::*;
+use crate::git;
 
 /// Changes are handled once this long passed without another…
 const QUIET: Duration = Duration::from_millis(250);
@@ -293,5 +295,45 @@ impl Core {
             git = self.listed_paths();
         }
         self.refresh_git(git);
+    }
+
+    /// Branch and changes of these projects, off the caller's thread. One thread at a time
+    /// reads them; projects asked for meanwhile are read right after.
+    fn refresh_git(self: &Arc<Self>, paths: Vec<String>) {
+        if paths.is_empty() {
+            return;
+        }
+        self.git_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).extend(paths);
+        if self.git_busy.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        let core = Arc::clone(self);
+
+        thread::spawn(move || loop {
+            let paths: Vec<String> = core.git_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).drain().collect();
+
+            if paths.is_empty() {
+                core.git_busy.store(false, Ordering::SeqCst);
+                // Queued between the drain and the store: this thread takes it after all.
+                let queued = !core.git_queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).is_empty();
+                if queued && !core.git_busy.swap(true, Ordering::SeqCst) {
+                    continue;
+                }
+                return;
+            }
+
+            let states: Vec<(String, Option<GitInfo>)> = paths.into_iter().map(|path| (path.clone(), git::status(&path))).collect();
+            {
+                let mut inner = core.lock();
+                for (path, state) in states {
+                    match state {
+                        Some(info) => inner.git.insert(path, info),
+                        None => inner.git.remove(&path),
+                    };
+                }
+            }
+            core.notify();
+        });
     }
 }

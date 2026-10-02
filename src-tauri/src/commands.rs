@@ -210,7 +210,7 @@ pub fn open_editor(app: AppHandle, state: State<'_, AppState>, path: String) {
 #[tauri::command]
 pub fn open_claude(app: AppHandle, state: State<'_, AppState>, path: String) {
     step_aside(&app);
-    state.core.open_claude(&path);
+    state.core.open_editor(&path);
 }
 
 #[tauri::command]

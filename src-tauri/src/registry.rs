@@ -245,10 +245,6 @@ impl Registry {
         Self { id: id.to_string(), ..Self::new(dir, title) }
     }
 
-    pub fn dir(&self) -> &Path {
-        &self.dir
-    }
-
     fn own_file(&self) -> PathBuf {
         self.dir.join("windows").join(format!("{}.json", self.id))
     }

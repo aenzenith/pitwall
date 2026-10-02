@@ -49,7 +49,7 @@ impl Session {
 }
 
 impl Core {
-    pub(super) fn sessions(&self) -> MutexGuard<'_, HashMap<u64, Session>> {
+    pub(super) fn terminal_sessions(&self) -> MutexGuard<'_, HashMap<u64, Session>> {
         self.terminals.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
@@ -107,7 +107,7 @@ impl Core {
             view
         };
 
-        self.sessions().insert(view.id, Session { master: pair.master, writer, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0 });
+        self.terminal_sessions().insert(view.id, Session { master: pair.master, writer, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0 });
         self.record_pids();
         self.notify();
 
@@ -140,7 +140,7 @@ impl Core {
                 continue;
             }
 
-            let seq = match self.sessions().get_mut(&id) {
+            let seq = match self.terminal_sessions().get_mut(&id) {
                 Some(session) => {
                     session.scrollback.push_str(&data);
                     trim_scrollback(&mut session.scrollback);
@@ -178,7 +178,7 @@ impl Core {
     }
 
     pub fn write_terminal(&self, id: u64, data: &str) {
-        if let Some(session) = self.sessions().get_mut(&id) {
+        if let Some(session) = self.terminal_sessions().get_mut(&id) {
             let _ = session.writer.write_all(data.as_bytes());
             let _ = session.writer.flush();
         }
@@ -188,14 +188,14 @@ impl Core {
         if cols == 0 || rows == 0 {
             return;
         }
-        if let Some(session) = self.sessions().get(&id) {
+        if let Some(session) = self.terminal_sessions().get(&id) {
             let _ = session.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 });
         }
     }
 
     /// What the terminal has shown lately, to draw it again.
     pub fn terminal_buffer(&self, id: u64) -> TerminalBuffer {
-        self.sessions()
+        self.terminal_sessions()
             .get(&id)
             .map(|session| TerminalBuffer { data: session.scrollback.clone(), seq: session.seq })
             .unwrap_or(TerminalBuffer { data: String::new(), seq: 0 })
@@ -204,7 +204,7 @@ impl Core {
     /// Closes a tab: the pseudo-terminal goes (the shell and its jobs get SIGHUP), then the
     /// shell's process group is ended for good.
     pub fn close_terminal(&self, id: u64) {
-        let Some(mut session) = self.sessions().remove(&id) else {
+        let Some(mut session) = self.terminal_sessions().remove(&id) else {
             return;
         };
 
@@ -225,7 +225,7 @@ impl Core {
 
     /// The shell ended (`exit`, or closed): the tab goes away.
     fn forget_terminal(&self, id: u64) {
-        self.sessions().remove(&id);
+        self.terminal_sessions().remove(&id);
 
         let removed = {
             let mut inner = self.lock();
@@ -243,7 +243,7 @@ impl Core {
 
     /// Every terminal's shell, for shutdown.
     pub(super) fn terminal_pids(&self) -> Vec<u32> {
-        self.sessions().values().filter_map(|session| session.pid).collect()
+        self.terminal_sessions().values().filter_map(|session| session.pid).collect()
     }
 }
 
