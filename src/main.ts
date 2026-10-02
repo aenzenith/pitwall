@@ -1,0 +1,31 @@
+import { createApp, watchEffect } from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "./styles/tokens.css";
+
+import { language } from "./lib/i18n";
+import { connect } from "./lib/store";
+import Popover from "./popover/Popover.vue";
+import Switcher from "./switcher/Switcher.vue";
+import WindowApp from "./window/WindowApp.vue";
+
+// Both windows load the same page; the window label picks the surface.
+const label = getCurrentWindow().label;
+
+document.documentElement.dataset.surface = label;
+
+// Screen readers, hyphenation and `text-transform` (the Turkish İ) follow the page language.
+watchEffect(() => (document.documentElement.lang = language.value));
+
+// No browser context menu (Reload, Inspect…) outside text fields and selectable output.
+document.addEventListener("contextmenu", (event) => {
+  if (!(event.target instanceof HTMLElement && event.target.closest("input, textarea, .selectable"))) {
+    event.preventDefault();
+  }
+});
+const surfaces = { popover: Popover, switcher: Switcher } as const;
+
+createApp(surfaces[label as keyof typeof surfaces] ?? WindowApp).mount("#app");
+void connect();

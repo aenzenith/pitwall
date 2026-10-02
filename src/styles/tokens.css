@@ -1,0 +1,153 @@
+/* Design tokens — direction A · Graphite list. */
+:root {
+  --bg-app: #111317;
+  --bg-panel: #16181d;
+  --bg-sidebar: #15171c;
+  --bg-detail: #14161b;
+  --bg-footer: #131519;
+  --bg-input: #0e1013;
+  --bg-log: #0b0c0f;
+  --bg-hover: #20242b;
+  --bg-selected: #1d2128;
+  --bg-control: #1c1f25;
+
+  --line: #23262d;
+  --line-strong: #2a2e36;
+
+  --text: #e6e8eb;
+  --text-strong: #f2f3f5;
+  --text-muted: #9aa0aa;
+  --text-subtle: #8b919b;
+
+  --run: #73c991;
+  --crash: #f14c4c;
+  --crash-text: #f28b8b;
+  --idle-ring: #7d838d;
+  --claude: #f0883e;
+  --claude-text: #f3a56b;
+  --claude-bg: #1f1a16;
+  --claude-line: #3a2c20;
+
+  --radius-panel: 12px;
+  --radius-card: 9px;
+  --radius-control: 7px;
+
+  --font: "Geist Variable", -apple-system, "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Scrollbars: a thin, rounded thumb on no track, in the graphite of the theme. The transparent
+   border keeps it off the edges; it brightens while hovered or dragged. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.13) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.24);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(255, 255, 255, 0.32);
+}
+
+/* A desktop app, not a page: no text selection, no dragging of text or images, no rubber-band
+   scrolling. WebKit (macOS) only honours the prefixed property. Inputs stay editable. */
+*,
+*::before,
+*::after {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+input,
+textarea,
+.selectable,
+.selectable * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+  overscroll-behavior: none;
+}
+
+/* The popover window is transparent; only its panel paints. */
+html[data-surface="popover"],
+html[data-surface="popover"] body,
+html[data-surface="switcher"],
+html[data-surface="switcher"] body {
+  background: transparent;
+  overflow: hidden;
+}
+
+html[data-surface="main"] body {
+  background: var(--bg-app);
+}
+
+/* The window never scrolls as a page: a focused element at an edge (the terminal's input)
+   can't push it. Panels scroll on their own. */
+html[data-surface="main"],
+html[data-surface="main"] body,
+html[data-surface="main"] #app {
+  overflow: clip;
+}
+
+#app {
+  height: 100%;
+}
+
+/* macOS controls keep the arrow cursor. A label stays on one line in every language (Chinese
+   and Japanese may break between any two characters); the layout around it gives way. */
+button {
+  font: inherit;
+  color: inherit;
+  cursor: default;
+  white-space: nowrap;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--claude-text);
+  outline-offset: 1px;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* Chinese and Japanese have no capitals to space out; tracked, they only look scattered. */
+:lang(zh) .section-label,
+:lang(ja) .section-label {
+  letter-spacing: 0;
+}
