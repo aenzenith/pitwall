@@ -1,3 +1,4 @@
+mod browser;
 mod claude;
 mod commands;
 mod core;

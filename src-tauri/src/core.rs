@@ -747,9 +747,7 @@ impl Core {
         }
 
         if let Some(Some(local)) = open {
-            if let Some(url) = self.resolve_url(path, Some(local)) {
-                self.emit(CoreEvent::Open(url));
-            }
+            self.show_in_browser(path, Some(local), true);
         }
 
         if let Some(port) = conflict_port {
@@ -1014,12 +1012,26 @@ impl Core {
         local
     }
 
-    pub fn open_browser(&self, path: &str) {
+    pub fn open_browser(self: &Arc<Self>, path: &str) {
         let local = self.snapshot().projects.into_iter().find(|p| p.path == path).and_then(|p| p.url);
+        self.show_in_browser(path, local, false);
+    }
 
-        if let Some(url) = self.resolve_url(path, local) {
-            self.emit(CoreEvent::Open(url));
-        }
+    /// Shows the project in the browser: a tab that already has it (its address or the dev
+    /// server's) comes forward, reloaded with `reload`; without one, the address opens. Off the
+    /// calling thread, as asking the browsers can take a moment.
+    fn show_in_browser(self: &Arc<Self>, path: &str, local: Option<String>, reload: bool) {
+        let Some(url) = self.resolve_url(path, local.clone()) else {
+            return;
+        };
+        let urls: Vec<String> = std::iter::once(url.clone()).chain(local.filter(|l| *l != url)).collect();
+        let core = Arc::clone(self);
+
+        thread::spawn(move || {
+            if !crate::browser::focus_tab(&urls, reload) {
+                core.emit(CoreEvent::Open(url));
+            }
+        });
     }
 
     /// Subfolders of the projects folder (see `Settings::projects_dir`), for the quick switcher's

@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- Asked once per browser: "Open in browser" brings forward the tab that already shows the project. -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Pitwall brings forward the browser tab that already shows your project instead of opening another one.</string>
   <!-- The languages Pitwall speaks (src/locales); macOS's own dialogs follow the system's one of these. -->
   <key>CFBundleLocalizations</key>
   <array>
