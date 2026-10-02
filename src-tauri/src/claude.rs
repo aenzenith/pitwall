@@ -39,6 +39,30 @@ pub struct Turn {
 pub struct Verdict {
     pub turn: Option<Turn>,
     pub cwd: Option<String>,
+    /// The session's name, as Claude Code shows it in `/resume`: a title set by hand, else the
+    /// one Claude Code wrote itself. Only these title lines are read, never message text.
+    pub title: Option<String>,
+}
+
+/// Where one session stands, for the day's timeline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionPhase {
+    Working,
+    Waiting,
+    Idle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionState {
+    /// The session log's file name, without `.jsonl`.
+    pub id: String,
+    /// The listed project it belongs to.
+    pub path: String,
+    pub title: Option<String>,
+    pub phase: SessionPhase,
+    /// While it waits on you: the turn it waits with.
+    pub turn: Option<Turn>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,7 +134,7 @@ pub fn read_tail(lines: &[&str]) -> Option<Verdict> {
         let cwd = entry.get("cwd").and_then(Value::as_str).map(str::to_string);
 
         if kind == Some("user") {
-            return Some(Verdict { turn: None, cwd });
+            return Some(Verdict { turn: None, cwd, title: None });
         }
 
         let message = entry.get("message");
@@ -126,19 +150,47 @@ pub fn read_tail(lines: &[&str]) -> Option<Verdict> {
             });
 
         if asking {
-            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Asking, at }), cwd });
+            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Asking, at }), cwd, title: None });
         }
 
         let stop = message.and_then(|m| m.get("stop_reason")).and_then(Value::as_str);
 
         if stop.is_some_and(|reason| reason != "tool_use") {
-            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Finished, at }), cwd });
+            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Finished, at }), cwd, title: None });
         }
 
-        return Some(Verdict { turn: None, cwd });
+        return Some(Verdict { turn: None, cwd, title: None });
     }
 
     None
+}
+
+/// The session's latest name in these lines: one set by hand (`custom-title`) wins over Claude
+/// Code's own (`ai-title`). Both are rewritten often, so the last lines have them.
+pub fn read_title(lines: &[&str]) -> Option<String> {
+    let mut generated: Option<String> = None;
+
+    for line in lines.iter().rev() {
+        let custom = line.contains("\"custom-title\"");
+        if !custom && (generated.is_some() || !line.contains("\"ai-title\"")) {
+            continue;
+        }
+
+        let Ok(entry) = serde_json::from_str::<Value>(line.trim()) else {
+            continue;
+        };
+        let key = if custom { "customTitle" } else { "aiTitle" };
+        let Some(title) = entry.get(key).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()) else {
+            continue;
+        };
+
+        if custom {
+            return Some(title.to_string());
+        }
+        generated = Some(title.to_string());
+    }
+
+    generated
 }
 
 /// Claude Code's folder name for a project: every non-alphanumeric character becomes `-`.
@@ -178,7 +230,7 @@ fn read_file_tail(file: &Path, size: u64) -> Option<Verdict> {
         let verdict = read_tail(&lines);
 
         if verdict.is_some() || length >= size || span >= TAIL_MAX {
-            return verdict;
+            return verdict.map(|verdict| Verdict { title: read_title(&lines), ..verdict });
         }
 
         span *= 4;
@@ -202,6 +254,8 @@ pub struct ScanResult {
     pub waiting: HashMap<String, Turn>,
     /// Projects where Claude is busy right now.
     pub working: HashSet<String>,
+    /// Every session changed lately, with its name and where it stands.
+    pub sessions: Vec<SessionState>,
 }
 
 /// What the Notification hook wrote (see hooks.rs). Only these fields are read.
@@ -360,7 +414,8 @@ impl ClaudeWatch {
 
         for folder_path in folder_paths {
             let baseline = book.paths.get(folder_path).copied().unwrap_or(book.since);
-            let (logged, working) = self.sessions(folder_path, &dirs, baseline, recent);
+            let (logged, working, sessions) = self.sessions(folder_path, &dirs, baseline, recent);
+            result.sessions.extend(sessions);
             let prompted = events
                 .iter()
                 .filter(|event| event.turn.at > baseline && inside(&event.cwd, folder_path))
@@ -380,11 +435,13 @@ impl ClaudeWatch {
         result
     }
 
-    /// The newest finished turn after `baseline`, and whether a session is mid-turn.
-    fn sessions(&mut self, folder_path: &str, dirs: &[String], baseline: u64, recent: u64) -> (Option<Turn>, bool) {
+    /// The newest finished turn after `baseline`, whether a session is mid-turn, and each
+    /// session's state.
+    fn sessions(&mut self, folder_path: &str, dirs: &[String], baseline: u64, recent: u64) -> (Option<Turn>, bool, Vec<SessionState>) {
         let encoded = fold_case(&encode_project_path(folder_path));
         let mut newest: Option<Turn> = None;
         let mut working = false;
+        let mut states = Vec::new();
 
         for dir in dirs {
             let name = fold_case(dir);
@@ -396,10 +453,18 @@ impl ClaudeWatch {
                 continue;
             }
 
-            for (verdict, modified) in self.verdicts_in(&self.root.join(dir), baseline.min(recent)) {
+            for (verdict, modified, id) in self.verdicts_in(&self.root.join(dir), baseline.min(recent)) {
                 if !exact && !verdict.cwd.as_deref().is_some_and(|cwd| inside(cwd, folder_path)) {
                     continue;
                 }
+
+                let phase = match verdict.turn {
+                    Some(turn) if turn.at > baseline => SessionPhase::Waiting,
+                    None if modified > recent => SessionPhase::Working,
+                    _ => SessionPhase::Idle,
+                };
+                let turn = verdict.turn.filter(|_| phase == SessionPhase::Waiting);
+                states.push(SessionState { id, path: folder_path.to_string(), title: verdict.title.clone(), phase, turn });
 
                 match verdict.turn {
                     Some(turn) if turn.at > baseline && newest.is_none_or(|current| turn.at > current.at) => {
@@ -411,11 +476,12 @@ impl ClaudeWatch {
             }
         }
 
-        (newest, working)
+        (newest, working, states)
     }
 
-    /// Verdicts of the session logs changed after `since`, with their modification time.
-    fn verdicts_in(&mut self, dir: &Path, since: u64) -> Vec<(Verdict, u64)> {
+    /// Verdicts of the session logs changed after `since`, with their modification time and
+    /// session id.
+    fn verdicts_in(&mut self, dir: &Path, since: u64) -> Vec<(Verdict, u64, String)> {
         let Ok(entries) = fs::read_dir(dir) else {
             return Vec::new();
         };
@@ -442,6 +508,7 @@ impl ClaudeWatch {
                 continue;
             }
 
+            let id = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
             let verdict = match self.files.get(&file) {
                 Some(cached) if cached.modified == modified && cached.size == meta.len() => cached.verdict.clone(),
                 _ => {
@@ -452,7 +519,7 @@ impl ClaudeWatch {
             };
 
             if let Some(verdict) = verdict {
-                verdicts.push((verdict, modified_ms));
+                verdicts.push((verdict, modified_ms, id));
             }
         }
 

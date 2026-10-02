@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::claude::{ClaudeWatch, Turn, TurnKind};
+use crate::claude::{ClaudeWatch, SessionPhase, Turn, TurnKind};
 use crate::git::{self, GitInfo};
 use crate::hooks::ClaudeHook;
 use crate::i18n::{self, t};
@@ -29,10 +29,13 @@ use crate::resolve::{
 };
 use crate::settings::{ProjectSettings, Settings};
 
+#[path = "activity.rs"]
+mod activity;
 #[path = "jobs.rs"]
 mod jobs;
 #[path = "terminal.rs"]
 mod terminal;
+pub use activity::DaySummary;
 pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
 use jobs::{Job, JobResult};
@@ -118,6 +121,17 @@ pub struct Owner {
     pub title: String,
 }
 
+/// A Claude session that is working, or waits on you (its notification not read yet).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveSession {
+    pub id: String,
+    /// `working` | `waiting`
+    pub phase: SessionPhase,
+    /// While it waits: the turn it waits with.
+    pub turn: Option<Turn>,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectView {
@@ -139,6 +153,8 @@ pub struct ProjectView {
     pub claude: Option<Turn>,
     /// Claude is mid-turn in this project right now.
     pub claude_working: bool,
+    /// Its Claude sessions that are working or wait on you.
+    pub claude_sessions: Vec<LiveSession>,
     pub git: Option<GitInfo>,
     pub script: String,
     pub settings: ProjectSettings,
@@ -200,6 +216,8 @@ struct Inner {
     favourites: Vec<Favourite>,
     waiting: HashMap<String, Turn>,
     working: HashSet<String>,
+    /// Sessions working or waiting on you, per project.
+    claude_sessions: HashMap<String, Vec<LiveSession>>,
     git: HashMap<String, GitInfo>,
     claude_hook: bool,
     claude_scanned: bool,
@@ -242,6 +260,8 @@ pub struct Core {
     inner: Mutex<Inner>,
     /// Project terminals' processes; apart from `inner` so typing never waits on it.
     terminals: Mutex<HashMap<u64, terminal::Session>>,
+    /// What the day's timeline has written down last.
+    activity: Mutex<activity::Recorder>,
     reservations: Mutex<Reservations>,
     claude: Mutex<ClaudeWatch>,
     hook: ClaudeHook,
@@ -323,6 +343,7 @@ impl Core {
             cfg,
             inner: Mutex::new(Inner { settings, favourites, peers, claude_hook, ..Inner::default() }),
             terminals: Mutex::new(HashMap::new()),
+            activity: Mutex::new(activity::Recorder::default()),
             reservations: Mutex::new(Reservations::default()),
             claude: Mutex::new(claude),
             hook,
@@ -799,6 +820,7 @@ impl Core {
         };
 
         self.lock().crash_unseen = true;
+        self.record_crash(path);
 
         let Some(attempt) = self.claim_restart(path, started) else {
             self.set_issue(path, "crashed", t!("core.issue.crashedGaveUp", detail = detail, max = MAX_RESTARTS));
@@ -887,6 +909,8 @@ impl Core {
 
     /// Quit: every server goes, nothing is left behind.
     pub fn dispose(&self) {
+        self.record_app("stop");
+
         let mut pids: Vec<u32> = {
             let mut inner = self.lock();
             inner.disposed = true;
@@ -1100,7 +1124,13 @@ impl Core {
         if let Ok(watch) = self.claude.lock() {
             watch.mark_seen(path);
         }
-        self.lock().waiting.remove(path);
+        {
+            let mut inner = self.lock();
+            inner.waiting.remove(path);
+            if let Some(sessions) = inner.claude_sessions.get_mut(path) {
+                sessions.retain(|session| session.phase != SessionPhase::Waiting);
+            }
+        }
         self.notify();
     }
 
@@ -1179,14 +1209,16 @@ impl Core {
 
         let scan = self.claude.lock().map(|mut watch| watch.scan(&paths)).unwrap_or_default();
         let hook_installed = self.hook.installed();
-        let announce = {
+        let (announce, projects) = {
             let mut inner = self.lock();
             let announce = due_notifications(&mut inner, &scan.waiting);
             inner.waiting = scan.waiting;
             inner.working = scan.working;
+            inner.claude_sessions = live_sessions(&scan.sessions);
             inner.claude_hook = hook_installed;
-            announce
+            (announce, build_snapshot(&inner).projects)
         };
+        self.record_activity(&scan.sessions, &projects);
 
         for (path, name, kind) in announce {
             let body = match kind {
@@ -1329,6 +1361,16 @@ fn take_lines(rest: &mut Vec<u8>) -> Vec<String> {
         .split_terminator('\n')
         .map(|line| crate::resolve::strip_ansi(line.trim_end_matches('\r')))
         .collect()
+}
+
+/// The sessions working or waiting on you, by project.
+fn live_sessions(sessions: &[crate::claude::SessionState]) -> HashMap<String, Vec<LiveSession>> {
+    let mut found: HashMap<String, Vec<LiveSession>> = HashMap::new();
+    for session in sessions.iter().filter(|s| s.phase != SessionPhase::Idle) {
+        let live = LiveSession { id: session.id.clone(), phase: session.phase, turn: session.turn };
+        found.entry(session.path.clone()).or_default().push(live);
+    }
+    found
 }
 
 fn wait_until(limit: Duration, mut done: impl FnMut() -> bool) -> bool {
@@ -1548,6 +1590,7 @@ fn build_snapshot(inner: &Inner) -> Snapshot {
                 open_in,
                 claude: inner.waiting.get(path).copied(),
                 claude_working: inner.working.contains(path),
+                claude_sessions: inner.claude_sessions.get(path).cloned().unwrap_or_default(),
                 git: inner.git.get(path).cloned(),
                 script: inner.settings.script_for(path),
                 settings: inner.settings.project(path),

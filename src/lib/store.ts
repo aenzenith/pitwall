@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ref } from "vue";
 
-import type { Folder, ProjectSettings, Settings, Snapshot, TerminalView } from "./types";
+import type { DaySummary, Folder, ProjectSettings, Settings, Snapshot, TerminalView } from "./types";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -29,6 +29,7 @@ export const api = {
   pickProjectsDir: () => invoke("pick_projects_dir"),
   clearProjectsDir: () => invoke("clear_projects_dir"),
   projectFolders: () => invoke<Folder[]>("project_folders"),
+  daySummary: (date: string | null = null) => invoke<DaySummary>("day_summary", { date }),
   openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null) =>
     invoke<TerminalView>("open_terminal", { path, claude, cols: size?.cols, rows: size?.rows }),
   renameTerminal: (id: number, name: string) => invoke("rename_terminal", { id, name }),

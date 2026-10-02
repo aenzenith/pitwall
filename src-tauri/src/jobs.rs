@@ -107,7 +107,16 @@ impl Core {
     }
 
     fn finish_job(&self, path: &str, id: &str, result: JobResult) {
-        self.lock().job_results.insert(job_key(path, id), result);
+        let state = if result.stopped { "stopped" } else if result.ok { "ok" } else { "failed" };
+        let disposed = {
+            let mut inner = self.lock();
+            inner.job_results.insert(job_key(path, id), result);
+            inner.disposed
+        };
+        // Quitting stops every command; that's no result of theirs.
+        if let Some(command) = self.custom_command(path, id).filter(|_| !disposed) {
+            self.record_command(path, &command.name, state);
+        }
         self.record_pids();
         self.notify();
     }
@@ -158,6 +167,7 @@ impl Core {
         };
 
         self.push_job_line(path, id, format!("$ {}", command.command));
+        self.record_command(path, &command.name, "running");
         self.record_pids();
         self.notify();
 

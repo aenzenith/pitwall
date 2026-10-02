@@ -14,6 +14,7 @@ import { outputRequest } from "../lib/panel";
 import { useReorder } from "../lib/reorder";
 import { api, now, snapshot } from "../lib/store";
 import type { Project } from "../lib/types";
+import DayView from "./DayView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
@@ -28,6 +29,8 @@ const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "star" |
 ];
 
 const filter = ref<Filter>("all");
+/** The project list, or the day's timeline. */
+const view = ref<"projects" | "day">("projects");
 const settingsOpen = ref(false);
 const query = ref("");
 const selectedPath = ref<string | null>(null);
@@ -63,6 +66,7 @@ function count(id: Filter): number {
 
 function pick(id: Filter): void {
   filter.value = id;
+  view.value = "projects";
 }
 
 function toggle(project: Project): void {
@@ -87,6 +91,7 @@ let unlistenReveal: UnlistenFn | null = null;
 
 /** From the switcher (⌘↵ on a command): select the project, even if a filter or search hid it. */
 function revealOutput(path: string, job: string): void {
+  view.value = "projects";
   if (!rows.value.some((p) => p.path === path)) {
     filter.value = "all";
     query.value = "";
@@ -130,13 +135,16 @@ function server(project: Project): string {
           v-for="f in filters"
           :key="f.id"
           type="button"
-          :class="{ on: filter === f.id }"
+          :class="{ on: view === 'projects' && filter === f.id }"
           @click="pick(f.id)"
         >
           <Icon :name="f.icon" /> {{ t(f.label) }}
           <span :class="['count', { hot: f.id === 'waiting' && count(f.id) > 0 }]">{{ count(f.id) }}</span>
         </button>
       </nav>
+      <div class="nav today">
+        <button type="button" :class="{ on: view === 'day' }" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
+      </div>
       <div class="grow"></div>
       <div class="nav">
         <button type="button" @click="api.pickFolder()"><Icon name="plus" /> {{ t("window.addProject") }}</button>
@@ -144,94 +152,98 @@ function server(project: Project): string {
       </div>
     </aside>
 
-    <main class="main">
-      <!-- Its heading and free space drag the window; the search box and buttons stay clickable. -->
-      <div class="toolbar" data-tauri-drag-region="deep">
-        <div class="heading">{{ t(current.label) }}</div>
-        <label class="sr" for="search">{{ t("common.searchProjects") }}</label>
-        <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" />
-        <Spinner v-if="anyBusy" class="busy-spin" />
-        <button type="button" class="control" :disabled="!projects.length || anyBusy" @click="api.startAll()">{{ t("common.startAll") }}</button>
-        <button type="button" class="control" :disabled="!snapshot?.running || anyBusy" @click="api.stopAll()">{{ t("common.stopAll") }}</button>
-      </div>
+    <DayView v-if="view === 'day'" />
 
-      <div v-if="rows.length" class="table">
-        <div class="thead">
-          <span>{{ t("window.col.project") }}</span>
-          <span>{{ t("window.col.branch") }}</span>
-          <span>{{ t("window.col.server") }}</span>
-          <span>{{ t("window.col.claude") }}</span>
-          <span></span>
+    <template v-else>
+      <main class="main">
+        <!-- Its heading and free space drag the window; the search box and buttons stay clickable. -->
+        <div class="toolbar" data-tauri-drag-region="deep">
+          <div class="heading">{{ t(current.label) }}</div>
+          <label class="sr" for="search">{{ t("common.searchProjects") }}</label>
+          <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" />
+          <Spinner v-if="anyBusy" class="busy-spin" />
+          <button type="button" class="control" :disabled="!projects.length || anyBusy" @click="api.startAll()">{{ t("common.startAll") }}</button>
+          <button type="button" class="control" :disabled="!snapshot?.running || anyBusy" @click="api.stopAll()">{{ t("common.stopAll") }}</button>
         </div>
-        <div ref="tbody" :class="['tbody', reorder.listClass()]">
-          <div
-            v-for="project in rows"
-            :key="project.path"
-            :data-path="project.path"
-            :class="['trow', { selected: project.path === selectedPath }, reorder.rowClass(project.path)]"
-            :style="reorder.rowStyle(project.path)"
-            :title="t('window.rowTitle')"
-            @pointerdown="reorder.down($event, project.path)"
-            @click="select(project.path)"
-            @dblclick="api.openEditor(project.path)"
-          >
-            <button type="button" class="cell-project" :aria-label="t('window.showName', { name: project.name })" @click.stop="select(project.path)">
-              <StatusIcon :project="project" ring="var(--bg-app)" />
-              <span class="names">
-                <span class="name">
-                  <span class="name-text">{{ project.name }}</span>
-                  <span v-if="project.terminals.length" class="term-badge" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
+
+        <div v-if="rows.length" class="table">
+          <div class="thead">
+            <span>{{ t("window.col.project") }}</span>
+            <span>{{ t("window.col.branch") }}</span>
+            <span>{{ t("window.col.server") }}</span>
+            <span>{{ t("window.col.claude") }}</span>
+            <span></span>
+          </div>
+          <div ref="tbody" :class="['tbody', reorder.listClass()]">
+            <div
+              v-for="project in rows"
+              :key="project.path"
+              :data-path="project.path"
+              :class="['trow', { selected: project.path === selectedPath }, reorder.rowClass(project.path)]"
+              :style="reorder.rowStyle(project.path)"
+              :title="t('window.rowTitle')"
+              @pointerdown="reorder.down($event, project.path)"
+              @click="select(project.path)"
+              @dblclick="api.openEditor(project.path)"
+            >
+              <button type="button" class="cell-project" :aria-label="t('window.showName', { name: project.name })" @click.stop="select(project.path)">
+                <StatusIcon :project="project" ring="var(--bg-app)" />
+                <span class="names">
+                  <span class="name">
+                    <span class="name-text">{{ project.name }}</span>
+                    <span v-if="project.terminals.length" class="term-badge" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
+                  </span>
+                  <span class="path">{{ project.path }}</span>
                 </span>
-                <span class="path">{{ project.path }}</span>
+              </button>
+              <span :class="['cell-git', { dirty: project.git?.changes }]">{{ gitLine(project.git) || "—" }}</span>
+              <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]"><Marquee :text="server(project)" /></span>
+              <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]"><Marquee :text="claudeState(project, now) || '—'" /></span>
+              <span class="cell-actions" data-no-drag @click.stop @dblclick.stop>
+                <button
+                  type="button"
+                  class="icon"
+                  :aria-label="t(project.favourite ? 'window.unfavouriteName' : 'window.favouriteName', { name: project.name })"
+                  :title="t(project.favourite ? 'window.favourite' : 'window.addFavourite')"
+                  @click="api.setFavourite(project.path, !project.favourite)"
+                >
+                  <Icon :name="project.favourite ? 'star-filled' : 'star'" :size="14" />
+                </button>
+                <button
+                  type="button"
+                  class="icon"
+                  :disabled="project.status === 'busy'"
+                  :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
+                  @click="toggle(project)"
+                >
+                  <Spinner v-if="project.status === 'busy'" />
+                  <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
+                </button>
               </span>
-            </button>
-            <span :class="['cell-git', { dirty: project.git?.changes }]">{{ gitLine(project.git) || "—" }}</span>
-            <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]"><Marquee :text="server(project)" /></span>
-            <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]"><Marquee :text="claudeState(project, now) || '—'" /></span>
-            <span class="cell-actions" data-no-drag @click.stop @dblclick.stop>
-              <button
-                type="button"
-                class="icon"
-                :aria-label="t(project.favourite ? 'window.unfavouriteName' : 'window.favouriteName', { name: project.name })"
-                :title="t(project.favourite ? 'window.favourite' : 'window.addFavourite')"
-                @click="api.setFavourite(project.path, !project.favourite)"
-              >
-                <Icon :name="project.favourite ? 'star-filled' : 'star'" :size="14" />
-              </button>
-              <button
-                type="button"
-                class="icon"
-                :disabled="project.status === 'busy'"
-                :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
-                @click="toggle(project)"
-              >
-                <Spinner v-if="project.status === 'busy'" />
-                <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
-              </button>
-            </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <section v-else class="empty">
-        <PitwallGlyph :size="44" lamps="var(--idle-ring)" />
-        <template v-if="projects.length">
-          <p>{{ t("window.noMatch") }}</p>
-        </template>
-        <template v-else>
-          <p>{{ t("window.emptyLine1") }}<br />{{ t("window.emptyLine2") }}</p>
-          <button type="button" class="control" @click="api.pickFolder()">{{ t("common.addProject") }}</button>
-        </template>
-      </section>
+        <section v-else class="empty">
+          <PitwallGlyph :size="44" lamps="var(--idle-ring)" />
+          <template v-if="projects.length">
+            <p>{{ t("window.noMatch") }}</p>
+          </template>
+          <template v-else>
+            <p>{{ t("window.emptyLine1") }}<br />{{ t("window.emptyLine2") }}</p>
+            <button type="button" class="control" @click="api.pickFolder()">{{ t("common.addProject") }}</button>
+          </template>
+        </section>
 
-      <!-- The selected project's terminals, level with the output panel beside it. -->
-      <TerminalPanel v-if="selected" ref="terminalPanel" :project="selected" />
-    </main>
+        <!-- The selected project's terminals, level with the output panel beside it. -->
+        <TerminalPanel v-if="selected" ref="terminalPanel" :project="selected" />
+      </main>
 
-    <ProjectDetail v-if="selected" :project="selected" />
-    <!-- Nothing to show: the panel stays blank but keeps its place, so the layout never jumps.
-         The middle panel already shows the glyph and what to do. -->
-    <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
+      <ProjectDetail v-if="selected" :project="selected" />
+      <!-- Nothing to show: the panel stays blank but keeps its place, so the layout never jumps.
+           The middle panel already shows the glyph and what to do. -->
+      <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
+    </template>
 
     <SettingsView v-if="settingsOpen" @close="settingsOpen = false" />
   </div>

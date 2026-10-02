@@ -1,5 +1,5 @@
 import { language, t, type Key } from "./i18n";
-import type { GitInfo, Project } from "./types";
+import type { GitInfo, Project, Turn } from "./types";
 
 export function uptime(startedAt: number | null, now: number): string {
   if (!startedAt) {
@@ -62,13 +62,14 @@ export function meta(project: Project, now: number): string {
 }
 
 export function claudeLine(project: Project, now: number): string {
-  if (!project.claude) {
-    return "";
-  }
+  return project.claude ? turnLine(project.claude, now) : "";
+}
 
-  const what = t(({ finished: "claude.finished", asking: "claude.asking", permission: "claude.permission" } as const)[project.claude.kind]);
+/** What Claude waits on you with, and since when: `Finished · 2 min ago`. */
+export function turnLine(turn: Turn, now: number): string {
+  const what = t(({ finished: "claude.finished", asking: "claude.asking", permission: "claude.permission" } as const)[turn.kind]);
 
-  return `${what} · ${ago(project.claude.at, now)}`;
+  return `${what} · ${ago(turn.at, now)}`;
 }
 
 /** `main · 3 changed · ↑1 ↓2`, or `` outside Git. */

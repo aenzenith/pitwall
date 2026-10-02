@@ -214,6 +214,7 @@ pub fn run() {
             app.manage(AppState { core: Arc::clone(&core) });
 
             core.reap_orphans();
+            core.record_app("start");
 
             // The login item points at whichever binary registered it; re-register from the
             // installed app so it never launches a stale or dev build.
@@ -297,6 +298,7 @@ pub fn run() {
             commands::pick_projects_dir,
             commands::clear_projects_dir,
             commands::project_folders,
+            commands::day_summary,
             commands::open_terminal,
             commands::rename_terminal,
             commands::write_terminal,

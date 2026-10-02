@@ -82,6 +82,14 @@ pub fn project_folders(state: State<'_, AppState>) -> Vec<crate::core::Folder> {
     state.core.project_folders()
 }
 
+/// The day's timeline (`YYYY-MM-DD`; today without one). It asks every project's git, so it
+/// runs off the main thread.
+#[tauri::command]
+pub async fn day_summary(state: State<'_, AppState>, date: Option<String>) -> Result<crate::core::DaySummary, String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.day_summary(date.as_deref())).await.map_err(|error| error.to_string())
+}
+
 /* ---------- project terminals ---------- */
 
 #[tauri::command]

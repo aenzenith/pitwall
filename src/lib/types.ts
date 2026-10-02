@@ -50,6 +50,8 @@ export type Project = {
   claude: Turn | null;
   /** Claude is mid-turn here right now. */
   claudeWorking: boolean;
+  /** Its Claude sessions that are working, or wait on you (notifications not read yet). */
+  claudeSessions: Array<{ id: string; phase: "working" | "waiting"; turn: Turn | null }>;
   git: GitInfo | null;
   script: string;
   settings: ProjectSettings;
@@ -97,3 +99,28 @@ export type Snapshot = {
   /** The system's language, for the "System" choice in Settings. */
   systemLanguage: Language;
 };
+
+/** A stretch of the day; Claude's name their session. */
+export type DaySpan = { start: number; end: number; session?: string };
+
+/** A Claude session's part in the day: when, how long it worked and waited on you, its turns. */
+export type DaySession = { id: string; title: string | null; start: number; end: number; work: number; wait: number; turns: number };
+
+export type DayCommit = { at: number; subject: string };
+
+export type DayCommand = { name: string; runs: number; failed: number };
+
+export type DayProject = {
+  path: string;
+  name: string;
+  work: DaySpan[];
+  wait: DaySpan[];
+  server: DaySpan[];
+  crashes: number[];
+  sessions: DaySession[];
+  commits: DayCommit[];
+  commands: DayCommand[];
+};
+
+/** One day: what Pitwall wrote down while it ran, and the commits made. */
+export type DaySummary = { date: string; start: number; end: number; today: boolean; now: number; projects: DayProject[] };

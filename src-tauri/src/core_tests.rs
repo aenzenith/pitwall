@@ -324,3 +324,20 @@ fn a_companion_command_starts_and_stops_with_the_dev_server() {
     fx.core.stop(&fx.project);
     assert!(wait_for(Duration::from_secs(5), || !is_port_served(port) && !is_port_served(worker_port)), "both down with the server");
 }
+
+#[test]
+fn starting_deletes_only_day_files_older_than_kept() {
+    let fx = fixture("node server.js", &[]);
+    let dir = fx._tmp.path().join("activity");
+    fs::create_dir_all(&dir).unwrap();
+    for name in ["2020-01-01.jsonl", "2999-01-01.jsonl", "notes.txt", "2020-01-01.json"] {
+        fs::write(dir.join(name), "{}\n").unwrap();
+    }
+
+    fx.core.record_app("start");
+
+    assert!(!dir.join("2020-01-01.jsonl").exists());
+    for kept in ["2999-01-01.jsonl", "notes.txt", "2020-01-01.json"] {
+        assert!(dir.join(kept).exists(), "{kept} kept");
+    }
+}
