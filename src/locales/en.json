@@ -185,6 +185,7 @@
   "link.namePlaceholder": "Staging",
   "link.address": "Address",
   "link.missing": "Give the link a name and an address.",
+  "link.badScheme": "Only http, https and mailto addresses can be opened.",
   "link.found": "Found in the project",
   "link.use": "Add",
   "link.add": "Add link",
@@ -244,6 +245,8 @@
   "settings.hookText": "Claude Code doesn't write permission prompts to its session logs. This adds a {hook} hook to {settings} that leaves a note in {events} — it runs in the background and never slows Claude down. The file is backed up once as {backup}; nothing else in it changes.",
   "settings.addHook": "Add hook",
   "settings.removeHook": "Remove hook",
+  "settings.updateHook": "Update hook",
+  "settings.hookOutdated": "An update is ready: with it, Claude's state shows here the moment it changes.",
 
   "settings.about": "About",
   "settings.extInstalled": "Installed · {version}",

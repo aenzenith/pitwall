@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 
 import Rich from "../components/Rich.vue";
 import { useBackdropClose } from "../lib/dialog";
+import { useReturnFocus } from "../lib/dialogFocus";
 import { t } from "../lib/i18n";
 import type { CustomCommand } from "../lib/types";
 
@@ -12,6 +13,7 @@ const emit = defineEmits<{ save: [command: CustomCommand]; close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
+useReturnFocus();
 const nameInput = ref<HTMLInputElement | null>(null);
 const draft = ref<CustomCommand>(props.command ? { ...props.command } : { id: "", name: "", command: "", keepRunning: false, confirm: false, withServer: false });
 const error = ref("");

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import { useBackdropClose } from "../lib/dialog";
+import { useReturnFocus } from "../lib/dialogFocus";
 import { bareUrl } from "../lib/format";
 import { t } from "../lib/i18n";
 import type { LinkSuggestion, ProjectLink } from "../lib/types";
@@ -17,14 +18,30 @@ const draft = ref<ProjectLink>(props.link ? { ...props.link } : { name: "", url:
 const error = ref("");
 const title = computed(() => t(props.link ? "link.editTitle" : "link.newTitle"));
 
+useReturnFocus();
+
 onMounted(() => {
   dialog.value?.showModal();
   nameInput.value?.focus();
 });
 
-/** `staging.app.dev` is saved as `https://staging.app.dev`. */
+/** The only kinds of address the core opens. */
+const OPENABLE = ["http", "https", "mailto"];
+
+/** The scheme an address starts with (`https`, `mailto`, `ftp`…), or `null`: in `localhost:5173`
+ * the part before the colon is a host, with its port after it. */
+function schemeOf(url: string): string | null {
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(url) ?? /^([a-z][a-z0-9+.-]*):(?!\d+(?:[/?#]|$))/i.exec(url);
+  return scheme ? scheme[1].toLowerCase() : null;
+}
+
+/** `staging.app.dev` is saved as `https://staging.app.dev`; `localhost:5173` and IP addresses,
+ * where dev servers listen, as `http://…`. */
 function withScheme(url: string): string {
-  return /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`;
+  if (schemeOf(url)) return url;
+  const host = url.split(/[/?#]/)[0].replace(/^.*@/, "").replace(/:\d+$/, "").toLowerCase();
+  const local = host === "localhost" || host.endsWith(".localhost") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[");
+  return `${local ? "http" : "https"}://${url}`;
 }
 
 function submit(): void {
@@ -33,6 +50,12 @@ function submit(): void {
 
   if (!name || !url) {
     error.value = t("link.missing");
+    return;
+  }
+
+  const scheme = schemeOf(url);
+  if (scheme && !OPENABLE.includes(scheme)) {
+    error.value = t("link.badScheme");
     return;
   }
 
@@ -56,7 +79,7 @@ function cancel(): void {
         <label class="field">{{ t("link.name") }} <input ref="nameInput" v-model="draft.name" :placeholder="t('link.namePlaceholder')" spellcheck="false" /></label>
         <label class="field">{{ t("link.address") }} <input v-model="draft.url" class="mono" placeholder="https://staging.example.com" spellcheck="false" /></label>
       </div>
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
 
       <!-- Found in the project itself (git remote, .env, package.json): one click adds it. -->
       <div v-if="!link && suggestions.length" class="found">

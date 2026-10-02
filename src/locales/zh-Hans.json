@@ -185,6 +185,7 @@
   "link.namePlaceholder": "Staging",
   "link.address": "地址",
   "link.missing": "请为链接填写名称和地址。",
+  "link.badScheme": "只能打开 http、https 和 mailto 地址。",
   "link.found": "在项目中找到",
   "link.use": "添加",
   "link.add": "添加链接",
@@ -244,6 +245,8 @@
   "settings.hookText": "Claude Code 不会把权限请求写入会话日志。此操作会在 {settings} 中添加一个 {hook} Hook，在 {events} 中留下记录——它在后台运行，绝不会拖慢 Claude。该文件只会备份一次，备份为 {backup}；文件中的其他内容都不会改动。",
   "settings.addHook": "添加 Hook",
   "settings.removeHook": "移除 Hook",
+  "settings.updateHook": "更新 Hook",
+  "settings.hookOutdated": "有可用更新：更新后，Claude 的状态一变化就会立即显示在这里。",
 
   "settings.about": "关于",
   "settings.extInstalled": "已安装 · {version}",

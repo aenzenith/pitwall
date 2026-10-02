@@ -185,6 +185,7 @@
   "link.namePlaceholder": "Staging",
   "link.address": "Adresse",
   "link.missing": "Gib dem Link einen Namen und eine Adresse.",
+  "link.badScheme": "Nur http-, https- und mailto-Adressen lassen sich öffnen.",
   "link.found": "Im Projekt gefunden",
   "link.use": "Hinzufügen",
   "link.add": "Link hinzufügen",
@@ -244,6 +245,8 @@
   "settings.hookText": "Claude Code schreibt Berechtigungsabfragen nicht in seine Sitzungslogs. Diese Funktion trägt in {settings} einen {hook}-Hook ein, der eine Notiz in {events} hinterlässt – er läuft im Hintergrund und bremst Claude nie aus. Die Datei wird einmalig als {backup} gesichert; sonst ändert sich nichts darin.",
   "settings.addHook": "Hook hinzufügen",
   "settings.removeHook": "Hook entfernen",
+  "settings.updateHook": "Hook aktualisieren",
+  "settings.hookOutdated": "Ein Update ist da: Damit erscheint Claudes Status hier, sobald er sich ändert.",
 
   "settings.about": "Info",
   "settings.extInstalled": "Installiert · {version}",

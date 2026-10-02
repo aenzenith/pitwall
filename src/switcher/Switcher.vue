@@ -35,7 +35,11 @@ const MIXED_COMMANDS = 6;
 const MIXED_LINKS = 4;
 
 const query = ref("");
-const index = ref(0);
+/** The highlighted row, by its key: a re-sort (Claude, a server starting) moves the row, not the
+ * highlight. */
+const selectedKey = ref<string | null>(null);
+/** Where the highlighted row last was, for when it leaves the list. */
+let lastIndex = 0;
 const input = ref<HTMLInputElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
@@ -218,7 +222,28 @@ const items = computed<Item[]>(() => {
 });
 
 const count = computed(() => items.value.length);
+/** The highlighted row's place: where its key is now; if it left the list, the row that took its
+ * place (the last one when the list got shorter). */
+const index = computed(() => {
+  const at = items.value.findIndex((item) => item.key === selectedKey.value);
+  return at >= 0 ? at : Math.max(0, Math.min(lastIndex, count.value - 1));
+});
 const current = computed<Item | null>(() => items.value[index.value] ?? null);
+
+/** Highlights the row at `at` (↑/↓, the pointer, a new query). */
+function select(at: number): void {
+  lastIndex = at;
+  selectedKey.value = items.value[at]?.key ?? null;
+}
+
+// The list changed (a state event, a query): the highlight stays on its row, or takes the row
+// that fell into its place.
+watch(items, () => select(index.value));
+
+/** The id the input's `aria-activedescendant` points at. */
+function optionId(item: Item): string {
+  return `option-${encodeURIComponent(item.key)}`;
+}
 const selected = computed(() => (current.value?.kind === "project" ? current.value.project : null));
 /** A command marked "ask first" waits here for a second ↵. */
 const confirming = ref<string | null>(null);
@@ -325,10 +350,10 @@ function onKey(event: KeyboardEvent): void {
     else void api.hideSwitcher();
   } else if (event.key === "ArrowDown") {
     event.preventDefault();
-    if (total) index.value = (index.value + 1) % total;
+    if (total) select((index.value + 1) % total);
   } else if (event.key === "ArrowUp") {
     event.preventDefault();
-    if (total) index.value = (index.value - 1 + total) % total;
+    if (total) select((index.value - 1 + total) % total);
   } else if (event.key === "Enter") {
     event.preventDefault();
     const item = current.value;
@@ -370,11 +395,12 @@ async function fitWindow(): Promise<void> {
 }
 
 watch(query, () => {
-  index.value = 0;
+  select(0);
   confirming.value = null;
 });
+// Another row: a pending "run?" is taken back.
+watch(selectedKey, () => (confirming.value = null));
 watch(index, async () => {
-  confirming.value = null;
   await nextTick();
   list.value?.querySelector(".row.on")?.scrollIntoView({ block: "nearest" });
 });
@@ -387,7 +413,7 @@ onMounted(async () => {
   window.addEventListener("blur", conceal);
   unlisten = await listen("switcher-opened", async () => {
     query.value = "";
-    index.value = 0;
+    select(0);
     void loadFolders();
     await fitWindow();
     reveal();
@@ -421,7 +447,9 @@ onBeforeUnmount(() => {
         spellcheck="false"
         role="combobox"
         aria-controls="results"
+        aria-autocomplete="list"
         :aria-expanded="count > 0"
+        :aria-activedescendant="current ? optionId(current) : undefined"
       />
       <kbd class="esc">esc</kbd>
     </div>
@@ -442,7 +470,14 @@ onBeforeUnmount(() => {
         <li v-if="item.kind === 'link' && !linkMode && i > 0 && items[i - 1].kind !== 'link'" class="group" role="presentation">
           {{ t("common.links") }}
         </li>
-        <li :class="['row', { on: i === index }]" role="option" :aria-selected="i === index" @mousemove="index = i" @click="pick(item)">
+        <li
+          :id="optionId(item)"
+          :class="['row', { on: i === index }]"
+          role="option"
+          :aria-selected="i === index"
+          @mousemove="i !== index && select(i)"
+          @click="pick(item)"
+        >
           <template v-if="item.kind === 'project'">
             <StatusIcon :project="item.project" :ring="i === index ? '#23272f' : 'var(--bg-panel)'" />
             <div class="text">

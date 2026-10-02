@@ -185,6 +185,7 @@
   "link.namePlaceholder": "Staging",
   "link.address": "Adres",
   "link.missing": "Bağlantıya bir ad ve bir adres ver.",
+  "link.badScheme": "Yalnızca http, https ve mailto adresleri açılabilir.",
   "link.found": "Projede bulunanlar",
   "link.use": "Ekle",
   "link.add": "Bağlantı ekle",
@@ -244,6 +245,8 @@
   "settings.hookText": "Claude Code izin istemlerini oturum loglarına yazmaz. Bu, {settings} dosyasına {events} içine not bırakan bir {hook} hook'u ekler — arka planda çalışır, Claude'u hiç yavaşlatmaz. Dosya bir kez {backup} olarak yedeklenir; içindeki başka hiçbir şey değişmez.",
   "settings.addHook": "Hook ekle",
   "settings.removeHook": "Hook'u kaldır",
+  "settings.updateHook": "Hook'u güncelle",
+  "settings.hookOutdated": "Bir güncelleme var: onunla Claude'un durumu değiştiği anda burada görünür.",
 
   "settings.about": "Hakkında",
   "settings.extInstalled": "Kurulu · {version}",

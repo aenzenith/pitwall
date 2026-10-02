@@ -185,6 +185,7 @@
   "link.namePlaceholder": "Staging",
   "link.address": "アドレス",
   "link.missing": "リンクの名前とアドレスを入力してください。",
+  "link.badScheme": "開けるのは http、https、mailto のアドレスだけです。",
   "link.found": "プロジェクト内で見つかったもの",
   "link.use": "追加",
   "link.add": "リンクを追加",
@@ -244,6 +245,8 @@
   "settings.hookText": "Claude Codeは許可プロンプトをセッションログに書き込みません。この機能は、{events}にメモを残す{hook}フックを{settings}に追加します。フックはバックグラウンドで実行され、Claudeが遅くなることはありません。ファイルは{backup}として一度だけバックアップされ、それ以外の内容は変更されません。",
   "settings.addHook": "フックを追加",
   "settings.removeHook": "フックを削除",
+  "settings.updateHook": "フックを更新",
+  "settings.hookOutdated": "更新があります。更新すると、Claude の状態が変わった瞬間にここへ表示されます。",
 
   "settings.about": "情報",
   "settings.extInstalled": "インストール済み · {version}",

@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 
 import { useBackdropClose } from "../lib/dialog";
+import { useReturnFocus } from "../lib/dialogFocus";
 import { t } from "../lib/i18n";
 
 /** Renames a terminal tab: opens with the name selected, Enter saves, Esc or a click outside cancels. */
@@ -10,6 +11,7 @@ const emit = defineEmits<{ save: [name: string]; close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
+useReturnFocus();
 const input = ref<HTMLInputElement | null>(null);
 const draft = ref(props.name);
 

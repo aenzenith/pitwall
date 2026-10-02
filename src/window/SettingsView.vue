@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getVersion } from "@tauri-apps/api/app";
-import { onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 
 import ClaudeMark from "../components/ClaudeMark.vue";
 import Icon from "../components/Icon.vue";
@@ -10,6 +10,7 @@ import { useBackdropClose } from "../lib/dialog";
 import { editorName, shortcutLabel } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { api, snapshot } from "../lib/store";
+import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings } from "../lib/types";
 
 const emit = defineEmits<{ close: [] }>();
@@ -55,6 +56,15 @@ function soundName(id: string): string {
 const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
 const tab = ref<Tab>("general");
+/** The rail top to bottom: the sections, then About. */
+const railOrder: Tab[] = [...tabs.map((section) => section.id), "about"];
+
+/** ↑/↓ (or ←/→), Home and End move along the rail. */
+function onRailKey(event: KeyboardEvent, id: Tab): void {
+  const next = tabKey(event, railOrder.length, railOrder.indexOf(id));
+  if (next !== null) tab.value = railOrder[next];
+}
+
 const version = ref("");
 const form = reactive<Settings>({
   language: "system",
@@ -164,6 +174,8 @@ function onCancel(event: Event): void {
   if (recording.value) event.preventDefault();
 }
 const hookError = ref("");
+/** Installed, but from before the hooks that report Claude's state at once. */
+const hookOutdated = computed(() => !!snapshot.value?.claudeHook && !!snapshot.value.claudeHookOutdated);
 
 async function setHook(on: boolean): Promise<void> {
   hookBusy.value = true;
@@ -177,13 +189,67 @@ async function setHook(on: boolean): Promise<void> {
   }
 }
 
+/* ---------- form ← snapshot ---------- */
+
+/** Each field as last taken from the snapshot (serialized): a field that differs from it holds
+ * an edit not saved, or not back in a snapshot, yet. */
+const taken: Partial<Record<keyof Settings, string>> = {};
+let lastSeen = "";
+/** Saves not answered yet. */
+let saving = 0;
+
+/** The text field being typed in (`data-setting`): a snapshot never writes over it. */
+function focusedField(): string | undefined {
+  return (document.activeElement as HTMLElement | null)?.dataset?.setting;
+}
+
+function clone<T>(value: T): T {
+  return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
+}
+
+/**
+ * Takes the snapshot's settings into the form, field by field, leaving the field being typed in
+ * and any edit on its way to the core. `revert`: a save failed, so edits go back to what is
+ * stored too.
+ */
+function takeSettings(settings: Settings, revert = false): void {
+  const focused = focusedField();
+  const keys = new Set([...Object.keys(form), ...Object.keys(settings)]) as Set<keyof Settings>;
+  const fields = form as Record<keyof Settings, unknown>;
+
+  for (const key of keys) {
+    if (key === focused) continue;
+    const theirs = JSON.stringify(settings[key]);
+    const mine = JSON.stringify(fields[key]);
+    if (theirs === mine) {
+      taken[key] = theirs;
+      continue;
+    }
+    // While a save is on its way, a snapshot may still be from before it.
+    const edited = saving > 0 || (taken[key] !== undefined && mine !== taken[key]);
+    if (edited && !revert) continue;
+    fields[key] = clone(settings[key]);
+    taken[key] = theirs;
+  }
+}
+
+// Every `state` event brings a whole new snapshot; only a real change in the settings counts.
 watch(
   () => snapshot.value?.settings,
   (settings) => {
-    if (settings) Object.assign(form, settings);
+    if (!settings) return;
+    const seen = JSON.stringify(settings);
+    if (seen === lastSeen) return;
+    lastSeen = seen;
+    takeSettings(settings);
   },
   { immediate: true },
 );
+
+/** Leaving a text field: what changed in the snapshot while it was being typed in comes in now. */
+function onFieldBlur(): void {
+  if (snapshot.value) takeSettings(snapshot.value.settings);
+}
 
 /* ---------- Pitwall for VS Code ---------- */
 
@@ -204,11 +270,20 @@ onBeforeUnmount(() => window.removeEventListener("focus", checkExtension));
 
 async function save(): Promise<void> {
   error.value = "";
+  // As the core will store it, so the snapshot that comes back matches the form.
+  form.script = form.script.trim() || "dev";
+  let failed = false;
+  saving += 1;
   try {
-    await api.setSettings({ ...form, script: form.script.trim() || "dev" });
+    await api.setSettings({ ...form });
   } catch (reason) {
     error.value = String(reason);
+    failed = true;
+  } finally {
+    saving -= 1;
   }
+  // A failed save stored nothing: the form shows what is stored again.
+  if (snapshot.value && !saving) takeSettings(snapshot.value.settings, failed);
 }
 </script>
 
@@ -229,8 +304,10 @@ async function save(): Promise<void> {
           type="button"
           role="tab"
           :aria-selected="tab === section.id"
+          :tabindex="tab === section.id ? 0 : -1"
           :class="{ on: tab === section.id }"
           @click="tab = section.id"
+          @keydown="onRailKey($event, section.id)"
         >
           <span class="tab-icon">
             <ClaudeMark v-if="section.icon === 'claude'" :size="14" color="currentColor" />
@@ -239,7 +316,15 @@ async function save(): Promise<void> {
           {{ t(section.label) }}
         </button>
         <div class="grow"></div>
-        <button type="button" role="tab" :aria-selected="tab === 'about'" :class="{ on: tab === 'about' }" @click="tab = 'about'">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'about'"
+          :tabindex="tab === 'about' ? 0 : -1"
+          :class="{ on: tab === 'about' }"
+          @click="tab = 'about'"
+          @keydown="onRailKey($event, 'about')"
+        >
           <span class="tab-icon"><Icon name="info" :size="15" /></span>
           {{ t("settings.about") }}
         </button>
@@ -249,7 +334,7 @@ async function save(): Promise<void> {
         <fieldset v-show="tab === 'servers'" :aria-label="t('settings.servers')">
           <label class="field">
             <span>{{ t("common.script") }}</span>
-            <input v-model="form.script" spellcheck="false" />
+            <input v-model="form.script" data-setting="script" spellcheck="false" @blur="onFieldBlur" />
             <small>
               <Rich :text="t('settings.scriptHint')">
                 <template #build><code>build</code></template>
@@ -291,8 +376,13 @@ async function save(): Promise<void> {
                   <template #backup><code>settings.json.pitwall-backup</code></template>
                 </Rich>
               </small>
+              <small v-if="hookOutdated">{{ t("settings.hookOutdated") }}</small>
             </div>
-            <button type="button" class="control hook-button" :disabled="hookBusy" @click="setHook(!snapshot?.claudeHook)">
+            <!-- An older hook: installing again upgrades it. -->
+            <button v-if="hookOutdated" type="button" class="control hook-button" :disabled="hookBusy" @click="setHook(true)">
+              {{ t("settings.updateHook") }}
+            </button>
+            <button v-else type="button" class="control hook-button" :disabled="hookBusy" @click="setHook(!snapshot?.claudeHook)">
               {{ t(snapshot?.claudeHook ? "settings.removeHook" : "settings.addHook") }}
             </button>
           </div>

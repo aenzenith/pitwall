@@ -63,6 +63,8 @@ export type Project = {
   claudeSessions: Array<{ id: string; phase: "working" | "waiting"; turn: Turn | null }>;
   git: GitInfo | null;
   script: string;
+  /** The exact command the dev server runs: `npm run dev`, `pnpm dev`, `bun run dev`… */
+  runCommand: string;
   settings: ProjectSettings;
   commands: CommandView[];
   /** Open terminals in this project. */
@@ -104,6 +106,8 @@ export type Snapshot = {
   crashUnseen: boolean;
   /** The Claude Code Notification hook is installed. */
   claudeHook: boolean;
+  /** Installed, but older than the current hook set (which reports Claude's state instantly). */
+  claudeHookOutdated: boolean;
   settings: Settings;
   /** The language to speak: Settings' choice, else the system's. */
   language: Language;

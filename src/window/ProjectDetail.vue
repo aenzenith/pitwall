@@ -2,7 +2,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/window";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 
 import ClaudeMark from "../components/ClaudeMark.vue";
 import Icon from "../components/Icon.vue";
@@ -21,14 +21,19 @@ import {
   terminalHeight,
   useResizer,
 } from "../lib/panel";
+import { forgetProjectSettings, projectSettings, updateProjectSettings } from "../lib/projectSettings";
 import { api, now, snapshot } from "../lib/store";
-import type { CommandView, CustomCommand, LinkSuggestion, Project, ProjectLink } from "../lib/types";
+import { tabKey } from "../lib/tabs";
+import type { CommandView, CustomCommand, LinkSuggestion, Project, ProjectLink, ProjectSettings } from "../lib/types";
 import CommandDialog from "./CommandDialog.vue";
 import LinkDialog from "./LinkDialog.vue";
 
 const props = defineProps<{ project: Project }>();
 
-const lines = ref<string[]>([]);
+/** An output line; `id` only grows, so a line keeps its key as older ones scroll out. */
+type OutputLine = { id: number; text: string; kind: "cmd" | "sys" | null };
+
+const lines = shallowRef<OutputLine[]>([]);
 const log = ref<HTMLElement | null>(null);
 const stage = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
@@ -49,6 +54,8 @@ const dialog = ref<{ command: CustomCommand | null; running: boolean } | null>(n
 const runsHere = computed(() => props.project.status !== "stopped" && !props.project.owner);
 const editor = computed(() => editorName(snapshot.value?.settings.editor));
 const commands = computed(() => props.project.commands ?? []);
+/** The project's own settings, with a change not in the snapshot yet on top (lib/projectSettings). */
+const settings = computed(() => projectSettings(props.project));
 const claudeTitle = computed(() => {
   const turn = props.project.claude;
   if (!turn) return t(props.project.claudeWorking ? "detail.claudeWorking" : "detail.noSession");
@@ -75,10 +82,11 @@ const traceLines = Array.from({ length: TRACE_STEPS }, (_, i) => {
 const server = computed(() => {
   const p = props.project;
   const title = p.status === "busy" ? phase(p) : t(`status.${p.status}`);
-  const sub = [`npm run ${p.script}`];
+  // The command the dev server runs, as the core runs it (npm, pnpm, yarn or bun).
+  const sub = [p.runCommand];
   if (p.status === "running" && p.port) sub.push(`:${p.port}`);
   if (p.status === "running" && p.startedAt) sub.push(uptime(p.startedAt, now.value));
-  return { title, sub: p.issue && p.status !== "running" ? p.issue.text : sub.join(" · ") };
+  return { title, sub: p.issue && p.status !== "running" ? p.issue.text : sub.filter(Boolean).join(" · ") };
 });
 
 /** Tabs: the dev server, then every command that ran in this session. */
@@ -86,11 +94,86 @@ const tabs = computed(() => [
   { id: null as string | null, name: t("common.devServer") },
   ...commands.value.filter((c) => c.status !== "idle" || c.result).map((c) => ({ id: c.id as string | null, name: c.name })),
 ]);
+/** The one tab in the Tab order: the shown one, else the dev server's. */
+const activeTab = computed(() => (tabs.value.some((item) => item.id === tab.value) ? tab.value : null));
+
+/** ←/→, Home and End move between the output tabs. */
+function onTabKey(event: KeyboardEvent, at: number): void {
+  const next = tabKey(event, tabs.value.length, at);
+  if (next !== null) showTab(tabs.value[next].id);
+}
 
 /* ---------- output ---------- */
 
+/** The pane keeps the newest lines only, as the core does. */
+const MAX_LINES = 500;
+
+/** The core's `output` event: a batch of lines (or, from older cores, one line) of a project's
+ * dev server (`job` unset) or one of its commands. */
+type OutputEvent = { path: string; job?: string | null } & ({ lines: string[] } | { line: string });
+
+let lineSeq = 0;
+/** Lines that arrive while `get_output` is on its way, added after its answer. */
+let arriving: string[] | null = null;
+/** The newest `loadOutput`: an older one's answer is dropped. */
+let outputLoad = 0;
+
+function toLines(texts: string[]): OutputLine[] {
+  return texts.map((text) => ({
+    id: ++lineSeq,
+    text,
+    kind: text.startsWith("$ ") ? "cmd" : text.startsWith("[pitwall]") ? "sys" : null,
+  }));
+}
+
+/** A whole batch in one update, then one scroll. */
+function append(texts: string[]): void {
+  if (!texts.length) return;
+  const next = lines.value.concat(toLines(texts));
+  lines.value = next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
+  void scrollDown();
+}
+
+/** How many of `late`'s first lines are already `fetched`'s last ones (sent while it was read). */
+function overlap(fetched: string[], late: string[]): number {
+  for (let k = Math.min(fetched.length, late.length); k > 0; k--) {
+    let match = true;
+    for (let i = 0; i < k && match; i++) match = fetched[fetched.length - k + i] === late[i];
+    if (match) return k;
+  }
+  return 0;
+}
+
+// Listening starts before the first `get_output`, so no line falls between the two.
+const listening = listen<OutputEvent>("output", (event) => {
+  const payload = event.payload;
+  if (payload.path !== props.project.path || (payload.job ?? null) !== tab.value) return;
+  const texts = "lines" in payload ? payload.lines : [payload.line];
+  if (arriving) arriving.push(...texts);
+  else append(texts);
+});
+
 async function loadOutput(): Promise<void> {
-  lines.value = await api.output(props.project.path, tab.value);
+  const load = ++outputLoad;
+  const path = props.project.path;
+  const job = tab.value;
+
+  await listening;
+  if (load !== outputLoad) return;
+  arriving = [];
+
+  let fetched: string[] = [];
+  try {
+    fetched = await api.output(path, job);
+  } catch {
+    // Nothing to show; live lines still come.
+  }
+  if (load !== outputLoad) return;
+
+  const late = arriving ?? [];
+  arriving = null;
+  lines.value = toLines(fetched.slice(-MAX_LINES));
+  append(late.slice(overlap(fetched, late)));
   await scrollDown();
 }
 
@@ -149,8 +232,14 @@ function toggleServer(): void {
   void api.act(props.project.path, props.project.status === "running" ? "stop" : "start");
 }
 
+/** The newest `loadAddress`: an older answer, or one for another project, is dropped. */
+let addressLoad = 0;
+
 async function loadAddress(): Promise<void> {
-  address.value = await api.resolveAddress(props.project.path);
+  const load = ++addressLoad;
+  const path = props.project.path;
+  const found = await api.resolveAddress(path);
+  if (load === addressLoad && path === props.project.path) address.value = found;
 }
 
 /* ---------- commands ---------- */
@@ -202,7 +291,7 @@ async function commandMenu(c: CommandView, event: MouseEvent): Promise<void> {
 
 /* ---------- links ---------- */
 
-const links = computed(() => props.project.settings.links ?? []);
+const links = computed(() => settings.value.links ?? []);
 /** Addresses the project names itself (git remote, .env, package.json). */
 const found = ref<LinkSuggestion[]>([]);
 /** The link dialog: the link being edited, by its place, or `null` for a new one. */
@@ -232,27 +321,29 @@ watch(
   { immediate: true },
 );
 
+/** Every change goes through the one writer, on top of the newest settings (lib/projectSettings). */
+function updateSettings(change: (settings: ProjectSettings) => ProjectSettings): void {
+  void updateProjectSettings(props.project.path, change);
+}
+
 /** Links are saved on their own, like commands. */
-function saveLinks(list: ProjectLink[]): void {
-  void api.setProjectSettings(props.project.path, { ...props.project.settings, links: list });
+function changeLinks(change: (list: ProjectLink[]) => ProjectLink[]): void {
+  updateSettings((s) => ({ ...s, links: change(s.links ?? []) }));
 }
 
 function saveLink(link: ProjectLink): void {
-  const list = links.value.map((l) => ({ ...l }));
   const at = linkDialog.value?.index ?? null;
-  if (at === null) list.push(link);
-  else list[at] = link;
-  saveLinks(list);
+  changeLinks((list) => (at === null ? [...list, link] : list.map((l, i) => (i === at ? link : l))));
   linkDialog.value = null;
 }
 
 function removeLink(at: number | null): void {
-  if (at !== null) saveLinks(links.value.filter((_, i) => i !== at));
+  if (at !== null) changeLinks((list) => list.filter((_, i) => i !== at));
   linkDialog.value = null;
 }
 
 function addSuggestion(s: LinkSuggestion): void {
-  saveLinks([...links.value, { name: s.name, url: s.url }]);
+  changeLinks((list) => (list.some((l) => sameUrl(l.url, s.url)) ? list : [...list, { name: s.name, url: s.url }]));
 }
 
 function copyLink(at: number): void {
@@ -282,9 +373,9 @@ async function linkMenu(at: number, event: MouseEvent): Promise<void> {
 /* ---------- project settings ---------- */
 
 function loadSettings(): void {
-  script.value = props.project.settings.script ?? "";
-  port.value = props.project.settings.port ? String(props.project.settings.port) : "";
-  url.value = props.project.settings.url ?? "";
+  script.value = settings.value.script ?? "";
+  port.value = settings.value.port ? String(settings.value.port) : "";
+  url.value = settings.value.url ?? "";
 }
 
 /** The gear swaps the panel body between the project's details and its settings. */
@@ -311,67 +402,53 @@ function editCommand(id: string | null): void {
 }
 
 function storedCommands(): CustomCommand[] {
-  return (props.project.settings.commands ?? []).map((c) => ({ ...c }));
+  return (settings.value.commands ?? []).map((c) => ({ ...c }));
 }
 
 /** Commands are saved on their own, so half-typed dev server fields aren't saved with them. */
-function saveCommands(list: CustomCommand[]): void {
-  void api.setProjectSettings(props.project.path, { ...props.project.settings, commands: list });
+function changeCommands(change: (list: CustomCommand[]) => CustomCommand[]): void {
+  updateSettings((s) => ({ ...s, commands: change(s.commands ?? []) }));
 }
 
 function saveCommand(command: CustomCommand): void {
-  const list = storedCommands();
-
   if (!command.id) {
-    list.push({ ...command, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` });
+    const added = { ...command, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` };
+    changeCommands((list) => [...list, added]);
   } else {
-    const at = list.findIndex((c) => c.id === command.id);
-    if (at >= 0) list[at] = command;
+    changeCommands((list) => list.map((c) => (c.id === command.id ? command : c)));
   }
-
-  saveCommands(list);
   dialog.value = null;
 }
 
 /** A running command is stopped too; once deleted it would have no row left to stop it from. */
 function removeCommand(id: string): void {
   if (commands.value.some((c) => c.id === id && c.status === "running")) void api.stopCommand(props.project.path, id);
-  saveCommands(storedCommands().filter((c) => c.id !== id));
+  changeCommands((list) => list.filter((c) => c.id !== id));
   if (tab.value === id) showTab(null);
 }
 
 function saveSettings(): void {
   const parsed = Number(port.value);
-  void api.setProjectSettings(props.project.path, {
-    ...props.project.settings,
+  const server = {
     script: script.value.trim() || undefined,
     port: Number.isInteger(parsed) && parsed > 0 && parsed < 65536 ? parsed : undefined,
     url: url.value.trim() || undefined,
-  });
+  };
+  updateSettings((s) => ({ ...s, ...server }));
   closeSettings();
 }
 
 /* ---------- lifecycle ---------- */
 
-let unlisten: UnlistenFn | null = null;
-
-onMounted(async () => {
-  unlisten = await listen<{ path: string; job: string | null; line: string }>("output", (event) => {
-    if (event.payload.path !== props.project.path || (event.payload.job ?? null) !== tab.value) return;
-    lines.value.push(event.payload.line);
-    if (lines.value.length > 500) lines.value.splice(0, lines.value.length - 500);
-    void scrollDown();
-  });
-});
-
 onBeforeUnmount(() => {
-  unlisten?.();
+  void listening.then((unlisten: UnlistenFn) => unlisten());
   outputShown.value = false;
 });
 
 watch(
   () => props.project.path,
-  () => {
+  (_, left) => {
+    if (left) forgetProjectSettings(left);
     settingsOpen.value = false;
     dialog.value = null;
     confirming.value = null;
@@ -426,7 +503,7 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
       <section class="group" :aria-label="t('common.commands')">
         <div class="section-label">{{ t("common.commands") }}</div>
 
-        <div v-for="c in project.settings.commands ?? []" :key="c.id" class="cmd-item">
+        <div v-for="c in settings.commands ?? []" :key="c.id" class="cmd-item">
           <div class="cmd-text">
             <span class="cmd-name">{{ c.name }}</span>
             <span class="cmd-line">{{ c.command }}</span>
@@ -461,7 +538,7 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
               <span class="server-title"><span :class="['state-dot', project.status]"></span>{{ server.title }}</span>
               <span :class="['server-sub', { bad: project.status === 'crashed' }]"><Marquee :text="server.sub" /></span>
             </div>
-            <button v-if="project.status === 'busy'" type="button" class="control busy" disabled>
+            <button v-if="project.status === 'busy'" type="button" class="control busy" :aria-label="server.title" disabled>
               <Spinner :size="12" />
             </button>
             <button v-else-if="project.status === 'running'" type="button" class="control stop" @click="toggleServer">
@@ -606,13 +683,15 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
         ></div>
         <div class="tabs" role="tablist" :aria-label="t('detail.output')">
           <button
-            v-for="item in tabs"
+            v-for="(item, i) in tabs"
             :key="item.id ?? 'server'"
             type="button"
             role="tab"
             :aria-selected="tab === item.id"
+            :tabindex="item.id === activeTab ? 0 : -1"
             :class="['tab', { on: tab === item.id }]"
             @click="showTab(item.id)"
+            @keydown="onTabKey($event, i)"
           >
             {{ item.name }}
           </button>
@@ -631,7 +710,7 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
         </div>
         <div ref="log" class="log selectable">
           <template v-if="lines.length">
-            <span v-for="(line, index) in lines" :key="index" :class="{ cmd: line.startsWith('$ '), sys: line.startsWith('[pitwall]') }">{{ line }}</span>
+            <span v-for="line in lines" :key="line.id" :class="line.kind">{{ line.text }}</span>
           </template>
           <span v-else-if="tab === null && project.owner" class="dim">{{ t("detail.noServerOutput") }}</span>
           <span v-else-if="tab === null" class="dim">{{ t("detail.notRunning") }}</span>

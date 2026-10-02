@@ -185,6 +185,7 @@
   "link.namePlaceholder": "Staging",
   "link.address": "Адрес",
   "link.missing": "Укажите название и адрес ссылки.",
+  "link.badScheme": "Открыть можно только адреса http, https и mailto.",
   "link.found": "Найдено в проекте",
   "link.use": "Добавить",
   "link.add": "Добавить ссылку",
@@ -244,6 +245,8 @@
   "settings.hookText": "Claude Code не записывает запросы разрешений в логи сессий. Эта функция добавляет в {settings} хук {hook}, который оставляет отметку в {events}, — он работает в фоне и никак не замедляет Claude. Файл один раз копируется в {backup}; больше в нём ничего не меняется.",
   "settings.addHook": "Добавить хук",
   "settings.removeHook": "Удалить хук",
+  "settings.updateHook": "Обновить хук",
+  "settings.hookOutdated": "Есть обновление: с ним состояние Claude появляется здесь сразу, как только меняется.",
 
   "settings.about": "О программе",
   "settings.extInstalled": "Установлено · {version}",
