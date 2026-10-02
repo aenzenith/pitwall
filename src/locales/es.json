@@ -136,7 +136,6 @@
   "detail.tagWithServer": "con el servidor",
   "detail.addCommand": "+ Agregar comando",
   "detail.commandsHint": "Los comandos se ejecutan en la carpeta del proyecto con tu shell de inicio de sesión. Se rechazan los comandos que hacen una compilación de producción ({build}, {vite}…).",
-  "detail.openInWindow": "Abierto en {window}; si lo inicias, se ejecuta allí.",
   "detail.notLookedAt": "{ago} · aún sin ver",
   "detail.workingHint": "Verás un punto y una notificación cuando sea tu turno",
   "detail.sessionsHint": "Las sesiones de la CLI y de VS Code aparecen aquí",

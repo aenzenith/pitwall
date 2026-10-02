@@ -134,7 +134,6 @@
   "detail.tagWithServer": "mit Server",
   "detail.addCommand": "+ Befehl hinzufügen",
   "detail.commandsHint": "Befehle laufen im Projektordner über deine Login-Shell. Befehle, die einen Production-Build ausführen ({build}, {vite} …), werden abgelehnt.",
-  "detail.openInWindow": "In {window} geöffnet; beim Starten läuft er dort.",
   "detail.notLookedAt": "{ago} · noch nicht angesehen",
   "detail.workingHint": "Du bekommst einen Punkt und eine Mitteilung, wenn du dran bist",
   "detail.sessionsHint": "Sitzungen aus der CLI und VS Code erscheinen hier",

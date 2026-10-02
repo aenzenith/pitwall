@@ -134,7 +134,6 @@
   "detail.tagWithServer": "with server",
   "detail.addCommand": "+ Add command",
   "detail.commandsHint": "Commands run in the project folder through your login shell. Commands that run a production build ({build}, {vite}…) are refused.",
-  "detail.openInWindow": "Open in {window}; starting it runs it there.",
   "detail.notLookedAt": "{ago} · not looked at yet",
   "detail.workingHint": "You'll get a dot and a notification when it's your turn",
   "detail.sessionsHint": "Sessions from the CLI and VS Code show up here",

@@ -132,7 +132,6 @@
   "detail.tagWithServer": "サーバー連動",
   "detail.addCommand": "+ コマンドを追加",
   "detail.commandsHint": "コマンドはプロジェクトフォルダで、ログインシェルを介して実行されます。本番ビルドを行うコマンド（{build}、{vite}など）は拒否されます。",
-  "detail.openInWindow": "{window}で開いています。起動するとそちらで実行されます。",
   "detail.notLookedAt": "{ago} · 未読",
   "detail.workingHint": "入力が必要になると、ドットと通知でお知らせします",
   "detail.sessionsHint": "CLIとVS Codeのセッションがここに表示されます",

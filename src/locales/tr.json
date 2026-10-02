@@ -134,7 +134,6 @@
   "detail.tagWithServer": "sunucuyla",
   "detail.addCommand": "+ Komut ekle",
   "detail.commandsHint": "Komutlar proje klasöründe, giriş kabuğun üzerinden çalışır. Production build alan komutlar ({build}, {vite}…) reddedilir.",
-  "detail.openInWindow": "{window} içinde açık; başlatınca orada çalışır.",
   "detail.notLookedAt": "{ago} · henüz bakılmadı",
   "detail.workingHint": "Sıra sana geldiğinde bir nokta ve bildirim gelir",
   "detail.sessionsHint": "CLI ve VS Code oturumları burada görünür",

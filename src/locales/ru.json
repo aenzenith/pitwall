@@ -138,7 +138,6 @@
   "detail.tagWithServer": "с сервером",
   "detail.addCommand": "+ Добавить команду",
   "detail.commandsHint": "Команды выполняются в папке проекта через вашу оболочку входа. Команды, запускающие продакшн-сборку ({build}, {vite}…), отклоняются.",
-  "detail.openInWindow": "Открыт в {window}; запустится там же.",
   "detail.notLookedAt": "{ago} · ещё не просмотрено",
   "detail.workingHint": "Когда настанет ваш ход, появится точка и придёт уведомление",
   "detail.sessionsHint": "Здесь появляются сессии из CLI и VS Code",

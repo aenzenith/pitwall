@@ -57,7 +57,6 @@ function toggleServer(): void {
       </button>
       <button type="button" class="control fixed" @click="api.openEditor(project.path)"><Icon name="editor" :size="13" /> {{ editor }}</button>
     </div>
-    <p v-if="!project.owner && project.openIn && project.status !== 'running'" class="note">{{ t("detail.openInWindow", { window: project.openIn }) }}</p>
   </section>
 </template>
 
@@ -133,13 +132,6 @@ function toggleServer(): void {
 .server-links {
   display: flex;
   gap: 6px;
-}
-
-.note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
 }
 
 @keyframes spin {

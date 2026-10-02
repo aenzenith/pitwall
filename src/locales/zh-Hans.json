@@ -132,7 +132,6 @@
   "detail.tagWithServer": "随服务器",
   "detail.addCommand": "+ 添加命令",
   "detail.commandsHint": "命令通过你的登录 shell 在项目文件夹中运行。执行生产构建的命令（{build}、{vite}…）会被拒绝。",
-  "detail.openInWindow": "已在 {window} 中打开；启动后会在那里运行。",
   "detail.notLookedAt": "{ago} · 尚未查看",
   "detail.workingHint": "轮到你时，你会看到一个圆点并收到通知",
   "detail.sessionsHint": "来自 CLI 和 VS Code 的会话会显示在这里",
