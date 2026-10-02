@@ -33,19 +33,16 @@
   "common.settings": "Settings",
   "common.script": "Script",
   "common.links": "Links",
-
   "status.running": "Running",
   "status.stopped": "Stopped",
   "status.crashed": "Crashed",
   "status.busy": "Working…",
   "status.claudeWaiting": "{status}, Claude is waiting on you",
   "status.claudeWorking": "{status}, Claude is working",
-
   "phase.starting": "starting…",
   "phase.stopping": "stopping…",
   "phase.restarting": "restarting…",
   "phase.working": "working…",
-
   "time.justNow": "just now",
   "time.minutesAgo": "{count} min ago",
   "time.hoursAgo": "{count} h ago",
@@ -54,20 +51,17 @@
   "time.duration": "{hours} h {minutes} min",
   "time.durationMinutes": "{minutes} min",
   "time.lessThanMinute": "< 1 min",
-
   "server.stopped": "stopped",
   "server.stoppedOpenIn": "stopped · open in {window}",
-
   "claude.finished": "Finished",
   "claude.asking": "Asked a question",
   "claude.permission": "Needs your permission",
   "claude.working": "Working…",
-
-  "git.changed": { "one": "{count} changed", "other": "{count} changed" },
-
-
+  "git.changed": {
+    "one": "{count} changed",
+    "other": "{count} changed"
+  },
   "editor.fallback": "Editor",
-
   "popover.noProjects": "No projects yet",
   "popover.running": "{count} running",
   "popover.waiting": "{count} waiting on you",
@@ -76,7 +70,6 @@
   "popover.rowTitle": "Open {name} in the editor — drag to reorder",
   "popover.openInBrowserName": "Open {name} in the browser",
   "popover.empty": "Add a project folder to run its dev server from here.",
-
   "switcher.label": "Jump to a project",
   "switcher.placeholder": "Jump to a project…",
   "switcher.foldersIn": "Folders in {folder}",
@@ -96,7 +89,6 @@
   "switcher.goToProject": "Go to project",
   "switcher.noLinkMatch": "No link matches “{query}”.",
   "switcher.noLinks": "No links yet. Add them under Links in a project.",
-
   "window.filters": "Filters",
   "window.filter.all": "All projects",
   "window.filter.running": "Running",
@@ -110,7 +102,10 @@
   "window.col.actions": "Actions",
   "window.rowTitle": "Double-click to open in the editor — drag to reorder",
   "window.showName": "Show {name}",
-  "window.openTerminals": { "one": "{count} open terminal", "other": "{count} open terminals" },
+  "window.openTerminals": {
+    "one": "{count} open terminal",
+    "other": "{count} open terminals"
+  },
   "window.favouriteName": "Add {name} to favourites",
   "window.unfavouriteName": "Remove {name} from favourites",
   "window.favourite": "Favourite",
@@ -119,7 +114,6 @@
   "window.emptyLine1": "Add a project folder, or drop folders onto this window.",
   "window.emptyLine2": "Projects open in VS Code show up on their own.",
   "window.projectDetails": "Project details",
-
   "detail.claudeWorking": "Claude is working",
   "detail.noSession": "No session waiting",
   "detail.claudeFinished": "Claude finished its turn",
@@ -157,7 +151,6 @@
   "detail.notRunning": "Not running. Start it to see output here.",
   "detail.noOutput": "No output yet.",
   "detail.noLinks": "Staging, production, the admin panel, the issue tracker: the project's other addresses, one click away.",
-
   "terminal.panel": "Terminals of {name}",
   "terminal.tabs": "Terminals",
   "terminal.resize": "Resize terminals",
@@ -171,7 +164,6 @@
   "terminal.expand": "Expand terminals",
   "terminal.collapse": "Collapse terminals",
   "terminal.none": "No terminal in {name}.",
-
   "command.newTitle": "New command",
   "command.editTitle": "Edit command",
   "command.name": "Name",
@@ -197,7 +189,6 @@
   "link.copyAddress": "Copy address",
   "link.copied": "Copied",
   "link.suggested": "Suggested:",
-
   "settings.sections": "Settings sections",
   "settings.close": "Close settings",
   "settings.general": "General",
@@ -264,7 +255,6 @@
   "settings.removeHook": "Remove hook",
   "settings.updateHook": "Update hook",
   "settings.hookOutdated": "An update is ready: with it, Claude's state shows here the moment it changes.",
-
   "settings.about": "About",
   "settings.extInstalled": "Installed · {version}",
   "settings.extMissing": "Not installed",
@@ -283,7 +273,6 @@
   "about.support": "Support Pitwall",
   "about.supportText": "Pitwall is free. If it saves you time, a coffee helps keep it going.",
   "about.coffee": "Buy me a coffee",
-
   "day.nav": "Today",
   "day.title": "Where did the day go?",
   "day.today": "Today",
@@ -299,11 +288,20 @@
   "day.sessions": "Claude sessions",
   "day.untitled": "Untitled session",
   "day.sessionTitle": "Click to show this session in the editor",
-  "day.turns": {"one": "{count} turn", "other": "{count} turns"},
+  "day.turns": {
+    "one": "{count} turn",
+    "other": "{count} turns"
+  },
   "day.commands": "Commands",
   "day.failed": "{count} failed",
-  "day.commitCount": {"one": "{count} commit", "other": "{count} commits"},
-  "day.crashCount": {"one": "{count} crash", "other": "{count} crashes"},
+  "day.commitCount": {
+    "one": "{count} commit",
+    "other": "{count} commits"
+  },
+  "day.crashCount": {
+    "one": "{count} crash",
+    "other": "{count} crashes"
+  },
   "day.timeline": "Timeline",
   "day.laneTitle": "Double-click to open in the editor",
   "day.laneKeys": "Left and right arrows step through the project's day.",
@@ -322,7 +320,7 @@
   "day.emptyHint": "While Pitwall runs, it notes Claude sessions, dev servers and commands.",
   "fuel.nav": "Fuel",
   "fuel.title": "Fuel",
-  "fuel.subtitle": "How much Claude has left",
+  "fuel.plan": "Claude · {plan}",
   "fuel.refresh": "Refresh",
   "fuel.left": "{value} left",
   "fuel.session": "5-hour session",
@@ -397,8 +395,10 @@
   "fuel.foot.extraOff": "Extra usage off",
   "fuel.foot.extraOf": "Extra usage {used} of {cap} this month",
   "fuel.foot.extraUsed": "Extra usage {used} this month",
-  "fuel.foot.more": {"one": "+{count} more limit", "other": "+{count} more limits"},
-  "fuel.foot.unused": {"one": "+{count} limit never used", "other": "+{count} limits never used"},
+  "fuel.foot.more": {
+    "one": "+{count} more limit",
+    "other": "+{count} more limits"
+  },
   "fuel.foot.topModel": "{model} is {value} of today",
   "fuel.foot.show": "show",
   "fuel.foot.hide": "hide",

@@ -33,19 +33,16 @@
   "common.settings": "Einstellungen",
   "common.script": "Skript",
   "common.links": "Links",
-
   "status.running": "Läuft",
   "status.stopped": "Gestoppt",
   "status.crashed": "Abgestürzt",
   "status.busy": "Arbeitet …",
   "status.claudeWaiting": "{status}, Claude wartet auf dich",
   "status.claudeWorking": "{status}, Claude arbeitet",
-
   "phase.starting": "startet …",
   "phase.stopping": "stoppt …",
   "phase.restarting": "startet neu …",
   "phase.working": "arbeitet …",
-
   "time.justNow": "gerade eben",
   "time.minutesAgo": "vor {count} Min.",
   "time.hoursAgo": "vor {count} Std.",
@@ -54,20 +51,17 @@
   "time.duration": "{hours} h {minutes} min",
   "time.durationMinutes": "{minutes} min",
   "time.lessThanMinute": "< 1 min",
-
   "server.stopped": "gestoppt",
   "server.stoppedOpenIn": "gestoppt · offen in {window}",
-
   "claude.finished": "Fertig",
   "claude.asking": "Hat eine Frage gestellt",
   "claude.permission": "Braucht deine Erlaubnis",
   "claude.working": "Arbeitet …",
-
-  "git.changed": { "one": "{count} Änderung", "other": "{count} Änderungen" },
-
-
+  "git.changed": {
+    "one": "{count} Änderung",
+    "other": "{count} Änderungen"
+  },
   "editor.fallback": "Editor",
-
   "popover.noProjects": "Noch keine Projekte",
   "popover.running": "Aktiv: {count}",
   "popover.waiting": "Wartet auf dich: {count}",
@@ -76,7 +70,6 @@
   "popover.rowTitle": "{name} im Editor öffnen – zum Sortieren ziehen",
   "popover.openInBrowserName": "{name} im Browser öffnen",
   "popover.empty": "Füge einen Projektordner hinzu, um seinen Dev-Server von hier aus zu starten.",
-
   "switcher.label": "Zu Projekt wechseln",
   "switcher.placeholder": "Zu Projekt wechseln …",
   "switcher.foldersIn": "Ordner in {folder}",
@@ -96,7 +89,6 @@
   "switcher.goToProject": "Zum Projekt",
   "switcher.noLinkMatch": "Kein Link passt zu „{query}“.",
   "switcher.noLinks": "Noch keine Links. Füge sie unter „Links“ in einem Projekt hinzu.",
-
   "window.filters": "Filter",
   "window.filter.all": "Alle Projekte",
   "window.filter.running": "Aktiv",
@@ -110,7 +102,10 @@
   "window.col.actions": "Aktionen",
   "window.rowTitle": "Zum Öffnen im Editor doppelklicken – zum Sortieren ziehen",
   "window.showName": "{name} anzeigen",
-  "window.openTerminals": { "one": "{count} offenes Terminal", "other": "{count} offene Terminals" },
+  "window.openTerminals": {
+    "one": "{count} offenes Terminal",
+    "other": "{count} offene Terminals"
+  },
   "window.favouriteName": "{name} zu Favoriten hinzufügen",
   "window.unfavouriteName": "{name} aus Favoriten entfernen",
   "window.favourite": "Favorit",
@@ -119,7 +114,6 @@
   "window.emptyLine1": "Füge einen Projektordner hinzu oder zieh Ordner auf dieses Fenster.",
   "window.emptyLine2": "In VS Code geöffnete Projekte erscheinen von selbst.",
   "window.projectDetails": "Projektdetails",
-
   "detail.claudeWorking": "Claude arbeitet",
   "detail.noSession": "Keine wartende Sitzung",
   "detail.claudeFinished": "Claude ist fertig",
@@ -157,7 +151,6 @@
   "detail.notRunning": "Läuft nicht. Starte den Server, um hier die Ausgabe zu sehen.",
   "detail.noOutput": "Noch keine Ausgabe.",
   "detail.noLinks": "Staging, Produktion, Admin-Bereich, Issue-Tracker: die anderen Adressen des Projekts, einen Klick entfernt.",
-
   "terminal.panel": "Terminals von {name}",
   "terminal.tabs": "Terminals",
   "terminal.resize": "Größe der Terminals ändern",
@@ -171,7 +164,6 @@
   "terminal.expand": "Terminals aufklappen",
   "terminal.collapse": "Terminals zuklappen",
   "terminal.none": "Kein Terminal in {name}.",
-
   "command.newTitle": "Neuer Befehl",
   "command.editTitle": "Befehl bearbeiten",
   "command.name": "Name",
@@ -197,7 +189,6 @@
   "link.copyAddress": "Adresse kopieren",
   "link.copied": "Kopiert",
   "link.suggested": "Vorschläge:",
-
   "settings.sections": "Einstellungsbereiche",
   "settings.close": "Einstellungen schließen",
   "settings.general": "Allgemein",
@@ -264,7 +255,6 @@
   "settings.removeHook": "Hook entfernen",
   "settings.updateHook": "Hook aktualisieren",
   "settings.hookOutdated": "Ein Update ist da: Damit erscheint Claudes Status hier, sobald er sich ändert.",
-
   "settings.about": "Info",
   "settings.extInstalled": "Installiert · {version}",
   "settings.extMissing": "Nicht installiert",
@@ -283,7 +273,6 @@
   "about.support": "Pitwall unterstützen",
   "about.supportText": "Pitwall ist kostenlos. Wenn es dir Zeit spart, hilft ein Kaffee, es am Laufen zu halten.",
   "about.coffee": "Einen Kaffee spendieren",
-
   "day.nav": "Heute",
   "day.title": "Wo ist der Tag geblieben?",
   "day.today": "Heute",
@@ -299,11 +288,20 @@
   "day.sessions": "Claude-Sitzungen",
   "day.untitled": "Unbenannte Sitzung",
   "day.sessionTitle": "Zum Anzeigen der Sitzung im Editor klicken",
-  "day.turns": {"one": "{count} Runde", "other": "{count} Runden"},
+  "day.turns": {
+    "one": "{count} Runde",
+    "other": "{count} Runden"
+  },
   "day.commands": "Befehle",
   "day.failed": "{count} fehlgeschlagen",
-  "day.commitCount": {"one": "{count} Commit", "other": "{count} Commits"},
-  "day.crashCount": {"one": "{count} Absturz", "other": "{count} Abstürze"},
+  "day.commitCount": {
+    "one": "{count} Commit",
+    "other": "{count} Commits"
+  },
+  "day.crashCount": {
+    "one": "{count} Absturz",
+    "other": "{count} Abstürze"
+  },
   "day.timeline": "Zeitleiste",
   "day.laneTitle": "Zum Öffnen im Editor doppelklicken",
   "day.laneKeys": "Mit den Pfeiltasten links und rechts gehst du den Tag des Projekts Schritt für Schritt durch.",
@@ -322,7 +320,7 @@
   "day.emptyHint": "Solange Pitwall läuft, notiert es Claude-Sitzungen, Dev-Server und Befehle.",
   "fuel.nav": "Tank",
   "fuel.title": "Tank",
-  "fuel.subtitle": "Wie viel Claude noch übrig hat",
+  "fuel.plan": "Claude · {plan}",
   "fuel.refresh": "Aktualisieren",
   "fuel.left": "{value} übrig",
   "fuel.session": "5-Stunden-Sitzung",
@@ -397,8 +395,10 @@
   "fuel.foot.extraOff": "Zusätzliche Nutzung aus",
   "fuel.foot.extraOf": "Zusätzliche Nutzung {used} von {cap} diesen Monat",
   "fuel.foot.extraUsed": "Zusätzliche Nutzung {used} diesen Monat",
-  "fuel.foot.more": {"one": "+{count} weiteres Limit", "other": "+{count} weitere Limits"},
-  "fuel.foot.unused": {"one": "+{count} Limit nie genutzt", "other": "+{count} Limits nie genutzt"},
+  "fuel.foot.more": {
+    "one": "+{count} weiteres Limit",
+    "other": "+{count} weitere Limits"
+  },
   "fuel.foot.topModel": "{model} macht {value} von heute aus",
   "fuel.foot.show": "anzeigen",
   "fuel.foot.hide": "ausblenden",

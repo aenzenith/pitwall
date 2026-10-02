@@ -6,7 +6,7 @@ defineProps<{ tag: string; title: string }>();
 </script>
 
 <template>
-  <section class="notice" role="status">
+  <section class="notice glass" role="status">
     <span class="badge"><Icon name="fuel" :size="16" /></span>
     <div class="text">
       <span class="section-label">{{ tag }}</span>
@@ -22,9 +22,6 @@ defineProps<{ tag: string; title: string }>();
   align-items: flex-start;
   gap: 14px;
   padding: 16px 18px;
-  border-radius: var(--radius-panel);
-  background: var(--bg-sidebar);
-  border: 1px solid var(--line);
 }
 
 .badge {

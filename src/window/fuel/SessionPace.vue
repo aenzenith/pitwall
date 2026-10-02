@@ -56,7 +56,7 @@ const sentence = computed(() => ({ key: SENTENCES[state.value.kind], out: state.
 <template>
   <section :class="['card', 'pace', { stale }]" :aria-label="t('fuel.pace.title')">
     <div class="head">
-      <span class="card-title">{{ t("fuel.pace.title") }}</span>
+      <span class="card-title caps">{{ t("fuel.pace.title") }}</span>
       <p :class="['sentence', { out: sentence.out }]">
         <Rich :text="t(sentence.key)">
           <template #empty><strong v-if="state.kind === 'out'" class="hot">{{ clock(state.emptyAt) }}</strong></template>

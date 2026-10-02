@@ -30,68 +30,86 @@ async function toggle(): Promise<void> {
 </script>
 
 <template>
-  <button type="button" class="chip" :aria-pressed="on" :title="t('settings.fuelAlert')" :disabled="!snapshot" @click="toggle">
+  <!-- A switch, not a button: what it does, and the switch itself. -->
+  <button
+    type="button"
+    role="switch"
+    :class="['alert', { on }]"
+    :aria-checked="on"
+    :title="t('settings.fuelAlert')"
+    :disabled="!snapshot"
+    @click="toggle"
+  >
     <span class="label">{{ t("fuel.alertChip", { value: percentText(90, language) }) }}</span>
-    <span :class="['switch', { on }]" aria-hidden="true"><i></i></span>
+    <span class="switch" aria-hidden="true"><i></i></span>
   </button>
 </template>
 
 <style scoped>
-.chip {
+/* No box of its own: it sits in the footer's line like the facts beside it. */
+.alert {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  height: 26px;
-  padding: 0 8px 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: var(--bg-control);
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   font-size: 12px;
-  color: #c7ccd3;
+  color: var(--text-muted);
   white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.chip:hover:not(:disabled) {
-  background: #2c3039;
+.alert:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
-.chip:disabled {
+.alert:disabled {
   opacity: 0.5;
 }
 
-/* A small switch: the knob to the right when on. Shape, not colour, tells the two apart. */
+.alert.on {
+  color: var(--text);
+}
+
+/* A Mac switch: the knob slides right and the track fills with Claude's colour when on. */
 .switch {
   position: relative;
-  width: 22px;
-  height: 12px;
+  width: 28px;
+  height: 16px;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--line-strong);
-  transition: background 0.15s ease;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: background 0.18s ease;
 }
 
 .switch i {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--text-faint);
-  transition: transform 0.15s ease, background 0.15s ease;
+  background: var(--text-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  transition: transform 0.18s ease;
 }
 
-.switch.on {
-  background: var(--text-muted);
+.on .switch {
+  background: var(--claude);
 }
 
-.switch.on i {
-  transform: translateX(10px);
-  background: var(--bg-app);
+.on .switch i {
+  transform: translateX(12px);
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .alert,
   .switch,
   .switch i {
     transition: none;

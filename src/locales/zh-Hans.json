@@ -33,19 +33,16 @@
   "common.settings": "设置",
   "common.script": "脚本",
   "common.links": "链接",
-
   "status.running": "运行中",
   "status.stopped": "已停止",
   "status.crashed": "已崩溃",
   "status.busy": "处理中…",
   "status.claudeWaiting": "{status}，Claude 正在等你",
   "status.claudeWorking": "{status}，Claude 正在工作",
-
   "phase.starting": "正在启动…",
   "phase.stopping": "正在停止…",
   "phase.restarting": "正在重启…",
   "phase.working": "正在处理…",
-
   "time.justNow": "刚刚",
   "time.minutesAgo": "{count} 分钟前",
   "time.hoursAgo": "{count} 小时前",
@@ -54,20 +51,16 @@
   "time.duration": "{hours} 小时 {minutes} 分",
   "time.durationMinutes": "{minutes} 分钟",
   "time.lessThanMinute": "不到 1 分钟",
-
   "server.stopped": "已停止",
   "server.stoppedOpenIn": "已停止 · 已在 {window} 中打开",
-
   "claude.finished": "已完成",
   "claude.asking": "提了一个问题",
   "claude.permission": "需要你授权",
   "claude.working": "工作中…",
-
-  "git.changed": { "other": "{count} 项更改" },
-
-
+  "git.changed": {
+    "other": "{count} 项更改"
+  },
   "editor.fallback": "编辑器",
-
   "popover.noProjects": "还没有项目",
   "popover.running": "{count} 个运行中",
   "popover.waiting": "{count} 个在等你",
@@ -76,7 +69,6 @@
   "popover.rowTitle": "在编辑器中打开 {name}——拖动可调整顺序",
   "popover.openInBrowserName": "在浏览器中打开 {name}",
   "popover.empty": "添加一个项目文件夹，即可在这里运行它的开发服务器。",
-
   "switcher.label": "跳转到项目",
   "switcher.placeholder": "跳转到项目…",
   "switcher.foldersIn": "{folder} 中的文件夹",
@@ -96,7 +88,6 @@
   "switcher.goToProject": "前往项目",
   "switcher.noLinkMatch": "没有与“{query}”匹配的链接。",
   "switcher.noLinks": "还没有链接。可在项目的“链接”中添加。",
-
   "window.filters": "筛选",
   "window.filter.all": "所有项目",
   "window.filter.running": "运行中",
@@ -110,7 +101,9 @@
   "window.col.actions": "操作",
   "window.rowTitle": "双击在编辑器中打开——拖动可调整顺序",
   "window.showName": "显示 {name}",
-  "window.openTerminals": { "other": "{count} 个打开的终端" },
+  "window.openTerminals": {
+    "other": "{count} 个打开的终端"
+  },
   "window.favouriteName": "将 {name} 添加到收藏",
   "window.unfavouriteName": "从收藏中移除 {name}",
   "window.favourite": "收藏",
@@ -119,7 +112,6 @@
   "window.emptyLine1": "添加一个项目文件夹，或将文件夹拖到此窗口中。",
   "window.emptyLine2": "在 VS Code 中打开的项目会自动显示在这里。",
   "window.projectDetails": "项目详情",
-
   "detail.claudeWorking": "Claude 正在工作",
   "detail.noSession": "没有等待中的会话",
   "detail.claudeFinished": "Claude 已完成这一轮",
@@ -157,7 +149,6 @@
   "detail.notRunning": "未运行。启动后即可在这里查看输出。",
   "detail.noOutput": "还没有输出。",
   "detail.noLinks": "预发布、生产、管理后台、问题跟踪：项目的其他地址，一键直达。",
-
   "terminal.panel": "{name} 的终端",
   "terminal.tabs": "终端",
   "terminal.resize": "调整终端大小",
@@ -171,7 +162,6 @@
   "terminal.expand": "展开终端",
   "terminal.collapse": "收起终端",
   "terminal.none": "{name} 中没有终端。",
-
   "command.newTitle": "新建命令",
   "command.editTitle": "编辑命令",
   "command.name": "名称",
@@ -197,7 +187,6 @@
   "link.copyAddress": "复制地址",
   "link.copied": "已复制",
   "link.suggested": "建议：",
-
   "settings.sections": "设置分区",
   "settings.close": "关闭设置",
   "settings.general": "通用",
@@ -264,7 +253,6 @@
   "settings.removeHook": "移除 Hook",
   "settings.updateHook": "更新 Hook",
   "settings.hookOutdated": "有可用更新：更新后，Claude 的状态一变化就会立即显示在这里。",
-
   "settings.about": "关于",
   "settings.extInstalled": "已安装 · {version}",
   "settings.extMissing": "未安装",
@@ -283,7 +271,6 @@
   "about.support": "支持 Pitwall",
   "about.supportText": "Pitwall 是免费的。如果它帮你节省了时间，一杯咖啡能帮它继续走下去。",
   "about.coffee": "请我喝杯咖啡",
-
   "day.nav": "今天",
   "day.title": "这一天去哪了?",
   "day.today": "今天",
@@ -299,11 +286,17 @@
   "day.sessions": "Claude 会话",
   "day.untitled": "未命名会话",
   "day.sessionTitle": "单击在编辑器中显示此会话",
-  "day.turns": {"other": "{count} 轮"},
+  "day.turns": {
+    "other": "{count} 轮"
+  },
   "day.commands": "命令",
   "day.failed": "{count} 次失败",
-  "day.commitCount": {"other": "{count} 个提交"},
-  "day.crashCount": {"other": "{count} 次崩溃"},
+  "day.commitCount": {
+    "other": "{count} 个提交"
+  },
+  "day.crashCount": {
+    "other": "{count} 次崩溃"
+  },
   "day.timeline": "时间线",
   "day.laneTitle": "双击在编辑器中打开",
   "day.laneKeys": "左右方向键逐项查看该项目的一天。",
@@ -322,7 +315,7 @@
   "day.emptyHint": "Pitwall 运行时会记录 Claude 会话、开发服务器和命令。",
   "fuel.nav": "燃料",
   "fuel.title": "燃料",
-  "fuel.subtitle": "Claude 还剩多少",
+  "fuel.plan": "Claude · {plan}",
   "fuel.refresh": "刷新",
   "fuel.left": "剩余 {value}",
   "fuel.session": "5 小时会话",
@@ -397,8 +390,9 @@
   "fuel.foot.extraOff": "额外用量已关闭",
   "fuel.foot.extraOf": "额外用量：本月 {used} / {cap}",
   "fuel.foot.extraUsed": "额外用量：本月 {used}",
-  "fuel.foot.more": {"other": "另有 +{count} 项限额"},
-  "fuel.foot.unused": {"other": "+{count} 项限额从未使用"},
+  "fuel.foot.more": {
+    "other": "另有 +{count} 项限额"
+  },
   "fuel.foot.topModel": "今天 {value} 来自 {model}",
   "fuel.foot.show": "显示",
   "fuel.foot.hide": "隐藏",

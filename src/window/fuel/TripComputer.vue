@@ -45,21 +45,20 @@ const cells = computed<Cell[]>(() => {
 
 <template>
   <dl :class="['trip', { stale }]">
-    <div v-for="cell in cells" :key="cell.key" class="cell">
-      <dt class="label" :title="cell.label">{{ cell.label }}</dt>
+    <div v-for="cell in cells" :key="cell.key" class="cell glass">
+      <dt class="label caps" :title="cell.label">{{ cell.label }}</dt>
       <dd :class="['value', { hot: cell.hot, none: cell.value === NONE }]">{{ cell.value }}</dd>
     </div>
   </dl>
 </template>
 
 <style scoped>
-/* Four equal cells divided by hairlines. */
+/* Four equal boxes of their own, side by side. */
 .trip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
   margin: 0;
-  border-top: 1px solid var(--line);
-  background: var(--bg-footer);
 }
 
 /* The value over its label, as on a car's display; the label comes first for VoiceOver. */
@@ -69,18 +68,16 @@ const cells = computed<Cell[]>(() => {
   justify-content: flex-end;
   gap: 3px;
   min-width: 0;
-  padding: 12px 16px;
+  padding: clamp(12px, 1.6cqh, 18px) clamp(16px, 1.6cqw, 24px);
 }
 
-.cell + .cell {
-  border-left: 1px solid var(--line);
-}
-
+/* Set like the dials' figures. */
 .value {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 18px;
-  color: var(--text);
+  font-size: clamp(18px, 1.5cqw, 24px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -96,8 +93,7 @@ const cells = computed<Cell[]>(() => {
 }
 
 .label {
-  font-size: 12px;
-  color: var(--text-subtle);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -15,9 +15,9 @@ import AlertChip from "./AlertChip.vue";
 import LimitList from "./LimitList.vue";
 
 /**
- * Under the cluster, in one muted line: Extra Usage, the limits without a dial (with a button that
- * lists them), today's top model; and the 90 % notification chip. `rest`: the limits without a
- * dial; `extraOnGauge`: Extra Usage has one.
+ * Under the cluster, in one muted line: Extra Usage, the used limits without a dial (with a button
+ * that lists them), today's top model; and the 90 % notification chip. `rest`: the used limits
+ * without a dial; `extraOnGauge`: Extra Usage has one.
  */
 const props = defineProps<{ rest: UsageWindow[]; extra: UsageExtra | null; extraOnGauge: boolean; today: SpendToday | null; limits: boolean; stale: boolean }>();
 
@@ -36,8 +36,6 @@ const extraText = computed(() => {
     : t("fuel.foot.extraUsed", { used: money(extra.usedCredits) });
 });
 
-const unused = computed(() => props.rest.filter((window) => window.used <= 0).length);
-const used = computed(() => props.rest.length - unused.value);
 
 /** The model with most of today's tokens, and its share. */
 const topModel = computed(() => {
@@ -65,8 +63,7 @@ const canList = computed(() => props.rest.length > 0 || !!listedExtra.value);
     <div class="line">
       <p class="facts">
         <span v-if="extraText" class="fact">{{ extraText }}</span>
-        <span v-if="used" class="fact">{{ t("fuel.foot.more", { count: used }) }}</span>
-        <span v-if="unused" class="fact">{{ t("fuel.foot.unused", { count: unused }) }}</span>
+        <span v-if="rest.length" class="fact">{{ t("fuel.foot.more", { count: rest.length }) }}</span>
         <button v-if="canList" type="button" class="toggle" :aria-expanded="shown" :aria-controls="LIST_ID" @click="shown = !shown">
           {{ t(shown ? "fuel.foot.hide" : "fuel.foot.show") }}
         </button>
@@ -136,7 +133,4 @@ const canList = computed(() => props.rest.length > 0 || !!listedExtra.value);
   text-decoration-color: currentColor;
 }
 
-.line :deep(.chip) {
-  height: 28px;
-}
 </style>
