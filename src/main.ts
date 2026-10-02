@@ -6,6 +6,7 @@ import "@fontsource-variable/geist-mono";
 import "./styles/tokens.css";
 
 import { language } from "./lib/i18n";
+import { isWindows, platform } from "./lib/platform";
 import { connect, visible } from "./lib/store";
 import Popover from "./popover/Popover.vue";
 import Switcher from "./switcher/Switcher.vue";
@@ -15,6 +16,27 @@ import WindowApp from "./window/WindowApp.vue";
 const label = getCurrentWindow().label;
 
 document.documentElement.dataset.surface = label;
+
+// mac | windows | linux: the styles that differ by system (title bar room, scrollbars, a
+// borderless window's ground) branch on it.
+document.documentElement.dataset.platform = platform;
+
+// WebView2 answers browser keys a desktop app doesn't have: reload, print, find, save, view
+// source, caret browsing. Keys the page uses itself (the switcher's Ctrl+P, a terminal's Ctrl+R)
+// are handled before this sees them, or prevented again here harmlessly.
+const BROWSER_KEYS = new Set(["KeyR", "KeyP", "KeyF", "KeyG", "KeyS", "KeyU", "KeyJ", "KeyH", "KeyO"]);
+if (isWindows) {
+  window.addEventListener("keydown", (event) => {
+    const browserKey =
+      event.key === "F5" ||
+      event.key === "F7" ||
+      event.key === "BrowserBack" ||
+      event.key === "BrowserForward" ||
+      (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight") && !event.ctrlKey) ||
+      (event.ctrlKey && !event.altKey && BROWSER_KEYS.has(event.code));
+    if (browserKey) event.preventDefault();
+  });
+}
 
 // Screen readers, hyphenation and `text-transform` (the Turkish İ) follow the page language.
 watchEffect(() => (document.documentElement.lang = language.value));

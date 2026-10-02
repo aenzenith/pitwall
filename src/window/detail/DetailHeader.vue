@@ -2,6 +2,7 @@
 import Icon from "../../components/Icon.vue";
 import { gitLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
+import { dragRegion } from "../../lib/platform";
 import type { Project } from "../../lib/types";
 
 defineProps<{ project: Project; settingsOpen: boolean }>();
@@ -10,7 +11,7 @@ const emit = defineEmits<{ toggle: [] }>();
 </script>
 
 <template>
-  <header v-if="settingsOpen" class="head bar" data-tauri-drag-region="deep">
+  <header v-if="settingsOpen" class="head bar" :data-tauri-drag-region="dragRegion">
     <!-- Settings mode: only the name and a back button; everything else waits for the way back.
          Settings: same height as the list's toolbar, so both bottom lines run as one. -->
     <div class="name">{{ t("detail.settingsHeading") }}</div>
@@ -20,7 +21,7 @@ const emit = defineEmits<{ toggle: [] }>();
     </button>
   </header>
 
-  <header v-else class="head" data-tauri-drag-region="deep">
+  <header v-else class="head" :data-tauri-drag-region="dragRegion">
     <!-- Name, path and branch drag the window; the settings button stays clickable. -->
     <div class="title-row">
       <div class="name">{{ project.name }}</div>

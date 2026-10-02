@@ -44,6 +44,13 @@
   color-scheme: dark;
 }
 
+/* Geist is bundled; past it, what Windows and Linux have for what it lacks (CJK, symbols):
+   -apple-system and ui-monospace are WebKit-on-macOS names. */
+:root:not([data-platform="mac"]) {
+  --font: "Geist Variable", system-ui, "Segoe UI", Ubuntu, Cantarell, "Noto Sans", sans-serif;
+  --font-mono: "Geist Mono Variable", "Cascadia Mono", Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -73,6 +80,15 @@
 
 ::-webkit-scrollbar-thumb:active {
   background-color: rgba(255, 255, 255, 0.32);
+}
+
+/* WebView2 and WebKitGTK draw classic scrollbars; the rules above (which both honour) make them
+   the same thin thumb as on macOS. No arrow buttons at the ends, and the standard properties stay
+   unset: in Chromium they would replace these rules with the system's bar. */
+:root:not([data-platform="mac"]) ::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* A desktop app, not a page: no text selection, no dragging of text or images, no rubber-band
@@ -116,6 +132,14 @@ html[data-surface="switcher"] body {
 
 html[data-surface="main"] body {
   background: var(--bg-app);
+}
+
+/* Linux: a borderless window may not be composited (an X11 desktop without a compositor), and its
+   see-through corners would turn black. The page paints the panel's own ground edge to edge and
+   the panel's corners go square (Popover, Switcher), so it looks right either way. */
+html[data-platform="linux"][data-surface="popover"] body,
+html[data-platform="linux"][data-surface="switcher"] body {
+  background: var(--bg-panel);
 }
 
 /* The window never scrolls as a page: a focused element at an edge (the terminal's input)

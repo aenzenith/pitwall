@@ -1,4 +1,5 @@
 import { language, t, type Key } from "./i18n";
+import { keys } from "./platform";
 import type { GitInfo, Project, Turn } from "./types";
 
 export function uptime(startedAt: number | null, now: number): string {
@@ -92,22 +93,11 @@ export function claudeState(project: Project, now: number): string {
   return project.claudeWorking ? t("claude.working") : "";
 }
 
-const MODIFIER_SYMBOLS: Record<string, string> = { CTRL: "⌃", CONTROL: "⌃", ALT: "⌥", OPTION: "⌥", SHIFT: "⇧", SUPER: "⌘", CMD: "⌘", COMMAND: "⌘" };
-const KEY_SYMBOLS: Record<string, string> = {
-  SPACE: "Space", ENTER: "↩", TAB: "⇥", BACKSPACE: "⌫", DELETE: "⌦", ESCAPE: "⎋",
-  ARROWUP: "↑", ARROWDOWN: "↓", ARROWLEFT: "←", ARROWRIGHT: "→",
-  MINUS: "-", EQUAL: "=", COMMA: ",", PERIOD: ".", SLASH: "/", BACKSLASH: "\\", SEMICOLON: ";",
-  QUOTE: "'", BACKQUOTE: "`", BRACKETLEFT: "[", BRACKETRIGHT: "]",
-};
-
-/** `Ctrl+Alt+KeyP` → `⌃⌥P`, in the usual macOS order (⌃⌥⇧⌘). */
-export function shortcutLabel(keys: string): string {
-  const parts = keys.split("+").map((part) => part.trim().toUpperCase()).filter(Boolean);
-  const order = ["⌃", "⌥", "⇧", "⌘"];
-  const mods = parts.filter((p) => p in MODIFIER_SYMBOLS).map((p) => MODIFIER_SYMBOLS[p]);
-  const key = parts.find((p) => !(p in MODIFIER_SYMBOLS)) ?? "";
-  const label = KEY_SYMBOLS[key] ?? key.replace(/^KEY/, "").replace(/^DIGIT/, "");
-  return [...order.filter((m) => mods.includes(m)), label].join("");
+/** A global shortcut (`Ctrl+Alt+KeyP`) as this platform writes it: `⌃⌥P` on macOS, `Ctrl+Alt+P` on
+ * Windows and Linux (lib/platform: keys). On macOS Return and Escape read ↩ and ⎋ here, as in
+ * menus. */
+export function shortcutLabel(hotkey: string): string {
+  return keys(hotkey, { ENTER: "↩", ESCAPE: "⎋" });
 }
 
 const EDITOR_NAMES: Record<string, string> = { vscode: "VS Code", "vscode-insiders": "Insiders", cursor: "Cursor", windsurf: "Windsurf" };

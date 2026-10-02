@@ -9,6 +9,7 @@ import Rich from "../components/Rich.vue";
 import { useBackdropClose } from "../lib/dialog";
 import { editorName, shortcutLabel } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
+import { keys, shortcutModifiers } from "../lib/platform";
 import { api, snapshot } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings } from "../lib/types";
@@ -146,7 +147,7 @@ async function onRecordKey(event: KeyboardEvent): Promise<void> {
   held.value = shortcutLabel(keys);
 
   if (!mods.some((m) => m !== "Shift")) {
-    shortcutError.value = t("settings.shortcutNeedsModifier");
+    shortcutError.value = t("settings.shortcutNeedsModifier", shortcutModifiers());
     return;
   }
 
@@ -481,7 +482,7 @@ async function save(): Promise<void> {
               <template v-if="recording">{{ held || t("settings.shortcutPress") }}</template>
               <template v-else>{{ shortcutLabel(form.shortcutKeys) }}</template>
             </button>
-            <small v-if="recording">{{ t("settings.shortcutHint") }}</small>
+            <small v-if="recording">{{ t("settings.shortcutHint", { ...shortcutModifiers(), esc: keys("Escape") }) }}</small>
           </div>
           <p v-if="shortcutError" class="error">{{ shortcutError }}</p>
 
@@ -892,6 +893,11 @@ code {
   font-size: 14px;
   letter-spacing: 0.08em;
   color: var(--text-strong);
+}
+
+/* Windows and Linux spell the keys out (Ctrl+Alt+P): no tracking between their letters. */
+:root:not([data-platform="mac"]) .recorder {
+  letter-spacing: 0;
 }
 
 .recorder.live {

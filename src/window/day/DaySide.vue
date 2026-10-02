@@ -6,6 +6,7 @@ import ClaudeMark from "../../components/ClaudeMark.vue";
 import { bounds, clock, clockRange, duration, projectTiles, sessionShare, type Live } from "../../lib/day";
 import { turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
+import { dragRegion } from "../../lib/platform";
 import { api, now, snapshot } from "../../lib/store";
 import type { DayProject } from "../../lib/types";
 
@@ -37,7 +38,7 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
   <aside class="side" :aria-label="selected?.name">
     <!-- Full height like the project details; its header line meets the toolbar's. -->
     <!-- Always drawn, so its line doesn't pop in when the day arrives. -->
-    <div class="side-head" data-tauri-drag-region="deep">
+    <div class="side-head" :data-tauri-drag-region="dragRegion">
       <template v-if="selected">
         <span class="name-row">
           <ClaudeDot :live="live" />

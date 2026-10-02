@@ -13,6 +13,7 @@ import StatusIcon from "../components/StatusIcon.vue";
 import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
 import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
+import { keys, primary } from "../lib/platform";
 import { api, now, snapshot } from "../lib/store";
 import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
 
@@ -220,7 +221,7 @@ function toggle(p: Project | null): void {
   void api.act(p.path, p.status === "running" ? "stop" : "start");
 }
 
-/** A folder from the projects folder: ↵ opens it in the editor, ⌘↵ adds it to Pitwall. */
+/** A folder from the projects folder: ↵ opens it in the editor, ⌘↵ (Ctrl+Enter) adds it to Pitwall. */
 function openFolder(folder: Folder | null, add: boolean): void {
   if (!folder) return;
   if (!add) conceal();
@@ -306,23 +307,24 @@ function onKey(event: KeyboardEvent): void {
     event.preventDefault();
     const item = current.value;
     if (!item) return;
-    if (item.kind === "folder") openFolder(item.folder, event.metaKey);
-    else if (item.kind === "command") runCommand(item, event.metaKey);
-    else if (item.kind === "link") openLink(item, event.metaKey);
-    else if (event.metaKey) toggle(item.project);
+    const mod = primary(event);
+    if (item.kind === "folder") openFolder(item.folder, mod);
+    else if (item.kind === "command") runCommand(item, mod);
+    else if (item.kind === "link") openLink(item, mod);
+    else if (mod) toggle(item.project);
     else open(item.project);
-  } else if (event.metaKey && event.code === "KeyC" && current.value?.kind === "link" && !hasSelection()) {
-    // ⌘C on a link copies its address (text selected in the search box copies as usual).
+  } else if (primary(event) && event.code === "KeyC" && current.value?.kind === "link" && !hasSelection()) {
+    // ⌘C (Ctrl+C) on a link copies its address (text selected in the search box copies as usual).
     event.preventDefault();
     void api.copyText(current.value.link.url);
     void api.hideSwitcher();
-  } else if (event.metaKey && event.key.toLowerCase() === "b" && selected.value) {
+  } else if (primary(event) && event.key.toLowerCase() === "b" && selected.value) {
     // The browser takes focus; the switcher goes as it opens.
     event.preventDefault();
     conceal();
     void api.openBrowser(selected.value.path);
-  } else if (event.metaKey && event.code === "KeyP") {
-    // ⌘P: open Pitwall's window; the switcher closes as the window takes focus.
+  } else if (primary(event) && event.code === "KeyP") {
+    // ⌘P (Ctrl+P): open Pitwall's window; the switcher closes as the window takes focus.
     event.preventDefault();
     void api.openWindow();
   }
@@ -399,7 +401,7 @@ onBeforeUnmount(() => {
         :aria-expanded="count > 0"
         :aria-activedescendant="current ? optionId(current) : undefined"
       />
-      <kbd class="esc">esc</kbd>
+      <kbd class="esc">{{ keys("Escape") }}</kbd>
     </div>
 
     <ul
@@ -449,7 +451,7 @@ onBeforeUnmount(() => {
               <div class="name">
                 <Highlight :text="item.command.name" :hits="item.hits" />
               </div>
-              <div v-if="confirming === item.key" class="meta confirm">{{ t("switcher.confirmAgain", { name: item.command.name }) }}</div>
+              <div v-if="confirming === item.key" class="meta confirm">{{ t("switcher.confirmAgain", { name: item.command.name, key: keys("Enter") }) }}</div>
               <div v-else class="meta"><Marquee :text="`${item.project.name}  ·  ${item.command.command}`" /></div>
             </div>
             <span v-if="item.command.status === 'running'" class="uptime">{{ uptime(item.command.startedAt, now) }}</span>
@@ -495,32 +497,32 @@ onBeforeUnmount(() => {
     </div>
 
     <footer v-if="current?.kind === 'folder'" class="foot">
-      <span><kbd>↵</kbd> {{ t("common.openInEditor") }}</span>
-      <span><kbd>⌘↵</kbd> {{ t("switcher.addToPitwall") }}</span>
+      <span><kbd>{{ keys("Enter") }}</kbd> {{ t("common.openInEditor") }}</span>
+      <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("switcher.addToPitwall") }}</span>
       <span class="grow"></span>
-      <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
+      <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
     <footer v-else-if="current?.kind === 'command'" class="foot">
-      <span><kbd>↵</kbd> {{ t(current.command.status === "running" ? "common.stop" : "common.run") }}</span>
-      <span><kbd>⌘↵</kbd> {{ t(current.command.status === "running" ? "switcher.showOutput" : "switcher.runAndShow") }}</span>
+      <span><kbd>{{ keys("Enter") }}</kbd> {{ t(current.command.status === "running" ? "common.stop" : "common.run") }}</span>
+      <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t(current.command.status === "running" ? "switcher.showOutput" : "switcher.runAndShow") }}</span>
       <span class="grow"></span>
-      <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
+      <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
     <footer v-else-if="current?.kind === 'link'" class="foot">
-      <span><kbd>↵</kbd> {{ t("common.openInBrowser") }}</span>
-      <span><kbd>⌘C</kbd> {{ t("link.copyAddress") }}</span>
-      <span><kbd>⌘↵</kbd> {{ t("switcher.goToProject") }}</span>
+      <span><kbd>{{ keys("Enter") }}</kbd> {{ t("common.openInBrowser") }}</span>
+      <span><kbd>{{ keys("mod+C") }}</kbd> {{ t("link.copyAddress") }}</span>
+      <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("switcher.goToProject") }}</span>
       <span class="grow"></span>
-      <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
+      <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
     <footer v-else class="foot">
-      <span><kbd>↵</kbd> {{ t(selected?.claude ? "switcher.openMarkSeen" : "common.openInEditor") }}</span>
-      <span><kbd>⌘↵</kbd> {{ t(selected?.status === "running" ? "common.stop" : "common.start") }}</span>
-      <span><kbd>⌘B</kbd> {{ t("switcher.browser") }}</span>
-      <span v-if="anyCommands"><kbd>&gt;</kbd> {{ t("common.commands") }}</span>
-      <span v-if="anyLinks"><kbd>@</kbd> {{ t("common.links") }}</span>
+      <span><kbd>{{ keys("Enter") }}</kbd> {{ t(selected?.claude ? "switcher.openMarkSeen" : "common.openInEditor") }}</span>
+      <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t(selected?.status === "running" ? "common.stop" : "common.start") }}</span>
+      <span><kbd>{{ keys("mod+B") }}</kbd> {{ t("switcher.browser") }}</span>
+      <span v-if="anyCommands" class="prefix"><kbd>&gt;</kbd> {{ t("common.commands") }}</span>
+      <span v-if="anyLinks" class="prefix"><kbd>@</kbd> {{ t("common.links") }}</span>
       <span class="grow"></span>
-      <span><kbd>⌘P</kbd> {{ t("switcher.openPitwall") }}</span>
+      <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
   </div>
 </template>
@@ -538,6 +540,12 @@ onBeforeUnmount(() => {
   opacity: 0;
   transform: translateY(10px) scale(0.985);
   transform-origin: 50% 0;
+}
+
+/* Linux: square corners on the solid ground the page paints there (tokens.css), as the window may
+   not be see-through. */
+:root[data-platform="linux"] .panel {
+  border-radius: 0;
 }
 
 .panel.shown {
@@ -782,6 +790,28 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Windows and Linux spell the keys out (Ctrl+Enter), which takes room: each hint stays on one
+   line, the keys first and the search prefixes (> @) last, and those that don't fit drop off the
+   end (they wrap onto a line out of sight). */
+:root:not([data-platform="mac"]) .foot {
+  flex-wrap: wrap;
+  gap: 0 12px;
+  overflow: hidden;
+}
+
+:root:not([data-platform="mac"]) .foot .prefix {
+  order: 1;
+}
+
+:root:not([data-platform="mac"]) .foot .grow {
+  order: 2;
+}
+
+:root:not([data-platform="mac"]) .foot span {
+  height: 100%;
+  white-space: nowrap;
 }
 
 .grow {

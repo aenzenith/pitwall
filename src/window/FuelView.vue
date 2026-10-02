@@ -7,6 +7,7 @@ import Spinner from "../components/Spinner.vue";
 import { ago } from "../lib/format";
 import { clockText, current, dayClockText, isStale, left, moneyText, sideWindow, windowName } from "../lib/fuel";
 import { language, t, type Key } from "../lib/i18n";
+import { dragRegion } from "../lib/platform";
 import { api, fuel, now, visible } from "../lib/store";
 import type { UsageError, UsageWindow } from "../lib/types";
 import FuelFooter from "./fuel/FuelFooter.vue";
@@ -148,7 +149,7 @@ watch(visible, (on) => {
 <template>
   <div class="fuel">
     <!-- Its heading and free space drag the window; the refresh button stays clickable. -->
-    <header class="bar" data-tauri-drag-region="deep">
+    <header class="bar" :data-tauri-drag-region="dragRegion">
       <div class="heading">
         <span class="title">{{ t("fuel.title") }}</span>
         <span class="subtitle">{{ subtitle }}</span>

@@ -217,6 +217,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
   overflow: hidden;
 }
 
+/* Linux: square corners on the solid ground the page paints there (tokens.css), as the window may
+   not be see-through. */
+:root[data-platform="linux"] .panel {
+  border-radius: 0;
+}
+
 .head,
 .claude,
 .label,

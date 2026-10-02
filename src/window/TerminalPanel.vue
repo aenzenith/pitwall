@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import ClaudeMark from "../components/ClaudeMark.vue";
 import Icon from "../components/Icon.vue";
 import { t } from "../lib/i18n";
+import { keys, TERMINAL_MOD } from "../lib/platform";
 import {
   COLLAPSED_HEIGHT,
   COLLAPSE_MS,
@@ -270,7 +271,7 @@ defineExpose({ openTerminal });
       </div>
       <!-- Left: the project and its tabs. Right: new tab buttons and collapse. -->
       <span class="grow"></span>
-      <button type="button" class="action" :title="t('terminal.newTabTitle')" :disabled="opening" @click="openTerminal()">
+      <button type="button" class="action" :title="t('terminal.newTabTitle', { shortcut: keys(`${TERMINAL_MOD}+T`) })" :disabled="opening" @click="openTerminal()">
         <Icon name="plus" :size="13" /> {{ t("terminal.newTab") }}
       </button>
       <button type="button" class="action" :title="t('terminal.newClaudeTitle')" :disabled="opening" @click="openTerminal(true)">

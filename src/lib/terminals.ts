@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
+import { isLinux, isMac, isWindows, terminalChord } from "./platform";
 import { api } from "./store";
 
 /**
@@ -66,7 +67,8 @@ void listen<number>("terminal-exit", (event) => dispose(event.payload));
 
 const options = {
   theme,
-  fontFamily: '"Geist Mono Variable", ui-monospace, Menlo, monospace',
+  // Geist Mono is bundled; past it (box drawing, symbols), each system's own terminal font.
+  fontFamily: isMac ? '"Geist Mono Variable", ui-monospace, Menlo, monospace' : '"Geist Mono Variable", "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace',
   fontSize: 12,
   lineHeight: 1.25,
   cursorBlink: true,
@@ -89,6 +91,15 @@ export function measure(host: HTMLElement): { cols: number; rows: number } | nul
   return size && size.cols > 0 && size.rows > 0 ? { cols: size.cols, rows: size.rows } : null;
 }
 
+/** Windows and Linux: the terminal's selection to the clipboard (the core's, as the web view's
+ * own copy needs a copy event these keys don't make), and the selection goes. */
+function copySelection(term: Terminal, event: KeyboardEvent): void {
+  event.preventDefault();
+  if (!term.hasSelection()) return;
+  void api.copyText(term.getSelection());
+  term.clearSelection();
+}
+
 function create(id: number): View {
   const element = document.createElement("div");
   element.className = "terminal-host";
@@ -98,16 +109,53 @@ function create(id: number): View {
   term.loadAddon(fit);
   term.open(element);
 
-  // ⌘T belongs to the window (new tab); ⌘K clears, like Terminal.app. Everything else goes
-  // to the shell. Returning false lets the key bubble to the window.
+  // The panel's own keys; everything else goes to the shell. Returning false keeps a key from
+  // the shell: it bubbles to the window, its default (copy, paste) left to the web view.
+  //  - macOS: ⌘T belongs to the window (new tab); ⌘K clears, like Terminal.app; ⌘C and ⌘V
+  //    copy and paste through the web view.
+  //  - Windows, Linux: Ctrl+letter is the shell's (Ctrl+C, Ctrl+D, Ctrl+K, Ctrl+R, Ctrl+T…), so
+  //    the panel's keys take Ctrl+Shift (lib/platform: terminalChord), as Windows Terminal,
+  //    GNOME Terminal and Konsole do: Ctrl+Shift+T new tab, Ctrl+Shift+K clears, Ctrl+Shift+C
+  //    copies the selection, Ctrl+Shift+V pastes. On Windows also Windows Terminal's own: Ctrl+C
+  //    copies while text is selected (^C otherwise), Ctrl+V pastes.
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== "keydown") return true;
-    if (!event.metaKey) return true;
-    if (event.code === "KeyK") {
-      term.clear();
+    if (isMac) {
+      if (!event.metaKey) return true;
+      if (event.code === "KeyK") {
+        term.clear();
+        return false;
+      }
+      return event.code !== "KeyT";
+    }
+    const plainCtrl = event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey;
+    if (isWindows && plainCtrl && event.code === "KeyC" && term.hasSelection()) {
+      copySelection(term, event);
       return false;
     }
-    return event.code !== "KeyT";
+    // Ctrl+V: the web view's paste, which xterm takes as typed text.
+    if (isWindows && plainCtrl && event.code === "KeyV") return false;
+    if (!terminalChord(event)) return true;
+    switch (event.code) {
+      case "KeyK":
+        event.preventDefault();
+        term.clear();
+        return false;
+      case "KeyC":
+        copySelection(term, event);
+        return false;
+      case "KeyV":
+        // WebView2 pastes on Ctrl+Shift+V by itself; WebKitGTK doesn't, so the clipboard is read.
+        if (isLinux) {
+          event.preventDefault();
+          void navigator.clipboard?.readText().then((text) => text && term.paste(text), () => undefined);
+        }
+        return false;
+      case "KeyT":
+        return false;
+      default:
+        return true;
+    }
   });
   term.onData((data) => void api.writeTerminal(id, data));
 

@@ -13,6 +13,7 @@ import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t, type Key } from "../lib/i18n";
 import { outputRequest } from "../lib/panel";
+import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
 import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
@@ -125,9 +126,9 @@ let unlistenResize: UnlistenFn | null = null;
 
 const terminalPanel = ref<InstanceType<typeof TerminalPanel> | null>(null);
 
-/** ⌘T opens a new terminal in the selected project. */
+/** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the selected project. */
 function onKey(event: KeyboardEvent): void {
-  if (event.metaKey && event.code === "KeyT" && terminalPanel.value) {
+  if (terminalChord(event) && event.code === "KeyT" && terminalPanel.value) {
     event.preventDefault();
     void terminalPanel.value.openTerminal();
   }
@@ -185,8 +186,9 @@ function server(project: Project): string {
 <template>
   <div :class="['shell', { fullscreen }]">
     <aside class="sidebar">
-      <!-- "deep": the logo and name drag the window too; so does the strip under the traffic lights. -->
-      <div class="brand" data-tauri-drag-region="deep">
+      <!-- "deep": the logo and name drag the window too; so does the strip under the traffic lights.
+           macOS only (lib/platform: dragRegion): elsewhere the window has its own title bar. -->
+      <div class="brand" :data-tauri-drag-region="dragRegion">
         <PitwallGlyph :size="30" lamps="var(--run)" />
         <span>Pitwall</span>
       </div>
@@ -222,7 +224,7 @@ function server(project: Project): string {
     <template v-else>
       <main class="main">
         <!-- Its heading and free space drag the window; the search box and buttons stay clickable. -->
-        <div class="toolbar" data-tauri-drag-region="deep">
+        <div class="toolbar" :data-tauri-drag-region="dragRegion">
           <div class="heading">{{ t(current.label) }}</div>
           <label class="sr" for="search">{{ t("common.searchProjects") }}</label>
           <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" @keydown.down.prevent="focusSelected" />
@@ -338,8 +340,10 @@ function server(project: Project): string {
   border-right: 1px solid var(--line);
 }
 
-/* No traffic lights: the brand moves up, level with the toolbar heading. */
-.shell.fullscreen .brand {
+/* No traffic lights: the brand moves up, level with the toolbar heading. So it is on Windows and
+   Linux, whose title bar sits above the window's content rather than over it. */
+.shell.fullscreen .brand,
+:root:not([data-platform="mac"]) .brand {
   padding-top: 13px;
 }
 

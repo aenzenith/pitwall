@@ -4,6 +4,7 @@ import { computed } from "vue";
 import Icon from "../../components/Icon.vue";
 import { bounds, clock, clockRange, dayName, yesterday } from "../../lib/day";
 import { language, t } from "../../lib/i18n";
+import { dragRegion } from "../../lib/platform";
 import type { DaySummary } from "../../lib/types";
 
 /** `day`: the summary shown, or the last one while the next loads. */
@@ -61,7 +62,7 @@ function onDayTabKey(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <header class="bar" data-tauri-drag-region="deep">
+  <header class="bar" :data-tauri-drag-region="dragRegion">
     <!-- Its heading and free space drag the window; the day buttons stay clickable. -->
     <div class="heading">
       <span class="title">{{ t("day.title") }}</span>
