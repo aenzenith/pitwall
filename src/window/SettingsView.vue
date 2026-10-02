@@ -13,14 +13,42 @@ import type { Settings } from "../lib/types";
 
 const emit = defineEmits<{ close: [] }>();
 
-type Tab = "general" | "servers" | "editor" | "claude" | "about";
+type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "about";
 
 const tabs: Array<{ id: Tab; label: Key }> = [
   { id: "general", label: "settings.general" },
   { id: "servers", label: "settings.servers" },
   { id: "editor", label: "settings.editor" },
   { id: "claude", label: "settings.claude" },
+  { id: "sounds", label: "settings.sounds" },
 ];
+
+/** Pitwall's sounds (src-tauri/sounds). */
+const soundOptions: Array<{ id: string; label: Key }> = [
+  { id: "boxbox", label: "sound.boxbox" },
+  { id: "limiter", label: "sound.limiter" },
+  { id: "purple", label: "sound.purple" },
+  { id: "lightsout", label: "sound.lightsout" },
+  { id: "yellowflag", label: "sound.yellowflag" },
+  { id: "wheelgun", label: "sound.wheelgun" },
+  { id: "pitboard", label: "sound.pitboard" },
+  { id: "radio", label: "sound.radio" },
+  { id: "lights", label: "sound.lights" },
+  { id: "chime", label: "sound.chime" },
+];
+
+/** What can make a sound; Claude's come with its notifications. */
+const soundEvents: Array<{ id: keyof Settings["sounds"]; label: Key; claude: boolean }> = [
+  { id: "claudeFinished", label: "sound.event.claudeFinished", claude: true },
+  { id: "claudeAsking", label: "sound.event.claudeAsking", claude: true },
+  { id: "serverCrashed", label: "sound.event.serverCrashed", claude: false },
+  { id: "serverReady", label: "sound.event.serverReady", claude: false },
+  { id: "commandDone", label: "sound.event.commandDone", claude: false },
+];
+
+function soundName(id: string): string {
+  return t(soundOptions.find((sound) => sound.id === id)?.label ?? "sound.none");
+}
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
@@ -33,6 +61,7 @@ const form = reactive<Settings>({
   editor: "vscode",
   openUrlOnStart: false,
   notify: true,
+  sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "", commandDone: "" },
   launchAtLogin: false,
   shortcut: true,
   shortcutKeys: "Ctrl+Alt+KeyP",
@@ -244,6 +273,34 @@ async function save(): Promise<void> {
             </button>
           </div>
           <p v-if="hookError" class="error">{{ hookError }}</p>
+        </fieldset>
+
+        <!-- Picking a sound plays it; the button plays it again. -->
+        <fieldset v-show="tab === 'sounds'" :aria-label="t('settings.sounds')">
+          <small class="hint">{{ t("settings.soundsHint") }}</small>
+          <div v-for="event in soundEvents" :key="event.id" class="sound-row">
+            <label :for="`sound-${event.id}`">{{ t(event.label) }}</label>
+            <select
+              :id="`sound-${event.id}`"
+              v-model="form.sounds[event.id]"
+              :disabled="event.claude && !form.notify"
+              @change="api.playSound(form.sounds[event.id])"
+            >
+              <option value="">{{ t("sound.none") }}</option>
+              <option v-for="sound in soundOptions" :key="sound.id" :value="sound.id">{{ t(sound.label) }}</option>
+            </select>
+            <button
+              type="button"
+              class="play"
+              :disabled="!form.sounds[event.id] || (event.claude && !form.notify)"
+              :aria-label="t('settings.playSound', { name: soundName(form.sounds[event.id]) })"
+              :title="t('settings.playSound', { name: soundName(form.sounds[event.id]) })"
+              @click="api.playSound(form.sounds[event.id])"
+            >
+              <Icon name="play" :size="12" />
+            </button>
+          </div>
+          <small v-if="!form.notify" class="hint">{{ t("settings.soundsClaudeOff") }}</small>
         </fieldset>
 
         <fieldset v-show="tab === 'editor'" :aria-label="t('settings.editor')">
@@ -505,6 +562,50 @@ select {
   width: 16px;
   height: 16px;
   accent-color: var(--run);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.5;
+}
+
+/* Event, its sound, and a button to hear it. */
+.sound-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px 30px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.sound-row label {
+  min-width: 0;
+}
+
+.sound-row select:disabled {
+  opacity: 0.5;
+}
+
+.play {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.play:hover:not(:disabled) {
+  background: #2c3039;
+  color: var(--text-strong);
+}
+
+.play:disabled {
+  opacity: 0.35;
 }
 
 kbd,

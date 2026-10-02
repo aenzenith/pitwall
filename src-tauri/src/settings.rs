@@ -36,6 +36,30 @@ pub struct ProjectSettings {
     pub commands: Vec<CustomCommand>,
 }
 
+/// Which of Pitwall's sounds (`sounds/`) each event plays; empty for none.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Sounds {
+    pub claude_finished: String,
+    /// Claude asks a question or needs a permission.
+    pub claude_asking: String,
+    pub server_crashed: String,
+    pub server_ready: String,
+    pub command_done: String,
+}
+
+impl Default for Sounds {
+    fn default() -> Self {
+        Self {
+            claude_finished: "boxbox".into(),
+            claude_asking: "limiter".into(),
+            server_crashed: "yellowflag".into(),
+            server_ready: String::new(),
+            command_done: String::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -50,6 +74,8 @@ pub struct Settings {
     pub open_url_on_start: bool,
     /// A system notification when Claude waits on you.
     pub notify: bool,
+    /// The sound each event plays.
+    pub sounds: Sounds,
     pub launch_at_login: bool,
     /// A global shortcut opens the quick switcher from anywhere.
     pub shortcut: bool,
@@ -72,6 +98,7 @@ impl Default for Settings {
             editor: "vscode".into(),
             open_url_on_start: false,
             notify: true,
+            sounds: Sounds::default(),
             launch_at_login: false,
             shortcut: true,
             shortcut_keys: "Ctrl+Alt+KeyP".into(),

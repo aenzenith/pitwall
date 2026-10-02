@@ -30,6 +30,7 @@ export const api = {
   clearProjectsDir: () => invoke("clear_projects_dir"),
   projectFolders: () => invoke<Folder[]>("project_folders"),
   daySummary: (date: string | null = null) => invoke<DaySummary>("day_summary", { date }),
+  playSound: (id: string) => invoke("play_sound", { id }),
   openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null) =>
     invoke<TerminalView>("open_terminal", { path, claude, cols: size?.cols, rows: size?.rows }),
   renameTerminal: (id: number, name: string) => invoke("rename_terminal", { id, name }),

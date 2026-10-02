@@ -116,6 +116,11 @@ impl Core {
         // Quitting stops every command; that's no result of theirs.
         if let Some(command) = self.custom_command(path, id).filter(|_| !disposed) {
             self.record_command(path, &command.name, state);
+
+            let sound = self.settings().sounds.command_done;
+            if state != "stopped" && !sound.is_empty() {
+                self.emit(CoreEvent::Sound(sound));
+            }
         }
         self.record_pids();
         self.notify();

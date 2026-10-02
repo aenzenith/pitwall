@@ -1,8 +1,9 @@
-//! System notifications on macOS. The installed app posts through UserNotifications under its
-//! own name: it asks for permission once, shows the banner even while it is in front, a click
-//! opens the project, and a newer notification of a project replaces the older one. A dev binary
-//! has no bundle for that API; it posts through the older one on behalf of Script Editor, the one
-//! borrowed name macOS still shows banners for (Terminal's are dropped).
+//! System notifications on macOS, silent: Pitwall plays its own sound (`sound.rs`). The
+//! installed app posts through UserNotifications under its own name: it asks for permission
+//! once, shows the banner even while it is in front, a click opens the project, and a newer
+//! notification of a project replaces the older one. A dev binary has no bundle for that API; it
+//! posts through the older one on behalf of Script Editor, the one borrowed name macOS still
+//! shows banners for (Terminal's are dropped).
 
 use std::path::Path;
 use std::sync::OnceLock;
@@ -15,8 +16,8 @@ use objc2::{define_class, msg_send, AllocAnyThread};
 use objc2_foundation::{NSArray, NSError, NSString, NSURL};
 use objc2_user_notifications::{
     UNAuthorizationOptions, UNMutableNotificationContent, UNNotification, UNNotificationAttachment,
-    UNNotificationPresentationOptions, UNNotificationRequest, UNNotificationResponse, UNNotificationSound,
-    UNUserNotificationCenter, UNUserNotificationCenterDelegate,
+    UNNotificationPresentationOptions, UNNotificationRequest, UNNotificationResponse, UNUserNotificationCenter,
+    UNUserNotificationCenterDelegate,
 };
 
 /// Who a dev binary's notifications come from.
@@ -45,9 +46,7 @@ define_class!(
             _notification: &UNNotification,
             handler: &block2::DynBlock<dyn Fn(UNNotificationPresentationOptions)>,
         ) {
-            handler.call((UNNotificationPresentationOptions::Banner
-                | UNNotificationPresentationOptions::List
-                | UNNotificationPresentationOptions::Sound,));
+            handler.call((UNNotificationPresentationOptions::Banner | UNNotificationPresentationOptions::List,));
         }
 
         /// A click: the request's identifier is the project.
@@ -100,7 +99,7 @@ pub fn start(bundled: bool, on_click: impl Fn(String) + Send + Sync + 'static) {
             eprintln!("[pitwall] notifications allowed: {}", granted.as_bool());
         }
     });
-    center.requestAuthorizationWithOptions_completionHandler(UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound, &answered);
+    center.requestAuthorizationWithOptions_completionHandler(UNAuthorizationOptions::Alert, &answered);
 }
 
 /// A notification about `path`, with `image` (a PNG) beside the text.
@@ -114,7 +113,7 @@ pub fn post(path: String, title: String, body: String, image: Option<&Path>) {
     // Waiting for the click blocks, so each notification gets its own thread.
     thread::spawn(move || {
         let mut notification = mac_notification_sys::Notification::new();
-        notification.title(&title).message(&body).default_sound().wait_for_click(true);
+        notification.title(&title).message(&body).wait_for_click(true);
         if let Some(image) = image.as_deref() {
             notification.content_image(image);
         }
@@ -128,7 +127,6 @@ fn post_bundled(path: &str, title: &str, body: &str, image: Option<&Path>) {
     let content = UNMutableNotificationContent::new();
     content.setTitle(&NSString::from_str(title));
     content.setBody(&NSString::from_str(body));
-    content.setSound(Some(&UNNotificationSound::defaultSound()));
 
     if let Some(attachment) = image.and_then(attach) {
         content.setAttachments(&NSArray::from_retained_slice(&[attachment]));

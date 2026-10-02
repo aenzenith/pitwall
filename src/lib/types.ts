@@ -68,6 +68,8 @@ export type Settings = {
   editor: string;
   openUrlOnStart: boolean;
   notify: boolean;
+  /** Which of Pitwall's sounds each event plays (src-tauri/sounds); "" for none. */
+  sounds: { claudeFinished: string; claudeAsking: string; serverCrashed: string; serverReady: string; commandDone: string };
   launchAtLogin: boolean;
   shortcut: boolean;
   /** Global-hotkey form: `Ctrl+Alt+KeyP`, `Alt+Space`. */

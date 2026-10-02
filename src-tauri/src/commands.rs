@@ -82,6 +82,12 @@ pub fn project_folders(state: State<'_, AppState>) -> Vec<crate::core::Folder> {
     state.core.project_folders()
 }
 
+/// Settings' preview of a notification sound.
+#[tauri::command]
+pub fn play_sound(app: AppHandle, id: String) {
+    crate::play_sound(&app, id);
+}
+
 /// The day's timeline (`YYYY-MM-DD`; today without one). It asks every project's git, so it
 /// runs off the main thread.
 #[tauri::command]

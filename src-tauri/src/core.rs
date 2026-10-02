@@ -71,6 +71,8 @@ pub enum CoreEvent {
     Open(String),
     /// A system notification: Claude waits in this project.
     Notify { path: String, title: String, body: String },
+    /// Play one of Pitwall's sounds (`sound.rs`), by id.
+    Sound(String),
     /// Output of a project terminal.
     Terminal { id: u64, seq: u64, data: String },
     /// A project terminal ended.
@@ -240,6 +242,8 @@ struct Inner {
     disposed: bool,
     crash_unseen: bool,
     last_state: String,
+    /// Each project's server status as last published, to hear it crash or come up.
+    statuses: HashMap<String, &'static str>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -371,19 +375,24 @@ impl Core {
 
     /// Emits `State` only when the snapshot actually changed.
     pub fn notify(&self) {
-        let changed = {
+        let (changed, sounds) = {
             let mut inner = self.lock();
             prune_pending(&mut inner);
-            let json = serde_json::to_string(&build_snapshot(&inner)).unwrap_or_default();
+            let snapshot = build_snapshot(&inner);
+            let sounds = server_sounds(&mut inner, &snapshot.projects);
+            let json = serde_json::to_string(&snapshot).unwrap_or_default();
 
             if json == inner.last_state {
-                false
+                (false, sounds)
             } else {
                 inner.last_state = json;
-                true
+                (true, sounds)
             }
         };
 
+        for sound in sounds {
+            self.emit(CoreEvent::Sound(sound));
+        }
         if changed {
             self.emit(CoreEvent::State);
         }
@@ -1222,6 +1231,8 @@ impl Core {
         };
         self.record_activity(&scan.sessions, &projects);
 
+        let sounds = self.settings().sounds;
+        let mut sound = None;
         for (path, name, kind) in announce {
             let body = match kind {
                 TurnKind::Finished => t!("core.notify.finished"),
@@ -1229,6 +1240,13 @@ impl Core {
                 TurnKind::Permission => t!("core.notify.permission"),
             };
             self.emit(CoreEvent::Notify { path, title: name, body });
+            // One sound for the lot; a question outranks a finished turn.
+            if kind != TurnKind::Finished || sound.is_none() {
+                sound = Some(if kind == TurnKind::Finished { &sounds.claude_finished } else { &sounds.claude_asking });
+            }
+        }
+        if let Some(sound) = sound.filter(|s| !s.is_empty()) {
+            self.emit(CoreEvent::Sound(sound.clone()));
         }
 
         self.notify();
@@ -1363,6 +1381,26 @@ fn take_lines(rest: &mut Vec<u8>) -> Vec<String> {
         .split_terminator('\n')
         .map(|line| crate::resolve::strip_ansi(line.trim_end_matches('\r')))
         .collect()
+}
+
+/// Servers, ours or a peer's, that just crashed or came up: their sounds, once each. A project
+/// first seen makes none.
+fn server_sounds(inner: &mut Inner, projects: &[ProjectView]) -> Vec<String> {
+    let mut sounds: Vec<String> = Vec::new();
+
+    for project in projects {
+        let before = inner.statuses.insert(project.path.clone(), project.status);
+        let sound = match (before, project.status) {
+            (Some(was), "crashed") if was != "crashed" => &inner.settings.sounds.server_crashed,
+            (Some(was), "running") if was != "running" => &inner.settings.sounds.server_ready,
+            _ => continue,
+        };
+        if !sound.is_empty() && !sounds.contains(sound) {
+            sounds.push(sound.clone());
+        }
+    }
+
+    sounds
 }
 
 /// The sessions working or waiting on you, by project.

@@ -11,6 +11,7 @@ mod ports;
 mod registry;
 mod resolve;
 mod settings;
+mod sound;
 mod tray;
 
 use std::path::PathBuf;
@@ -81,6 +82,7 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
             let _ = app.opener().open_url(url, None::<&str>);
         }
         CoreEvent::Notify { path, title, body } => notify(app, path, title, body),
+        CoreEvent::Sound(id) => play_sound(app, id),
         CoreEvent::Terminal { id, seq, data } => {
             let _ = app.emit_to(MAIN, "terminal", TerminalData { id, seq, data });
         }
@@ -95,6 +97,11 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
 fn notify(app: &AppHandle, path: String, title: String, body: String) {
     let image = claude_mark(app);
     notify::post(path, title, body, image.as_deref().map(std::path::Path::new));
+}
+
+/// Plays one of Pitwall's notification sounds (from a notification, or Settings' preview).
+pub fn play_sound(app: &AppHandle, id: String) {
+    let _ = app.run_on_main_thread(move || sound::play(&id));
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -285,6 +292,7 @@ pub fn run() {
             commands::clear_projects_dir,
             commands::project_folders,
             commands::day_summary,
+            commands::play_sound,
             commands::open_terminal,
             commands::rename_terminal,
             commands::write_terminal,
