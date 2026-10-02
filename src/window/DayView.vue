@@ -748,6 +748,11 @@ onBeforeUnmount(() => {
 .part {
   flex: 0 1 0;
   min-width: 3px;
+  cursor: pointer;
+}
+
+.part:hover {
+  filter: brightness(1.2);
 }
 
 .split-legend {

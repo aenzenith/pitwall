@@ -86,7 +86,7 @@ export function useReorder(list: Ref<HTMLElement | null>) {
       if (!layout) return;
       dragging.value = press.path;
       target = layout.from;
-      document.body.style.cursor = "grabbing";
+      document.body.classList.add("grabbing");
       scrolling = requestAnimationFrame(autoScroll);
     }
 
@@ -152,7 +152,7 @@ export function useReorder(list: Ref<HTMLElement | null>) {
   function up(): void {
     window.removeEventListener("pointermove", move);
     cancelAnimationFrame(scrolling);
-    document.body.style.cursor = "";
+    document.body.classList.remove("grabbing");
 
     const moved = dragging.value;
     const drop = layout;

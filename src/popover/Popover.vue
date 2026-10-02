@@ -328,6 +328,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
   padding: 6px 4px 6px 8px;
   border-radius: var(--radius-control);
 }

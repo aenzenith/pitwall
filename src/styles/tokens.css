@@ -124,13 +124,40 @@ html[data-surface="main"] #app {
   height: 100%;
 }
 
-/* macOS controls keep the arrow cursor. A label stays on one line in every language (Chinese
-   and Japanese may break between any two characters); the layout around it gives way. */
+/* A label stays on one line in every language (Chinese and Japanese may break between any two
+   characters); the layout around it gives way. */
 button {
   font: inherit;
   color: inherit;
-  cursor: default;
   white-space: nowrap;
+}
+
+/* Whatever can be clicked shows the hand; a disabled control keeps the arrow. Rows that are
+   clickable without being buttons say so in their own styles. */
+button,
+select,
+a[href],
+[role="button"],
+[role="tab"],
+[role="option"],
+input[type="checkbox"],
+input[type="radio"],
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+[aria-disabled="true"] {
+  cursor: default;
+}
+
+/* While a row is dragged into place, the closed hand everywhere. */
+body.grabbing,
+body.grabbing * {
+  cursor: grabbing !important;
 }
 
 button:focus-visible {

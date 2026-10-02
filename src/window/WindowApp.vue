@@ -451,6 +451,7 @@ input[type="search"] {
 .trow {
   padding: 7px 10px;
   border-radius: 8px;
+  cursor: pointer;
 }
 
 .trow:hover {
