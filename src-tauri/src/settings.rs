@@ -23,6 +23,14 @@ pub struct CustomCommand {
     pub with_server: bool,
 }
 
+/// One of a project's other addresses: staging, production, the admin panel, the issue tracker…
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ProjectLink {
+    pub name: String,
+    pub url: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ProjectSettings {
@@ -34,6 +42,8 @@ pub struct ProjectSettings {
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<CustomCommand>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<ProjectLink>,
 }
 
 /// Which of Pitwall's sounds (`sounds/`) each event plays; empty for none.

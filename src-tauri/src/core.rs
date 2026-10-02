@@ -1047,6 +1047,22 @@ impl Core {
         local
     }
 
+    /// Opens one of a project's links: the tab that already shows it comes forward, else it opens.
+    /// Off the calling thread, as asking the browsers can take a moment.
+    pub fn open_url(self: &Arc<Self>, url: &str) {
+        let url = crate::links::normalize(url);
+        if url.is_empty() {
+            return;
+        }
+        let core = Arc::clone(self);
+
+        thread::spawn(move || {
+            if !crate::browser::focus_page(&url) {
+                core.emit(CoreEvent::Open(url));
+            }
+        });
+    }
+
     pub fn open_browser(self: &Arc<Self>, path: &str) {
         let local = self.snapshot().projects.into_iter().find(|p| p.path == path).and_then(|p| p.url);
         self.show_in_browser(path, local, false);

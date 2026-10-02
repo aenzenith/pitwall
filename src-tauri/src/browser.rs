@@ -167,6 +167,21 @@ end run
     }
 }
 
+/// Brings forward a tab showing `url` or a page under it (a project's link: its path counts, so a
+/// GitHub link doesn't bring up any GitHub tab); false when there is none.
+pub fn focus_page(url: &str) -> bool {
+    let prefix = url.trim_end_matches('/');
+    if !prefix.starts_with("http://") && !prefix.starts_with("https://") {
+        return false;
+    }
+
+    #[cfg(target_os = "macos")]
+    return mac::focus_tab(&[prefix.to_string()], false);
+
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
 /// Brings forward a browser tab showing one of `urls`, reloaded with `reload` (a server that
 /// just came back); false when there is none (or asking the browsers isn't possible), and the
 /// address should be opened instead.

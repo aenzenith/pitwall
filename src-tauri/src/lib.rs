@@ -5,6 +5,7 @@ mod core;
 mod git;
 mod hooks;
 mod i18n;
+mod links;
 #[cfg(target_os = "macos")]
 mod notify;
 mod ports;
@@ -102,6 +103,21 @@ fn notify(app: &AppHandle, path: String, title: String, body: String) {
 /// Plays one of Pitwall's notification sounds (from a notification, or Settings' preview).
 pub fn play_sound(app: &AppHandle, id: String) {
     let _ = app.run_on_main_thread(move || sound::play(&id));
+}
+
+/// Puts `text` on the clipboard.
+pub fn copy_text(app: &AppHandle, text: String) {
+    #[cfg(target_os = "macos")]
+    let _ = app.run_on_main_thread(move || {
+        let board = objc2_app_kit::NSPasteboard::generalPasteboard();
+        board.clearContents();
+        // SAFETY: an AppKit constant, read on the main thread.
+        let kind = unsafe { objc2_app_kit::NSPasteboardTypeString };
+        board.setString_forType(&objc2_foundation::NSString::from_str(&text), kind);
+    });
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, text);
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -291,6 +307,9 @@ pub fn run() {
             commands::pick_projects_dir,
             commands::clear_projects_dir,
             commands::project_folders,
+            commands::open_url,
+            commands::copy_text,
+            commands::link_suggestions,
             commands::day_summary,
             commands::play_sound,
             commands::open_terminal,

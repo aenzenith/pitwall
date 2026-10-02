@@ -82,6 +82,24 @@ pub fn project_folders(state: State<'_, AppState>) -> Vec<crate::core::Folder> {
     state.core.project_folders()
 }
 
+/// Opens one of a project's links; a tab that already shows it comes forward.
+#[tauri::command]
+pub fn open_url(app: AppHandle, state: State<'_, AppState>, url: String) {
+    step_aside(&app);
+    state.core.open_url(&url);
+}
+
+#[tauri::command]
+pub fn copy_text(app: AppHandle, text: String) {
+    crate::copy_text(&app, text);
+}
+
+/// Addresses the project names itself (git remote, `.env`, `package.json`), offered as links.
+#[tauri::command]
+pub async fn link_suggestions(path: String) -> Vec<crate::links::LinkSuggestion> {
+    tauri::async_runtime::spawn_blocking(move || crate::links::suggestions(&path)).await.unwrap_or_default()
+}
+
 /// Settings' preview of a notification sound.
 #[tauri::command]
 pub fn play_sound(app: AppHandle, id: String) {

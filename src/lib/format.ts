@@ -65,6 +65,11 @@ export function claudeLine(project: Project, now: number): string {
   return project.claude ? turnLine(project.claude, now) : "";
 }
 
+/** An address without its scheme and trailing slash, as a link row shows it. */
+export function bareUrl(url: string): string {
+  return url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/\/$/, "");
+}
+
 /** What Claude waits on you with, and since when: `Finished · 2 min ago`. */
 export function turnLine(turn: Turn, now: number): string {
   const what = t(({ finished: "claude.finished", asking: "claude.asking", permission: "claude.permission" } as const)[turn.kind]);

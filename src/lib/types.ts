@@ -20,7 +20,13 @@ export type CustomCommand = {
   withServer: boolean;
 };
 
-export type ProjectSettings = { script?: string; port?: number; url?: string; commands?: CustomCommand[] };
+/** One of a project's other addresses: staging, production, the admin panel, the issue tracker… */
+export type ProjectLink = { name: string; url: string };
+
+/** An address the project names itself, offered as a link; `source`: `git`, `.env`, `package.json`. */
+export type LinkSuggestion = { name: string; url: string; source: string };
+
+export type ProjectSettings = { script?: string; port?: number; url?: string; commands?: CustomCommand[]; links?: ProjectLink[] };
 
 export type JobResult = { ok: boolean; code: number | null; stopped: boolean; finishedAt: number };
 
