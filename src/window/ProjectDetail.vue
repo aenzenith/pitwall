@@ -172,8 +172,8 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
     <div v-else ref="stage" :class="['stage', { animated: !outputDragging }]">
       <div class="sections" :style="{ bottom: `${shownOutput}px` }">
         <ServerBlock :project="project" :address="address" />
-        <LinksBlock :project="project" :found="found" />
         <ClaudeCard :project="project" />
+        <LinksBlock :project="project" :found="found" />
         <CommandsBlock v-model:confirming="confirming" :project="project" :tab="tab" @show="showTab" @edit="editCommand" @remove="removeCommand" />
       </div>
 
