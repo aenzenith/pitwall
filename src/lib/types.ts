@@ -23,6 +23,9 @@ export type CustomCommand = {
 /** One of a project's other addresses: staging, production, the admin panel, the issue tracker… */
 export type ProjectLink = { name: string; url: string };
 
+/** Pitwall for VS Code in the chosen editor: its version when installed; where it installs from. */
+export type ExtensionStatus = { version: string | null; marketplace: boolean };
+
 /** An address the project names itself, offered as a link; `source`: `git`, `.env`, `package.json`. */
 export type LinkSuggestion = { name: string; url: string; source: string };
 

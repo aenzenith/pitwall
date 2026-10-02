@@ -2,6 +2,7 @@ mod browser;
 mod claude;
 mod commands;
 mod core;
+mod extension;
 mod git;
 mod hooks;
 mod i18n;
@@ -310,6 +311,8 @@ pub fn run() {
             commands::open_url,
             commands::copy_text,
             commands::link_suggestions,
+            commands::extension_status,
+            commands::open_extension_page,
             commands::day_summary,
             commands::play_sound,
             commands::open_terminal,

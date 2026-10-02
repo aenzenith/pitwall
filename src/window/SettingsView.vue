@@ -6,10 +6,10 @@ import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Rich from "../components/Rich.vue";
 import { useBackdropClose } from "../lib/dialog";
-import { shortcutLabel } from "../lib/format";
+import { editorName, shortcutLabel } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { api, snapshot } from "../lib/store";
-import type { Settings } from "../lib/types";
+import type { ExtensionStatus, Settings } from "../lib/types";
 
 const emit = defineEmits<{ close: [] }>();
 
@@ -183,6 +183,23 @@ watch(
   { immediate: true },
 );
 
+/* ---------- Pitwall for VS Code ---------- */
+
+/** Whether the chosen editor has the extension; read again when the editor changes and when the
+ * window comes back (after installing it there). */
+const extension = ref<ExtensionStatus | null>(null);
+const extensionWhy: Key[] = ["settings.extWhyServers", "settings.extWhySeen", "settings.extWhyReveal", "settings.extWhyProjects"];
+
+async function checkExtension(): Promise<void> {
+  const editor = form.editor;
+  const status = await api.extensionStatus(editor);
+  if (editor === form.editor) extension.value = status;
+}
+
+watch(() => form.editor, () => void checkExtension(), { immediate: true });
+window.addEventListener("focus", checkExtension);
+onBeforeUnmount(() => window.removeEventListener("focus", checkExtension));
+
 async function save(): Promise<void> {
   error.value = "";
   try {
@@ -313,6 +330,26 @@ async function save(): Promise<void> {
               <option value="windsurf">Windsurf</option>
             </select>
           </label>
+
+          <!-- Pitwall for VS Code: there or not in the chosen editor, how to get it, and why. -->
+          <div class="hook">
+            <div class="hook-text">
+              <span class="hook-title">
+                Pitwall for VS Code
+                <span :class="['badge', { on: extension?.version }]">
+                  {{ extension?.version ? t("settings.extInstalled", { version: extension.version }) : t("settings.extMissing") }}
+                </span>
+              </span>
+              <small>{{ t("settings.extIntro") }}</small>
+              <ul class="why">
+                <li v-for="key in extensionWhy" :key="key">{{ t(key) }}</li>
+              </ul>
+              <small v-if="extension && !extension.version && !extension.marketplace">{{ t("settings.extVsixHint", { editor: editorName(form.editor) }) }}</small>
+            </div>
+            <button v-if="extension && !extension.version" type="button" class="control hook-button" @click="api.openExtensionPage(form.editor)">
+              {{ t(extension.marketplace ? "settings.extOpenPage" : "settings.extDownload") }}
+            </button>
+          </div>
         </fieldset>
 
         <fieldset v-show="tab === 'general'" :aria-label="t('settings.general')">
@@ -632,6 +669,17 @@ code {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.why {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .hook small {

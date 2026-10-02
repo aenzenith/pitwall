@@ -100,6 +100,18 @@ pub async fn link_suggestions(path: String) -> Vec<crate::links::LinkSuggestion>
     tauri::async_runtime::spawn_blocking(move || crate::links::suggestions(&path)).await.unwrap_or_default()
 }
 
+/// Whether `editor` (as in Settings) has Pitwall for VS Code.
+#[tauri::command]
+pub fn extension_status(editor: String) -> crate::extension::ExtensionStatus {
+    crate::extension::status(&editor)
+}
+
+/// Where to get Pitwall for VS Code for `editor`: its page in the editor, or the release.
+#[tauri::command]
+pub fn open_extension_page(app: AppHandle, editor: String) -> Result<(), String> {
+    app.opener().open_url(crate::extension::page(&editor), None::<&str>).map_err(|error| error.to_string())
+}
+
 /// Settings' preview of a notification sound.
 #[tauri::command]
 pub fn play_sound(app: AppHandle, id: String) {
