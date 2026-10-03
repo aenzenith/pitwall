@@ -202,7 +202,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
     <!-- Between the bars, the page's body on its own ground: the smoke, lit round the dials. -->
     <div class="stage">
       <FuelBackdrop :window="session" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
-      <!-- Black rising from the bottom, gone by the trip computer's top. -->
+      <!-- The ground's own colour rising from the bottom, gone by the trip computer's top. -->
       <div v-if="shade" class="shade" :style="{ height: `${shade}px` }" aria-hidden="true"></div>
 
       <div ref="scroller" class="scroll" @scroll.passive="measureShade">
@@ -313,7 +313,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-input);
+  background: var(--bg-detail);
 }
 
 /* Over the backdrop, under the page. */
@@ -323,7 +323,12 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   right: 0;
   bottom: 0;
   pointer-events: none;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.45) 45%, transparent);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--bg-detail) 75%, transparent),
+    color-mix(in srgb, var(--bg-detail) 45%, transparent) 45%,
+    transparent
+  );
 }
 
 /* Only the page body scrolls, never the window. Its size, width and height, sizes the dials. */

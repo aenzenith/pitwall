@@ -177,7 +177,7 @@ void main() {
 `;
 
 const canvas = ref<HTMLCanvasElement | null>(null);
-/** The first frame is up: the canvas fades in over the plain panel. */
+/** The first frame is up: the canvas shows at once, over the plain panel. */
 const ready = ref(false);
 const reducedMotion = ref(false);
 
@@ -258,7 +258,7 @@ function setUp(target: HTMLCanvasElement): Scene | null {
 }
 
 function colour(): void {
-  base = token("--bg-input");
+  base = token("--bg-detail");
   tint = token(props.stale ? "--idle-ring" : low.value ? "--crash" : "--claude");
 }
 
@@ -399,16 +399,9 @@ onBeforeUnmount(() => {
   height: 100%;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 1.2s ease;
 }
 
 .backdrop.ready {
   opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .backdrop {
-    transition: none;
-  }
 }
 </style>
