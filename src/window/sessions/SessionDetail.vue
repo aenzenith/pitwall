@@ -3,28 +3,38 @@ import { computed } from "vue";
 
 import ClaudeSpark from "../../components/ClaudeSpark.vue";
 import Icon from "../../components/Icon.vue";
+import Markdown from "../../components/Markdown.vue";
 import { clock, duration } from "../../lib/day";
 import { ago, editorName } from "../../lib/format";
 import { compactText, moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { dragRegion, isMac, isWindows } from "../../lib/platform";
-import { endedAt, lastActive, modelsText, runsElsewhere, sessionTitle, unlinkedEditor } from "../../lib/sessions";
+import { endedAt, lastActive, modelsText, runsElsewhere, sessionTerminal, sessionTitle, unlinkedEditor } from "../../lib/sessions";
 import { snapshot } from "../../lib/store";
-import type { SessionRow } from "../../lib/types";
+import type { SessionRow, TerminalView } from "../../lib/types";
 import OriginLabel from "./OriginLabel.vue";
 import SessionDay from "./SessionDay.vue";
 import SessionNotice from "./SessionNotice.vue";
+import SessionTerminal from "./SessionTerminal.vue";
 
 /**
- * One session: what it is doing, its day and its tokens. Claude's state reads as a project's
- * Claude card does (detail/ClaudeCard), its one button the same; bringing it up, opening or adding
- * its project are the list's (double-click, Enter, the context menu). `others`: the other sessions
- * of its project that wait on you (seen is kept per project); `error`: why adding its folder failed.
+ * One session: what it is doing, its day and its tokens, and under them its terminal when it runs
+ * in one of Pitwall's, else what Claude last said in it. The Sessions page's details, and a
+ * board card's once it has a session.
+ * Claude's state reads as a project's Claude card does (detail/ClaudeCard), its one button the
+ * same; bringing it up, opening or adding its project are the list's (double-click, Enter, the
+ * context menu). `others`: the other sessions of its project that wait on you (seen is kept per
+ * project); `error`: why adding its folder failed; `terminal`: the Pitwall terminal to show, as
+ * the caller knows it (a board card's; null: none), left out: the one its origin names; `note`:
+ * a board card's note, shown once its work is over; `lastMessage`: what Claude last said in it
+ * (Markdown), shown in the terminal's place. `hold`: the keyboard is in its terminal.
  */
-const props = defineProps<{ row: SessionRow; now: number; others: number; error: string }>();
-const emit = defineEmits<{ markSeen: [] }>();
+const props = defineProps<{ row: SessionRow; now: number; others: number; error: string; terminal?: TerminalView | null; lastMessage?: string }>();
+const emit = defineEmits<{ markSeen: []; hold: [on: boolean] }>();
 
 const title = computed(() => sessionTitle(props.row));
+/** Only Pitwall's own terminals show here; a session running anywhere else stays a summary. */
+const ownTerminal = computed(() => (props.terminal === undefined ? sessionTerminal(props.row, snapshot.value?.projects ?? []) : props.terminal));
 const waiting = computed(() => props.row.phase === "waiting");
 const permission = computed(() => waiting.value && props.row.turn?.kind === "permission");
 const elsewhere = computed(() => runsElsewhere(props.row));
@@ -166,64 +176,23 @@ const fuel = computed(() => {
         <span v-else class="note">{{ t("sessions.fuel.none") }}</span>
       </section>
 
-      <p class="privacy"><Icon name="lock" :size="12" />{{ t("sessions.privacy") }}</p>
+      <!-- Its terminal shows the conversation itself, so the line on what is shown of it goes.
+           In its place, what Claude last said. -->
+      <SessionTerminal v-if="ownTerminal" :terminal="ownTerminal" @hold="emit('hold', $event)" />
+      <template v-else>
+        <section v-if="lastMessage" class="block" :aria-label="t('sessions.lastMessage')">
+          <div class="section-label">{{ t("sessions.lastMessage") }}</div>
+          <Markdown :text="lastMessage" />
+        </section>
+        <p class="privacy"><Icon name="lock" :size="12" />{{ t("sessions.privacy") }}</p>
+      </template>
     </div>
   </section>
 </template>
 
 <style scoped src="../detail/detail.css"></style>
+<style scoped src="./panel.css"></style>
 <style scoped>
-/* As wide as the project details, so the panel line stays where it was. */
-.detail {
-  width: 380px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--bg-detail);
-  border-left: 1px solid var(--line);
-  overflow: hidden;
-}
-
-/* 100px: the toolbar (56) and the filter bar (44). */
-.head {
-  height: 100px;
-  flex-shrink: 0;
-  padding: 13px 20px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  border-bottom: 1px solid var(--line);
-}
-
-.name {
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 30px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.where {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--text-subtle);
-  white-space: nowrap;
-}
-
-.project {
-  flex-shrink: 0;
-  max-width: 50%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #c7ccd3;
-}
-
 .outside {
   flex-shrink: 0;
   padding: 0 6px;
@@ -236,23 +205,6 @@ const fuel = computed(() => {
 
 .where .origin {
   overflow: hidden;
-}
-
-.path {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Only the details scroll, never the window. */
-.body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 20px;
 }
 
 /* ---------- Claude's state ---------- */
@@ -351,6 +303,7 @@ const fuel = computed(() => {
 }
 
 .privacy {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 6px;

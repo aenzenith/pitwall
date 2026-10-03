@@ -494,7 +494,8 @@
   "sessions.fuel.api": "≈ what the API would charge, not what you're billed. Subagents included.",
   "sessions.fuel.unpriced": "Some of its models have no known price; left out of the cost.",
   "sessions.fuel.none": "No tokens read for it today.",
-  "sessions.privacy": "Message content is never shown: only state, names and token counts.",
+  "sessions.privacy": "Of the conversation, only Claude's last message is shown: read when you look, never stored.",
+  "sessions.lastMessage": "Last message",
   "sessions.hiddenCount": {
     "one": "{count} session in a folder outside your projects is hidden.",
     "other": "{count} sessions in folders outside your projects are hidden."

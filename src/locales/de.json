@@ -494,7 +494,8 @@
   "sessions.fuel.api": "≈ was die API berechnen würde, nicht deine Rechnung. Subagenten eingerechnet.",
   "sessions.fuel.unpriced": "Für einige ihrer Modelle ist kein Preis bekannt; sie fehlen in den Kosten.",
   "sessions.fuel.none": "Heute keine Tokens für sie gelesen.",
-  "sessions.privacy": "Nachrichteninhalte werden nie gezeigt: nur Status, Namen und Token-Zahlen.",
+  "sessions.privacy": "Vom Gespräch wird nur Claudes letzte Nachricht gezeigt: beim Ansehen gelesen, nie gespeichert.",
+  "sessions.lastMessage": "Letzte Nachricht",
   "sessions.hiddenCount": {
     "one": "{count} Sitzung in einem Ordner außerhalb deiner Projekte ist ausgeblendet.",
     "other": "{count} Sitzungen in Ordnern außerhalb deiner Projekte sind ausgeblendet."

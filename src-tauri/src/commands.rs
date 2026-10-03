@@ -142,6 +142,14 @@ pub async fn claude_sessions(app: AppHandle) -> Result<crate::core::SessionsView
     .map_err(|error| error.to_string())
 }
 
+/// What Claude last said in a session, for its details (the Sessions page's, a board card's):
+/// read from its log off the main thread, never kept.
+#[tauri::command]
+pub async fn claude_last_message(app: AppHandle, session: String) -> Option<String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.last_message(&session)).await.ok().flatten()
+}
+
 /* ---------- project terminals ---------- */
 
 #[tauri::command]

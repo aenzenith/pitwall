@@ -1,6 +1,8 @@
 //! Claude Code session watcher. Port of the extension's `src/claude.ts`.
 //! Reads only the last lines of each session log, and only to see whether the turn ended;
-//! message text is never kept. Where the opt-in hook is installed (hooks.rs), its events decide
+//! message text is never kept. One exception: what Claude last said in a session, read when
+//! that session's details ask for it (`last_message`: the Sessions page, a board card) and
+//! handed over, never kept. Where the opt-in hook is installed (hooks.rs), its events decide
 //! instead: a prompt sent, the turn over, a permission prompt or question open, the session
 //! gone. Logs stay the fallback for sessions the hook hasn't reported. "Seen" state lives in the
 //! shared `claude-seen.json`.
@@ -216,6 +218,51 @@ pub fn read_title(lines: &[&str]) -> Option<String> {
     generated
 }
 
+/// What Claude last said in these lines: the text blocks of the last assistant line that has
+/// any, nothing of its thinking or of a tool's input. Side-chain (sub-agent) and meta entries
+/// are skipped, and nothing the user wrote is read. For a session's details only
+/// (`last_message`).
+pub fn read_last_message(lines: &[&str]) -> Option<String> {
+    for line in lines.iter().rev() {
+        if !line.contains("\"assistant\"") {
+            continue;
+        }
+
+        let Ok(entry) = serde_json::from_str::<Value>(line.trim()) else {
+            continue;
+        };
+        let flag = |key: &str| entry.get(key).and_then(Value::as_bool).unwrap_or(false);
+
+        if entry.get("type").and_then(Value::as_str) != Some("assistant") || flag("isSidechain") || flag("isMeta") {
+            continue;
+        }
+
+        let Some(blocks) = entry.get("message").and_then(|m| m.get("content")).and_then(Value::as_array) else {
+            continue;
+        };
+        let said: Vec<&str> = blocks
+            .iter()
+            .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|block| block.get("text").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .collect();
+
+        if !said.is_empty() {
+            return Some(said.join("\n\n"));
+        }
+    }
+
+    None
+}
+
+/// What Claude last said in the session logged in `file` (`read_last_message`): read from the
+/// file's end when asked and handed over, never kept or logged.
+pub fn last_message(file: &Path) -> Option<String> {
+    let size = fs::metadata(file).ok()?.len();
+    scan_tail(file, size, read_last_message)
+}
+
 /// Claude Code's folder name for a project, as Claude Code makes it: every UTF-16 unit that isn't
 /// an ASCII letter or digit becomes `-` (`C:\Users\me\proj` is `C--Users-me-proj`). A name
 /// longer than 200 is cut there and gets the path's hash, in base 36, after a `-`.
@@ -239,9 +286,9 @@ fn path_hash(folder_path: &str) -> u64 {
     i64::from(hash).unsigned_abs()
 }
 
-/// Reads from the end of the file, growing the window until a line decides. A single tool
-/// output line can be hundreds of KB, so a fixed tail is not enough.
-fn read_file_tail(file: &Path, size: u64) -> Option<Verdict> {
+/// Reads from the end of the file, growing the window until `read` finds what it looks for. A
+/// single tool output line can be hundreds of KB, so a fixed tail is not enough.
+fn scan_tail<T>(file: &Path, size: u64, read: impl Fn(&[&str]) -> Option<T>) -> Option<T> {
     let mut handle = File::open(file).ok()?;
     let mut span = TAIL_START;
 
@@ -259,14 +306,19 @@ fn read_file_tail(file: &Path, size: u64) -> Option<Verdict> {
             lines.remove(0);
         }
 
-        let verdict = read_tail(&lines);
+        let found = read(&lines);
 
-        if verdict.is_some() || length >= size || span >= TAIL_MAX {
-            return verdict.map(|verdict| Verdict { title: read_title(&lines), ..verdict });
+        if found.is_some() || length >= size || span >= TAIL_MAX {
+            return found;
         }
 
         span *= 4;
     }
+}
+
+/// What the log's last decisive line says, with the session's name from the same lines.
+fn read_file_tail(file: &Path, size: u64) -> Option<Verdict> {
+    scan_tail(file, size, |lines| read_tail(lines).map(|verdict| Verdict { title: read_title(lines), ..verdict }))
 }
 
 /// A session log as last read.
@@ -1122,6 +1174,24 @@ mod tests {
         assert_eq!(read_tail(&[asking]).unwrap().turn.unwrap().kind, TurnKind::Asking);
         assert_eq!(read_tail(&[finished, working]).unwrap().turn, None);
         assert_eq!(read_tail(&[noise]), None);
+    }
+
+    /// A session's details are the one place message text is read: only what Claude last said,
+    /// never the user's words, Claude's thinking, a tool's input or a sub-agent's lines.
+    #[test]
+    fn the_last_message_is_only_what_claude_said() {
+        let prompt = r#"{"type":"user","message":{"role":"user","content":"my secret prompt"}}"#;
+        let earlier = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Looking into it."}]}}"#;
+        let tool = r#"{"type":"assistant","message":{"stop_reason":"tool_use","content":[{"type":"thinking","thinking":"private thought"},{"type":"tool_use","name":"Bash","input":{"command":"cat .env"}}]}}"#;
+        let result = r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"\"type\":\"assistant\" TOKEN=abc"}]}}"#;
+        let answer = r#"{"type":"assistant","message":{"stop_reason":"end_turn","content":[{"type":"thinking","thinking":"private thought"},{"type":"text","text":" Moved the port check. "},{"type":"text","text":"Tests pass."}]}}"#;
+        let sidechain = r#"{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"text","text":"sub-agent report"}]}}"#;
+        let meta = r#"{"type":"assistant","isMeta":true,"message":{"content":[{"type":"text","text":"meta line"}]}}"#;
+
+        assert_eq!(read_last_message(&[prompt, earlier, tool, result, answer, sidechain, meta]).as_deref(), Some("Moved the port check.\n\nTests pass."));
+        // Still at work: the last thing said, nothing of the tool call after it.
+        assert_eq!(read_last_message(&[prompt, earlier, tool, result]).as_deref(), Some("Looking into it."));
+        assert_eq!(read_last_message(&[prompt, tool, result, sidechain, meta]), None);
     }
 
     #[test]

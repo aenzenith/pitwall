@@ -15,8 +15,9 @@ import Spinner from "../components/Spinner.vue";
 import { t } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
 import { dragRegion } from "../lib/platform";
-import { bringKeys, FILTERS, keepOrder, layout, matches, resumeCommand, sectionOf, type Layout } from "../lib/sessions";
-import { api, loadSessions, now, sessions } from "../lib/store";
+import { messageState, useLastMessage } from "../lib/lastMessage";
+import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionTerminal, type Layout } from "../lib/sessions";
+import { api, loadSessions, now, sessions, snapshot } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionList from "./sessions/SessionList.vue";
@@ -55,15 +56,20 @@ const fresh = computed(() => layout(pool.value, current.value.sections));
 
 /**
  * While the pointer or the keyboard is on the list, rows keep their places (lib/sessions:
- * keepOrder): a session that changes state stays put until the list is let go.
+ * keepOrder): a session that changes state stays put until the list is let go. So it is while the
+ * keyboard is in the selected session's terminal: answered there, it stays selected even when it
+ * leaves the filter.
  */
 const holding = ref(false);
 const frozen = ref<Layout | null>(null);
 const shown = computed<Layout>(() => (holding.value && frozen.value ? keepOrder(frozen.value, fresh.value, new Set(pool.value.map((row) => row.id))) : fresh.value));
 
-function hold(on: boolean): void {
-  holding.value = on;
-  frozen.value = on ? (frozen.value ?? fresh.value) : null;
+const held = { list: false, terminal: false };
+
+function hold(by: keyof typeof held, on: boolean): void {
+  held[by] = on;
+  holding.value = held.list || held.terminal;
+  frozen.value = holding.value ? (frozen.value ?? fresh.value) : null;
 }
 
 // A new filter or search is a new list: its order is taken as it stands.
@@ -87,12 +93,14 @@ watch(
 const selected = computed(() => (selectedId.value ? (byId.value.get(selectedId.value) ?? null) : null));
 
 /** The selected session's project's other sessions waiting on you: marking it seen clears them too. */
-const others = computed(() => {
-  const row = selected.value;
-  if (!row) return 0;
-  const where = row.path ?? row.folder;
-  return all.value.filter((other) => other.id !== row.id && other.phase === "waiting" && (other.path ?? other.folder) === where).length;
-});
+const others = computed(() => (selected.value ? othersWaiting(selected.value, all.value) : 0));
+
+/** What Claude last said in the selected session: its details show it unless it runs in one of
+ * Pitwall's terminals, which shows the conversation itself. */
+const lastMessage = useLastMessage(
+  () => (selected.value && !sessionTerminal(selected.value, snapshot.value?.projects ?? []) ? selected.value.id : null),
+  () => messageState(selected.value, now.value),
+);
 
 /** ↓ in the search box goes on to the selected row. */
 function focusSelected(): void {
@@ -276,7 +284,7 @@ onMounted(() => void loadSessions());
               @open-project="openProject"
               @copy="copyResume"
               @menu="rowMenu"
-              @hold="hold"
+              @hold="hold('list', $event)"
             />
             <p v-else class="none">{{ noneText }}</p>
           </template>
@@ -292,7 +300,9 @@ onMounted(() => void loadSessions());
       :now="now"
       :others="others"
       :error="addError?.id === selected.id ? addError.text : ''"
+      :last-message="lastMessage"
       @mark-seen="markSeen(selected.id)"
+      @hold="hold('terminal', $event)"
     />
     <!-- Nothing to show: the panel stays blank but keeps its place, so the layout never jumps. -->
     <section v-else class="detail-empty" :aria-label="t('sessions.details')"></section>

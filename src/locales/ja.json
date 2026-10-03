@@ -487,7 +487,8 @@
   "sessions.fuel.api": "≈ API で課金した場合の額で、実際の請求額ではありません。サブエージェントを含みます。",
   "sessions.fuel.unpriced": "一部のモデルは価格が不明なため、金額に含まれていません。",
   "sessions.fuel.none": "今日はこのセッションのトークンを読み取っていません。",
-  "sessions.privacy": "メッセージの内容は表示しません。表示するのは状態、名前、トークン数だけです。",
+  "sessions.privacy": "会話のうち表示するのは Claude の最後のメッセージだけです。表示するときに読み取り、保存はしません。",
+  "sessions.lastMessage": "最後のメッセージ",
   "sessions.hiddenCount": {
     "other": "プロジェクト外のフォルダーにある {count} 件のセッションを非表示にしています。"
   },

@@ -7,7 +7,7 @@ import { ago, editorName } from "./format";
 import { compactText, modelName, moneyText } from "./fuel";
 import { fuzzy } from "./fuzzy";
 import { t, type Key } from "./i18n";
-import type { SessionOrigin, SessionRow, SessionSpan, Turn } from "./types";
+import type { Project, SessionOrigin, SessionRow, SessionSpan, TerminalView, Turn } from "./types";
 
 /** The list's sections, top to bottom. `open`: running, nothing going on, nothing unseen. */
 export type Section = "waiting" | "working" | "open" | "ended";
@@ -217,6 +217,24 @@ export function unlinkedEditor(origin: SessionOrigin): boolean {
  */
 export function runsElsewhere(row: SessionRow): boolean {
   return row.phase !== "ended" && row.running !== false && (row.origin.kind === "terminal" || row.origin.kind === "other");
+}
+
+/** The Pitwall terminal it runs (or ran) in, while that tab is still open. */
+export function sessionTerminal(row: SessionRow, projects: Project[]): TerminalView | null {
+  const origin = row.origin;
+  if (origin.kind !== "pitwall") return null;
+  for (const project of projects) {
+    const found = project.terminals.find((terminal) => terminal.id === origin.terminal);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Its project's other sessions that wait on you: marking it seen clears them too (seen is kept
+ * per project). */
+export function othersWaiting(row: SessionRow, rows: SessionRow[]): number {
+  const where = row.path ?? row.folder;
+  return rows.filter((other) => other.id !== row.id && other.phase === "waiting" && (other.path ?? other.folder) === where).length;
 }
 
 /** The command that continues it in a terminal. */

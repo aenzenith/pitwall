@@ -1,0 +1,83 @@
+/* The right-hand details of a session (sessions/SessionDetail) and of a board card without one
+   (board/CardDetail): the panel, its head and the part that scrolls. Each takes this as a scoped
+   style (`<style scoped src>`) before its own, as with detail/detail.css. */
+
+/* As wide as the project details, so the panel line stays where it was. */
+.detail {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-detail);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+
+/* 100px: on the Sessions page the toolbar (56) and the filter bar (44). */
+.head {
+  height: 100px;
+  flex-shrink: 0;
+  padding: 13px 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-bottom: 1px solid var(--line);
+}
+
+.name {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 30px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.where {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.project {
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #c7ccd3;
+}
+
+.path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A board card's note, as it was typed. */
+.card-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Only the details scroll, never the window. A column, so a terminal takes the height left. */
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-bottom: 20px;
+}

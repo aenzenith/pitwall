@@ -145,6 +145,8 @@ export const api = {
   revealClaude: (path: string, session: string) => invoke("reveal_claude", { path, session }),
   /** Every Claude Code session today (the Sessions page). */
   claudeSessions: () => invoke<SessionsView>("claude_sessions"),
+  /** What Claude last said in a session (Markdown): read when asked, never kept. */
+  lastMessage: (session: string) => invoke<string | null>("claude_last_message", { session }),
   markSeen: (path: string) => invoke("mark_seen", { path }),
   setSettings: (settings: Settings) => invoke("set_settings", { settings }),
   setProjectSettings: (path: string, settings: ProjectSettings) => invoke("set_project_settings", { path, settings }),

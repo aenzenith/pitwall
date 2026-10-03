@@ -146,17 +146,26 @@ impl Core {
         }
     }
 
-    /// When the session's log last changed; `None` when there's no such log.
-    fn log_modified(&self, session: &str) -> Option<u64> {
+    /// The session's log (`<session>.jsonl` in one of Claude Code's project folders; the last
+    /// written, should several have one) and when it last changed; `None` when there's no such
+    /// log. `session` must be a session id: it becomes a file name.
+    pub(super) fn session_log(&self, session: &str) -> Option<(PathBuf, u64)> {
         let file = format!("{session}.jsonl");
 
         fs::read_dir(&self.cfg.claude_dir)
             .ok()?
             .flatten()
-            .filter_map(|dir| fs::metadata(dir.path().join(&file)).ok()?.modified().ok())
-            .filter_map(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|since| since.as_millis() as u64)
-            .max()
+            .filter_map(|dir| {
+                let log = dir.path().join(&file);
+                let modified = fs::metadata(&log).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+                Some((log, modified.as_millis() as u64))
+            })
+            .max_by_key(|(_, modified)| *modified)
+    }
+
+    /// When the session's log last changed; `None` when there's no such log.
+    fn log_modified(&self, session: &str) -> Option<u64> {
+        self.session_log(session).map(|(_, modified)| modified)
     }
 }
 

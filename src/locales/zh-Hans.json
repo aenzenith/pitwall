@@ -487,7 +487,8 @@
   "sessions.fuel.api": "≈ 按 API 计价的金额，并非你的账单。包含子代理。",
   "sessions.fuel.unpriced": "部分模型价格未知，未计入费用。",
   "sessions.fuel.none": "今天没有读到它的 token。",
-  "sessions.privacy": "从不显示消息内容：只显示状态、名称和 token 数。",
+  "sessions.privacy": "对话中只显示 Claude 的最后一条消息：查看时读取，从不保存。",
+  "sessions.lastMessage": "最后一条消息",
   "sessions.hiddenCount": {
     "other": "已隐藏项目以外文件夹中的 {count} 个会话。"
   },

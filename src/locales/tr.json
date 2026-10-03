@@ -490,7 +490,8 @@
   "sessions.fuel.api": "≈ API'nin isteyeceği tutar, faturan değil. Alt ajanlar dahil.",
   "sessions.fuel.unpriced": "Modellerinden bazılarının fiyatı bilinmiyor; tutara katılmadı.",
   "sessions.fuel.none": "Bugün onun için token okunmadı.",
-  "sessions.privacy": "Mesajların içeriği hiç gösterilmez; yalnızca durum, ad ve token sayıları.",
+  "sessions.privacy": "Konuşmadan yalnızca Claude'un son mesajı gösterilir; bakıldığında okunur, saklanmaz.",
+  "sessions.lastMessage": "Son mesaj",
   "sessions.hiddenCount": {
     "other": "Projelerinin dışındaki klasörlerde {count} oturum gizli."
   },

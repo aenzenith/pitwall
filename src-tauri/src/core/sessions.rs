@@ -346,6 +346,17 @@ impl Core {
         self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// What Claude last said in a session, for its details (the Sessions page's, a board
+    /// card's): read whole from the session's log when asked, never kept or logged. `None` for
+    /// what isn't a session id (it becomes a file name) and for a session without a log.
+    pub fn last_message(&self, session: &str) -> Option<String> {
+        if !is_session_id(session) {
+            return None;
+        }
+        let (log, _) = self.session_log(session)?;
+        crate::claude::last_message(&log)
+    }
+
     /// `~/.claude/sessions`, beside the projects folder.
     pub(super) fn sessions_dir(&self) -> Option<PathBuf> {
         self.cfg.claude_dir.parent().map(|claude| claude.join("sessions"))
