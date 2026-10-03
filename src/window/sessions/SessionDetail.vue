@@ -121,7 +121,7 @@ const fuel = computed(() => {
 
     <div class="body">
       <section class="block" :aria-label="t('window.col.claude')">
-        <div class="section-label">Claude</div>
+        <div class="section-label">{{ t("window.col.claude") }}</div>
         <div :class="['card', { hot: waiting }]">
           <ClaudeSpark :state="spark" :lock="permission" />
           <div class="card-text">

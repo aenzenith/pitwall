@@ -18,7 +18,7 @@ const claudeTitle = computed(() => {
 
 <template>
   <section class="block" :aria-label="t('window.col.claude')">
-    <div class="section-label">Claude</div>
+    <div class="section-label">{{ t("window.col.claude") }}</div>
     <div :class="['card', { hot: project.claude }]">
       <ClaudeSpark :state="project.claude ? 'waiting' : project.claudeWorking ? 'working' : 'quiet'" />
       <div class="card-text">
