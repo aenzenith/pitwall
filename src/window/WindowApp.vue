@@ -239,6 +239,7 @@ function server(project: Project): string {
           :key="f.id"
           type="button"
           :class="{ on: view === 'projects' && filter === f.id }"
+          :aria-current="view === 'projects' && filter === f.id ? 'page' : undefined"
           @click="pick(f.id)"
         >
           <Icon :name="f.icon" /> {{ t(f.label) }}
@@ -246,11 +247,11 @@ function server(project: Project): string {
         </button>
       </nav>
       <div class="nav today">
-        <button type="button" :class="{ on: view === 'day' }" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
-        <button type="button" :class="{ on: view === 'sessions' }" @click="view = 'sessions'">
+        <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
+        <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="view = 'sessions'">
           <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
         </button>
-        <button type="button" :class="{ on: view === 'fuel' }" @click="view = 'fuel'">
+        <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="view = 'fuel'">
           <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
           <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
         </button>
