@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0](https://github.com/aenzenith/pitwall/compare/v1.1.1...v1.2.0) (2026-10-03)
+
+
+### Features
+
+* **board:** a card in review follows its session back to Claude ([2805437](https://github.com/aenzenith/pitwall/commit/2805437e79d807c05c67cf808af7642fd4a8e2b9))
+* **board:** images pasted into a card's note ([12d3f77](https://github.com/aenzenith/pitwall/commit/12d3f776d6f146a1593a78f2a6fd2ef03b78c621))
+* **board:** the picker shows where Claude waits on you ([0b252a8](https://github.com/aenzenith/pitwall/commit/0b252a8e1bd4e157f1219caa2b85d79761ab6a3d))
+
 ## [1.1.1](https://github.com/aenzenith/pitwall/compare/v1.1.0...v1.1.1) (2026-10-03)
 
 
