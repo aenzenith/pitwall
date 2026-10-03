@@ -3,7 +3,21 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRaw, wa
 
 import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
-import { cardMatches, cardStatus, cardText, COLUMN_LABELS, COLUMNS, columnCards, folderName, laneDrawn, laneOf, moveCard, onBoard, type BoardLayout } from "../lib/board";
+import {
+  boardWaits,
+  cardMatches,
+  cardStatus,
+  cardText,
+  COLUMN_LABELS,
+  COLUMNS,
+  columnCards,
+  folderName,
+  laneDrawn,
+  laneOf,
+  moveCard,
+  onBoard,
+  type BoardLayout,
+} from "../lib/board";
 import { SETTLE_MS, useCardDrag, type DropTarget } from "../lib/cardDrag";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
@@ -16,6 +30,7 @@ import type { BoardColumn, Card, SessionRow, TerminalView } from "../lib/types";
 import BoardCard from "./board/BoardCard.vue";
 import BoardColumns from "./board/BoardColumns.vue";
 import BoardLanes from "./board/BoardLanes.vue";
+import BoardPicker from "./board/BoardPicker.vue";
 import CardDetail from "./board/CardDetail.vue";
 import CardDialog from "./board/CardDialog.vue";
 import { BOARD_ACTIONS, type BoardActions, type CardBusy } from "./board/context";
@@ -58,10 +73,24 @@ function lastScope(): string | null {
 const scope = ref<string | null>(lastScope());
 const project = computed(() => (scope.value ? (projects.value.find((p) => p.path === scope.value) ?? null) : null));
 
-/** A board picked by hand: the page opens on it next time too. */
+/**
+ * A board picked by hand: the page opens on it next time too. What Claude finished counts as seen
+ * on the board left (it was in sight) and on the one picked, as it does in a session's own tab;
+ * the card that waited there is the one selected.
+ */
 function show(path: string | null): void {
+  const left = scope.value;
+  const waited = path ? all.value.find((card) => card.path === path && statuses.value.get(card.id)?.waits)?.id : undefined;
   scope.value = path;
   void api.setBoardScope(path ?? ALL);
+  if (left) seeFinished(left);
+  if (path) seeFinished(path);
+  // Once the new board's first card has been selected.
+  if (waited) {
+    void nextTick(() => {
+      if (shownIds.value.has(waited)) selectedId.value = waited;
+    });
+  }
 }
 
 // A project taken off the list leaves every project's board.
@@ -74,17 +103,6 @@ watch(
 );
 
 const menu = useNativeMenu();
-
-function pickScope(event: MouseEvent): void {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  void menu.popup({ clientX: box.left, clientY: box.bottom + 4 }, [
-    { text: t("board.allProjects"), checked: scope.value === null, action: () => show(null) },
-    "separator",
-    ...projects.value.map((p) => ({ text: p.name, checked: scope.value === p.path, action: () => show(p.path) })),
-  ]);
-}
-
-const scopeName = computed(() => project.value?.name ?? t("board.allProjects"));
 
 /* ---------- how it is drawn ---------- */
 
@@ -143,6 +161,19 @@ function terminalOf(card: Card): TerminalView | null {
 const statuses = computed(
   () => new Map([...all.value, ...unlisted.value].map((card) => [card.id, cardStatus(card, rowOf(card) ?? undefined, sessions.value !== null, terminalOpen(card), now.value)])),
 );
+
+/** What Claude waits on you with on each project's board (a finished turn not seen yet, a
+ * question, a permission prompt): the picker marks those projects with Claude's dot. */
+const waits = computed(() => boardWaits(all.value, statuses.value));
+
+/** What Claude finished on a project's board counts as seen: every session of the project stops
+ * waiting on you. Not while one asks something there (a question, a permission prompt): seen, it
+ * would no longer say so. */
+function seeFinished(path: string): void {
+  if (waits.value.get(path) !== "finished") return;
+  const asks = (sessions.value?.sessions ?? []).some((row) => (row.path ?? row.folder) === path && row.phase === "waiting" && !!row.turn && row.turn.kind !== "finished");
+  if (!asks) void api.markSeen(path).catch(() => undefined);
+}
 
 const projectCards = computed(() => (project.value ? all.value.filter((card) => card.path === project.value?.path) : []));
 
@@ -745,11 +776,7 @@ const ghostStyle = computed(() =>
           <Icon name="search" :size="13" />
           <input v-model="query" type="search" :placeholder="t('board.search')" :aria-label="t('board.search')" spellcheck="false" @keydown.down.prevent="focusSelected()" />
         </label>
-        <button type="button" class="board-picker" :aria-label="t('board.pickerLabel', { name: scopeName })" :title="t('board.pickerLabel', { name: scopeName })" @click="pickScope">
-          <Icon v-if="project" name="folder" :size="13" />
-          <span class="board-picker-text">{{ scopeName }}</span>
-          <Icon name="chevron-down" :size="11" />
-        </button>
+        <BoardPicker :projects="projects" :scope="scope" :waits="waits" @pick="show" />
         <button type="button" class="board-add" :disabled="!projects.length" @click="openAdd">
           <Icon name="plus" :size="13" />
           <span class="board-add-text">{{ t("board.addCard") }}</span>
@@ -942,7 +969,6 @@ const ghostStyle = computed(() =>
   text-overflow: ellipsis;
 }
 
-.board-picker,
 .board-add,
 .board-control {
   display: inline-flex;
@@ -954,29 +980,15 @@ const ghostStyle = computed(() =>
   white-space: nowrap;
 }
 
-.board-picker:hover,
 .board-add:hover:not(:disabled),
 .board-control:hover {
   background: #2c3039;
 }
 
-/* A long project name gives way; the arrow never does. */
-.board-picker {
-  flex-shrink: 1;
-  min-width: 90px;
-  max-width: 220px;
-  gap: 7px;
-  padding: 0 10px;
-  font-size: 12px;
-  color: #c7ccd3;
-}
-
-.board-picker svg,
 .board-add svg {
   flex-shrink: 0;
 }
 
-.board-picker-text,
 .board-add-text {
   min-width: 0;
   overflow: hidden;

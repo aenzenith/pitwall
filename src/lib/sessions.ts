@@ -41,7 +41,7 @@ export function sessionTitle(row: SessionRow): string {
 /* ---------- order ---------- */
 
 /** Waits that block (a permission prompt, a question) come before a finished turn. */
-const WAIT_RANK: Record<Turn["kind"], number> = { permission: 0, asking: 1, finished: 2 };
+export const WAIT_RANK: Record<Turn["kind"], number> = { permission: 0, asking: 1, finished: 2 };
 
 function lastSpanEnd(row: SessionRow): number | null {
   const spans = row.today?.spans ?? [];

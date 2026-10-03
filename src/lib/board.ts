@@ -5,7 +5,8 @@
 import { clock, duration } from "./day";
 import { ago } from "./format";
 import { language, t, type Key } from "./i18n";
-import type { BoardColumn, Card, Project, SessionRow } from "./types";
+import { WAIT_RANK } from "./sessions";
+import type { BoardColumn, Card, Project, SessionRow, Turn } from "./types";
 
 export const COLUMNS: BoardColumn[] = ["queued", "claude", "review", "done"];
 
@@ -14,6 +15,14 @@ export const COLUMN_LABELS: Record<BoardColumn, Key> = {
   claude: "board.column.claude",
   review: "board.column.review",
   done: "board.column.done",
+};
+
+/** A project in the board picker's list while Claude waits on you on its board: its name, and on
+ * what. */
+export const WAIT_LABELS: Record<Turn["kind"], Key> = {
+  finished: "board.picker.finished",
+  asking: "board.picker.asking",
+  permission: "board.picker.permission",
 };
 
 /** How a project's board is drawn: its columns side by side, or one under the other with a card
@@ -131,7 +140,8 @@ export function cardText(card: Card): string {
  * A given card's session as its card shows it. `mark`: a filled dot waits on you, a ring works
  * (breathing) or is quiet (grey); `tone`: Claude's colour while it waits on you. `closed`: the
  * session ended before its turn did (it can be given again); `unseen`: a finished turn not looked
- * at yet.
+ * at yet; `waits`: what it waits on you with (a finished turn not looked at yet among them), null
+ * while it doesn't.
  */
 export type CardStatus = {
   text: string;
@@ -139,7 +149,25 @@ export type CardStatus = {
   mark: "waiting" | "working" | "idle" | null;
   closed: boolean;
   unseen: boolean;
+  waits: Turn["kind"] | null;
 };
+
+/**
+ * What Claude waits on you with on each project's board, by the project's path: the most pressing
+ * of its cards' waits (a permission prompt, a question, then a finished turn not seen yet). Seen,
+ * a finished turn waits no longer, though its card stays to review. A board where nothing waits
+ * has no entry.
+ */
+export function boardWaits(cards: Card[], statuses: Map<string, CardStatus | null>): Map<string, Turn["kind"]> {
+  const waits = new Map<string, Turn["kind"]>();
+  for (const card of cards) {
+    const kind = statuses.get(card.id)?.waits;
+    if (!kind) continue;
+    const known = waits.get(card.path);
+    if (!known || WAIT_RANK[kind] < WAIT_RANK[known]) waits.set(card.path, kind);
+  }
+  return waits;
+}
 
 /** How long, at least "< 1 min". */
 function lasting(ms: number): string {
@@ -160,8 +188,12 @@ export function cardStatus(card: Card, row: SessionRow | undefined, listed: bool
     mark,
     closed: false,
     unseen: false,
+    waits: null,
     ...extra,
   });
+
+  /** A finished turn not looked at yet. */
+  const unread: Partial<CardStatus> = { unseen: true, waits: "finished" };
 
   /** A session at work, or waiting on a permission or a question: what its card says, in Claude's
    * column or anywhere else; null in any other state. */
@@ -172,8 +204,9 @@ export function cardStatus(card: Card, row: SessionRow | undefined, listed: bool
     const turn = session.phase === "waiting" ? session.turn : null;
     if (!turn || turn.kind === "finished") return null;
     const wait = lasting(now - (turn.at ?? session.since ?? now));
-    if (turn.kind === "asking") return status(t("sessions.status.asking", { duration: wait }), "hot", "waiting");
-    return status(session.tool ? t("board.permissionTool", { tool: session.tool, duration: wait }) : t("sessions.status.permission", { duration: wait }), "hot", "waiting");
+    if (turn.kind === "asking") return status(t("sessions.status.asking", { duration: wait }), "hot", "waiting", { waits: "asking" });
+    const text = session.tool ? t("board.permissionTool", { tool: session.tool, duration: wait }) : t("sessions.status.permission", { duration: wait });
+    return status(text, "hot", "waiting", { waits: "permission" });
   };
 
   if (card.column === "review") {
@@ -182,7 +215,7 @@ export function cardStatus(card: Card, row: SessionRow | undefined, listed: bool
     if (again) return again;
     const unseen = row?.phase === "waiting" && row.turn?.kind === "finished";
     const at = unseen && row?.turn ? row.turn.at : card.movedAt;
-    return status(t("sessions.status.finished", { ago: ago(at, now) }), unseen ? "hot" : "quiet", unseen ? "waiting" : null, { unseen });
+    return status(t("sessions.status.finished", { ago: ago(at, now) }), unseen ? "hot" : "quiet", unseen ? "waiting" : null, unseen ? unread : {});
   }
   // Up next: only a session that still runs says so; the card kept it when it was moved.
   if (card.column === "queued" && (!row || row.phase === "ended")) return null;
@@ -211,7 +244,7 @@ export function cardStatus(card: Card, row: SessionRow | undefined, listed: bool
     case "working":
     case "waiting": {
       const at = row.turn?.at ?? row.since ?? now;
-      return busy(row) ?? status(t("sessions.status.finished", { ago: ago(at, now) }), "hot", "waiting", { unseen: true });
+      return busy(row) ?? status(t("sessions.status.finished", { ago: ago(at, now) }), "hot", "waiting", unread);
     }
   }
 }
