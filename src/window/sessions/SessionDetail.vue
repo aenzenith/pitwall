@@ -6,12 +6,14 @@ import Icon from "../../components/Icon.vue";
 import Markdown from "../../components/Markdown.vue";
 import { clock, duration } from "../../lib/day";
 import { ago, editorName } from "../../lib/format";
+import type { Shot } from "../../lib/cardImages";
 import { compactText, moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { dragRegion, isMac, isWindows } from "../../lib/platform";
 import { endedAt, lastActive, modelsText, runsElsewhere, sessionTerminal, sessionTitle, unlinkedEditor } from "../../lib/sessions";
 import { snapshot } from "../../lib/store";
 import type { SessionRow, TerminalView } from "../../lib/types";
+import CardImages from "../board/CardImages.vue";
 import OriginLabel from "./OriginLabel.vue";
 import SessionDay from "./SessionDay.vue";
 import SessionNotice from "./SessionNotice.vue";
@@ -26,10 +28,20 @@ import SessionTerminal from "./SessionTerminal.vue";
  * context menu). `others`: the other sessions of its project that wait on you (seen is kept per
  * project); `error`: why adding its folder failed; `terminal`: the Pitwall terminal to show, as
  * the caller knows it (a board card's; null: none), left out: the one its origin names; `note`:
- * a board card's note, shown once its work is over; `lastMessage`: what Claude last said in it
- * (Markdown), shown in the terminal's place. `hold`: the keyboard is in its terminal.
+ * a board card's note, shown once its work is over, with `images`, the images it names;
+ * `lastMessage`: what Claude last said in it (Markdown), shown in the terminal's place. `hold`:
+ * the keyboard is in its terminal.
  */
-const props = defineProps<{ row: SessionRow; now: number; others: number; error: string; terminal?: TerminalView | null; note?: string; lastMessage?: string }>();
+const props = defineProps<{
+  row: SessionRow;
+  now: number;
+  others: number;
+  error: string;
+  terminal?: TerminalView | null;
+  note?: string;
+  images?: Shot[];
+  lastMessage?: string;
+}>();
 const emit = defineEmits<{ markSeen: []; hold: [on: boolean] }>();
 
 const title = computed(() => sessionTitle(props.row));
@@ -162,6 +174,7 @@ const fuel = computed(() => {
       <section v-if="note" class="block" :aria-label="t('board.dialog.note')">
         <div class="section-label">{{ t("board.dialog.note") }}</div>
         <p class="card-note">{{ note }}</p>
+        <CardImages v-if="images?.length" :images="images" />
       </section>
 
       <!-- Today's hours are kept for the listed projects only. -->

@@ -13,6 +13,7 @@ import type {
   Folder,
   Fuel,
   LinkSuggestion,
+  NewImage,
   ProjectSettings,
   SessionsView,
   Settings,
@@ -266,8 +267,12 @@ export const api = {
   refreshFuel: (force: boolean) => invoke("refresh_fuel", { force }),
   /** The board: every project's cards (the Board page). */
   boardState: () => invoke<Card[]>("board_state"),
-  boardAdd: (path: string, title: string, note: string) => invoke<Card>("board_add", { path, title, note }),
-  boardEdit: (id: string, title: string, note: string) => invoke("board_edit", { id, title, note }),
+  /** `images`: those pasted into the note; the card takes the ones its note names (`[Image #n]`). */
+  boardAdd: (path: string, title: string, note: string, images: NewImage[] = []) => invoke<Card>("board_add", { path, title, note, images }),
+  /** `images`: those pasted since the card was saved; one its note no longer names is dropped. */
+  boardEdit: (id: string, title: string, note: string, images: NewImage[] = []) => invoke("board_edit", { id, title, note, images }),
+  /** One of a card's images, as a `data:` URL. */
+  boardImage: (id: string, n: number) => invoke<string>("board_image", { id, n }),
   /** `index`: its place among the project's cards in `column`, counted without it. */
   boardMove: (id: string, column: BoardColumn, index: number) => invoke("board_move", { id, column, index }),
   boardDelete: (id: string) => invoke("board_delete", { id }),

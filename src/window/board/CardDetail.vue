@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import Markdown from "../../components/Markdown.vue";
 import { COLUMN_LABELS, type CardStatus } from "../../lib/board";
+import type { Shot } from "../../lib/cardImages";
 import { t } from "../../lib/i18n";
 import { dragRegion } from "../../lib/platform";
 import type { Card, TerminalView } from "../../lib/types";
 import SessionTerminal from "../sessions/SessionTerminal.vue";
+import CardImages from "./CardImages.vue";
 
 /**
  * The board's details for a card with no session in the list (not given yet, or its session only
  * starting): what the card says, and its Pitwall terminal once it has one. A card with a session
  * shows that session's details instead (sessions/SessionDetail). `project`: its project's name;
- * `lastMessage`: what Claude last said in its session (Markdown), for a card whose work is over
- * and whose session has left the list. `hold`: the keyboard is in its terminal.
+ * `images`: the images its note names; `lastMessage`: what Claude last said in its session
+ * (Markdown), for a card whose work is over and whose session has left the list. `hold`: the
+ * keyboard is in its terminal.
  */
-defineProps<{ card: Card; project: string; status: CardStatus | null; terminal: TerminalView | null; lastMessage: string }>();
+defineProps<{ card: Card; project: string; status: CardStatus | null; terminal: TerminalView | null; images: Shot[]; lastMessage: string }>();
 const emit = defineEmits<{ hold: [on: boolean] }>();
 </script>
 
@@ -39,6 +42,7 @@ const emit = defineEmits<{ hold: [on: boolean] }>();
       <section v-if="card.note" class="block" :aria-label="t('board.dialog.note')">
         <div class="section-label">{{ t("board.dialog.note") }}</div>
         <p class="card-note">{{ card.note }}</p>
+        <CardImages v-if="images.length" :images="images" />
       </section>
 
       <!-- In the terminal's place once its work is over: what Claude last said. -->

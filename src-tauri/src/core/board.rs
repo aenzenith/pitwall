@@ -18,6 +18,11 @@
 //! what the app already has: the last scan's phases (`Inner::scanned`) and Claude Code's running
 //! sessions (`sessions.rs`, its allowed fields only).
 //!
+//! An image pasted into a card's note is `[Image #n]` in the note's text, as Claude Code writes
+//! one in its prompt, and a file in the card's own folder under `board-images/`, beside
+//! `board.json`. A given card names those files under its text, and Claude starts with that
+//! folder among its directories (`--add-dir`), so it reads them without asking.
+//!
 //! A given card asks Claude to end with a short summary, and the card's details show what
 //! Claude last said in its session once the work is over, as a session's details do
 //! (`Core::last_message`): read from that session's log when asked, never kept.
@@ -25,6 +30,8 @@
 use std::io::ErrorKind;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -47,6 +54,11 @@ const RESUME_GRACE_MS: u64 = 60_000;
 /// A card given in a terminal takes a session that starts there within this long of the give;
 /// a `claude` started in that tab later is somebody else's work.
 const ADOPT_MS: u64 = 2 * 60 * 1000;
+/// Each card's images are in a folder of its own under this one, beside the board's file.
+const IMAGES_DIR: &str = "board-images";
+/// A card holds this many images at most, each this large at most.
+const IMAGES_MAX: usize = 12;
+const IMAGE_BYTES_MAX: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -67,6 +79,108 @@ impl Column {
             _ => None,
         }
     }
+}
+
+/// What an image file is: the kinds Claude reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageKind {
+    Png,
+    Jpeg,
+    Gif,
+    Webp,
+}
+
+impl ImageKind {
+    /// What `bytes` are, by how they start; None for anything else.
+    fn of(bytes: &[u8]) -> Option<Self> {
+        match bytes {
+            [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, ..] => Some(Self::Png),
+            [0xFF, 0xD8, 0xFF, ..] => Some(Self::Jpeg),
+            [b'G', b'I', b'F', b'8', b'7' | b'9', b'a', ..] => Some(Self::Gif),
+            [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some(Self::Webp),
+            _ => None,
+        }
+    }
+
+    fn ext(self) -> &'static str {
+        match self {
+            Self::Png => "png",
+            Self::Jpeg => "jpg",
+            Self::Gif => "gif",
+            Self::Webp => "webp",
+        }
+    }
+
+    fn mime(self) -> &'static str {
+        match self {
+            Self::Png => "image/png",
+            Self::Jpeg => "image/jpeg",
+            Self::Gif => "image/gif",
+            Self::Webp => "image/webp",
+        }
+    }
+}
+
+/// An image pasted into a card's note: `[Image #n]` in the note's text, and the file
+/// `<n>.<kind>` in the card's image folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CardImage {
+    pub n: u32,
+    pub kind: ImageKind,
+}
+
+impl CardImage {
+    /// Its file's name: a number and one of four endings, whatever the board's file says.
+    fn file_name(self) -> String {
+        format!("{}.{}", self.n, self.kind.ext())
+    }
+}
+
+/// An image the window hands over with a card's text: its number in the note, and its bytes as a
+/// `data:` URL in base64.
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewImage {
+    pub n: u32,
+    pub data: String,
+}
+
+/// `note` names image `n`: `[Image #n]` is in its text.
+fn names(note: &str, n: u32) -> bool {
+    note.contains(&format!("[Image #{n}]"))
+}
+
+/// The bytes of a `data:` URL and what image they are. Only how the bytes start counts, never
+/// the type the URL gives.
+fn decode_image(data: &str) -> Result<(ImageKind, Vec<u8>), String> {
+    let too_large = || format!("an image is at most {} MB", IMAGE_BYTES_MAX / (1024 * 1024));
+    let encoded = data.strip_prefix("data:").and_then(|rest| rest.split_once(";base64,")).map(|(_, encoded)| encoded).ok_or("not an image")?;
+    if encoded.len() / 4 * 3 > IMAGE_BYTES_MAX + 3 {
+        return Err(too_large());
+    }
+    let bytes = BASE64.decode(encoded).map_err(|_| "not an image")?;
+    if bytes.len() > IMAGE_BYTES_MAX {
+        return Err(too_large());
+    }
+    let kind = ImageKind::of(&bytes).ok_or("not an image")?;
+    Ok((kind, bytes))
+}
+
+/// What of `images` a card with `note` takes: those the note names, each number once, decoded.
+fn taken(note: &str, images: &[NewImage]) -> Result<Vec<(CardImage, Vec<u8>)>, String> {
+    let mut taken: Vec<(CardImage, Vec<u8>)> = Vec::new();
+    for image in images.iter().filter(|image| image.n > 0 && names(note, image.n)) {
+        if taken.iter().any(|(held, _)| held.n == image.n) {
+            continue;
+        }
+        let (kind, bytes) = decode_image(&image.data)?;
+        taken.push((CardImage { n: image.n, kind }, bytes));
+    }
+    Ok(taken)
+}
+
+fn too_many() -> String {
+    format!("a card holds at most {IMAGES_MAX} images")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,10 +215,15 @@ pub struct Card {
     /// got there. Only then does that session at work mean it went on.
     #[serde(default)]
     pub rested: bool,
+    /// The images pasted into its note, by number.
+    #[serde(default)]
+    pub images: Vec<CardImage>,
 }
 
 pub(super) struct Board {
     file: PathBuf,
+    /// The folder of the cards' image folders.
+    images: PathBuf,
     cards: Vec<Card>,
     /// False when an unusable file could not be set aside: nothing is written over it.
     writable: bool,
@@ -121,12 +240,48 @@ impl Board {
     /// The saved board; empty when there is none. An unusable file is set aside first
     /// (`board.json.broken-<ms>`), never written over; done cards older than 30 days are dropped.
     pub(super) fn load(file: PathBuf, now: u64) -> Self {
-        let (cards, writable, changed) = read_cards(&file, now);
-        let board = Self { file, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new() };
-        if changed {
-            board.save();
+        let (cards, writable, changed, dropped) = read_cards(&file, now);
+        let images = file.with_file_name(IMAGES_DIR);
+        let board = Self { file, images, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new() };
+        if changed && board.save() {
+            // Gone from the board's file for good: their images go with them.
+            for card in &dropped {
+                board.remove_images(&card.id, &card.images);
+            }
         }
         board
+    }
+
+    /// Card `id`'s image folder. None for an id the board never gives (anything but letters,
+    /// digits and dashes): a board file written by hand names no folder elsewhere.
+    fn image_dir(&self, id: &str) -> Option<PathBuf> {
+        let own = !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-');
+        own.then(|| self.images.join(id))
+    }
+
+    /// Writes a card's new images into its folder.
+    fn write_images(&self, id: &str, images: &[(CardImage, Vec<u8>)]) -> Result<(), String> {
+        if images.is_empty() {
+            return Ok(());
+        }
+        let dir = self.image_dir(id).ok_or_else(|| no_card(id))?;
+        fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+        for (image, bytes) in images {
+            fs::write(dir.join(image.file_name()), bytes).map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    /// Deletes the files of `images`, a card's, and its folder once nothing is left in it. Only
+    /// files the card names go, never a folder with what is in it.
+    fn remove_images(&self, id: &str, images: &[CardImage]) {
+        let Some(dir) = self.image_dir(id).filter(|_| !images.is_empty()) else {
+            return;
+        };
+        for image in images {
+            let _ = fs::remove_file(dir.join(image.file_name()));
+        }
+        let _ = fs::remove_dir(&dir);
     }
 
     /// Writes the board; false when it isn't on disk as it is now.
@@ -182,20 +337,20 @@ impl Board {
     }
 }
 
-/// The cards in `file`, whether it may be written, and whether what was read changed (to be
-/// written back).
-fn read_cards(file: &Path, now: u64) -> (Vec<Card>, bool, bool) {
+/// The cards in `file`, whether it may be written, whether what was read changed (to be
+/// written back), and the done cards dropped for their age.
+fn read_cards(file: &Path, now: u64) -> (Vec<Card>, bool, bool, Vec<Card>) {
     let raw = match fs::read(file) {
         Ok(raw) => raw,
-        Err(error) if error.kind() == ErrorKind::NotFound => return (Vec::new(), true, false),
-        Err(error) => return (Vec::new(), set_aside(file, &error.to_string()), false),
+        Err(error) if error.kind() == ErrorKind::NotFound => return (Vec::new(), true, false, Vec::new()),
+        Err(error) => return (Vec::new(), set_aside(file, &error.to_string()), false, Vec::new()),
     };
     let value = match serde_json::from_slice::<Value>(&raw) {
         Ok(value) => value,
-        Err(error) => return (Vec::new(), set_aside(file, &error.to_string()), false),
+        Err(error) => return (Vec::new(), set_aside(file, &error.to_string()), false, Vec::new()),
     };
     let Some(items) = value.get("cards").and_then(Value::as_array) else {
-        return (Vec::new(), set_aside(file, "no card list"), false);
+        return (Vec::new(), set_aside(file, "no card list"), false, Vec::new());
     };
 
     // Each card on its own: one that doesn't fit costs only itself, and the file is kept aside.
@@ -214,9 +369,8 @@ fn read_cards(file: &Path, now: u64) -> (Vec<Card>, bool, bool) {
         changed = true;
     }
 
-    let before = cards.len();
-    cards.retain(|card| card.column != Column::Done || now.saturating_sub(card.moved_at) < DONE_KEPT_MS);
-    changed |= cards.len() != before;
+    let (mut cards, dropped): (Vec<Card>, Vec<Card>) = cards.into_iter().partition(|card| card.column != Column::Done || now.saturating_sub(card.moved_at) < DONE_KEPT_MS);
+    changed |= !dropped.is_empty();
 
     for card in &mut cards {
         if card.session.as_deref().is_some_and(|session| !is_session_id(session)) {
@@ -233,7 +387,7 @@ fn read_cards(file: &Path, now: u64) -> (Vec<Card>, bool, bool) {
         }
     }
 
-    (cards, writable, changed)
+    (cards, writable, changed, dropped)
 }
 
 /// Where a followed session stands.
@@ -386,8 +540,9 @@ impl Core {
         self.board().cards.clone()
     }
 
-    /// A new card, at the end of `queued`.
-    pub fn board_add(&self, path: &str, title: &str, note: &str) -> Result<Card, String> {
+    /// A new card, at the end of `queued`. `images`: those pasted into its note; it takes the
+    /// ones the note still names.
+    pub fn board_add(&self, path: &str, title: &str, note: &str, images: &[NewImage]) -> Result<Card, String> {
         let title = title.trim();
         if title.is_empty() {
             return Err("a card needs a title".into());
@@ -395,14 +550,23 @@ impl Core {
         if path.trim().is_empty() {
             return Err("a card needs a project".into());
         }
+        let note = note.trim();
+        let taken = taken(note, images)?;
+        if taken.len() > IMAGES_MAX {
+            return Err(too_many());
+        }
+        let mut held: Vec<CardImage> = taken.iter().map(|(image, _)| *image).collect();
+        held.sort_by_key(|image| image.n);
 
         let now = now_ms();
         let mut board = self.board();
+        let id = new_id(&board.cards, now);
+        board.write_images(&id, &taken)?;
         let card = Card {
-            id: new_id(&board.cards, now),
+            id,
             path: path.to_string(),
             title: title.to_string(),
-            note: note.trim().to_string(),
+            note: note.to_string(),
             column: Column::Queued,
             created_at: now,
             moved_at: now,
@@ -412,6 +576,7 @@ impl Core {
             worked: false,
             ran: false,
             rested: false,
+            images: held,
         };
         board.cards.push(card.clone());
         board.place(&card.id, Column::Queued, usize::MAX, now);
@@ -419,18 +584,53 @@ impl Core {
         Ok(card)
     }
 
-    pub fn board_edit(&self, id: &str, title: &str, note: &str) -> Result<(), String> {
+    /// A card's new text. `images`: those pasted into its note since it was saved. An image
+    /// stays while the note names it (`[Image #n]`), and its file goes once the note no longer
+    /// does; a new one under a held number takes that one's place.
+    pub fn board_edit(&self, id: &str, title: &str, note: &str, images: &[NewImage]) -> Result<(), String> {
         let title = title.trim();
         if title.is_empty() {
             return Err("a card needs a title".into());
         }
+        let note = note.trim();
+        let added = taken(note, images)?;
 
         let mut board = self.board();
+        let before = board.find(id).ok_or_else(|| no_card(id))?.images.clone();
+        let mut held: Vec<CardImage> = before.iter().copied().filter(|image| names(note, image.n) && !added.iter().any(|(new, _)| new.n == image.n)).collect();
+        held.extend(added.iter().map(|(image, _)| *image));
+        held.sort_by_key(|image| image.n);
+        if held.len() > IMAGES_MAX {
+            return Err(too_many());
+        }
+        board.write_images(id, &added)?;
+        let gone: Vec<CardImage> = before.into_iter().filter(|image| !held.contains(image)).collect();
+
         let card = board.find_mut(id).ok_or_else(|| no_card(id))?;
         card.title = title.to_string();
-        card.note = note.trim().to_string();
+        card.note = note.to_string();
+        card.images = held;
+        board.remove_images(id, &gone);
         self.board_changed(board);
         Ok(())
+    }
+
+    /// One of a card's images as a `data:` URL, for the window to draw.
+    pub fn board_image(&self, id: &str, n: u32) -> Result<String, String> {
+        let (file, kind) = {
+            let board = self.board();
+            let image = board.find(id).and_then(|card| card.images.iter().find(|image| image.n == n).copied()).ok_or_else(|| no_card(id))?;
+            (board.image_dir(id).ok_or_else(|| no_card(id))?.join(image.file_name()), image.kind)
+        };
+        let bytes = fs::read(&file).map_err(|error| error.to_string())?;
+        Ok(format!("data:{};base64,{}", kind.mime(), BASE64.encode(bytes)))
+    }
+
+    /// The image files of `card` that are there, by number, and the folder they are in.
+    fn card_images(&self, card: &Card) -> Option<(PathBuf, Vec<(u32, PathBuf)>)> {
+        let dir = self.board().image_dir(&card.id)?;
+        let files: Vec<(u32, PathBuf)> = card.images.iter().map(|image| (image.n, dir.join(image.file_name()))).filter(|(_, file)| file.is_file()).collect();
+        (!files.is_empty()).then_some((dir, files))
     }
 
     /// Moves a card to `index` among `column`'s cards (the card itself left out; clamped). Only
@@ -450,13 +650,15 @@ impl Core {
         Ok(())
     }
 
+    /// Deletes a card, and its images with it.
     pub fn board_delete(&self, id: &str) {
         let mut board = self.board();
-        let before = board.cards.len();
-        board.cards.retain(|card| card.id != id);
-        if board.cards.len() != before {
-            self.board_changed(board);
-        }
+        let Some(at) = board.cards.iter().position(|card| card.id == id) else {
+            return;
+        };
+        let card = board.cards.remove(at);
+        board.remove_images(&card.id, &card.images);
+        self.board_changed(board);
     }
 
     /// Every card of `from` goes to `to`, a listed project: for a folder taken off the list or
@@ -484,9 +686,10 @@ impl Core {
     }
 
     /// Gives a card to Claude: a Claude Code tab in the card's project, with the card's text as
-    /// the first prompt (`Give::Plan`: in plan mode) and, under it, a line asking for a short
-    /// summary at the end (the card's details show it). The card goes to `claude` and follows the
-    /// session that starts in that tab (`follow_board`).
+    /// the first prompt (`Give::Plan`: in plan mode) and, under it, the files of the images its
+    /// note names and a line asking for a short summary at the end (the card's details show it).
+    /// The card goes to `claude` and follows the session that starts in that tab
+    /// (`follow_board`).
     ///
     /// `Give::Continue` keeps the session the card holds instead (`carry`): one that runs is
     /// followed where it is, with no tab opened (`None`); one that has ended opens again in a
@@ -509,11 +712,19 @@ impl Core {
             }
             (Carry::Resume, Some(session)) => Launch::Resume { session: session.clone() },
             _ => {
-                let text = if card.note.is_empty() { card.title.clone() } else { format!("{}\n\n{}", card.title, card.note) };
+                let mut text = if card.note.is_empty() { card.title.clone() } else { format!("{}\n\n{}", card.title, card.note) };
+                // What `[Image #n]` in the note stands for: Claude reads the file.
+                let images = self.card_images(&card);
+                if let Some((_, files)) = &images {
+                    text.push_str(&format!("\n\n{}", t!("board.imagesPrompt")));
+                    for (n, file) in files {
+                        text.push_str(&format!("\n[Image #{n}] {}", file.display()));
+                    }
+                }
                 // A one-word card alone would be read as one of Claude's subcommands (`update`,
                 // `doctor`, `mcp`…) even after `--`; with the line under it, it never is one word.
                 let prompt = format!("{text}\n\n{}", t!("board.summaryPrompt"));
-                Launch::Claude { prompt: Some(prompt), plan: give == Give::Plan }
+                Launch::Claude { prompt: Some(prompt), plan: give == Give::Plan, images: images.map(|(dir, _)| dir) }
             }
         };
         let resumed = match &launch {
@@ -818,6 +1029,7 @@ mod tests {
             worked: false,
             ran: false,
             rested: false,
+            images: Vec::new(),
         }
     }
 
@@ -902,6 +1114,72 @@ mod tests {
 
         let again = Board::load(settings_file.with_file_name("board.json"), now_ms());
         assert_eq!(again.cards, core.board_state());
+    }
+
+    /// A card's images are files of its own folder, and nothing else is: only bytes that are an
+    /// image are written there, an image goes when its note no longer names it or its card is
+    /// deleted, and a card whose id was written by hand reaches no folder outside the board's.
+    #[test]
+    fn a_cards_images_stay_in_its_own_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = tmp.path().join("config");
+        let core = Core::new(
+            CoreConfig {
+                registry_dir: tmp.path().join("registry"),
+                claude_dir: tmp.path().join("claude").join("projects"),
+                settings_file: config.join("settings.json"),
+                claude_settings: tmp.path().join("claude").join("settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            Arc::new(|_| {}),
+        );
+        let url = |bytes: &[u8]| format!("data:image/png;base64,{}", BASE64.encode(bytes));
+        let image = |n: u32, fill: u8| NewImage { n, data: url(&[&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A][..], &[fill; 16][..]].concat()) };
+        let script = |n: u32| NewImage { n, data: url(b"#!/bin/sh\nrm -rf ~\n") };
+        let files = |dir: PathBuf| -> Vec<String> {
+            let mut names: Vec<String> = fs::read_dir(dir).map(|entries| entries.flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
+            names.sort();
+            names
+        };
+        let folder = |id: &str| config.join("board-images").join(id);
+        let project = "/Users/me/projects/paddock";
+
+        // Only what the note names is taken, and only bytes that are an image.
+        let first = core.board_add(project, "Card", "see [Image #1] and [Image #2]", &[image(1, 1), image(2, 2), image(3, 3)]).unwrap();
+        assert_eq!(first.images, [CardImage { n: 1, kind: ImageKind::Png }, CardImage { n: 2, kind: ImageKind::Png }]);
+        assert_eq!(files(folder(&first.id)), ["1.png", "2.png"]);
+        assert_eq!(core.board_image(&first.id, 2).unwrap(), image(2, 2).data);
+        assert!(core.board_add(project, "Card", "[Image #1]", &[script(1)]).is_err());
+        assert!(core.board_edit(&first.id, "Card", "[Image #1] [Image #2] [Image #4]", &[script(4)]).is_err());
+        assert_eq!(core.board_state(), std::slice::from_ref(&first));
+        assert_eq!(files(config.join("board-images")), std::slice::from_ref(&first.id));
+
+        // An edit keeps what the note still names; the file of what it no longer names goes.
+        core.board_edit(&first.id, "Card", "only [Image #2] and [Image #3]", &[image(3, 3)]).unwrap();
+        assert_eq!(files(folder(&first.id)), ["2.png", "3.png"]);
+        assert_eq!(Board::load(config.join("board.json"), now_ms()).cards, core.board_state());
+
+        // An id written by hand names no folder: nothing is read, written or deleted through it.
+        let outside = config.join("kept");
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("1.png"), b"mine").unwrap();
+        let mut forged = card("../kept", Column::Queued);
+        forged.note = "[Image #1]".into();
+        forged.images = vec![CardImage { n: 1, kind: ImageKind::Png }];
+        core.board().cards.push(forged);
+        assert!(core.board_image("../kept", 1).is_err());
+        assert!(core.board_edit("../kept", "Card", "[Image #1] [Image #2]", &[image(2, 2)]).is_err());
+        core.board_edit("../kept", "Card", "", &[]).unwrap();
+        core.board_delete("../kept");
+        assert_eq!(files(outside.clone()), ["1.png"]);
+        assert_eq!(fs::read(outside.join("1.png")).unwrap(), b"mine");
+
+        // A deleted card takes its own images along, and only those.
+        let second = core.board_add(project, "Other", "[Image #1]", &[image(1, 9)]).unwrap();
+        core.board_delete(&first.id);
+        assert!(!folder(&first.id).exists());
+        assert_eq!(files(folder(&second.id)), ["1.png"]);
     }
 
     /// Cards of a folder that left the list go to a listed project whole: every card and its

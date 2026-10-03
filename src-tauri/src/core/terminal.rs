@@ -37,8 +37,9 @@ pub struct TerminalBuffer {
 pub(super) enum Launch {
     /// The user's shell.
     Shell,
-    /// Claude Code, then the shell: with a first prompt (a board card's text) and in plan mode.
-    Claude { prompt: Option<String>, plan: bool },
+    /// Claude Code, then the shell: with a first prompt (a board card's text), in plan mode, and
+    /// with the folder of that card's images among Claude's directories.
+    Claude { prompt: Option<String>, plan: bool, images: Option<PathBuf> },
     /// Claude Code with a session that has ended opened again (`claude --resume`), then the
     /// shell: a board card's session, going on.
     Resume { session: String },
@@ -71,7 +72,7 @@ impl Core {
     /// `size` (cols, rows) is the view's: a shell that starts at another width draws its first
     /// prompt for that width, and zsh leaves its partial-line mark behind.
     pub fn open_terminal(self: &Arc<Self>, path: &str, claude: bool, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
-        let launch = if claude { Launch::Claude { prompt: None, plan: false } } else { Launch::Shell };
+        let launch = if claude { Launch::Claude { prompt: None, plan: false, images: None } } else { Launch::Shell };
         self.open_terminal_as(path, &launch, None, size)
     }
 
@@ -96,7 +97,7 @@ impl Core {
 
         let shell_path = CommandBuilder::new_default_prog().get_shell();
         let mut command = match launch {
-            Launch::Claude { prompt, plan } => claude_command(&shell_path, prompt.as_deref(), *plan),
+            Launch::Claude { prompt, plan, images } => claude_command(&shell_path, prompt.as_deref(), *plan, images.as_deref()),
             Launch::Resume { session } => resume_command(&shell_path, session)?,
             Launch::Shell => CommandBuilder::new_default_prog(),
         };
@@ -301,6 +302,10 @@ impl Core {
 #[cfg(unix)]
 const PROMPT_VAR: &str = "PITWALL_PROMPT";
 
+/// The environment variable the folder of a card's images travels in, the same way.
+#[cfg(unix)]
+const IMAGES_VAR: &str = "PITWALL_IMAGES";
+
 /// The user's shell, interactive and login (so PATH and version managers load), running
 /// `claude` and then becoming an ordinary shell when Claude ends. `plan` starts Claude in plan
 /// mode.
@@ -309,19 +314,28 @@ const PROMPT_VAR: &str = "PITWALL_PROMPT";
 /// `PITWALL_PROMPT`, and the fixed script hands it to Claude as one quoted argument after `--`,
 /// so no shell syntax in it runs and nothing in it reads as one of Claude's options. The shell
 /// that stays after Claude is started without it.
+///
+/// `images`, the folder of the images that prompt names, becomes one of Claude's directories
+/// (`--add-dir`): Claude reads a file outside the project only after asking, and a card's images
+/// are outside it. The folder goes in `PITWALL_IMAGES`, never into the command line either.
 #[cfg(unix)]
-pub(super) fn claude_command(shell: &str, prompt: Option<&str>, plan: bool) -> CommandBuilder {
+pub(super) fn claude_command(shell: &str, prompt: Option<&str>, plan: bool, images: Option<&Path>) -> CommandBuilder {
     let quoted = shell.replace('\'', "'\\''");
     let mode = if plan { " --permission-mode plan" } else { "" };
-    let script = match prompt {
-        Some(_) => format!("claude{mode} -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} '{quoted}' -l"),
-        None => format!("claude{mode}; exec '{quoted}' -l"),
+    let images = images.filter(|_| prompt.is_some());
+    let script = match (prompt, images) {
+        (Some(_), Some(_)) => format!("claude{mode} --add-dir \"${IMAGES_VAR}\" -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} -u {IMAGES_VAR} '{quoted}' -l"),
+        (Some(_), None) => format!("claude{mode} -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} '{quoted}' -l"),
+        (None, _) => format!("claude{mode}; exec '{quoted}' -l"),
     };
 
     let mut command = CommandBuilder::new(shell);
     command.args(["-l", "-i", "-c", &script]);
     if let Some(prompt) = prompt {
         command.env(PROMPT_VAR, prompt);
+    }
+    if let Some(images) = images {
+        command.env(IMAGES_VAR, images);
     }
     command
 }
@@ -330,7 +344,7 @@ pub(super) fn claude_command(shell: &str, prompt: Option<&str>, plan: bool) -> C
 /// quotes, `&` or `|` in a card would end the argument and run as commands. Claude starts
 /// without the card's text here (it stays unused) rather than risk that.
 #[cfg(windows)]
-pub(super) fn claude_command(_shell: &str, _prompt: Option<&str>, plan: bool) -> CommandBuilder {
+pub(super) fn claude_command(_shell: &str, _prompt: Option<&str>, plan: bool, _images: Option<&Path>) -> CommandBuilder {
     let mut command = CommandBuilder::new("cmd.exe");
     command.args(["/K", "claude"]);
     if plan {
@@ -414,19 +428,32 @@ mod tests {
         let argv = |command: &CommandBuilder| -> Vec<String> { command.get_argv().iter().map(|arg| arg.to_string_lossy().into_owned()).collect() };
 
         for plan in [false, true] {
-            let command = claude_command("/bin/zsh", Some(&prompt), plan);
+            let command = claude_command("/bin/zsh", Some(&prompt), plan, None);
             let args = argv(&command);
             for arg in &args {
                 assert!(!arg.contains("pwned") && !arg.contains("dangerously"), "{arg}");
             }
             assert_eq!(command.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
             // The same command line for any text: it only names the variable.
-            assert_eq!(args, argv(&claude_command("/bin/zsh", Some("x"), plan)));
+            assert_eq!(args, argv(&claude_command("/bin/zsh", Some("x"), plan, None)));
 
             let script = args.last().unwrap();
             assert!(script.contains(r#"-- "$PITWALL_PROMPT";"#), "{script}");
             // The shell that stays after Claude doesn't keep it.
             assert!(script.ends_with("exec env -u PITWALL_PROMPT '/bin/zsh' -l"), "{script}");
+
+            // The folder of its images travels the same way, whatever its path holds.
+            let folder = Path::new(r#"/Users/it's "me"; touch /tmp/pwned/board-images/a-0"#);
+            let command = claude_command("/bin/zsh", Some(&prompt), plan, Some(folder));
+            let args = argv(&command);
+            for arg in &args {
+                assert!(!arg.contains("pwned") && !arg.contains("dangerously"), "{arg}");
+            }
+            assert_eq!(command.get_env("PITWALL_IMAGES"), Some(folder.as_os_str()));
+            assert_eq!(command.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
+            let script = args.last().unwrap();
+            assert!(script.contains(r#" --add-dir "$PITWALL_IMAGES" -- "$PITWALL_PROMPT";"#), "{script}");
+            assert!(script.ends_with("exec env -u PITWALL_PROMPT -u PITWALL_IMAGES '/bin/zsh' -l"), "{script}");
         }
     }
 

@@ -40,6 +40,8 @@ sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 # Local time (the day's bounds, wall-clock times) on every platform.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tauri-plugin-clipboard-manager = "2.4.1"
+# A card's images cross to the window and back as `data:` URLs.
+base64 = "0.22"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

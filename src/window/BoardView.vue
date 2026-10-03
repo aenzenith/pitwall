@@ -19,6 +19,7 @@ import {
   type BoardLayout,
 } from "../lib/board";
 import { SETTLE_MS, useCardDrag, type DropTarget } from "../lib/cardDrag";
+import { useCardImages } from "../lib/cardImages";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
 import { dragRegion, keys, primary } from "../lib/platform";
@@ -286,6 +287,9 @@ function markSeen(): void {
 watch(selectedId, (id) => {
   if (id !== opened.value) opened.value = null;
 });
+
+/** The images the selected card's note names, for its details. */
+const selectedImages = useCardImages(() => selected.value);
 
 /** What Claude last said in the selected card's session, once its work is over: the summary the
  * card asked for. Asked for again when the card or its session moves on. */
@@ -875,6 +879,7 @@ const ghostStyle = computed(() =>
       error=""
       :terminal="selectedTerminal"
       :note="selectedOver ? selected.note : ''"
+      :images="selectedOver ? selectedImages : []"
       :last-message="lastMessage"
       @mark-seen="markSeen"
       @hold="typing = $event"
@@ -885,6 +890,7 @@ const ghostStyle = computed(() =>
       :project="selectedProject"
       :status="statuses.get(selected.id) ?? null"
       :terminal="selectedTerminal"
+      :images="selectedImages"
       :last-message="lastMessage"
       @hold="typing = $event"
     />

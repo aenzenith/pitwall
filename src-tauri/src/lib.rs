@@ -370,6 +370,7 @@ pub fn run() {
             commands::board_state,
             commands::board_add,
             commands::board_edit,
+            commands::board_image,
             commands::board_move,
             commands::board_delete,
             commands::board_rehome,

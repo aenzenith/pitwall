@@ -361,7 +361,8 @@ export type BoardColumn = "queued" | "claude" | "review" | "done";
 /**
  * A card: a piece of work written for a project. Its place in its column is its place among the
  * project's cards there, in the board's order. `session` and `terminal`: the Claude session it was
- * given to (the core links it), and the Pitwall terminal that runs it; times in ms.
+ * given to (the core links it), and the Pitwall terminal that runs it; times in ms. `images`: those
+ * pasted into its note, `[Image #n]` in its text.
  */
 export type Card = {
   id: string;
@@ -374,4 +375,12 @@ export type Card = {
   session: string | null;
   terminal: number | null;
   givenAt: number | null;
+  images: CardImage[];
 };
+
+/** An image a card holds: its number in the note, and what its file is. */
+export type CardImage = { n: number; kind: "png" | "jpeg" | "gif" | "webp" };
+
+/** An image pasted into a card's note, handed to the core with the card's text: its bytes as a
+ * `data:` URL. */
+export type NewImage = { n: number; data: string };

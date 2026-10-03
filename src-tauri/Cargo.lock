@@ -3239,6 +3239,7 @@ dependencies = [
 name = "pitwall"
 version = "1.1.0"
 dependencies = [
+ "base64 0.22.1",
  "block2",
  "chrono",
  "dirs 7.0.0",

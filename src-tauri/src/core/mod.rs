@@ -46,7 +46,7 @@ mod supervise;
 mod terminal;
 mod watch;
 pub use activity::DaySummary;
-pub use board::{Card, Give};
+pub use board::{Card, Give, NewImage};
 pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
 pub use projects::Folder;

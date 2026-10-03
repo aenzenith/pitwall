@@ -195,14 +195,26 @@ pub fn board_state(state: State<'_, AppState>) -> Vec<crate::core::Card> {
     state.core.board_state()
 }
 
+/// `images`: those pasted into the note, each a `data:` URL. Their files are written, so it runs
+/// off the main thread.
 #[tauri::command]
-pub fn board_add(state: State<'_, AppState>, path: String, title: String, note: String) -> Result<crate::core::Card, String> {
-    state.core.board_add(&path, &title, &note)
+pub async fn board_add(app: AppHandle, path: String, title: String, note: String, images: Vec<crate::core::NewImage>) -> Result<crate::core::Card, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.board_add(&path, &title, &note, &images)).await.map_err(|error| error.to_string())?
 }
 
+/// `images`: those pasted into the note since the card was saved.
 #[tauri::command]
-pub fn board_edit(state: State<'_, AppState>, id: String, title: String, note: String) -> Result<(), String> {
-    state.core.board_edit(&id, &title, &note)
+pub async fn board_edit(app: AppHandle, id: String, title: String, note: String, images: Vec<crate::core::NewImage>) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.board_edit(&id, &title, &note, &images)).await.map_err(|error| error.to_string())?
+}
+
+/// One of a card's images (`[Image #n]` in its note) as a `data:` URL.
+#[tauri::command]
+pub async fn board_image(app: AppHandle, id: String, n: u32) -> Result<String, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.board_image(&id, n)).await.map_err(|error| error.to_string())?
 }
 
 /// `index`: the card's place among `column`'s cards, itself left out.

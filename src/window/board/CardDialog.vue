@@ -2,18 +2,24 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import Spinner from "../../components/Spinner.vue";
+import { IMAGE_MB_MAX, imageData, imageNumbers, IMAGES_MAX, imageToken, nextImageNumber, pastedImages, spaced, useCardImages, withoutImage, type Shot } from "../../lib/cardImages";
 import { useBackdropClose } from "../../lib/dialog";
 import { useReturnFocus } from "../../lib/dialogFocus";
 import { t } from "../../lib/i18n";
-import { primary } from "../../lib/platform";
+import { keys, primary } from "../../lib/platform";
 import { api } from "../../lib/store";
 import type { Card } from "../../lib/types";
+import CardImages from "./CardImages.vue";
 
 /**
  * Writes a card, or edits one (`card`): a title (needed) and a note. A new card goes to `path`;
  * without one it asks which of `projects` (`suggested` first chosen), and it never goes to a folder
  * that isn't one of them. Enter in the title or ⌘↵ anywhere saves; Esc, Cancel or a click outside
  * closes without saving.
+ *
+ * An image pasted into the note becomes `[Image #n]` at the caret, as in Claude Code's prompt,
+ * and shows under the note; it goes to Claude with the card's text. It stays the card's while the
+ * note names it.
  */
 const props = defineProps<{ card: Card | null; path: string | null; suggested?: string | null; projects: Array<{ path: string; name: string }> }>();
 const emit = defineEmits<{ added: [card: Card]; close: [] }>();
@@ -22,6 +28,7 @@ const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
 useReturnFocus();
 const titleInput = ref<HTMLInputElement | null>(null);
+const noteInput = ref<HTMLTextAreaElement | null>(null);
 
 const draft = ref({ title: props.card?.title ?? "", note: props.card?.note ?? "", path: props.card?.path ?? props.path ?? props.suggested ?? props.projects[0]?.path ?? "" });
 const error = ref("");
@@ -54,6 +61,70 @@ onMounted(() => {
   if (props.card) titleInput.value?.select();
 });
 
+/* ---------- the note's images ---------- */
+
+/** The card's saved images, and those pasted here (not saved yet; `src` null while one is read). */
+const saved = useCardImages(() => props.card);
+const pasted = ref<Shot[]>([]);
+/** Each pasted image being read: saving waits for them. */
+const reading: Promise<void>[] = [];
+/** The images the note names, in its order: what the card holds once saved. */
+const shots = computed(() =>
+  imageNumbers(draft.value.note)
+    .map((n) => pasted.value.find((shot) => shot.n === n) ?? saved.value.find((shot) => shot.n === n))
+    .filter((shot): shot is Shot => !!shot),
+);
+const pasteKeys = keys("mod+V");
+
+/** A paste that carries an image puts the image in; any other is the text it always was. */
+function onPaste(event: ClipboardEvent): void {
+  const files = pastedImages(event.clipboardData);
+  if (!files.length) return;
+  event.preventDefault();
+  for (const file of files) attach(file);
+}
+
+function refused(): void {
+  error.value = t("board.dialog.imageRefused", { count: IMAGES_MAX, size: IMAGE_MB_MAX });
+}
+
+/** Puts `file` into the note: its token at the caret at once, the picture once it is read. */
+function attach(file: File): void {
+  error.value = "";
+  if (shots.value.length >= IMAGES_MAX) {
+    refused();
+    return;
+  }
+
+  const n = nextImageNumber(draft.value.note, [...(props.card?.images ?? []), ...pasted.value].map((image) => image.n));
+  pasted.value.push({ n, src: null });
+  const field = noteInput.value;
+  if (field) {
+    field.setRangeText(spaced(field.value, field.selectionStart, imageToken(n)), field.selectionStart, field.selectionEnd, "end");
+    draft.value.note = field.value;
+  } else {
+    draft.value.note += spaced(draft.value.note, draft.value.note.length, imageToken(n));
+  }
+
+  reading.push(
+    imageData(file)
+      .then((src) => {
+        const shot = pasted.value.find((shot) => shot.n === n);
+        if (shot) shot.src = src;
+      })
+      .catch(() => {
+        removeImage(n);
+        refused();
+      }),
+  );
+}
+
+/** Takes image `n` out of the note; a saved one leaves the card when the card is saved. */
+function removeImage(n: number): void {
+  draft.value.note = withoutImage(draft.value.note, n);
+  pasted.value = pasted.value.filter((shot) => shot.n !== n);
+}
+
 async function submit(): Promise<void> {
   if (saving.value) return;
   const title = draft.value.title.trim();
@@ -76,8 +147,13 @@ async function submit(): Promise<void> {
   saving.value = true;
   error.value = "";
   try {
-    if (props.card) await api.boardEdit(props.card.id, title, note);
-    else emit("added", await api.boardAdd(path, title, note));
+    await Promise.all(reading);
+    // An image that couldn't be read took its token out of the note, and says so.
+    if (error.value) return;
+    const named = imageNumbers(note);
+    const images = pasted.value.flatMap((shot) => (shot.src && named.includes(shot.n) ? [{ n: shot.n, data: shot.src }] : []));
+    if (props.card) await api.boardEdit(props.card.id, title, note, images);
+    else emit("added", await api.boardAdd(path, title, note, images));
     dialog.value?.close();
   } catch (failure) {
     error.value = String(failure);
@@ -117,10 +193,14 @@ function cancel(): void {
         {{ t("board.dialog.title") }}
         <input ref="titleInput" v-model="draft.title" maxlength="200" :placeholder="t('board.dialog.titlePlaceholder')" />
       </label>
-      <label class="cd-field">
-        {{ t("board.dialog.note") }}
-        <textarea v-model="draft.note" rows="5" maxlength="8000" :placeholder="t('board.dialog.notePlaceholder')"></textarea>
-      </label>
+      <div class="cd-note">
+        <label class="cd-field">
+          {{ t("board.dialog.note") }}
+          <textarea ref="noteInput" v-model="draft.note" rows="5" maxlength="8000" :placeholder="t('board.dialog.notePlaceholder')" @paste="onPaste"></textarea>
+        </label>
+        <CardImages v-if="shots.length" :images="shots" removable @remove="removeImage" />
+        <p v-else class="cd-hint">{{ t("board.dialog.imageHint", { keys: pasteKeys }) }}</p>
+      </div>
       <p v-if="error" class="cd-error" role="alert">{{ error }}</p>
       <div class="cd-actions">
         <button type="button" class="cd-control" @click="cancel">{{ t("common.cancel") }}</button>
@@ -220,6 +300,20 @@ function cancel(): void {
 .cd-field input::placeholder,
 .cd-field textarea::placeholder {
   color: var(--text-faint);
+}
+
+/* The note, and under it its images or how one gets there. */
+.cd-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cd-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
 }
 
 .cd-error {
