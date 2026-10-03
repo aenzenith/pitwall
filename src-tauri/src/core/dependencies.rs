@@ -434,6 +434,9 @@ impl Core {
         if wanted.is_empty() {
             return;
         }
+        if anew {
+            process::reread_terminal_env();
+        }
         let probed = deps::probe(&wanted);
         self.deps_lock().probed.merge(probed);
     }
@@ -448,6 +451,7 @@ impl Core {
         if lacking().is_none() {
             return Ok(());
         }
+        process::reread_terminal_env();
         let probed = deps::probe(&Wanted::tools(needs));
         self.deps_lock().probed.merge(probed);
         match lacking() {

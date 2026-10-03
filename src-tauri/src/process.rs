@@ -1,5 +1,6 @@
-//! Processes at the operating-system level: a login shell whose whole tree can be stopped (its
-//! own process group on macOS and Linux, a job object on Windows), its output read as lines,
+//! Processes at the operating-system level: a shell with the terminal's environment whose whole
+//! tree can be stopped (its own process group on macOS and Linux, a job object on Windows), its
+//! output read as lines,
 //! signals to a whole tree, and whether a process or a tree still exists. Also what else differs
 //! per platform: the process table, when a process started and the system booted, programs found
 //! on `PATH`, and child processes that never open a console window on Windows.
@@ -7,9 +8,13 @@
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
+#[cfg(unix)]
+use std::ffi::OsString;
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
+#[cfg(unix)]
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -39,15 +44,142 @@ fn login_shell() -> String {
     std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| fallback.into())
 }
 
-/// Runs `command_line` in `cwd` through the login shell, so PATH (nvm, Herd, Homebrew) matches the
-/// terminal. `-l` and `-c` go as two arguments, which fish takes too. The shell leads a process
-/// group of its own, so stopping it takes the `vite` under `npm` down too.
+/// What a shell exports: names and values as the system gives them.
+#[cfg(unix)]
+type Environment = Vec<(OsString, OsString)>;
+
+/// The terminal's environment as last read; empty when the shell gave none.
+#[cfg(unix)]
+static TERMINAL_ENV: Mutex<Option<Arc<Environment>>> = Mutex::new(None);
+
+/// The line each end of the shell's answer is marked with.
+#[cfg(unix)]
+const ENV_MARK: &str = "pitwall-env";
+
+/// How long the shell's start-up files may take.
+#[cfg(unix)]
+const ENV_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The shell's own variables: every shell sets them for itself.
+#[cfg(unix)]
+const SHELL_OWN: &[&[u8]] = &[b"PWD", b"OLDPWD", b"SHLVL", b"_"];
+
+/// What the user's terminal exports: their shell's environment once it has read its interactive
+/// start-up files too (`.zshrc`, `.bashrc`), where Herd, nvm and most installers put their PATH
+/// lines. A login shell alone (`-l -c`) skips those, and an app opened from the Dock or Finder
+/// starts with launchd's PATH only. Read once, and again with `anew`; a shell that gives nothing
+/// then leaves what it gave before.
+#[cfg(unix)]
+fn terminal_env(anew: bool) -> Arc<Environment> {
+    let mut kept = TERMINAL_ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    if anew || kept.is_none() {
+        // Tests never start the user's shell.
+        let read = if cfg!(test) { None } else { read_terminal_env() };
+        if read.is_some() || kept.is_none() {
+            *kept = Some(Arc::new(read.unwrap_or_default()));
+        }
+    }
+    kept.clone().unwrap_or_default()
+}
+
+/// Reads the terminal's environment again: the shell's start-up files may have changed since.
+#[cfg(unix)]
+pub fn reread_terminal_env() {
+    terminal_env(true);
+}
+
+/// On Windows a command runs with the app's own environment.
+#[cfg(windows)]
+pub fn reread_terminal_env() {}
+
+/// Asks an interactive login shell, in the home folder, for its environment (`env -0` between
+/// two marks). The shell gets a session of its own: an interactive shell takes its terminal's
+/// foreground (a dev run's), and without a terminal there is none to take. `None` when it
+/// didn't answer in time, or its `env` has no `-0`.
+#[cfg(unix)]
+fn read_terminal_env() -> Option<Environment> {
+    use std::os::unix::process::CommandExt;
+
+    let script = format!("echo {ENV_MARK}; /usr/bin/env -0; echo {ENV_MARK}");
+    let mut shell = command(login_shell());
+    shell.args(["-l", "-i", "-c", &script]).current_dir(dirs::home_dir()?).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    // SAFETY: setsid is async-signal-safe, and nothing else runs between fork and exec.
+    unsafe {
+        shell.pre_exec(|| if libc::setsid() == -1 { Err(std::io::Error::last_os_error()) } else { Ok(()) });
+    }
+    let mut child = shell.spawn().ok()?;
+    let pid = child.id();
+    let mut stdout = child.stdout.take()?;
+
+    // Read up to the closing mark only, and never joined: something the start-up files left
+    // running may hold the pipe open for good.
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut output = Vec::new();
+        let mut chunk = [0u8; 8192];
+        while let Ok(read @ 1..) = stdout.read(&mut chunk) {
+            output.extend_from_slice(&chunk[..read]);
+            if let Some(env) = parse_env(&output) {
+                let _ = sender.send(env);
+                break;
+            }
+        }
+    });
+
+    let deadline = Instant::now() + ENV_TIMEOUT;
+    let env = receiver.recv_timeout(ENV_TIMEOUT).ok();
+    // Having answered, the shell ends by itself. One that is stuck, and whatever its start-up
+    // files left running in its group, is stopped.
+    while env.is_some() && Instant::now() < deadline && matches!(child.try_wait(), Ok(None)) {
+        thread::sleep(Duration::from_millis(20));
+    }
+    if group_alive(pid) {
+        stop_groups(&[pid], Duration::from_millis(600), Duration::from_secs(3));
+    }
+    let _ = child.wait();
+    env
+}
+
+/// The variables between the two marks of the shell's answer; what it printed before the first
+/// is start-up noise. `None` until the closing mark is there: it follows a NUL, which no value
+/// holds.
+#[cfg(unix)]
+fn parse_env(output: &[u8]) -> Option<Environment> {
+    use std::os::unix::ffi::OsStringExt;
+
+    let find = |from: usize, mark: &[u8]| output[from..].windows(mark.len()).position(|window| window == mark).map(|at| from + at);
+    let open = format!("{ENV_MARK}\n");
+    let close = format!("\0{ENV_MARK}\n");
+    let start = find(0, open.as_bytes())? + open.len();
+    let end = find(start, close.as_bytes())?;
+
+    let variables = output[start..end].split(|byte| *byte == 0).filter_map(|entry| {
+        let at = entry.iter().position(|byte| *byte == b'=')?;
+        let (name, value) = (&entry[..at], &entry[at + 1..]);
+        (!name.is_empty() && !SHELL_OWN.contains(&name)).then(|| (OsString::from_vec(name.to_vec()), OsString::from_vec(value.to_vec())))
+    });
+    Some(variables.collect())
+}
+
+/// Runs `command_line` in `cwd` through the user's shell with the terminal's environment
+/// (`terminal_env`), so PATH (nvm, Herd, Homebrew) matches the terminal. The shell is no login
+/// shell then: its login files would only reorder a PATH that is already whole (macOS's
+/// `path_helper`). Where the terminal's environment couldn't be read it is one, which gives the
+/// login files' part of it. The flags go as separate arguments, which fish takes too. The shell
+/// leads a process group of its own, so stopping it takes the `vite` under `npm` down too.
 #[cfg(unix)]
 pub fn spawn_shell(command_line: &str, cwd: &str) -> std::io::Result<Child> {
     use std::os::unix::process::CommandExt;
 
-    command(login_shell())
-        .args(["-l", "-c", command_line])
+    let env = terminal_env(false);
+    let mut shell = command(login_shell());
+    if env.is_empty() {
+        shell.arg("-l");
+    }
+    shell
+        .args(["-c", command_line])
+        .envs(env.iter().map(|(name, value)| (name, value)))
         .current_dir(cwd)
         .env("FORCE_COLOR", "0")
         .stdin(Stdio::null())
