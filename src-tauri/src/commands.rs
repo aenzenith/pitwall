@@ -339,7 +339,7 @@ pub fn refresh_fuel(app: AppHandle, state: State<'_, AppState>, force: bool) {
 /// Esc in the popover: close it and go back to the app from before.
 #[tauri::command]
 pub fn hide_popover(app: AppHandle) {
-    tray::dismiss_popover(&app);
+    tray::hide_popover(&app);
 }
 
 /// Esc in the switcher: close it and go back to the app from before.
@@ -350,8 +350,9 @@ pub fn hide_switcher(app: AppHandle) {
 
 /// Before opening something (editor, Claude, a link): the popover and switcher get out of the
 /// way. While Pitwall is the active app they go when the opened app takes focus, since hidden
-/// right away Pitwall's own window would come up for a moment. When it isn't (the switcher,
-/// opened by its shortcut), they go at once rather than linger while that app starts.
+/// right away Pitwall's own window would come up for a moment. When it isn't (both are panels
+/// that leave the app you are in in front), they go at once rather than linger while that app
+/// starts.
 fn step_aside(app: &AppHandle) {
     let wait = tray::pitwall_active();
     for label in [POPOVER, SWITCHER] {

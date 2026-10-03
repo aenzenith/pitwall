@@ -263,15 +263,17 @@ pub fn run() {
             }
             let settings = core.settings();
             let _ = apply_shortcut(app.handle(), settings.shortcut, &settings.shortcut_keys);
+            // The popover and the switcher never bring Pitwall to the front, not even while they
+            // are made (`tray::without_activating`).
+            #[cfg(target_os = "macos")]
+            tray::guard_activation();
             // The popover opens from the icon. Linux delivers no clicks on it (the tray has a
             // menu there instead), so it is made only on macOS and Windows.
             #[cfg(not(target_os = "linux"))]
-            let _popover = windows::get_or_create(app.handle(), POPOVER);
-            #[cfg(target_os = "macos")]
-            if let Some(popover) = &_popover {
-                tray::float_over_spaces(popover);
-            }
+            let _ = windows::get_or_create(app.handle(), POPOVER);
             tray::create(app.handle())?;
+            #[cfg(target_os = "macos")]
+            tray::hide_popover_on_outside_click(app.handle());
             // The main window and the switcher are made on first use (`windows`).
             windows::setup(app.handle());
 
@@ -294,7 +296,8 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| match event {
-            // The popover behaves like a menu: it goes away when it loses focus.
+            // The popover behaves like a menu: it goes away when it loses focus (and, on macOS, at
+            // any click outside Pitwall: `tray::hide_popover_on_outside_click`).
             WindowEvent::Focused(false) if window.label() == POPOVER => tray::hide_popover(window.app_handle()),
             // It sizes itself to its content; above a taskbar it grows upwards, away from the icon.
             #[cfg(windows)]

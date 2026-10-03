@@ -15,54 +15,8 @@ use crate::{windows, AppState, MAIN, POPOVER, SWITCHER};
 
 const TRAY_ID: &str = "pitwall";
 
-/// The app that was in front before the popover or switcher took focus, so dismissing them
-/// hands focus straight back (as Spotlight does) instead of raising Pitwall's main window.
-/// 0 = Pitwall itself was in front; nothing to hand back.
-static PREVIOUS_APP: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
-
-/// Remember who is in front, unless it is Pitwall already.
-fn note_front_app<R: Runtime>(app: &AppHandle<R>) {
-    let ours = [MAIN, POPOVER, SWITCHER]
-        .iter()
-        .any(|label| app.get_webview_window(label).and_then(|w| w.is_focused().ok()).unwrap_or(false));
-
-    #[cfg(target_os = "macos")]
-    let pid = if ours {
-        0
-    } else {
-        objc2_app_kit::NSWorkspace::sharedWorkspace()
-            .frontmostApplication()
-            .map(|front| front.processIdentifier())
-            .filter(|pid| *pid as u32 != std::process::id())
-            .unwrap_or(0)
-    };
-    #[cfg(not(target_os = "macos"))]
-    let pid = {
-        let _ = ours;
-        0
-    };
-
-    PREVIOUS_APP.store(pid, std::sync::atomic::Ordering::SeqCst);
-}
-
-/// After an explicit dismiss (shortcut, Esc, a pick): the app from before gets focus back.
-/// Returns whether there was one to hand it to.
-fn hand_back_focus() -> bool {
-    let pid = PREVIOUS_APP.swap(0, std::sync::atomic::Ordering::SeqCst);
-
-    #[cfg(target_os = "macos")]
-    if pid != 0 {
-        if let Some(previous) = objc2_app_kit::NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
-            return previous.activateWithOptions(objc2_app_kit::NSApplicationActivationOptions::empty());
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    let _ = pid;
-    false
-}
-
-/// Whether Pitwall is the active app. Opened by its shortcut, the switcher (a non-activating
-/// panel) leaves it inactive; opened from the popover, it is active.
+/// Whether Pitwall is the active app. The popover and the switcher (non-activating panels) leave
+/// it as it was: active only while its window is the one you are in.
 pub fn pitwall_active() -> bool {
     #[cfg(target_os = "macos")]
     return objc2_app_kit::NSRunningApplication::currentApplication().isActive();
@@ -83,33 +37,13 @@ pub fn hide_once_focus_moves<R: Runtime>(window: WebviewWindow<R>, wait: Duratio
     });
 }
 
-/// Closes the switcher on purpose and returns to whatever was in front before: that app first,
-/// then the switcher, so no Pitwall window comes up in between.
+/// Closes the switcher on purpose (its shortcut again, Esc, a pick). It never took the front from
+/// the app you are in (`make_panel`), so the keyboard is back there as soon as it goes.
 pub fn dismiss_switcher<R: Runtime>(app: &AppHandle<R>) {
     if let Some(switcher) = app.get_webview_window(SWITCHER) {
         if switcher.is_visible().unwrap_or(false) {
-            if hand_back_focus() {
-                hide_once_focus_moves(switcher, Duration::from_millis(300));
-            } else {
-                let _ = windows::hide(&switcher);
-            }
+            let _ = windows::hide(&switcher);
         }
-    }
-}
-
-/// Closes the popover on purpose (Esc) and returns to whatever was in front before, in the
-/// same order as the switcher.
-pub fn dismiss_popover<R: Runtime>(app: &AppHandle<R>) {
-    let Some(popover) = app.get_webview_window(POPOVER) else {
-        return;
-    };
-    if !popover.is_visible().unwrap_or(false) {
-        return;
-    }
-    if hand_back_focus() {
-        hide_once_focus_moves(popover, Duration::from_millis(300));
-    } else {
-        hide_popover(app);
     }
 }
 
@@ -155,7 +89,7 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
     };
 
     if popover.is_visible().unwrap_or(false) {
-        dismiss_popover(app);
+        hide_popover(app);
         return;
     }
 
@@ -167,9 +101,9 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
 
     place_popover(app, &popover);
 
-    note_front_app(app);
+    // Not `set_focus`: on macOS it brings Pitwall to the front, and Pitwall's window with it.
     let _ = windows::show(&popover);
-    let _ = popover.set_focus();
+    focus_alone(&popover);
 
     if let Some(state) = app.try_state::<AppState>() {
         state.core.popover_opened();
@@ -243,19 +177,26 @@ pub fn hide_popover<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// A click anywhere outside Pitwall closes the popover, as it does a menu. Losing the keyboard
+/// already hides it (`Focused(false)`), but a click on the menu bar, on another app's icon there
+/// or on the Dock takes the keyboard from no one. Only that a button went down is used; clicks in
+/// Pitwall's own windows don't come this way. Once, at start: the monitor stays for good.
+#[cfg(target_os = "macos")]
+pub fn hide_popover_on_outside_click<R: Runtime>(app: &AppHandle<R>) {
+    use objc2_app_kit::{NSEvent, NSEventMask};
+
+    let app = app.clone();
+    let hide = block2::RcBlock::new(move |_: std::ptr::NonNull<NSEvent>| hide_popover(&app));
+    let buttons = NSEventMask::LeftMouseDown | NSEventMask::RightMouseDown | NSEventMask::OtherMouseDown;
+    let _ = NSEvent::addGlobalMonitorForEventsMatchingMask_handler(buttons, &hide);
+}
+
 /// The quick switcher: a centred palette for jumping to a project from the keyboard.
 pub fn toggle_switcher<R: Runtime>(app: &AppHandle<R>) {
     // The shortcut toggles: pressed again, it closes and hands focus back.
     if app.get_webview_window(SWITCHER).is_some_and(|switcher| switcher.is_visible().unwrap_or(false)) {
         dismiss_switcher(app);
         return;
-    }
-
-    // Coming from the popover's search button, the app to return to is the popover's. Otherwise
-    // there is none: the switcher never takes the front from the app you are in (`make_panel`).
-    let from_popover = app.get_webview_window(POPOVER).and_then(|p| p.is_visible().ok()).unwrap_or(false);
-    if !from_popover {
-        PREVIOUS_APP.store(0, std::sync::atomic::Ordering::SeqCst);
     }
 
     // Made on first use; it comes up once its page listens for `switcher-opened`.
@@ -281,8 +222,8 @@ pub fn present_switcher<R: Runtime>(app: &AppHandle<R>) {
     let _ = switcher.emit("switcher-opened", ());
 }
 
-/// Gives the switcher the keyboard. It is a non-activating panel (`make_panel`), so Pitwall is
-/// not brought to the front and none of its other windows come along.
+/// Gives the popover or the switcher the keyboard. They are non-activating panels (`make_panel`),
+/// so Pitwall is not brought to the front and none of its other windows come along.
 #[cfg(target_os = "macos")]
 fn focus_alone<R: Runtime>(window: &WebviewWindow<R>) {
     let Ok(ns_window) = window.ns_window() else {
@@ -299,9 +240,11 @@ fn focus_alone<R: Runtime>(window: &WebviewWindow<R>) {
     });
 }
 
-/// Turns the switcher into a non-activating panel, as Spotlight's is: it takes the keyboard while
-/// the app you are in stays in front. Activating Pitwall for it raised Pitwall's main window too,
-/// and now and then that window took the keyboard and the search went away. Once, at start.
+/// Turns the popover or the switcher into a non-activating panel, as a menu bar extra's and
+/// Spotlight's are: it takes the keyboard while the app you are in stays in front. Activating
+/// Pitwall for it raised Pitwall's main window too, and now and then that window took the keyboard:
+/// the search went away, and the popover, never having had the keyboard, stayed up when you
+/// clicked elsewhere. Once, when the window is made.
 ///
 /// The window's class becomes a subclass of NSPanel. NSPanel adds no fields to NSWindow, and the
 /// one field of tao's window class, `focusable`, is declared again in the same place, so tao's
@@ -314,7 +257,7 @@ pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
     let ns_window = ns_window as usize;
 
     let _ = window.run_on_main_thread(move || {
-        use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
+        use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, NSObjectProtocol, Sel};
         use objc2::{msg_send, sel, ClassType};
         use objc2_app_kit::{NSPanel, NSWindow, NSWindowStyleMask};
 
@@ -344,6 +287,12 @@ pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
         unsafe { objc2::ffi::object_setClass(ns_window as *mut AnyObject, class) };
         let ns_window = unsafe { &*(ns_window as *const NSWindow) };
         ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+        // AppKit passes that flag on to the window server only when a window is made. Set later,
+        // the panel takes the keyboard without activating Pitwall, but a click in it still
+        // activates. This tells the window server; it is private, hence the check.
+        if ns_window.respondsToSelector(sel!(_setPreventsActivation:)) {
+            let _: () = unsafe { msg_send![ns_window, _setPreventsActivation: true] };
+        }
         // Hiding is the blur handler's job, not AppKit's.
         ns_window.setHidesOnDeactivate(false);
         let _: () = unsafe { msg_send![ns_window, setBecomesKeyOnlyIfNeeded: false] };
@@ -353,6 +302,69 @@ pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
 #[cfg(not(target_os = "macos"))]
 fn focus_alone<R: Runtime>(window: &WebviewWindow<R>) {
     let _ = window.set_focus();
+}
+
+/// Set while a panel's window is being made (`without_activating`).
+#[cfg(target_os = "macos")]
+static STAY_BEHIND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Makes a panel's window (`make`) without Pitwall coming to the front for it. wry activates the
+/// app for every webview it makes; for the switcher, made on first use over the app you are in,
+/// that brought Pitwall forward, and its window with it once the switcher went.
+#[cfg(target_os = "macos")]
+pub fn without_activating<T>(make: impl FnOnce() -> T) -> T {
+    use std::sync::atomic::Ordering;
+
+    STAY_BEHIND.store(true, Ordering::SeqCst);
+    let made = make();
+    STAY_BEHIND.store(false, Ordering::SeqCst);
+    made
+}
+
+/// Lets `without_activating` hold Pitwall back: AppKit's `activate` (and the older
+/// `activateIgnoringOtherApps:`, which wry calls before macOS 14) get a wrapper that does nothing
+/// while a panel is being made and is AppKit's own method otherwise. Once, at start.
+#[cfg(target_os = "macos")]
+pub fn guard_activation() {
+    use std::mem::transmute;
+    use std::sync::atomic::Ordering;
+    use std::sync::OnceLock;
+
+    use objc2::runtime::{AnyObject, Bool, Imp, Sel};
+    use objc2::{sel, ClassType};
+
+    type Activate = unsafe extern "C-unwind" fn(&AnyObject, Sel);
+    type ActivateIgnoring = unsafe extern "C-unwind" fn(&AnyObject, Sel, Bool);
+
+    /// AppKit's own methods, to pass the call on to.
+    static ACTIVATE: OnceLock<Activate> = OnceLock::new();
+    static ACTIVATE_IGNORING: OnceLock<ActivateIgnoring> = OnceLock::new();
+
+    unsafe extern "C-unwind" fn activate(this: &AnyObject, cmd: Sel) {
+        if let (false, Some(appkit)) = (STAY_BEHIND.load(Ordering::SeqCst), ACTIVATE.get()) {
+            unsafe { appkit(this, cmd) };
+        }
+    }
+    unsafe extern "C-unwind" fn activate_ignoring(this: &AnyObject, cmd: Sel, others: Bool) {
+        if let (false, Some(appkit)) = (STAY_BEHIND.load(Ordering::SeqCst), ACTIVATE_IGNORING.get()) {
+            unsafe { appkit(this, cmd, others) };
+        }
+    }
+
+    let class = objc2_app_kit::NSApplication::class();
+    // SAFETY: each wrapper has the signature of the method it stands in for (`activate`: no
+    // arguments; `activateIgnoringOtherApps:`: a BOOL; neither returns anything), and AppKit's
+    // method is kept before the wrapper goes in.
+    unsafe {
+        if let Some(method) = class.instance_method(sel!(activate)) {
+            let _ = ACTIVATE.set(transmute::<Imp, Activate>(method.implementation()));
+            method.set_implementation(transmute::<Activate, Imp>(activate));
+        }
+        if let Some(method) = class.instance_method(sel!(activateIgnoringOtherApps:)) {
+            let _ = ACTIVATE_IGNORING.set(transmute::<Imp, ActivateIgnoring>(method.implementation()));
+            method.set_implementation(transmute::<ActivateIgnoring, Imp>(activate_ignoring));
+        }
+    }
 }
 
 /// The popover and the switcher show on the Space you are on, a full-screen app's included.

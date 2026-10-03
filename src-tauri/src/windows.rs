@@ -67,8 +67,8 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     let config = tauri::utils::config::WindowConfig { transparent: false, ..config };
     // A new page, should an earlier window of this label have gone: not listening yet.
     pages().ready.retain(|l| l != label);
-    let built = WebviewWindowBuilder::from_config(app, &config)
-        .and_then(|builder| {
+    let build = || {
+        WebviewWindowBuilder::from_config(app, &config).and_then(|builder| {
             builder
                 // A reload (or a crashed page coming back) is not listening until it says so again.
                 .on_page_load(|window, load| {
@@ -77,7 +77,16 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
                     }
                 })
                 .build()
-        });
+        })
+    };
+    // The popover and the switcher are panels over the app you are in: Pitwall stays behind it
+    // while they are made, too.
+    #[cfg(target_os = "macos")]
+    let panel = label == SWITCHER || label == crate::POPOVER;
+    #[cfg(target_os = "macos")]
+    let built = if panel { tray::without_activating(build) } else { build() };
+    #[cfg(not(target_os = "macos"))]
+    let built = build();
 
     let window = match built {
         Ok(window) => window,
@@ -90,7 +99,7 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     };
 
     #[cfg(target_os = "macos")]
-    if label == SWITCHER {
+    if panel {
         tray::make_panel(&window);
         tray::float_over_spaces(&window);
     }
