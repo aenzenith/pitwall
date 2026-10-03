@@ -2,7 +2,8 @@
 //! card given to Claude opens a Claude Code tab in one of Pitwall's terminals with its text as
 //! the first prompt, then follows that session: it stays in `claude` while Claude works or waits
 //! on a permission or a question, and goes to `review` once the turn is over or the session has
-//! ended. The user moves it to `done`.
+//! ended. From `review` it goes back to `claude` when its session goes to work again. The user
+//! moves it to `done`.
 //!
 //! A card follows the process its session runs in: a session that takes a new id there (`/clear`)
 //! is still the card's. Claude Code's own `busy` / `waiting` outranks a hook gone quiet through a
@@ -96,6 +97,10 @@ pub struct Card {
     /// ended. Kept through a restart, so a card whose session ended meanwhile still moves on.
     #[serde(default)]
     pub ran: bool,
+    /// In `review`: its session has been seen at rest (its turn over, or ended) since the card
+    /// got there. Only then does that session at work mean it went on.
+    #[serde(default)]
+    pub rested: bool,
 }
 
 pub(super) struct Board {
@@ -155,13 +160,15 @@ impl Board {
     }
 
     /// Takes the card out and puts it at `index` among its project's cards in `column` (past the
-    /// last one: at the end), as the board shows them. A new column sets `moved_at`.
+    /// last one: at the end), as the board shows them. A new column sets `moved_at`, and the
+    /// card is no longer `rested`: that is told anew where it got to.
     fn place(&mut self, id: &str, column: Column, index: usize, now: u64) -> Option<&mut Card> {
         let at = self.cards.iter().position(|card| card.id == id)?;
         let mut card = self.cards.remove(at);
         if card.column != column {
             card.column = column;
             card.moved_at = now;
+            card.rested = false;
         }
 
         let slots: Vec<usize> =
@@ -404,6 +411,7 @@ impl Core {
             given_at: None,
             worked: false,
             ran: false,
+            rested: false,
         };
         board.cards.push(card.clone());
         board.place(&card.id, Column::Queued, usize::MAX, now);
@@ -608,9 +616,12 @@ impl Core {
     /// Follows the cards given to Claude: a card started in a Pitwall terminal takes the session
     /// that starts in it, a card whose session took a new id in its process (`/clear`) takes that
     /// one, and a card goes to `review` once its session's turn is over (after it was seen at
-    /// work) or the session ended. Runs after every refresh of Claude's state (`refresh_claude`:
-    /// each heartbeat and each change to Claude's files), with or without the window, and costs
-    /// nothing while no card is in `claude`.
+    /// work) or the session ended. A card in `review` goes back to `claude` when its session,
+    /// seen at rest since the card got there, is at work again; a session several cards hold
+    /// works for the one given last, and only that one follows it back. Runs after every refresh
+    /// of Claude's state (`refresh_claude`: each heartbeat and each change to Claude's files),
+    /// with or without the window, and costs nothing while no card in `claude` or `review` has a
+    /// session to follow.
     pub(super) fn follow_board(&self) {
         // One pass at a time, so an older reading never lands after a newer one.
         let _pass = self.board_follow.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -619,10 +630,13 @@ impl Core {
         // and the process each was last seen running in.
         let (unlinked, linked, processes) = {
             let board = self.board();
-            let given: Vec<&Card> = board.cards.iter().filter(|card| card.column == Column::Claude).collect();
-            let unlinked: Vec<(u64, u64)> =
-                given.iter().filter(|card| card.session.is_none()).filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at)))).collect();
-            let linked: Vec<String> = given.iter().filter_map(|card| card.session.clone()).collect();
+            let unlinked: Vec<(u64, u64)> = board
+                .cards
+                .iter()
+                .filter(|card| card.column == Column::Claude && card.session.is_none())
+                .filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at))))
+                .collect();
+            let linked: Vec<String> = board.cards.iter().filter(|card| matches!(card.column, Column::Claude | Column::Review)).filter_map(|card| card.session.clone()).collect();
             (unlinked, linked, board.pids.clone())
         };
         if unlinked.is_empty() && linked.is_empty() {
@@ -681,13 +695,26 @@ impl Core {
         }
         resumed.retain(|_, until| *until > now);
 
+        // A session several cards hold works for the one given last, wherever that card is.
+        let mut latest: HashMap<String, (u64, String)> = HashMap::new();
+        for card in cards.iter() {
+            let Some(session) = card.session.as_ref().map(|session| renamed.get(session).unwrap_or(session)) else {
+                continue;
+            };
+            let given = card.given_at.unwrap_or(0);
+            if latest.get(session).is_none_or(|(at, _)| given >= *at) {
+                latest.insert(session.clone(), (given, card.id.clone()));
+            }
+        }
+
         let mut over: Vec<String> = Vec::new();
-        for card in cards.iter_mut().filter(|card| card.column == Column::Claude) {
+        let mut again: Vec<String> = Vec::new();
+        for card in cards.iter_mut().filter(|card| matches!(card.column, Column::Claude | Column::Review)) {
             if let Some(next) = card.session.as_ref().and_then(|session| renamed.get(session)) {
                 card.session = Some(next.clone());
                 changed = true;
             }
-            if card.session.is_none() {
+            if card.column == Column::Claude && card.session.is_none() {
                 if let Some((session, _)) = card.terminal.and_then(|terminal| links.get(&terminal)) {
                     card.session = Some(session.clone());
                     changed = true;
@@ -702,6 +729,18 @@ impl Core {
             }
 
             let state = stand(session, scanned.get(session), running.as_ref(), card.ran);
+            if card.column == Column::Review {
+                match state {
+                    // At work again after the rest that left the card here: its session went on.
+                    Stand::Busy if card.rested && latest.get(session).is_some_and(|(_, id)| *id == card.id) => again.push(card.id.clone()),
+                    Stand::Over(_) | Stand::Ended if !card.rested => {
+                        card.rested = true;
+                        changed = true;
+                    }
+                    _ => {}
+                }
+                continue;
+            }
             // Linked while its session was at work on something else: the card's own work
             // starts once that turn is over.
             if linked_busy.contains(&card.id) {
@@ -739,8 +778,18 @@ impl Core {
         pids.retain(|id, _| cards.iter().any(|card| card.session.as_ref() == Some(id)));
         linked_busy.retain(|id| cards.iter().any(|card| card.id == *id && card.column == Column::Claude));
 
+        // Its turn was over, or its session had ended: at rest, as far as `review` goes.
         for id in &over {
-            board.place(id, Column::Review, usize::MAX, now);
+            if let Some(card) = board.place(id, Column::Review, usize::MAX, now) {
+                card.rested = true;
+            }
+            changed = true;
+        }
+        // Seen at work already: the end of this turn sends it to `review` again.
+        for id in &again {
+            if let Some(card) = board.place(id, Column::Claude, usize::MAX, now) {
+                card.worked = true;
+            }
             changed = true;
         }
 
@@ -768,6 +817,7 @@ mod tests {
             given_at: None,
             worked: false,
             ran: false,
+            rested: false,
         }
     }
 
