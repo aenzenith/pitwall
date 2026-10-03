@@ -3,7 +3,20 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ref, watch } from "vue";
 
-import type { DaySummary, ExtensionStatus, Folder, Fuel, LinkSuggestion, ProjectSettings, SessionsView, Settings, Snapshot, TerminalView } from "./types";
+import type {
+  BoardColumn,
+  Card,
+  DaySummary,
+  ExtensionStatus,
+  Folder,
+  Fuel,
+  LinkSuggestion,
+  ProjectSettings,
+  SessionsView,
+  Settings,
+  Snapshot,
+  TerminalView,
+} from "./types";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -113,6 +126,37 @@ export async function connectSessions(): Promise<UnlistenFn> {
   return unlisten;
 }
 
+/** Every card on the board, all projects': the Board page's. Null until the core answers. */
+export const board = ref<Card[] | null>(null);
+
+/** `board` events heard so far: an answer asked for before the latest one is older than it. */
+let boardHeard = 0;
+
+/** Asks the core for the cards; one that doesn't answer (yet) leaves them as they were. */
+export async function loadBoard(): Promise<void> {
+  const before = boardHeard;
+  try {
+    const cards = await api.boardState();
+    // An event that came in meanwhile is newer.
+    if (boardHeard === before) board.value = cards;
+  } catch {
+    // Kept as it was (null shows as loading); the next `board` event fills it.
+  }
+}
+
+/**
+ * The main window's: hears `board` (sent to this window only, with every card after each change)
+ * and asks for the current state.
+ */
+export async function connectBoard(): Promise<UnlistenFn> {
+  const unlisten = await getCurrentWindow().listen<Card[]>("board", (event) => {
+    boardHeard++;
+    board.value = event.payload;
+  });
+  await loadBoard();
+  return unlisten;
+}
+
 export type Action = "start" | "stop" | "restart";
 
 export const api = {
@@ -151,6 +195,10 @@ export const api = {
   setSettings: (settings: Settings) => invoke("set_settings", { settings }),
   setProjectSettings: (path: string, settings: ProjectSettings) => invoke("set_project_settings", { path, settings }),
   reorder: (paths: string[]) => invoke("reorder", { paths }),
+  /** The board picked on the Board page: `all`, or a project's path. */
+  setBoardScope: (scope: string) => invoke("set_board_scope", { scope }),
+  /** How a project's board is drawn: `columns` or `list`. */
+  setBoardView: (view: string) => invoke("set_board_view", { view }),
   setShortcut: (keys: string) => invoke("set_shortcut", { keys }),
   suspendShortcut: () => invoke("suspend_shortcut"),
   resumeShortcut: () => invoke("resume_shortcut"),
@@ -169,5 +217,19 @@ export const api = {
   openLink: (link: "site" | "coffee") => invoke("open_link", { link }),
   /** Asks the core to read the limits again (`force`: past the background pace; it still throttles). */
   refreshFuel: (force: boolean) => invoke("refresh_fuel", { force }),
+  /** The board: every project's cards (the Board page). */
+  boardState: () => invoke<Card[]>("board_state"),
+  boardAdd: (path: string, title: string, note: string) => invoke<Card>("board_add", { path, title, note }),
+  boardEdit: (id: string, title: string, note: string) => invoke("board_edit", { id, title, note }),
+  /** `index`: its place among the project's cards in `column`, counted without it. */
+  boardMove: (id: string, column: BoardColumn, index: number) => invoke("board_move", { id, column, index }),
+  boardDelete: (id: string) => invoke("board_delete", { id }),
+  /** Starts a Claude session in a new Pitwall terminal with the card's text (`plan`: in plan mode).
+   * `continue`: the session the card holds goes on instead; one that still runs opens no terminal (null). */
+  boardGive: (id: string, mode: "new" | "plan" | "continue", size: { cols: number; rows: number } | null = null) =>
+    invoke<TerminalView | null>("board_give", { id, mode, cols: size?.cols, rows: size?.rows }),
+  boardLink: (id: string, session: string) => invoke("board_link", { id, session }),
+  /** Every card of the folder `from` goes to the project `to`, each in its column. */
+  boardRehome: (from: string, to: string) => invoke("board_rehome", { from, to }),
   quit: () => invoke("quit"),
 };

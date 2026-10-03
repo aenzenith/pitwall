@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "board" | "list" | "chevron-down";
     size?: number;
   }>(),
   { size: 15 },
@@ -21,6 +21,7 @@ withDefaults(
     <path v-else-if="name === 'star'" d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
     <path v-else-if="name === 'star-filled'" d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" fill="currentColor" />
     <path v-else-if="name === 'chevron'" d="m9 6 6 6-6 6" />
+    <path v-else-if="name === 'chevron-down'" d="m6 9 6 6 6-6" />
     <path v-else-if="name === 'back'" d="m15 6-6 6 6 6" />
     <g v-else-if="name === 'search'"><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></g>
     <g v-else-if="name === 'settings'"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></g>
@@ -41,6 +42,8 @@ withDefaults(
     <g v-else-if="name === 'chat'"><path d="M5.5 5h13a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5V17h-1a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8.5 11h.01M12 11h.01M15.5 11h.01" /></g>
     <g v-else-if="name === 'fuel'"><path d="M4.5 20V5.5a2 2 0 0 1 2-2h5.5a2 2 0 0 1 2 2V20" /><path d="M3 20h12.5M4.5 10h9.5" /><path d="M14 8.5h1.5a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 0 3 0V8.5L18.5 6" /></g>
     <g v-else-if="name === 'sparkles'"><path d="M10 4.5c.6 3.9 2.6 5.9 6.5 6.5-3.9.6-5.9 2.6-6.5 6.5-.6-3.9-2.6-5.9-6.5-6.5 3.9-.6 5.9-2.6 6.5-6.5z" /><path d="M18.5 3v4.5M16.25 5.25h4.5" /><path d="M18.5 16.5v3.5M16.75 18.25h3.5" /></g>
+    <g v-else-if="name === 'board'"><rect x="4" y="4" width="4.5" height="15" rx="1.2" /><rect x="9.75" y="4" width="4.5" height="9.5" rx="1.2" /><rect x="15.5" y="4" width="4.5" height="12" rx="1.2" /></g>
+    <path v-else-if="name === 'list'" d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" />
     <g v-else-if="name === 'lock'"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></g>
     <path v-else-if="name === 'folder'" d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
   </svg>

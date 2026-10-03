@@ -71,6 +71,8 @@ pub struct Snapshot {
     pub claude_hook: bool,
     /// The hook is installed but older than this version's; installing it again updates it.
     pub claude_hook_outdated: bool,
+    /// The board could not be written to disk: what changed on it lives only while the app runs.
+    pub board_unsaved: bool,
     pub settings: Settings,
     /// The language the UI speaks: Settings' choice, else the system's.
     pub language: &'static str,
@@ -258,6 +260,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         crash_unseen: inner.crash_unseen,
         claude_hook: inner.claude_hook,
         claude_hook_outdated: inner.claude_hook_outdated,
+        board_unsaved: inner.board_unsaved,
         settings: inner.settings.clone(),
         language: i18n::resolve(&inner.settings.language),
         system_language: i18n::system(),

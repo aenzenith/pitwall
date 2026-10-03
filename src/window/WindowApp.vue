@@ -16,8 +16,9 @@ import { outputRequest, terminalRequest } from "../lib/panel";
 import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
-import { api, connectFuel, connectSessions, fuel, loadSessions, now, snapshot, visible } from "../lib/store";
+import { api, connectBoard, connectFuel, connectSessions, fuel, loadBoard, loadSessions, now, snapshot, visible } from "../lib/store";
 import type { Project } from "../lib/types";
+import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
 import FuelView from "./FuelView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
@@ -35,8 +36,8 @@ const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "star" |
 ];
 
 const filter = ref<Filter>("all");
-/** The project list, the day's timeline, Claude's sessions, or Claude's fuel. */
-const view = ref<"projects" | "day" | "sessions" | "fuel">("projects");
+/** The project list, the day's timeline, Claude's sessions, the board of cards, or Claude's fuel. */
+const view = ref<"projects" | "day" | "sessions" | "board" | "fuel">("projects");
 
 /** The sidebar's "26% left" beside Fuel: the session's share left, red when low, grey when stale. */
 const fuelBadge = computed(() => {
@@ -47,27 +48,42 @@ const fuelBadge = computed(() => {
 });
 
 let unlistenFuel: (() => void) | null = null;
-let unlistenSessions: (() => void) | null = null;
+/** Each feed is connected once, on first need (kept as the promise, so a quick second opening
+ * never listens twice), and let go with the window. */
+let sessionsLink: Promise<UnlistenFn> | null = null;
+let boardLink: Promise<UnlistenFn> | null = null;
 
 // Fuel's data comes to this window from the start: the sidebar shows it on every page.
 onMounted(async () => {
   unlistenFuel = await connectFuel();
 });
 
-// The sessions' only once their page is first opened: until then the core doesn't work them out.
-watch(view, async (shown) => {
-  if (shown === "sessions" && !unlistenSessions) unlistenSessions = await connectSessions();
+// The sessions' only once a page showing them (Sessions, Board) first opens: until then the core
+// doesn't work them out. The Sessions page asks for a fresh look itself on each opening; the
+// board's cards follow their sessions, so the Board page's opening asks for both here.
+watch(view, (shown) => {
+  if (shown === "sessions" || shown === "board") {
+    if (!sessionsLink) sessionsLink = connectSessions();
+    else if (shown === "board") void loadSessions();
+  }
+  if (shown === "board") {
+    if (!boardLink) boardLink = connectBoard();
+    else void loadBoard();
+  }
 });
 
 onBeforeUnmount(() => {
   unlistenFuel?.();
-  unlistenSessions?.();
+  void sessionsLink?.then((unlisten) => unlisten(), () => undefined);
+  void boardLink?.then((unlisten) => unlisten(), () => undefined);
 });
 
 // The core sends `sessions` only while this window is on screen: back on screen, the page catches
 // up if it is shown.
 watch(visible, (on) => {
-  if (on && view.value === "sessions") void loadSessions();
+  if (!on) return;
+  if (view.value === "sessions" || view.value === "board") void loadSessions();
+  if (view.value === "board") void loadBoard();
 });
 const settingsOpen = ref(false);
 /** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's. */
@@ -251,6 +267,9 @@ function server(project: Project): string {
         <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="view = 'sessions'">
           <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
         </button>
+        <button type="button" :class="{ on: view === 'board' }" :aria-current="view === 'board' ? 'page' : undefined" @click="view = 'board'">
+          <Icon name="board" /> <span class="nav-label">{{ t("board.nav") }}</span>
+        </button>
         <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="view = 'fuel'">
           <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
           <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
@@ -272,6 +291,7 @@ function server(project: Project): string {
       @open-settings="openSettings('claude')"
       @open-claude="openClaudeTerminal"
     />
+    <BoardView v-else-if="view === 'board'" :project-path="selected?.path ?? null" @open-settings="openSettings('claude')" />
 
     <template v-else>
       <main class="main">

@@ -120,6 +120,10 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
             tray::show_main(app);
             let _ = app.emit("reveal-terminal", TerminalReveal { path, id });
         }
+        // Only the window shows the board.
+        CoreEvent::Board(cards) => {
+            let _ = app.emit_to(MAIN, "board", cards);
+        }
     }
 }
 
@@ -359,6 +363,14 @@ pub fn run() {
             commands::resize_terminal,
             commands::close_terminal,
             commands::terminal_buffer,
+            commands::board_state,
+            commands::board_add,
+            commands::board_edit,
+            commands::board_move,
+            commands::board_delete,
+            commands::board_rehome,
+            commands::board_give,
+            commands::board_link,
             commands::set_favourite,
             commands::act,
             commands::start_all,
@@ -371,6 +383,8 @@ pub fn run() {
             commands::set_settings,
             commands::set_project_settings,
             commands::reorder,
+            commands::set_board_scope,
+            commands::set_board_view,
             commands::set_shortcut,
             commands::suspend_shortcut,
             commands::resume_shortcut,

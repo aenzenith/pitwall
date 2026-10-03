@@ -303,7 +303,7 @@ fn origin_of(running: &Running, pitwall: &[(u32, u64)], peers: &[WindowRecord]) 
 /// Where a session stands by Claude Code's own `status`, for a session whose phase the hook
 /// doesn't decide: busy is working, waiting is a prompt open; idle at the prompt keeps a
 /// finished turn that still waits on you.
-fn status_phase(status: Option<&str>, scanned: Option<(RowPhase, Option<Turn>)>) -> Option<(RowPhase, Option<Turn>)> {
+pub(super) fn status_phase(status: Option<&str>, scanned: Option<(RowPhase, Option<Turn>)>) -> Option<(RowPhase, Option<Turn>)> {
     let waiting_turn = scanned.and_then(|(phase, turn)| turn.filter(|_| phase == RowPhase::Waiting));
 
     match status? {
@@ -317,7 +317,7 @@ fn status_phase(status: Option<&str>, scanned: Option<(RowPhase, Option<Turn>)>)
     }
 }
 
-fn row_phase(phase: SessionPhase) -> RowPhase {
+pub(super) fn row_phase(phase: SessionPhase) -> RowPhase {
     match phase {
         SessionPhase::Working => RowPhase::Working,
         SessionPhase::Waiting => RowPhase::Waiting,
@@ -381,7 +381,7 @@ impl Core {
     }
 
     /// The running sessions as last read; again when the folder changed, or 30 s on.
-    fn running_cached(&self) -> Option<HashMap<String, Running>> {
+    pub(super) fn running_cached(&self) -> Option<HashMap<String, Running>> {
         let due = {
             let cache = self.sessions_cache();
             cache.stale || cache.read_at.is_none_or(|at| at.elapsed() >= READ_EVERY)

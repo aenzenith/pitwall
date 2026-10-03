@@ -29,6 +29,7 @@ use crate::resolve::PackageManager;
 use crate::settings::{ProjectSettings, Settings};
 
 mod activity;
+mod board;
 mod claude_state;
 mod jobs;
 mod open;
@@ -44,6 +45,7 @@ mod supervise;
 mod terminal;
 mod watch;
 pub use activity::DaySummary;
+pub use board::{Card, Give};
 pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
 pub use projects::Folder;
@@ -86,6 +88,8 @@ pub enum CoreEvent {
     TerminalExit { id: u64 },
     /// Show this terminal in the main window: a Claude session runs in it.
     RevealTerminal { path: String, id: u64 },
+    /// The board changed: every card, for the main window.
+    Board(Vec<Card>),
 }
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
@@ -126,6 +130,8 @@ struct Inner {
     git: HashMap<String, GitInfo>,
     claude_hook: bool,
     claude_hook_outdated: bool,
+    /// The board isn't on disk as it is now (`board.rs`).
+    board_unsaved: bool,
     claude_scanned: bool,
     /// Turn timestamps already announced, per project.
     notified: HashMap<String, u64>,
@@ -169,6 +175,10 @@ pub struct Core {
     outbox: Arc<Mutex<Outbox>>,
     /// Projects whose Git state is to be read again.
     git_queue: Mutex<HashSet<String>>,
+    /// The board's cards (`board.rs`); never held together with `inner`.
+    board: Mutex<board::Board>,
+    /// Held while the board follows its sessions, one pass at a time.
+    board_follow: Mutex<()>,
     sink: Sink,
 }
 
@@ -187,6 +197,8 @@ impl Core {
         i18n::set(i18n::resolve(&settings.language));
         let favourites = registry.read_favourites();
         let peers = registry.read_peers();
+        // Beside the settings, on this Mac only.
+        let board = board::Board::load(cfg.settings_file.with_file_name("board.json"), now_ms());
 
         Arc::new(Self {
             registry,
@@ -197,6 +209,7 @@ impl Core {
                 peers,
                 claude_hook: hook_status.installed,
                 claude_hook_outdated: hook_status.outdated,
+                board_unsaved: board.read_only(),
                 ..Inner::default()
             }),
             terminals: Mutex::new(HashMap::new()),
@@ -210,6 +223,8 @@ impl Core {
             pids_lock: Mutex::new(()),
             outbox: Arc::new(Mutex::new(Outbox::default())),
             git_queue: Mutex::new(HashSet::new()),
+            board: Mutex::new(board),
+            board_follow: Mutex::new(()),
             sink,
         })
     }

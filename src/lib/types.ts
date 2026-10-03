@@ -92,6 +92,10 @@ export type Settings = {
   order: string[];
   /** Searched by the quick switcher when no project matches. */
   projectsDir?: string;
+  /** The board the Board page showed last: `all`, or a project's path. */
+  boardScope?: string;
+  /** How a project's board is drawn: `columns` (side by side) or `list` (one under the other). */
+  boardView?: string;
 };
 
 /** An open project terminal. */
@@ -110,6 +114,8 @@ export type Snapshot = {
   claudeHook: boolean;
   /** Installed, but older than the current hook set (which reports Claude's state instantly). */
   claudeHookOutdated: boolean;
+  /** The board's file couldn't be written: changes to its cards last only while the app runs. */
+  boardUnsaved: boolean;
   settings: Settings;
   /** The language to speak: Settings' choice, else the system's. */
   language: Language;
@@ -261,3 +267,26 @@ export type SessionRow = {
  * only grow (today's) come again at most every 30 s.
  */
 export type SessionsView = { now: number; hook: boolean; sessions: SessionRow[]; unlisted: number };
+
+/* ---------- Board: cards of work per project, given to Claude (board_state, event `board`) ---------- */
+
+/** Up next, with Claude, to review, done. */
+export type BoardColumn = "queued" | "claude" | "review" | "done";
+
+/**
+ * A card: a piece of work written for a project. Its place in its column is its place among the
+ * project's cards there, in the board's order. `session` and `terminal`: the Claude session it was
+ * given to (the core links it), and the Pitwall terminal that runs it; times in ms.
+ */
+export type Card = {
+  id: string;
+  path: string;
+  title: string;
+  note: string;
+  column: BoardColumn;
+  createdAt: number;
+  movedAt: number;
+  session: string | null;
+  terminal: number | null;
+  givenAt: number | null;
+};

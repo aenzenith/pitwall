@@ -4,7 +4,7 @@ import Icon from "../../components/Icon.vue";
 
 /** What the page can't show or do, and why: a tag, a title, what it means; a button in the
  * `action` slot. `compact` for the session details' narrower column. */
-withDefaults(defineProps<{ tag: string; title: string; icon?: "claude" | "info" | "lock"; compact?: boolean }>(), { icon: "claude", compact: false });
+withDefaults(defineProps<{ tag: string; title: string; icon?: "claude" | "info" | "lock" | "board" | "link"; compact?: boolean }>(), { icon: "claude", compact: false });
 </script>
 
 <template>

@@ -188,6 +188,57 @@ pub fn terminal_buffer(state: State<'_, AppState>, id: u64) -> crate::core::Term
     state.core.terminal_buffer(id)
 }
 
+/* ---------- the board ---------- */
+
+#[tauri::command]
+pub fn board_state(state: State<'_, AppState>) -> Vec<crate::core::Card> {
+    state.core.board_state()
+}
+
+#[tauri::command]
+pub fn board_add(state: State<'_, AppState>, path: String, title: String, note: String) -> Result<crate::core::Card, String> {
+    state.core.board_add(&path, &title, &note)
+}
+
+#[tauri::command]
+pub fn board_edit(state: State<'_, AppState>, id: String, title: String, note: String) -> Result<(), String> {
+    state.core.board_edit(&id, &title, &note)
+}
+
+/// `index`: the card's place among `column`'s cards, itself left out.
+#[tauri::command]
+pub fn board_move(state: State<'_, AppState>, id: String, column: String, index: usize) -> Result<(), String> {
+    state.core.board_move(&id, &column, index)
+}
+
+#[tauri::command]
+pub fn board_delete(state: State<'_, AppState>, id: String) {
+    state.core.board_delete(&id);
+}
+
+/// Gives a card to Claude. `mode` is `new` or `plan` (a new terminal tab of its project), or
+/// `continue`: the session it holds goes on, and no tab opens for one that still runs. It
+/// starts a shell and reads the process table, so it runs off the main thread.
+#[tauri::command]
+pub async fn board_give(app: AppHandle, id: String, mode: String, cols: Option<u16>, rows: Option<u16>) -> Result<Option<crate::core::TerminalView>, String> {
+    let give = crate::core::Give::parse(&mode).ok_or_else(|| format!("unknown mode: {mode}"))?;
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.board_give(&id, give, cols.zip(rows))).await.map_err(|error| error.to_string())?
+}
+
+/// Every card of the folder `from` goes to the listed project `to`.
+#[tauri::command]
+pub fn board_rehome(state: State<'_, AppState>, from: String, to: String) -> Result<(), String> {
+    state.core.board_rehome(&from, &to)
+}
+
+/// Hands a card to a Claude session that already runs.
+#[tauri::command]
+pub async fn board_link(app: AppHandle, id: String, session: String) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.board_link(&id, &session)).await.map_err(|error| error.to_string())?
+}
+
 #[tauri::command]
 pub fn add_project(state: State<'_, AppState>, path: String) -> Result<(), String> {
     state.core.add_project(&path)
@@ -264,13 +315,15 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
         apply_shortcut(&app, settings.shortcut, &before.shortcut_keys)?;
     }
 
-    // Project overrides, the list order, the shortcut keys and the projects folder have their
-    // own commands.
+    // Project overrides, the list order, the shortcut keys, the projects folder, the board shown
+    // last and how it is drawn have their own commands.
     let mut settings = settings;
     settings.projects = before.projects;
     settings.order = before.order;
     settings.shortcut_keys = before.shortcut_keys;
     settings.projects_dir = before.projects_dir;
+    settings.board_scope = before.board_scope;
+    settings.board_view = before.board_view;
     state.core.set_settings(settings);
     Ok(())
 }
@@ -313,6 +366,18 @@ pub fn resume_shortcut(app: AppHandle, state: State<'_, AppState>) {
 #[tauri::command]
 pub fn reorder(state: State<'_, AppState>, paths: Vec<String>) {
     state.core.reorder(paths);
+}
+
+/// The board picked on the Board page: `all`, or a project's path.
+#[tauri::command]
+pub fn set_board_scope(state: State<'_, AppState>, scope: String) {
+    state.core.set_board_scope(scope);
+}
+
+/// How the Board page draws a project's board: `columns` or `list`.
+#[tauri::command]
+pub fn set_board_view(state: State<'_, AppState>, view: String) {
+    state.core.set_board_view(view);
 }
 
 #[tauri::command]

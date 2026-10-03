@@ -102,6 +102,12 @@ pub struct Settings {
     pub projects_dir: Option<String>,
     /// A notification when Claude's session or weekly limit passes 90 %.
     pub fuel_alert: bool,
+    /// The board the Board page showed last: `all`, or a project's path. None until one is picked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub board_scope: Option<String>,
+    /// How the Board page draws a project's board: `columns` or `list`. None until one is picked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub board_view: Option<String>,
 }
 
 impl Default for Settings {
@@ -121,6 +127,8 @@ impl Default for Settings {
             order: Vec::new(),
             projects_dir: None,
             fuel_alert: true,
+            board_scope: None,
+            board_view: None,
         }
     }
 }
@@ -201,8 +209,9 @@ impl Settings {
 }
 
 /// Moves a settings file that can't be used to `<file>.broken-<ms>` (with `-1`, `-2`… when that
-/// is taken: an earlier backup is never overwritten) and says so on stderr.
-fn set_aside(file: &Path, reason: &str) {
+/// is taken: an earlier backup is never overwritten) and says so on stderr. False when it could
+/// not be moved. The board (`core/board.rs`) keeps its file the same way.
+pub(crate) fn set_aside(file: &Path, reason: &str) -> bool {
     let stamp = now_ms();
 
     for attempt in 0..100 {
@@ -221,8 +230,10 @@ fn set_aside(file: &Path, reason: &str) {
         } else {
             eprintln!("[pitwall] {} is unusable ({reason}) and could not be set aside", file.display());
         }
-        return;
+        return kept;
     }
+
+    false
 }
 
 /// Settings out of JSON that doesn't fit as a whole: field by field, so a value of the wrong

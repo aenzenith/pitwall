@@ -84,6 +84,8 @@ impl Core {
         }
 
         self.notify();
+        // Cards given to Claude follow their sessions from the state just read.
+        self.follow_board();
         true
     }
 

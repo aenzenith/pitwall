@@ -7,6 +7,7 @@ use std::io::Write;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
+use super::reveal::is_session_id;
 use super::*;
 
 /// Output kept per terminal to redraw it when its view comes back.
@@ -29,6 +30,18 @@ pub struct TerminalView {
 pub struct TerminalBuffer {
     pub data: String,
     pub seq: u64,
+}
+
+/// What a terminal starts with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Launch {
+    /// The user's shell.
+    Shell,
+    /// Claude Code, then the shell: with a first prompt (a board card's text) and in plan mode.
+    Claude { prompt: Option<String>, plan: bool },
+    /// Claude Code with a session that has ended opened again (`claude --resume`), then the
+    /// shell: a board card's session, going on.
+    Resume { session: String },
 }
 
 pub(super) struct Session {
@@ -58,13 +71,35 @@ impl Core {
     /// `size` (cols, rows) is the view's: a shell that starts at another width draws its first
     /// prompt for that width, and zsh leaves its partial-line mark behind.
     pub fn open_terminal(self: &Arc<Self>, path: &str, claude: bool, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
+        let launch = if claude { Launch::Claude { prompt: None, plan: false } } else { Launch::Shell };
+        self.open_terminal_as(path, &launch, None, size)
+    }
+
+    /// `open_terminal`, starting with `launch`; `name` is the tab's title instead of the
+    /// numbered `claude` / shell name.
+    pub(super) fn open_terminal_as(
+        self: &Arc<Self>,
+        path: &str,
+        launch: &Launch,
+        name: Option<String>,
+        size: Option<(u16, u16)>,
+    ) -> Result<TerminalView, String> {
+        // A folder that is gone would start the shell in the home folder instead, unasked.
+        if !Path::new(path).is_dir() {
+            return Err(t!("core.error.notFolder", path = path));
+        }
+        let claude = !matches!(launch, Launch::Shell);
         let (cols, rows) = size.filter(|&(cols, rows)| cols > 0 && rows > 0).unwrap_or((80, 24));
         let pair = native_pty_system()
             .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
             .map_err(|error| error.to_string())?;
 
         let shell_path = CommandBuilder::new_default_prog().get_shell();
-        let mut command = if claude { claude_command(&shell_path) } else { CommandBuilder::new_default_prog() };
+        let mut command = match launch {
+            Launch::Claude { prompt, plan } => claude_command(&shell_path, prompt.as_deref(), *plan),
+            Launch::Resume { session } => resume_command(&shell_path, session)?,
+            Launch::Shell => CommandBuilder::new_default_prog(),
+        };
         command.cwd(path);
         // Started under npm (dev runs), the app carries npm's variables; nvm in the shell
         // complains about them. A terminal starts from the user's own environment.
@@ -105,7 +140,11 @@ impl Core {
             inner.next_run += 1;
             let id = inner.next_run;
             let same = inner.terminal_list.iter().filter(|t| t.path == path && t.kind == kind).count();
-            let name = if same == 0 { base } else { format!("{base} {}", same + 1) };
+            let name = match name {
+                Some(name) => name,
+                None if same == 0 => base,
+                None => format!("{base} {}", same + 1),
+            };
             let view = TerminalView { id, path: path.to_string(), name, kind: kind.into() };
             inner.terminal_list.push(view.clone());
             view
@@ -243,6 +282,8 @@ impl Core {
             self.emit(CoreEvent::TerminalExit { id });
             self.notify();
         }
+        // A board card's Claude ran in it: the card goes to review.
+        self.board_terminal_gone(id);
     }
 
     /// Every terminal's shell: its pid, the terminal's id and its project.
@@ -256,20 +297,72 @@ impl Core {
     }
 }
 
-/// The user's shell, interactive and login (so PATH and version managers load), running
-/// `claude` and then becoming an ordinary shell when Claude ends.
+/// The environment variable a first prompt travels in, from Pitwall to Claude's command line.
 #[cfg(unix)]
-fn claude_command(shell: &str) -> CommandBuilder {
+const PROMPT_VAR: &str = "PITWALL_PROMPT";
+
+/// The user's shell, interactive and login (so PATH and version managers load), running
+/// `claude` and then becoming an ordinary shell when Claude ends. `plan` starts Claude in plan
+/// mode.
+///
+/// A first prompt (a board card's text) is never put into the command line: it goes in
+/// `PITWALL_PROMPT`, and the fixed script hands it to Claude as one quoted argument after `--`,
+/// so no shell syntax in it runs and nothing in it reads as one of Claude's options. The shell
+/// that stays after Claude is started without it.
+#[cfg(unix)]
+pub(super) fn claude_command(shell: &str, prompt: Option<&str>, plan: bool) -> CommandBuilder {
+    let quoted = shell.replace('\'', "'\\''");
+    let mode = if plan { " --permission-mode plan" } else { "" };
+    let script = match prompt {
+        Some(_) => format!("claude{mode} -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} '{quoted}' -l"),
+        None => format!("claude{mode}; exec '{quoted}' -l"),
+    };
+
     let mut command = CommandBuilder::new(shell);
-    command.args(["-l", "-i", "-c", &format!("claude; exec '{}' -l", shell.replace('\'', "'\\''"))]);
+    command.args(["-l", "-i", "-c", &script]);
+    if let Some(prompt) = prompt {
+        command.env(PROMPT_VAR, prompt);
+    }
     command
 }
 
+/// `cmd.exe /K` can't take arbitrary text safely: `%VAR%` expands before quoting is parsed, so
+/// quotes, `&` or `|` in a card would end the argument and run as commands. Claude starts
+/// without the card's text here (it stays unused) rather than risk that.
 #[cfg(windows)]
-fn claude_command(_shell: &str) -> CommandBuilder {
+pub(super) fn claude_command(_shell: &str, _prompt: Option<&str>, plan: bool) -> CommandBuilder {
     let mut command = CommandBuilder::new("cmd.exe");
     command.args(["/K", "claude"]);
+    if plan {
+        command.args(["--permission-mode", "plan"]);
+    }
     command
+}
+
+/// The same shell, opening a session again (`claude --resume <id>`) and then becoming an ordinary
+/// shell. The id is written into the command line, so only a session id gets there (a UUID: hex
+/// digits and dashes).
+#[cfg(unix)]
+pub(super) fn resume_command(shell: &str, session: &str) -> Result<CommandBuilder, String> {
+    if !is_session_id(session) {
+        return Err(format!("not a session id: {session}"));
+    }
+    let quoted = shell.replace('\'', "'\\''");
+    let script = format!("claude --resume {session}; exec '{quoted}' -l");
+
+    let mut command = CommandBuilder::new(shell);
+    command.args(["-l", "-i", "-c", &script]);
+    Ok(command)
+}
+
+#[cfg(windows)]
+pub(super) fn resume_command(_shell: &str, session: &str) -> Result<CommandBuilder, String> {
+    if !is_session_id(session) {
+        return Err(format!("not a session id: {session}"));
+    }
+    let mut command = CommandBuilder::new("cmd.exe");
+    command.args(["/K", "claude", "--resume", session]);
+    Ok(command)
 }
 
 /// Text out of `pending`; an unfinished UTF-8 sequence at the end waits for the next read.
@@ -306,4 +399,48 @@ fn trim_scrollback(scrollback: &mut String) {
     }
     let cut = scrollback[cut..].find('\n').map_or(cut, |at| cut + at + 1);
     scrollback.drain(..cut);
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// A card's text reaches Claude only through `PITWALL_PROMPT`: shell syntax in it never
+    /// becomes part of the command line, whatever it holds.
+    #[test]
+    fn a_card_never_reaches_the_command_line() {
+        let title = r#""; touch /tmp/pwned; echo ""#;
+        let prompt = format!("{title}\n\n$(touch /tmp/pwned) `touch /tmp/pwned` ' --dangerously-skip-permissions");
+        let argv = |command: &CommandBuilder| -> Vec<String> { command.get_argv().iter().map(|arg| arg.to_string_lossy().into_owned()).collect() };
+
+        for plan in [false, true] {
+            let command = claude_command("/bin/zsh", Some(&prompt), plan);
+            let args = argv(&command);
+            for arg in &args {
+                assert!(!arg.contains("pwned") && !arg.contains("dangerously"), "{arg}");
+            }
+            assert_eq!(command.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
+            // The same command line for any text: it only names the variable.
+            assert_eq!(args, argv(&claude_command("/bin/zsh", Some("x"), plan)));
+
+            let script = args.last().unwrap();
+            assert!(script.contains(r#"-- "$PITWALL_PROMPT";"#), "{script}");
+            // The shell that stays after Claude doesn't keep it.
+            assert!(script.ends_with("exec env -u PITWALL_PROMPT '/bin/zsh' -l"), "{script}");
+        }
+    }
+
+    /// A session opened again has its id written into the command line: nothing but a session
+    /// id is ever written there.
+    #[test]
+    fn only_a_session_id_reaches_the_resume_command() {
+        let id = "9bb85e86-f618-4861-9858-03ec8fc36c28";
+        let command = resume_command("/bin/zsh", id).unwrap();
+        let script = command.get_argv().last().unwrap().to_string_lossy().into_owned();
+        assert_eq!(script, format!("claude --resume {id}; exec '/bin/zsh' -l"));
+
+        for bad in ["", "x; touch /tmp/pwned", "$(touch /tmp/pwned)", "9bb85e86-f618-4861-9858-03ec8fc36c2;", "--dangerously-skip-permissions"] {
+            assert!(resume_command("/bin/zsh", bad).is_err(), "{bad}");
+        }
+    }
 }

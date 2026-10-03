@@ -29,7 +29,7 @@ import SessionTerminal from "./SessionTerminal.vue";
  * a board card's note, shown once its work is over; `lastMessage`: what Claude last said in it
  * (Markdown), shown in the terminal's place. `hold`: the keyboard is in its terminal.
  */
-const props = defineProps<{ row: SessionRow; now: number; others: number; error: string; terminal?: TerminalView | null; lastMessage?: string }>();
+const props = defineProps<{ row: SessionRow; now: number; others: number; error: string; terminal?: TerminalView | null; note?: string; lastMessage?: string }>();
 const emit = defineEmits<{ markSeen: []; hold: [on: boolean] }>();
 
 const title = computed(() => sessionTitle(props.row));
@@ -157,6 +157,11 @@ const fuel = computed(() => {
           <SessionNotice v-if="!isMac" compact icon="info" :tag="t('sessions.limits.tag', { system })" :title="t('sessions.limits.title')">{{ t("sessions.limits.body") }}</SessionNotice>
           <SessionNotice v-else compact icon="info" :tag="t('sessions.unknown.tag')" :title="t('sessions.unknown.title')">{{ t("sessions.unknown.body") }}</SessionNotice>
         </template>
+      </section>
+
+      <section v-if="note" class="block" :aria-label="t('board.dialog.note')">
+        <div class="section-label">{{ t("board.dialog.note") }}</div>
+        <p class="card-note">{{ note }}</p>
       </section>
 
       <!-- Today's hours are kept for the listed projects only. -->

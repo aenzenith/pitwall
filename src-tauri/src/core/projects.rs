@@ -53,6 +53,36 @@ impl Core {
         self.notify();
     }
 
+    /// The board the Board page shows (`all`, or a project's path), kept for its next opening.
+    pub fn set_board_scope(&self, scope: String) {
+        let settings = {
+            let mut inner = self.lock();
+            if inner.settings.board_scope.as_deref() == Some(scope.as_str()) {
+                return;
+            }
+            inner.settings.board_scope = Some(scope);
+            inner.settings.clone()
+        };
+
+        settings.save(&self.cfg.settings_file);
+        self.notify();
+    }
+
+    /// How the Board page draws a project's board (`columns` or `list`), kept for its next opening.
+    pub fn set_board_view(&self, view: String) {
+        let settings = {
+            let mut inner = self.lock();
+            if inner.settings.board_view.as_deref() == Some(view.as_str()) {
+                return;
+            }
+            inner.settings.board_view = Some(view);
+            inner.settings.clone()
+        };
+
+        settings.save(&self.cfg.settings_file);
+        self.notify();
+    }
+
     pub fn set_project_settings(&self, path: &str, project: ProjectSettings) {
         let settings = {
             let mut inner = self.lock();

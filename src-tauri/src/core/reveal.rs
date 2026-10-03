@@ -131,7 +131,7 @@ impl Core {
         }
     }
 
-    fn liveness(&self, session: &str) -> Liveness {
+    pub(super) fn liveness(&self, session: &str) -> Liveness {
         let Some(running) = self.read_running() else {
             return Liveness::Unknown;
         };
