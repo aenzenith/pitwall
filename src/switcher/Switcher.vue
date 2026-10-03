@@ -13,6 +13,7 @@ import StatusIcon from "../components/StatusIcon.vue";
 import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
 import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
+import { pages, type Page, type PageEntry } from "../lib/pages";
 import { keys, primary } from "../lib/platform";
 import { api, now, snapshot } from "../lib/store";
 import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
@@ -23,12 +24,15 @@ const MAX_HEIGHT = 540;
 type FolderMatch = { folder: Folder; score: number; hits: Set<number> };
 type CommandMatch = { project: Project; command: CommandView; score: number; hits: Set<number> };
 type LinkMatch = { project: Project; link: ProjectLink; score: number; hits: Set<number> };
+type PageMatch = { page: PageEntry; score: number; hits: Set<number> };
 
-/** One row of the list: a project, a project's command or link, or a folder from the projects folder. */
+/** One row of the list: a project, a project's command or link, a page of the window, or a folder
+ * from the projects folder. */
 type Item =
   | { kind: "project"; key: string; project: Project; hits: Set<number> }
   | { kind: "command"; key: string; project: Project; command: CommandView; hits: Set<number> }
   | { kind: "link"; key: string; project: Project; link: ProjectLink; hits: Set<number> }
+  | { kind: "page"; key: string; page: PageEntry; hits: Set<number> }
   | { kind: "folder"; key: string; folder: Folder; hits: Set<number> };
 
 /** Commands shown under the projects while typing; `>` lists them all. */
@@ -90,10 +94,12 @@ const folderMatches = computed<FolderMatch[]>(() => {
   return found.sort((a, b) => b.score - a.score).slice(0, 50);
 });
 
-/** `>` at the start lists only commands, as in VS Code's command palette; `@` only links. */
+/** `>` at the start lists only commands, as in VS Code's command palette; `@` only links; `/` the
+ * window's pages. */
 const commandMode = computed(() => query.value.trimStart().startsWith(">"));
 const linkMode = computed(() => query.value.trimStart().startsWith("@"));
-const needle = computed(() => (commandMode.value || linkMode.value ? query.value.trimStart().slice(1) : query.value).trim().toLowerCase());
+const pageMode = computed(() => query.value.trimStart().startsWith("/"));
+const needle = computed(() => (commandMode.value || linkMode.value || pageMode.value ? query.value.trimStart().slice(1) : query.value).trim().toLowerCase());
 const anyCommands = computed(() => (snapshot.value?.projects ?? []).some((p) => p.commands.length));
 const anyLinks = computed(() => (snapshot.value?.projects ?? []).some((p) => p.settings.links?.length));
 
@@ -160,9 +166,29 @@ const linkMatches = computed<LinkMatch[]>(() => {
   return linkMode.value ? found : found.slice(0, MIXED_LINKS);
 });
 
-/** What the list shows: with `>` commands only, with `@` links only; else projects, then matching
- * commands and links; else folders. */
+/**
+ * The window's pages that match, by their names in the language shown; with `/` and nothing
+ * typed, all of them as the sidebar lists them.
+ */
+const pageMatches = computed<PageMatch[]>(() => {
+  const q = needle.value;
+  if (!q) return pages.map((page) => ({ page, score: 0, hits: new Set<number>() }));
+
+  const found: PageMatch[] = [];
+
+  for (const page of pages) {
+    const hit = fuzzy(t(page.label), q);
+    if (hit) found.push({ page, score: hit.score, hits: new Set(hit.hits) });
+  }
+
+  return found.sort((a, b) => b.score - a.score);
+});
+
+/** What the list shows: with `/` pages only, with `>` commands only, with `@` links only; else
+ * projects, then matching commands and links; else folders. */
 const items = computed<Item[]>(() => {
+  if (pageMode.value) return pageMatches.value.map(({ page, hits }) => ({ kind: "page", key: `g:${page.id}`, page, hits }));
+
   const commands: Item[] = commandMatches.value.map(({ project, command, hits }) => ({ kind: "command", key: `c:${project.path}:${command.id}`, project, command, hits }));
   if (commandMode.value) return commands;
 
@@ -281,11 +307,23 @@ function openLink(item: Extract<Item, { kind: "link" }>, show: boolean): void {
   }
 }
 
+/** A page: Pitwall's window, on it. */
+function openPage(page: Page): void {
+  void emitTo("main", "reveal-page", { page });
+  void api.openWindow();
+}
+
+/** A filter's count, as the sidebar shows it. */
+function pageCount(page: PageEntry): number {
+  return (snapshot.value?.projects ?? []).filter(page.test ?? (() => true)).length;
+}
+
 /** A click does what ↵ does. */
 function pick(item: Item): void {
   if (item.kind === "project") open(item.project);
   else if (item.kind === "command") runCommand(item, false);
   else if (item.kind === "link") openLink(item, false);
+  else if (item.kind === "page") openPage(item.page.id);
   else openFolder(item.folder, false);
 }
 
@@ -311,6 +349,7 @@ function onKey(event: KeyboardEvent): void {
     if (item.kind === "folder") openFolder(item.folder, mod);
     else if (item.kind === "command") runCommand(item, mod);
     else if (item.kind === "link") openLink(item, mod);
+    else if (item.kind === "page") openPage(item.page.id);
     else if (mod) toggle(item.project);
     else open(item.project);
   } else if (primary(event) && event.code === "KeyC" && current.value?.kind === "link" && !hasSelection()) {
@@ -401,6 +440,13 @@ onBeforeUnmount(() => {
         :aria-expanded="count > 0"
         :aria-activedescendant="current ? optionId(current) : undefined"
       />
+      <!-- Nothing typed: what a first character narrows the list to, here where it is typed. A
+           click types it; the keyboard stays in the field. -->
+      <div v-if="!query" class="modes">
+        <button v-if="anyCommands" type="button" tabindex="-1" @mousedown.prevent @click="query = '>'"><kbd>&gt;</kbd> {{ t("common.commands") }}</button>
+        <button v-if="anyLinks" type="button" tabindex="-1" @mousedown.prevent @click="query = '@'"><kbd>@</kbd> {{ t("common.links") }}</button>
+        <button type="button" tabindex="-1" @mousedown.prevent @click="query = '/'"><kbd>/</kbd> {{ t("switcher.pages") }}</button>
+      </div>
       <kbd class="esc">{{ keys("Escape") }}</kbd>
     </div>
 
@@ -410,7 +456,7 @@ onBeforeUnmount(() => {
       ref="list"
       class="list"
       role="listbox"
-      :aria-label="t(commandMode ? 'common.commands' : linkMode ? 'common.links' : 'common.projects')"
+      :aria-label="t(commandMode ? 'common.commands' : linkMode ? 'common.links' : pageMode ? 'switcher.pages' : 'common.projects')"
     >
       <template v-for="(item, i) in items" :key="item.key">
         <!-- Under the projects, the commands that match get their own heading. -->
@@ -422,7 +468,7 @@ onBeforeUnmount(() => {
         </li>
         <li
           :id="optionId(item)"
-          :class="['row', { on: i === index }]"
+          :class="['row', { on: i === index, compact: item.kind === 'page' }]"
           role="option"
           :aria-selected="i === index"
           @mousemove="i !== index && select(i)"
@@ -468,6 +514,16 @@ onBeforeUnmount(() => {
             </div>
           </template>
 
+          <template v-else-if="item.kind === 'page'">
+            <span class="folder-icon"><Icon :name="item.page.icon" :size="16" /></span>
+            <div class="text">
+              <div class="name">
+                <Highlight :text="t(item.page.label)" :hits="item.hits" />
+              </div>
+            </div>
+            <span v-if="item.page.test" :class="['count', { hot: item.page.id === 'waiting' && pageCount(item.page) > 0 }]">{{ pageCount(item.page) }}</span>
+          </template>
+
           <template v-else>
             <span class="folder-icon"><Icon name="folder" :size="16" /></span>
             <div class="text">
@@ -488,6 +544,7 @@ onBeforeUnmount(() => {
       <template v-else-if="commandMode">{{ t("switcher.noCommands") }}</template>
       <template v-else-if="linkMode && needle">{{ t("switcher.noLinkMatch", { query: needle }) }}</template>
       <template v-else-if="linkMode">{{ t("switcher.noLinks") }}</template>
+      <template v-else-if="pageMode">{{ t("switcher.noPageMatch", { query: needle }) }}</template>
       <template v-else-if="query.trim() && projectsDir">{{ t("switcher.noMatchAnywhere", { folder: dirName, query }) }}</template>
       <template v-else-if="query.trim()">
         {{ t("switcher.noMatch", { query }) }}
@@ -515,12 +572,15 @@ onBeforeUnmount(() => {
       <span class="grow"></span>
       <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
+    <footer v-else-if="current?.kind === 'page'" class="foot">
+      <span><kbd>{{ keys("Enter") }}</kbd> {{ t("common.open") }}</span>
+      <span class="grow"></span>
+      <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
+    </footer>
     <footer v-else class="foot">
       <span><kbd>{{ keys("Enter") }}</kbd> {{ t(selected?.claude ? "switcher.openMarkSeen" : "common.openInEditor") }}</span>
       <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t(selected?.status === "running" ? "common.stop" : "common.start") }}</span>
       <span><kbd>{{ keys("mod+B") }}</kbd> {{ t("switcher.browser") }}</span>
-      <span v-if="anyCommands" class="prefix"><kbd>&gt;</kbd> {{ t("common.commands") }}</span>
-      <span v-if="anyLinks" class="prefix"><kbd>@</kbd> {{ t("common.links") }}</span>
       <span class="grow"></span>
       <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
@@ -584,6 +644,7 @@ onBeforeUnmount(() => {
 
 input {
   flex-grow: 1;
+  min-width: 0;
   height: 100%;
   border: 0;
   outline: none;
@@ -612,6 +673,29 @@ kbd {
   flex-shrink: 0;
 }
 
+.modes {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.modes button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.modes button:hover {
+  color: var(--text);
+}
+
 .list {
   flex: 0 1 auto;
   min-height: 0;
@@ -633,6 +717,11 @@ kbd {
 
 .row.on {
   background: #23272f;
+}
+
+/* A page: one line, so all of them show at once. */
+.row.compact {
+  min-height: 38px;
 }
 
 .text {
@@ -773,6 +862,19 @@ kbd {
   color: var(--text-muted);
 }
 
+/* A filter's count, as in the window's sidebar. */
+.count {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.count.hot {
+  color: var(--claude);
+  font-weight: 700;
+}
+
 .foot {
   flex-shrink: 0;
   display: flex;
@@ -793,20 +895,15 @@ kbd {
 }
 
 /* Windows and Linux spell the keys out (Ctrl+Enter), which takes room: each hint stays on one
-   line, the keys first and the search prefixes (> @) last, and those that don't fit drop off the
-   end (they wrap onto a line out of sight). */
+   line, and those that don't fit drop off the end (they wrap onto a line out of sight). */
 :root:not([data-platform="mac"]) .foot {
   flex-wrap: wrap;
   gap: 0 12px;
   overflow: hidden;
 }
 
-:root:not([data-platform="mac"]) .foot .prefix {
-  order: 1;
-}
-
 :root:not([data-platform="mac"]) .foot .grow {
-  order: 2;
+  order: 1;
 }
 
 :root:not([data-platform="mac"]) .foot span {

@@ -89,6 +89,8 @@
   "switcher.goToProject": "Zum Projekt",
   "switcher.noLinkMatch": "Kein Link passt zu „{query}“.",
   "switcher.noLinks": "Noch keine Links. Füge sie unter „Links“ in einem Projekt hinzu.",
+  "switcher.pages": "Seiten",
+  "switcher.noPageMatch": "Keine Seite passt zu „{query}“.",
   "window.filters": "Filter",
   "window.filter.all": "Alle Projekte",
   "window.filter.running": "Aktiv",

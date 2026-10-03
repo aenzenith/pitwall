@@ -89,6 +89,8 @@
   "switcher.goToProject": "Projeye git",
   "switcher.noLinkMatch": "“{query}” ile eşleşen bağlantı yok.",
   "switcher.noLinks": "Henüz bağlantı yok. Bir projenin Bağlantılar bölümünden ekleyebilirsin.",
+  "switcher.pages": "Sayfalar",
+  "switcher.noPageMatch": "“{query}” ile eşleşen sayfa yok.",
   "window.filters": "Filtreler",
   "window.filter.all": "Tüm projeler",
   "window.filter.running": "Çalışanlar",

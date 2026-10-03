@@ -89,6 +89,8 @@
   "switcher.goToProject": "Go to project",
   "switcher.noLinkMatch": "No link matches “{query}”.",
   "switcher.noLinks": "No links yet. Add them under Links in a project.",
+  "switcher.pages": "Pages",
+  "switcher.noPageMatch": "No page matches “{query}”.",
   "window.filters": "Filters",
   "window.filter.all": "All projects",
   "window.filter.running": "Running",

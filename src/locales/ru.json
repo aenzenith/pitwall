@@ -91,6 +91,8 @@
   "switcher.goToProject": "Перейти к проекту",
   "switcher.noLinkMatch": "Нет ссылок по запросу «{query}».",
   "switcher.noLinks": "Ссылок пока нет. Добавьте их в разделе «Ссылки» проекта.",
+  "switcher.pages": "Страницы",
+  "switcher.noPageMatch": "Нет страниц по запросу «{query}».",
   "window.filters": "Фильтры",
   "window.filter.all": "Все проекты",
   "window.filter.running": "Запущенные",

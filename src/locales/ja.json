@@ -88,6 +88,8 @@
   "switcher.goToProject": "プロジェクトへ移動",
   "switcher.noLinkMatch": "「{query}」に一致するリンクはありません。",
   "switcher.noLinks": "リンクはまだありません。プロジェクトの「リンク」から追加できます。",
+  "switcher.pages": "ページ",
+  "switcher.noPageMatch": "「{query}」に一致するページはありません。",
   "window.filters": "フィルタ",
   "window.filter.all": "すべてのプロジェクト",
   "window.filter.running": "実行中",

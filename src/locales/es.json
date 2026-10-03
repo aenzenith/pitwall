@@ -90,6 +90,8 @@
   "switcher.goToProject": "Ir al proyecto",
   "switcher.noLinkMatch": "Ningún enlace coincide con «{query}».",
   "switcher.noLinks": "Aún no hay enlaces. Añádelos en Enlaces de un proyecto.",
+  "switcher.pages": "Páginas",
+  "switcher.noPageMatch": "Ninguna página coincide con «{query}».",
   "window.filters": "Filtros",
   "window.filter.all": "Todos los proyectos",
   "window.filter.running": "En ejecución",

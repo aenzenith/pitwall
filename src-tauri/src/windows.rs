@@ -20,7 +20,7 @@ const FALLBACK: Duration = Duration::from_secs(3);
 /// Events the switcher (or the core: a notification, a Claude session in one of Pitwall's
 /// terminals) sends the main window just before opening it. If the window's page isn't listening
 /// yet they would be lost, so the last one waits here and is sent again once it is.
-const FOR_MAIN: [&str; 4] = ["reveal-project", "reveal-output", "reveal-fuel", "reveal-terminal"];
+const FOR_MAIN: [&str; 5] = ["reveal-project", "reveal-output", "reveal-fuel", "reveal-terminal", "reveal-page"];
 
 struct Pages {
     /// Windows whose page is up and listening.

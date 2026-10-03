@@ -11,7 +11,8 @@ import StatusIcon from "../components/StatusIcon.vue";
 import { claudeState, gitLine, meta } from "../lib/format";
 import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
-import { language, t, type Key } from "../lib/i18n";
+import { language, t } from "../lib/i18n";
+import { filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
 import { outputRequest, terminalRequest } from "../lib/panel";
 import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
@@ -28,19 +29,10 @@ import SessionsView from "./SessionsView.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
 
-type Filter = "all" | "running" | "favourites" | "waiting";
-
-const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "star" | "chat"; test: (p: Project) => boolean }> = [
-  { id: "all", label: "window.filter.all", icon: "grid", test: () => true },
-  { id: "running", label: "window.filter.running", icon: "pulse", test: (p) => p.status === "running" },
-  { id: "favourites", label: "window.filter.favourites", icon: "star", test: (p) => p.favourite },
-  { id: "waiting", label: "window.filter.waiting", icon: "chat", test: (p) => p.claude !== null },
-];
-
 const filter = ref<Filter>("all");
 /** The project list, the day's timeline, Claude's sessions, the board of cards, Claude's fuel, or
  * the projects' dependencies. */
-const view = ref<"projects" | "day" | "sessions" | "board" | "fuel" | "deps">("projects");
+const view = ref<"projects" | View>("projects");
 
 /** The sidebar's "26% left" beside Fuel: the session's share left, red when low, grey when stale. */
 const fuelBadge = computed(() => {
@@ -195,6 +187,19 @@ let unlistenReveal: UnlistenFn | null = null;
 let unlistenProject: UnlistenFn | null = null;
 let unlistenFuelReveal: UnlistenFn | null = null;
 let unlistenTerminal: UnlistenFn | null = null;
+let unlistenPage: UnlistenFn | null = null;
+
+/** From the switcher (`/`): that page of the window. Settings opens over the page shown and "Add
+ * project" asks for the folder; any other page closes Settings, which would cover it. */
+function revealPage(page: Page): void {
+  if (page === "settings") openSettings();
+  else if (page === "add") void api.pickFolder();
+  else {
+    settingsOpen.value = false;
+    if (isFilter(page)) pick(page);
+    else view.value = page;
+  }
+}
 
 /** From the switcher (⌘↵ on a link): select the project, even if a filter or search hid it. */
 function revealProject(path: string): void {
@@ -234,6 +239,8 @@ onMounted(async () => {
   unlistenFuelReveal = await listen("reveal-fuel", () => (view.value = "fuel"));
   // Bringing up a Claude session that runs in one of Pitwall's terminals: that terminal.
   unlistenTerminal = await listen<{ path: string; id: number }>("reveal-terminal", (event) => revealTerminal(event.payload.path, event.payload.id));
+  // `/` in the switcher: one of the sidebar's pages.
+  unlistenPage = await listen<{ page: Page }>("reveal-page", (event) => revealPage(event.payload.page));
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
   void api.windowReady();
   const win = getCurrentWindow();
@@ -250,6 +257,7 @@ onBeforeUnmount(() => {
   unlistenProject?.();
   unlistenFuelReveal?.();
   unlistenTerminal?.();
+  unlistenPage?.();
   unlistenResize?.();
 });
 
