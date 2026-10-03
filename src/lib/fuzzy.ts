@@ -9,18 +9,41 @@ export type FuzzyMatch = { score: number; hits: number[] };
 /** A project that matches, with the matched characters of its name. */
 export type ProjectMatch = { project: Project; score: number; hits: Set<number> };
 
+/** Accents written as their own characters (U+0300 to U+036F). */
+const MARKS = /[̀-ͯ]/g;
+
 /**
- * Fuzzy: every query character in order; runs, word starts and prefixes score higher. `q` is
- * lower case (the text is lowered here).
+ * `text` as the search compares it: lower case, accents dropped, Turkish's dotless ı as i. Every
+ * character keeps its place, so a match's hits fit the text as written: "Bağımlılıklar" →
+ * "bagimliliklar".
+ */
+export function fold(text: string): string {
+  let out = "";
+
+  for (const ch of text) {
+    const [base, ...marks] = ch.normalize("NFD");
+    const plain = marks.length && marks.every((mark) => mark >= "̀" && mark <= "ͯ") ? base : ch;
+    const lower = plain === "ı" ? "i" : plain.toLowerCase();
+    out += lower.length === ch.length ? lower : ch;
+  }
+
+  return out;
+}
+
+/**
+ * Fuzzy: every query character in order; runs, word starts and prefixes score higher. Case and
+ * accents don't count, in the text or in `q` (`fold`): "bagim" finds "Bağımlılıklar".
  */
 export function fuzzy(text: string, q: string): FuzzyMatch | null {
-  const lower = text.toLowerCase();
+  const lower = fold(text);
+  // A query has no places to keep: an accent left on its own (an "İ" lowered by the caller) goes.
+  const wanted = fold(q.normalize("NFC")).replace(MARKS, "");
   const hits: number[] = [];
   let from = 0;
   let last = -2;
   let score = 0;
 
-  for (const ch of q) {
+  for (const ch of wanted) {
     const i = lower.indexOf(ch, from);
     if (i < 0) return null;
     score += i === last + 1 ? 3 : 1;
@@ -30,7 +53,7 @@ export function fuzzy(text: string, q: string): FuzzyMatch | null {
     from = i + 1;
   }
 
-  if (lower.startsWith(q)) score += 8;
+  if (lower.startsWith(wanted)) score += 8;
   return { score: score - lower.length * 0.01, hits };
 }
 
