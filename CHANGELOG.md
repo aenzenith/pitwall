@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/aenzenith/pitwall/compare/v1.1.0...v1.1.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **shell:** commands run with the terminal's environment ([fe6c912](https://github.com/aenzenith/pitwall/commit/fe6c9124d07df94dabcf7c12c03cbf626d1d5236))
+
 ## [1.1.0](https://github.com/aenzenith/pitwall/compare/v1.0.0...v1.1.0) (2026-10-03)
 
 
