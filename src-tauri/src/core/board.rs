@@ -617,14 +617,13 @@ impl Core {
 
         // (terminal, given at) of the cards still waiting for their session, the sessions held,
         // and the process each was last seen running in.
-        let (unlinked, linked, processes): (Vec<(u64, u64)>, Vec<String>, HashMap<String, u32>) = {
+        let (unlinked, linked, processes) = {
             let board = self.board();
             let given: Vec<&Card> = board.cards.iter().filter(|card| card.column == Column::Claude).collect();
-            (
-                given.iter().filter(|card| card.session.is_none()).filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at)))).collect(),
-                given.iter().filter_map(|card| card.session.clone()).collect(),
-                board.pids.clone(),
-            )
+            let unlinked: Vec<(u64, u64)> =
+                given.iter().filter(|card| card.session.is_none()).filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at)))).collect();
+            let linked: Vec<String> = given.iter().filter_map(|card| card.session.clone()).collect();
+            (unlinked, linked, board.pids.clone())
         };
         if unlinked.is_empty() && linked.is_empty() {
             return;
