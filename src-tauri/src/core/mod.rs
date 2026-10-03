@@ -31,6 +31,7 @@ use crate::settings::{ProjectSettings, Settings};
 mod activity;
 mod board;
 mod claude_state;
+mod dependencies;
 mod jobs;
 mod open;
 mod output;
@@ -90,6 +91,8 @@ pub enum CoreEvent {
     RevealTerminal { path: String, id: u64 },
     /// The board changed: every card, for the main window.
     Board(Vec<Card>),
+    /// The Dependencies page's reports changed; every listed project's.
+    Deps(Vec<crate::deps::DepReport>),
 }
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
@@ -179,6 +182,8 @@ pub struct Core {
     board: Mutex<board::Board>,
     /// Held while the board follows its sessions, one pass at a time.
     board_follow: Mutex<()>,
+    /// The Dependencies page's checks.
+    deps: dependencies::Dependencies,
     sink: Sink,
 }
 
@@ -225,6 +230,7 @@ impl Core {
             git_queue: Mutex::new(HashSet::new()),
             board: Mutex::new(board),
             board_follow: Mutex::new(()),
+            deps: dependencies::Dependencies::default(),
             sink,
         })
     }
@@ -295,6 +301,8 @@ impl Core {
         if tick > 0 && tick.is_multiple_of(HEALTH_EVERY) {
             self.check_health();
         }
+
+        self.deps_tick(tick);
     }
 }
 

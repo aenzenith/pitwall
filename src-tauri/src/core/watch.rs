@@ -48,6 +48,9 @@ struct Changes {
     sessions: bool,
     /// Projects whose Git state changed.
     git: HashSet<String>,
+    /// Projects whose `HEAD` or `ORIG_HEAD` moved: a checkout, pull, merge or rebase, after
+    /// which their dependencies are checked again.
+    heads: HashSet<String>,
     /// Events were dropped: read everything again.
     rescan: bool,
 }
@@ -83,6 +86,9 @@ impl Routes {
                 continue;
             };
             let name = rest.to_string_lossy();
+            if matches!(name.as_ref(), "HEAD" | "ORIG_HEAD") {
+                changes.heads.insert(project.clone());
+            }
             // Branch, index and refs; never git's own lock files.
             if !name.ends_with(".lock") && (matches!(name.as_ref(), "HEAD" | "index" | "packed-refs") || rest.starts_with("refs")) {
                 changes.git.insert(project.clone());
@@ -173,6 +179,7 @@ impl Core {
         self.watch_paths(paths);
         self.lock().git.retain(|path, _| paths.contains(path));
         self.refresh_git(added);
+        self.deps_follow(paths);
     }
 
     /// Creates the watcher and the thread that handles its changes, once.
@@ -295,6 +302,8 @@ impl Core {
         if changes.sessions || changes.rescan {
             self.sessions_changed();
         }
+
+        self.deps_heads_changed(changes.heads.into_iter().collect());
 
         let claude_changed = changes.rescan || changes.events || !changes.logs.is_empty();
         let mut git: Vec<String> = changes.git.into_iter().collect();

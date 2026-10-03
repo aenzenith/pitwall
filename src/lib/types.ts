@@ -209,6 +209,91 @@ export type SpendToday = {
 /** The Fuel page's data, pushed to the main window as `fuel`. */
 export type Fuel = { limits: UsageState; today: SpendToday | null };
 
+/* ---------- Dependencies: lock files against what is installed (deps_state, event `deps`) ---------- */
+
+/** A package whose installed version isn't the locked one; `installed` null: missing, `locked`
+ * null: installed but no longer locked. */
+export type DepPackage = { name: string; locked: string | null; installed: string | null };
+
+/** One package manager's check. `ecosystem`: the language it belongs to (`npm`, `composer`,
+ * `python`, `ruby`, `dotnet`, …); `manager`: the tool (`pnpm`, `uv`, `bundler`, …). `unknown`: no
+ * lock file to compare with (not watched); `differing`: how many packages differ (`packages` may
+ * list fewer). `installCommand`: what an install runs, null for a manager that resolves at build
+ * time (nothing to install); `canScan`: it has an `outdated`/`audit` to run; `tool`: whether the
+ * manager itself was found on this machine. */
+export type DepCheck = {
+  ecosystem: string;
+  manager: string;
+  state: "ok" | "install" | "unknown";
+  packages: DepPackage[];
+  differing: number;
+  installCommand: string | null;
+  canScan: boolean;
+  tool: "ok" | "missing";
+};
+
+/** What the project asks of a runtime (`node`, `php`, `python`, …), what is active, and whether
+ * it satisfies it (null: can't tell). */
+export type DepRuntime = { name: string; required: string | null; active: string | null; ok: boolean | null };
+
+/** The last `outdated`/`audit` run (network, on request only); counts null when it didn't get them. */
+export type DepScan = { at: number; outdated: number | null; vulnerable: number | null; error: "offline" | "timeout" | "failed" | null; running: boolean };
+
+/** A package an outdated report lists: the version installed, the newest the project's
+ * constraint allows (where the manager tells) and the newest there is. */
+export type DepOutdated = { name: string; installed: string | null; wanted: string | null; latest: string | null };
+
+/** One advisory against a package, as far as the manager's audit tells. `direct`: the project
+ * asks for the package itself; `affected`: the versions it is in, as the advisory writes them;
+ * `via`: the vulnerable packages it comes with, for one with no advisory of its own; `fix`: what
+ * fixes it, as the audit writes it (the patched versions, or the package to install);
+ * `fixable`: the manager can fix it itself, null where the audit doesn't say. */
+export type DepAdvisory = {
+  package: string;
+  installed: string | null;
+  severity: "critical" | "high" | "moderate" | "low" | "info" | null;
+  direct: boolean | null;
+  title: string | null;
+  url: string | null;
+  affected: string | null;
+  via: string | null;
+  fix: string | null;
+  fixable: boolean | null;
+};
+
+/** What a scan's counts are of (`deps_scan_details`, asked for when shown): the lists the scan
+ * kept, at most 300 of each. A part is null when its command didn't run or gave no list. */
+export type DepScanDetails = { outdated: DepOutdated[] | null; advisories: DepAdvisory[] | null };
+
+/** One migration tool's (`laravel`, `django`, `rails`, `prisma`, …) migrations as the project's
+ * database reports them (read-only; the tool connects, Pitwall never reads credentials).
+ * `command`: what a migrate runs; `pending`: the names still to run, kept from the last good read
+ * when a later one fails; `error`: why the last read got no list; `at`: when it was read;
+ * `running`: a read is in flight; `database`: where the migrations would go, when known. */
+export type DepMigrations = {
+  tool: string;
+  command: string;
+  pending: string[];
+  error: "unreachable" | "noTable" | "timeout" | "failed" | "toolMissing" | null;
+  at: number;
+  running: boolean;
+  database: { connection: string | null; name: string | null } | null;
+};
+
+/** One listed project's dependencies. `migrations`: one per migration tool found, usually none or
+ * one; `scans`: by ecosystem. */
+export type DepReport = {
+  path: string;
+  checks: DepCheck[];
+  runtimes: DepRuntime[];
+  migrations: DepMigrations[];
+  framework: { name: string; version: string } | null;
+  scans: Record<string, DepScan>;
+  checkedAt: number;
+  /** The ecosystem whose install runs now, if any. */
+  installing: string | null;
+};
+
 /* ---------- Sessions: every Claude Code session today, live (claude_sessions, event `sessions`) ---------- */
 
 /**

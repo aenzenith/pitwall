@@ -3,6 +3,7 @@ mod claude;
 mod clock;
 mod commands;
 mod core;
+mod deps;
 mod extension;
 mod fuel;
 mod git;
@@ -123,6 +124,9 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         // Only the window shows the board.
         CoreEvent::Board(cards) => {
             let _ = app.emit_to(MAIN, "board", cards);
+        }
+        CoreEvent::Deps(reports) => {
+            let _ = app.emit_to(MAIN, "deps", reports);
         }
     }
 }
@@ -398,6 +402,12 @@ pub fn run() {
             commands::window_ready,
             commands::fuel_state,
             commands::refresh_fuel,
+            commands::deps_state,
+            commands::deps_check,
+            commands::deps_install,
+            commands::deps_migrate,
+            commands::deps_scan,
+            commands::deps_scan_details,
             commands::install_claude_hook,
             commands::uninstall_claude_hook,
             commands::open_link,

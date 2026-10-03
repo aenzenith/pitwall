@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "board" | "list" | "chevron-down";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down";
     size?: number;
   }>(),
   { size: 15 },
@@ -44,6 +44,8 @@ withDefaults(
     <g v-else-if="name === 'sparkles'"><path d="M10 4.5c.6 3.9 2.6 5.9 6.5 6.5-3.9.6-5.9 2.6-6.5 6.5-.6-3.9-2.6-5.9-6.5-6.5 3.9-.6 5.9-2.6 6.5-6.5z" /><path d="M18.5 3v4.5M16.25 5.25h4.5" /><path d="M18.5 16.5v3.5M16.75 18.25h3.5" /></g>
     <g v-else-if="name === 'board'"><rect x="4" y="4" width="4.5" height="15" rx="1.2" /><rect x="9.75" y="4" width="4.5" height="9.5" rx="1.2" /><rect x="15.5" y="4" width="4.5" height="12" rx="1.2" /></g>
     <path v-else-if="name === 'list'" d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" />
+    <g v-else-if="name === 'tools'" transform="translate(-.5 .5)"><path transform="rotate(45 12 12)" d="M13.6.99A4.6 4.6 0 0 1 13.8 9.53V21.5a1.8 1.8 0 0 1-3.6 0V9.53A4.6 4.6 0 0 1 10.4.99V5h3.2z" /><g transform="rotate(-45 12 12)"><path d="M12 1.4v8.8M12 13.8v2.8" /><rect x="10.3" y="16.6" width="3.4" height="6.8" rx="1.7" /></g></g>
+    <g v-else-if="name === 'wifi-off'"><path d="M3.5 3.5l17 17" /><path d="M8.6 16.2a5 5 0 0 1 6.8 0" /><path d="M5 12.6a10 10 0 0 1 5-2.5M14.8 10.3a10 10 0 0 1 4.2 2.3" /><path d="M12 19.5h.01" /></g>
     <g v-else-if="name === 'lock'"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></g>
     <path v-else-if="name === 'folder'" d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
   </svg>

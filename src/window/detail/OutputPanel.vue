@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import Icon from "../../components/Icon.vue";
+import { depJobName, depJobs } from "../../lib/deps";
 import { uptime } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import type { OutputLine } from "../../lib/outputStream";
@@ -28,11 +29,16 @@ const runsHere = computed(() => props.project.status !== "stopped" && !props.pro
 /** While the handle is dragged, the panel follows the pointer without animating. */
 const dragging = computed(() => props.resizer.dragging.value);
 
-/** Tabs: the dev server, then every command that ran in this session. */
-const tabs = computed(() => [
-  { id: null as string | null, name: t("common.devServer") },
-  ...(props.project.commands ?? []).filter((c) => c.status !== "idle" || c.result).map((c) => ({ id: c.id as string | null, name: c.name })),
-]);
+/** Tabs: the dev server, then every command that ran in this session, then the Garage
+ * page's installs and migrations that did (lib/deps) and the core doesn't list as commands. */
+const tabs = computed(() => {
+  const commands = (props.project.commands ?? []).filter((c) => c.status !== "idle" || c.result).map((c) => ({ id: c.id as string | null, name: c.name }));
+  const listed = new Set((props.project.commands ?? []).map((c) => c.id));
+  const depTabs = (depJobs.value[props.project.path] ?? [])
+    .filter((job) => !listed.has(job))
+    .map((job) => ({ id: job as string | null, name: depJobName(props.project.path, job) ?? job }));
+  return [{ id: null as string | null, name: t("common.devServer") }, ...commands, ...depTabs];
+});
 /** The one tab in the Tab order: the shown one, else the dev server's. */
 const activeTab = computed(() => (tabs.value.some((item) => item.id === props.tab) ? props.tab : null));
 

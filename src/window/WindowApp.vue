@@ -16,10 +16,12 @@ import { outputRequest, terminalRequest } from "../lib/panel";
 import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
-import { api, connectBoard, connectFuel, connectSessions, fuel, loadBoard, loadSessions, now, snapshot, visible } from "../lib/store";
+import { needsAttention } from "../lib/deps";
+import { api, connectBoard, connectDeps, connectFuel, connectSessions, deps, fuel, loadBoard, loadSessions, now, snapshot, visible } from "../lib/store";
 import type { Project } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
+import DepsView from "./DepsView.vue";
 import FuelView from "./FuelView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
 import SessionsView from "./SessionsView.vue";
@@ -36,8 +38,9 @@ const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "star" |
 ];
 
 const filter = ref<Filter>("all");
-/** The project list, the day's timeline, Claude's sessions, the board of cards, or Claude's fuel. */
-const view = ref<"projects" | "day" | "sessions" | "board" | "fuel">("projects");
+/** The project list, the day's timeline, Claude's sessions, the board of cards, Claude's fuel, or
+ * the projects' dependencies. */
+const view = ref<"projects" | "day" | "sessions" | "board" | "fuel" | "deps">("projects");
 
 /** The sidebar's "26% left" beside Fuel: the session's share left, red when low, grey when stale. */
 const fuelBadge = computed(() => {
@@ -56,6 +59,21 @@ let boardLink: Promise<UnlistenFn> | null = null;
 // Fuel's data comes to this window from the start: the sidebar shows it on every page.
 onMounted(async () => {
   unlistenFuel = await connectFuel();
+});
+
+/** The dependencies' feed: from the start too, for the sidebar's count. */
+let depsLink: Promise<UnlistenFn> | null = null;
+onMounted(() => {
+  depsLink = connectDeps();
+});
+onBeforeUnmount(() => {
+  void depsLink?.then((unlisten) => unlisten(), () => undefined);
+});
+
+/** Beside Garage: how many listed projects need you (lib/deps: needsAttention). */
+const depsBadge = computed(() => {
+  const listed = new Set((snapshot.value?.projects ?? []).map((project) => project.path));
+  return (deps.value ?? []).filter((report) => listed.has(report.path) && needsAttention(report)).length;
 });
 
 // The sessions' only once a page showing them (Sessions, Board) first opens: until then the core
@@ -274,6 +292,10 @@ function server(project: Project): string {
           <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
           <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
         </button>
+        <button type="button" :class="{ on: view === 'deps' }" :aria-current="view === 'deps' ? 'page' : undefined" @click="view = 'deps'">
+          <Icon name="tools" /> <span class="nav-label">{{ t("deps.nav") }}</span>
+          <span v-if="depsBadge" class="deps-badge" :aria-label="t('deps.group.attention', { count: depsBadge })">{{ depsBadge }}</span>
+        </button>
       </div>
       <div class="grow"></div>
       <div class="nav">
@@ -292,6 +314,7 @@ function server(project: Project): string {
       @open-claude="openClaudeTerminal"
     />
     <BoardView v-else-if="view === 'board'" :project-path="selected?.path ?? null" @open-settings="openSettings('claude')" />
+    <DepsView v-else-if="view === 'deps'" @open-project="revealProject" @open-output="revealOutput" />
 
     <template v-else>
       <main class="main">
@@ -501,6 +524,16 @@ function server(project: Project): string {
 
 .fuel-badge.stale {
   color: var(--text-subtle);
+}
+
+/* The projects whose dependencies need you, beside Garage: the attention yellow. */
+.deps-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--warn);
 }
 
 .grow {

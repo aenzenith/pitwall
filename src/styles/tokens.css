@@ -28,6 +28,8 @@
   --run: #73c991;
   --crash: #f14c4c;
   --crash-text: #f28b8b;
+  /* Needs your attention (a server with an issue, dependencies to install): small marks only. */
+  --warn: #cca700;
   --idle-ring: #7d838d;
   --claude: #f0883e;
   --claude-text: #f3a56b;

@@ -409,6 +409,61 @@ pub fn refresh_fuel(app: AppHandle, state: State<'_, AppState>, force: bool) {
     state.fuel.refresh(&app, force);
 }
 
+/* ---------- dependencies ---------- */
+
+/// The Dependencies page: every listed project's report, in list order. From then on the main
+/// window also gets `deps` (the same) whenever it changes. A project not checked yet is checked
+/// first, so it runs off the main thread.
+#[tauri::command]
+pub async fn deps_state(state: State<'_, AppState>) -> Result<Vec<crate::deps::DepReport>, String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.deps_state()).await.map_err(|error| error.to_string())
+}
+
+/// Checks one project (`path`) or every listed one again, with the login shell asked anew for
+/// the runtimes' versions and the managers' executables; resolves once done (the reports come
+/// as `deps`). A project's pending migrations are read again too (its migration tools' status
+/// commands) on a thread of their own: `running` in its `migrations` till then.
+#[tauri::command]
+pub async fn deps_check(state: State<'_, AppState>, path: Option<String>) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.deps_check(path.as_deref())).await.map_err(|error| error.to_string())
+}
+
+/// Installs a project's packages of one ecosystem (`npm`, `composer`: the check's
+/// `installCommand`) as its job `deps:<ecosystem>`; the output is that job's (`get_output`),
+/// stopped with `stop_command`.
+#[tauri::command]
+pub async fn deps_install(state: State<'_, AppState>, path: String, ecosystem: String) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.deps_install(&path, &ecosystem)).await.map_err(|error| error.to_string())?
+}
+
+/// A migration tool's forward-only migrate command, exactly (`laravel`: `php artisan migrate`;
+/// the report's `migrations[].command`), as the job `deps:migrate:<tool>`: only from the user's
+/// confirm.
+#[tauri::command]
+pub async fn deps_migrate(state: State<'_, AppState>, path: String, tool: String) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.deps_migrate(&path, &tool)).await.map_err(|error| error.to_string())?
+}
+
+/// The network scan (outdated, vulnerable) of one ecosystem of a project; its `running` shows
+/// in the reports until it ends.
+#[tauri::command]
+pub async fn deps_scan(state: State<'_, AppState>, path: String, ecosystem: String) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.deps_scan(&path, &ecosystem)).await.map_err(|error| error.to_string())?
+}
+
+/// What a project's last scan of one ecosystem listed: the outdated packages and the advisories
+/// its counts are of. `null` for a scan kept from before they were listed.
+#[tauri::command]
+pub async fn deps_scan_details(state: State<'_, AppState>, path: String, ecosystem: String) -> Result<Option<crate::deps::ScanDetails>, String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.deps_scan_details(&path, &ecosystem)).await.map_err(|error| error.to_string())
+}
+
 /// Esc in the popover: close it and go back to the app from before.
 #[tauri::command]
 pub fn hide_popover(app: AppHandle) {

@@ -106,7 +106,7 @@ impl Core {
         self.send_output(path, Some(id), line);
     }
 
-    fn finish_job(&self, path: &str, id: &str, result: JobResult) {
+    fn finish_job(self: &Arc<Self>, path: &str, id: &str, result: JobResult) {
         let state = if result.stopped { "stopped" } else if result.ok { "ok" } else { "failed" };
         let disposed = {
             let mut inner = self.lock();
@@ -124,6 +124,7 @@ impl Core {
         }
         self.record_pids();
         self.notify();
+        self.deps_job_done(path, id);
     }
 
     /// Runs a project's command. A run by hand starts a fresh output and restart series.
@@ -136,9 +137,16 @@ impl Core {
         let Some(command) = self.custom_command(path, id) else {
             return;
         };
+        self.spawn_job_line(path, id, Some(&command.name), &command.command, fresh);
+    }
+
+    /// Runs `command_line` as the project's job `id`: a custom command (`name` is its name, for
+    /// the day's timeline) or one of the app's own (`dependencies.rs`). False when it never got
+    /// going (another start of it, a stop, quitting); otherwise its end reaches `finish_job`.
+    pub(super) fn spawn_job_line(self: &Arc<Self>, path: &str, id: &str, name: Option<&str>, command_line: &str, fresh: bool) -> bool {
         let unit = Unit::Command(path.to_string(), id.to_string());
         let Some(start) = self.begin_start(&unit) else {
-            return;
+            return false;
         };
         let key = job_key(path, id);
 
@@ -148,18 +156,20 @@ impl Core {
 
         let failed = |code| JobResult { ok: false, code, stopped: false, finished_at: now_ms() };
 
-        if is_forbidden_command(&command.command) {
-            self.push_job_line(path, id, format!("[pitwall] {}", t!("core.log.refusedBuild", command = command.command)));
+        if is_forbidden_command(command_line) {
+            self.push_job_line(path, id, format!("[pitwall] {}", t!("core.log.refusedBuild", command = command_line)));
             drop(start);
-            return self.finish_job(path, id, failed(None));
+            self.finish_job(path, id, failed(None));
+            return true;
         }
 
-        let child = match process::spawn_shell(&command.command, path) {
+        let child = match process::spawn_shell(command_line, path) {
             Ok(child) => child,
             Err(error) => {
                 self.push_job_line(path, id, format!("[pitwall] {}", t!("core.issue.couldNotStart", error = error)));
                 drop(start);
-                return self.finish_job(path, id, failed(None));
+                self.finish_job(path, id, failed(None));
+                return true;
             }
         };
 
@@ -167,14 +177,17 @@ impl Core {
             inner.jobs.insert(key, Job { run, pid, started: Instant::now(), started_at: now_ms() });
         });
         let Some((run, child)) = adopted else {
-            return;
+            return false;
         };
 
-        self.push_job_line(path, id, format!("$ {}", command.command));
-        self.record_command(path, &command.name, "running");
+        self.push_job_line(path, id, format!("$ {command_line}"));
+        if let Some(name) = name {
+            self.record_command(path, name, "running");
+        }
         self.record_pids();
         self.notify();
         self.watch(unit, run, child);
+        true
     }
 
     /// A line of run `run`'s output; a line of an earlier run is dropped.

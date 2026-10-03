@@ -1,0 +1,86 @@
+/* What the Garage page's pieces share: a project's mark (deps/DepRow) and a topic's
+   (deps/DepDetails), and the buttons of the details and their lines (deps/DepTopicLine). Each
+   takes this as a scoped style (`<style scoped src>`) before its own, as with sessions/panel.css. */
+
+/* The page's only yellow and red: a small dot. */
+.dep-mark {
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
+.dep-mark.warn {
+  background: var(--warn);
+}
+
+.dep-mark.bad {
+  background: var(--crash);
+}
+
+.dep-mark.ok {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--idle-ring);
+}
+
+.dep-mark.busy {
+  border: 1.5px solid var(--text-muted);
+  border-top-color: transparent;
+  animation: dep-spin 0.8s linear infinite;
+}
+
+@keyframes dep-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A command longer than its room gives way inside the button; its tooltip keeps it. */
+.dep-btn {
+  flex-shrink: 0;
+  max-width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dep-btn-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dep-btn:hover:not(:disabled) {
+  background: #2c3039;
+}
+
+.dep-btn:disabled {
+  opacity: 0.5;
+}
+
+.dep-btn[aria-busy="true"]:disabled {
+  opacity: 0.7;
+}
+
+.dep-btn :deep(.spinner) {
+  color: var(--text-muted);
+}
+
+.dep-btn.primary {
+  background: #2a3a30;
+  border-color: #3d5446;
+  color: #cdebd8;
+}
+
+.dep-btn.primary:hover:not(:disabled) {
+  background: #33473a;
+}

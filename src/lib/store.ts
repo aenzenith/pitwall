@@ -7,6 +7,8 @@ import type {
   BoardColumn,
   Card,
   DaySummary,
+  DepReport,
+  DepScanDetails,
   ExtensionStatus,
   Folder,
   Fuel,
@@ -89,6 +91,40 @@ export async function connectFuel(): Promise<UnlistenFn> {
     if (heard === before) fuel.value = state;
   } catch {
     // Kept as loading; the next `fuel` event fills it.
+  }
+  return unlisten;
+}
+
+/** Every listed project's dependencies: the Garage page's, and its sidebar count's. Null
+ * until the core answers. */
+export const deps = ref<DepReport[] | null>(null);
+
+/** Asks the core for the dependencies; one that doesn't answer (yet) leaves them as they were. */
+export async function loadDeps(): Promise<void> {
+  try {
+    deps.value = await api.depsState();
+  } catch {
+    // Kept as it was (null shows as loading); the next `deps` event fills it.
+  }
+}
+
+/**
+ * The main window's: hears `deps` (sent to this window only, every project's report after each
+ * change) and asks for the current state.
+ */
+export async function connectDeps(): Promise<UnlistenFn> {
+  let heard = 0;
+  const unlisten = await getCurrentWindow().listen<DepReport[]>("deps", (event) => {
+    heard++;
+    deps.value = event.payload;
+  });
+  const before = heard;
+  try {
+    const reports = await api.depsState();
+    // An event that came in meanwhile is newer.
+    if (heard === before) deps.value = reports;
+  } catch {
+    // Kept as loading; the next `deps` event fills it.
   }
   return unlisten;
 }
@@ -191,6 +227,17 @@ export const api = {
   claudeSessions: () => invoke<SessionsView>("claude_sessions"),
   /** What Claude last said in a session (Markdown): read when asked, never kept. */
   lastMessage: (session: string) => invoke<string | null>("claude_last_message", { session }),
+  /** Every listed project's dependencies (the Garage page). */
+  depsState: () => invoke<DepReport[]>("deps_state"),
+  /** Reads lock files and installed packages again: one project's, or every one's (`null`). */
+  depsCheck: (path: string | null) => invoke("deps_check", { path }),
+  depsInstall: (path: string, ecosystem: string) => invoke("deps_install", { path, ecosystem }),
+  /** One migration tool's migrate (`laravel`, `django`, …). */
+  depsMigrate: (path: string, tool: string) => invoke("deps_migrate", { path, tool }),
+  /** `outdated` and `audit` for one ecosystem: needs the network. */
+  depsScan: (path: string, ecosystem: string) => invoke("deps_scan", { path, ecosystem }),
+  /** What the last scan of one ecosystem listed; null for one kept from before it was listed. */
+  depsScanDetails: (path: string, ecosystem: string) => invoke<DepScanDetails | null>("deps_scan_details", { path, ecosystem }),
   markSeen: (path: string) => invoke("mark_seen", { path }),
   setSettings: (settings: Settings) => invoke("set_settings", { settings }),
   setProjectSettings: (path: string, settings: ProjectSettings) => invoke("set_project_settings", { path, settings }),
