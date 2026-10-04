@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { yesterday } from "../lib/day";
 import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
-import { ALL, dayMonth, nextDay, periodLabel, previousDay, type Period } from "../lib/period";
+import { ALL, dayMonth, nextDay, periodLabel, previousDay, shiftDay, type Period } from "../lib/period";
+import { today } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import Icon from "./Icon.vue";
 
@@ -26,6 +26,8 @@ const period = defineModel<Period>({ required: true });
 
 /** The earlier day shown, if one is. */
 const day = computed(() => (period.value !== null && period.value !== ALL ? period.value : null));
+/** Yesterday as the clock has it: the page may stay open over midnight. */
+const yesterday = computed(() => shiftDay(today.value, -1));
 
 /** Every label the day tab takes: yesterday's name, and a day late in each month. */
 const dayLabels = computed(() => {
@@ -39,9 +41,9 @@ const tabs = computed<Array<{ id: string; label: string; on: boolean; value: Per
   ...(props.all ? [{ id: "all", label: t("period.all"), on: period.value === ALL, value: ALL, widths: [] }] : []),
   {
     id: "day",
-    label: day.value && day.value !== yesterday() ? dayMonth(day.value) : t("day.yesterday"),
+    label: day.value && day.value !== yesterday.value ? dayMonth(day.value) : t("day.yesterday"),
     on: day.value !== null,
-    value: day.value ?? yesterday(),
+    value: day.value ?? yesterday.value,
     widths: dayLabels.value,
   },
   { id: "today", label: t("day.today"), on: period.value === null, value: null, widths: [] },
@@ -51,8 +53,8 @@ const tabs = computed<Array<{ id: string; label: string; on: boolean; value: Per
 const current = computed(() => tabs.value.find((tab) => tab.on)?.label ?? "");
 const compactLabels = computed(() => [...new Set([...tabs.value.map((tab) => tab.label), ...dayLabels.value])]);
 
-const before = computed(() => previousDay(period.value));
-const after = computed(() => nextDay(period.value));
+const before = computed(() => previousDay(period.value, today.value));
+const after = computed(() => nextDay(period.value, today.value));
 
 function step(to: Period | undefined): void {
   if (to !== undefined) period.value = to;
@@ -110,8 +112,8 @@ function openMenu(event: MouseEvent): void {
       type="button"
       :class="['period-compact', { set: period !== null }]"
       aria-haspopup="menu"
-      :aria-label="`${t('period.label')}: ${periodLabel(period)}`"
-      :title="`${t('period.label')}: ${periodLabel(period)}`"
+      :aria-label="`${t('period.label')}: ${periodLabel(period, today)}`"
+      :title="`${t('period.label')}: ${periodLabel(period, today)}`"
       @click="openMenu"
     >
       <Icon name="calendar" :size="13" />

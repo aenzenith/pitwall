@@ -20,6 +20,7 @@ import type {
   Snapshot,
   TerminalView,
 } from "./types";
+import { dayName } from "./day";
 import { trackSettings, type TrackSettings } from "./track";
 
 /** The whole app state, pushed by the core on every change. */
@@ -27,6 +28,9 @@ export const snapshot = ref<Snapshot | null>(null);
 
 /** Ticks so uptimes and "2 min ago" stay current; stands still while the window is hidden. */
 export const now = ref(Date.now());
+
+/** The day it is (`YYYY-MM-DD`, local), by that clock: a page left open over midnight follows it. */
+export const today = computed(() => dayName(now.value));
 
 /**
  * This window is on screen. It starts as the window says (`isVisible`, as windows start hidden

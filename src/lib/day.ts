@@ -30,13 +30,6 @@ export function dayName(at: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function yesterday(): string {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() - 1);
-  return dayName(d.getTime());
-}
-
 /* ---------- formats ---------- */
 
 /** One time formatter per language, made on first use: a day has hundreds of times to show. */

@@ -2,7 +2,7 @@
 // Board and Sessions pages each show one (components/PeriodPicker). No component state; what
 // reads the language (`t`, `clock`) follows it.
 
-import { clock, dayName, yesterday } from "./day";
+import { clock, dayName } from "./day";
 import { language, t } from "./i18n";
 
 /** Every day there is something kept of. */
@@ -24,17 +24,18 @@ export function shiftDay(date: string, days: number): string {
   return dayName(d.getTime());
 }
 
-/** The day before the one shown; undefined from every day's, where there is none to step from. */
-export function previousDay(period: Period): Period | undefined {
+/** The day before the one shown; undefined from every day's, where there is none to step from.
+ * `today`: the day it is, here and below (lib/store: `today`, which follows the clock). */
+export function previousDay(period: Period, today: string): Period | undefined {
   if (period === ALL) return undefined;
-  return period === null ? yesterday() : shiftDay(period, -1);
+  return shiftDay(period ?? today, -1);
 }
 
 /** The day after the one shown (null: today); undefined from today and from every day's. */
-export function nextDay(period: Period): Period | undefined {
+export function nextDay(period: Period, today: string): Period | undefined {
   if (period === null || period === ALL) return undefined;
   const next = shiftDay(period, 1);
-  return next >= dayName(Date.now()) ? null : next;
+  return next >= today ? null : next;
 }
 
 /** `at` falls in `period`. */
@@ -74,10 +75,10 @@ export function dayLong(date: string): string {
 }
 
 /** A period by name: `Today`, `Yesterday`, `2 Oct`, `All time`. */
-export function periodLabel(period: Period): string {
+export function periodLabel(period: Period, today: string): string {
   if (period === null) return t("day.today");
   if (period === ALL) return t("period.all");
-  return period === yesterday() ? t("day.yesterday") : dayShort(period);
+  return period === shiftDay(today, -1) ? t("day.yesterday") : dayShort(period);
 }
 
 /** A time as a row says it: `14:05` today, `2 Oct 14:05` on any other day. */

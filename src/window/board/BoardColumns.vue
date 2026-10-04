@@ -5,10 +5,10 @@ import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
 import { COLUMN_ICONS, COLUMN_LABELS, COLUMNS, columnCards, type BoardLayout, type CardStatus } from "../../lib/board";
 import type { DropTarget, Ghost } from "../../lib/cardDrag";
-import { yesterday } from "../../lib/day";
 import { language, t } from "../../lib/i18n";
-import { ALL, dayShort, type Period } from "../../lib/period";
+import { ALL, dayShort, shiftDay, type Period } from "../../lib/period";
 import { useSlide } from "../../lib/slide";
+import { today } from "../../lib/store";
 import type { BoardColumn, Card, SessionRow } from "../../lib/types";
 import BoardCard from "./BoardCard.vue";
 import type { CardBusy } from "./context";
@@ -75,7 +75,7 @@ function label(column: BoardColumn): string {
   const period = props.period;
   if (column !== "done" || period === ALL) return t(COLUMN_LABELS[column]);
   if (period === null) return t("board.doneToday");
-  return t("board.doneOn", { when: period === yesterday() ? t("day.yesterday").toLocaleLowerCase(language.value) : dayShort(period) });
+  return t("board.doneOn", { when: period === shiftDay(today.value, -1) ? t("day.yesterday").toLocaleLowerCase(language.value) : dayShort(period) });
 }
 
 /**

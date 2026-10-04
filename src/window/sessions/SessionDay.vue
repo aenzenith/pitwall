@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
-import { clock, clockRange, duration, hourTicks, pct } from "../../lib/day";
+import { clock, clockRange, dayName, duration, hourTicks, pct } from "../../lib/day";
 import { t } from "../../lib/i18n";
 import { ALL, periodLabel, type Period } from "../../lib/period";
 import { sessionRange } from "../../lib/sessions";
@@ -16,7 +16,7 @@ const today = computed(() => props.row.today);
 const spans = computed(() => today.value?.spans ?? []);
 /** Still running, today: the hours reach now, and now is marked. */
 const live = computed(() => props.period === null && props.row.phase !== "ended");
-const label = computed(() => periodLabel(props.period));
+const label = computed(() => periodLabel(props.period, dayName(props.now)));
 const range = computed(() => sessionRange(spans.value, props.now, live.value));
 
 /** The hour row's width, so labels are spaced to fit and step aside for now. */
