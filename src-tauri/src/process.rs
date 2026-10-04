@@ -37,6 +37,38 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
     command
 }
 
+/// What Claude Code hands every process it starts: the marks of running inside one of its
+/// sessions, and that session's own id, socket and key. The app carries them when its start
+/// goes back to such a process: a dev run from a shell Claude opened, or from a terminal of an
+/// editor Claude launched. A card's Claude hands on what Pitwall gave it too: the card's text and
+/// the folder of its images (`core/terminal.rs`).
+const CLAUDE_SESSION_VARS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_PID",
+    "CLAUDE_EFFORT",
+    "AI_AGENT",
+    "PITWALL_PROMPT",
+    "PITWALL_IMAGES",
+];
+
+/// Takes those out of the app's own environment, so nothing it starts (a terminal, a dev server,
+/// an editor) passes for a part of that session. A `claude` that inherits
+/// `CLAUDE_CODE_CHILD_SESSION` takes itself for a nested session: it keeps no log and no file
+/// among the running sessions, so a card given to it has nothing to follow. Called once, before
+/// the app starts a thread.
+pub fn leave_claude_session() {
+    for name in CLAUDE_SESSION_VARS {
+        std::env::remove_var(name);
+    }
+}
+
 /// The user's login shell: `$SHELL`, else the system's own (zsh on macOS, sh elsewhere).
 #[cfg(unix)]
 fn login_shell() -> String {

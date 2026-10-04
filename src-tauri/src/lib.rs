@@ -201,6 +201,9 @@ pub fn apply_shortcut(app: &AppHandle, on: bool, keys: &str) -> Result<(), Strin
 const AUTOSTART_ARG: &str = "--autostart";
 
 pub fn run() {
+    // Started from inside a Claude session (a dev run), the app is no part of it.
+    process::leave_claude_session();
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| tray::show_main(app)))
         .plugin(tauri_plugin_opener::init())
