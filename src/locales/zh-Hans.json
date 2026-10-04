@@ -677,6 +677,7 @@
   "board.column.review": "待审查",
   "board.column.done": "已完成",
   "board.doneToday": "已完成 · 今天",
+  "board.doneOn": "已完成 · {when}",
   "board.give": "交给 Claude",
   "board.giveOptions": "交给 Claude 的方式",
   "board.giveNew": "在新的 Claude 标签页中开始",

@@ -694,6 +694,7 @@
   "board.column.review": "Zu prüfen",
   "board.column.done": "Erledigt",
   "board.doneToday": "Erledigt · heute",
+  "board.doneOn": "Erledigt · {when}",
   "board.give": "An Claude geben",
   "board.giveOptions": "Optionen zum Übergeben an Claude",
   "board.giveNew": "In neuem Claude-Tab starten",

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRaw, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
+import PeriodPicker from "../components/PeriodPicker.vue";
 import Spinner from "../components/Spinner.vue";
 import {
   boardWaits,
@@ -23,6 +24,7 @@ import { useCardImages } from "../lib/cardImages";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
 import { detailTerminalHeight } from "../lib/panel";
+import { ALL as EVERY_DAY, type Period } from "../lib/period";
 import { dragRegion, keys, primary } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { originView, othersWaiting, sessionTerminal } from "../lib/sessions";
@@ -124,16 +126,22 @@ function setLayout(next: BoardLayout): void {
   void api.setBoardView(next).catch(() => undefined);
 }
 
+/* ---------- which days ---------- */
+
+/** The days whose done cards show: today's, an earlier day's, or every day's. The cards still to
+ * do show whatever the day. Today's again each time the page opens. */
+const period = ref<Period>(null);
+
 /* ---------- what it shows ---------- */
 
 const query = ref("");
 const q = computed(() => query.value.trim());
 
-/** The listed projects' cards on the board today (done ones: today's). */
-const all = computed(() => (board.value ?? []).filter((card) => listed.value.has(card.path) && onBoard(card, now.value)));
+/** The listed projects' cards on the board (done ones: the shown days'). */
+const all = computed(() => (board.value ?? []).filter((card) => listed.value.has(card.path) && onBoard(card, period.value, now.value)));
 /** Those of folders no longer among the projects (none until the projects are known): every
  * project's board keeps them in sight under its lanes, to be read, closed or moved to a project. */
-const unlisted = computed(() => (snapshot.value ? (board.value ?? []).filter((card) => !listed.value.has(card.path) && onBoard(card, now.value)) : []));
+const unlisted = computed(() => (snapshot.value ? (board.value ?? []).filter((card) => !listed.value.has(card.path) && onBoard(card, period.value, now.value)) : []));
 /** Those the search leaves. */
 const shown = computed(() => all.value.filter((card) => cardMatches(card, q.value)));
 const unlistedShown = computed(() => unlisted.value.filter((card) => cardMatches(card, q.value)));
@@ -184,7 +192,7 @@ const projectCards = computed(() => (project.value ? all.value.filter((card) => 
 const showHidden = ref(false);
 const laneAll = computed(() =>
   projects.value.map((p) => ({
-    lane: laneOf(p.path, p, shown.value, all.value, now.value),
+    lane: laneOf(p.path, p, shown.value, all.value),
     has: shown.value.some((card) => card.path === p.path),
   })),
 );
@@ -195,7 +203,7 @@ const hiddenLanes = computed(() => (q.value ? 0 : laneAll.value.filter((entry) =
 const unlistedLanes = computed(() =>
   [...new Set(unlistedShown.value.map((card) => card.path))]
     .sort((a, b) => a.localeCompare(b))
-    .map((path) => laneOf(path, null, unlistedShown.value, unlisted.value, now.value)),
+    .map((path) => laneOf(path, null, unlistedShown.value, unlisted.value)),
 );
 
 const subtitle = computed(() => {
@@ -223,7 +231,7 @@ const hook = computed(() => {
 /** The cards as they read, column by column (lane by lane): where the selection may go. */
 const visibleIds = computed<string[]>(() => {
   const p = project.value;
-  if (p) return COLUMNS.flatMap((column) => columnCards(shown.value, p.path, column, now.value).map((card) => card.id));
+  if (p) return COLUMNS.flatMap((column) => columnCards(shown.value, p.path, column).map((card) => card.id));
   return [...lanes.value, ...unlistedLanes.value].flatMap((lane) => [...laneDrawn(lane, "queued"), ...laneDrawn(lane, "claude"), ...laneDrawn(lane, "review")].map((card) => card.id));
 });
 /** Every card the page shows, drawn or not (a lane draws only its first few, and none of its done
@@ -425,6 +433,8 @@ function moveTo(id: string, column: BoardColumn, index: number, kind: "move" | "
   const card = byId.value.get(id);
   if (!board.value || !card || busy.value[id]) return;
   const giving = column === "claude" && card.column !== "claude";
+  // Done now is done today: an earlier day's board goes back to today's, where the card shows.
+  if (column === "done" && card.column !== "done" && period.value !== EVERY_DAY) period.value = null;
   const before = toRaw(board.value);
   const at = Date.now();
   const next = giving
@@ -464,7 +474,7 @@ function onDrop(id: string, target: DropTarget): void {
   const column = target.column as BoardColumn;
 
   const every = peers(card, column);
-  const visible = columnCards(shown.value, p.path, column, now.value).filter((c) => c.id !== id);
+  const visible = columnCards(shown.value, p.path, column).filter((c) => c.id !== id);
   const beside = visible[target.index];
   const last = visible[visible.length - 1];
   const index = beside ? every.findIndex((c) => c.id === beside.id) : last ? every.findIndex((c) => c.id === last.id) + 1 : every.length;
@@ -764,6 +774,7 @@ const ghostStyle = computed(() =>
           <span class="board-title">{{ t("board.title") }}</span>
           <span class="board-subtitle">{{ subtitle }}</span>
         </div>
+        <PeriodPicker v-model="period" />
         <!-- A project's board only: every project's is drawn one way. -->
         <div v-if="project" class="board-views" role="group" :aria-label="t('board.view.label')">
           <button
@@ -784,7 +795,7 @@ const ghostStyle = computed(() =>
           <input v-model="query" type="search" :placeholder="t('board.search')" :aria-label="t('board.search')" spellcheck="false" @keydown.down.prevent="focusSelected()" />
         </label>
         <BoardPicker :projects="projects" :scope="scope" :waits="waits" @pick="show" />
-        <button type="button" class="board-add" :disabled="!projects.length" @click="openAdd">
+        <button type="button" class="board-add" :title="t('board.addCard')" :disabled="!projects.length" @click="openAdd">
           <Icon name="plus" :size="13" />
           <span class="board-add-text">{{ t("board.addCard") }}</span>
           <span class="board-keys" aria-hidden="true">{{ keys("mod+KeyN") }}</span>
@@ -839,7 +850,7 @@ const ghostStyle = computed(() =>
           :path="project.path"
           :layout="layout"
           :cards="shown"
-          :now="now"
+          :period="period"
           :selected="selectedId"
           :statuses="statuses"
           :row-of="rowOf"
@@ -950,6 +961,58 @@ const ghostStyle = computed(() =>
   gap: 10px;
   padding: 0 20px;
   border-bottom: 1px solid var(--line);
+  container-type: inline-size;
+}
+
+/* Without room for the days' tabs beside the rest, one button holds them (PeriodPicker), and the
+   subtitle gives way well before a control's name is cut; the title keeps its room. */
+@container (max-width: 1100px) {
+  .board-bar :deep(.period-full) {
+    display: none;
+  }
+
+  .board-bar :deep(.period-compact) {
+    display: inline-flex;
+  }
+
+  .board-bar > .board-heading {
+    flex-shrink: 1000;
+    min-width: 64px;
+  }
+}
+
+/* Narrower still (the window at its first size): that button's icon alone, and "Add card"
+   without its keys. */
+@container (max-width: 900px) {
+  .board-bar :deep(.compact-text),
+  .board-bar :deep(.compact-more),
+  .board-add .board-keys {
+    display: none;
+  }
+}
+
+/* Narrowest: "Add card" is its plus alone (still its tooltip, and read out). */
+@container (max-width: 520px) {
+  .board-add-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The window at its narrowest: the bar has never had room for all of it, and the days' button
+   takes none from the rest (the title and the search box give it up). */
+@container (max-width: 340px) {
+  .board-bar > .board-heading {
+    min-width: 0;
+  }
+
+  .board-bar > .board-search {
+    min-width: 64px;
+  }
 }
 
 .board-heading {

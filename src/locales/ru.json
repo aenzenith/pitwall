@@ -728,6 +728,7 @@
   "board.column.review": "На проверку",
   "board.column.done": "Готово",
   "board.doneToday": "Готово · сегодня",
+  "board.doneOn": "Готово · {when}",
   "board.give": "Отдать Claude",
   "board.giveOptions": "Как отдать Claude",
   "board.giveNew": "Запустить в новой вкладке Claude",

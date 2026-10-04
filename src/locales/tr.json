@@ -682,6 +682,7 @@
   "board.column.review": "İncelenecek",
   "board.column.done": "Bitti",
   "board.doneToday": "Bitti · bugün",
+  "board.doneOn": "Bitti · {when}",
   "board.give": "Claude'a ver",
   "board.giveOptions": "Claude'a verme seçenekleri",
   "board.giveNew": "Yeni Claude sekmesinde başlat",

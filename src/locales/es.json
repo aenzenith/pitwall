@@ -698,6 +698,7 @@
   "board.column.review": "Por revisar",
   "board.column.done": "Hecho",
   "board.doneToday": "Hecho · hoy",
+  "board.doneOn": "Hecho · {when}",
   "board.give": "Dar a Claude",
   "board.giveOptions": "Formas de dárselo a Claude",
   "board.giveNew": "Empezar en una pestaña nueva de Claude",

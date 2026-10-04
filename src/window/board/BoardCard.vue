@@ -8,6 +8,7 @@ import { clock } from "../../lib/day";
 import type { CardStatus } from "../../lib/board";
 import { moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
+import { stamp } from "../../lib/period";
 import { keys } from "../../lib/platform";
 import type { Card, SessionRow } from "../../lib/types";
 import OriginLabel from "../sessions/OriginLabel.vue";
@@ -17,8 +18,8 @@ import { useBoardActions, type CardBusy } from "./context";
  * One card. `full`: a project's board (title, note, its session, buttons when selected); `row`:
  * the same board drawn as a list (the title with a line of its note under it, then its session's
  * state and where it runs each in a column of their own; selected, the whole title and more of the
- * note); `compact`: a lane of every project's board (one line, its status); `done`: a row of
- * today's done.
+ * note); `compact`: a lane of every project's board (one line, its status); `done`: a row of the
+ * done column, with when it was done (`dated`: its day too, among every day's).
  * `lifted`: being dragged (its place stays empty); `ghost`: the image that follows the pointer.
  * `givable` false: a card of a folder no longer listed, which is never given to Claude (no button
  * offers it).
@@ -36,8 +37,9 @@ const props = withDefaults(
     lifted?: boolean;
     ghost?: boolean;
     givable?: boolean;
+    dated?: boolean;
   }>(),
-  { variant: "full", status: null, row: null, selected: false, busy: null, error: "", draggable: false, lifted: false, ghost: false, givable: true },
+  { variant: "full", status: null, row: null, selected: false, busy: null, error: "", draggable: false, lifted: false, ghost: false, givable: true, dated: false },
 );
 
 const actions = useBoardActions();
@@ -115,11 +117,11 @@ function giveMenu(event: MouseEvent): void {
     @dblclick="actions.edit(card.id)"
     @contextmenu="onMenu"
   >
-    <!-- Today's done: a check, the title, when. -->
+    <!-- Done: a check, the title, when. -->
     <template v-if="variant === 'done'">
       <Icon name="check" :size="13" class="bcard-check" />
       <span class="bcard-done-title">{{ card.title }}</span>
-      <span class="bcard-time">{{ clock(card.movedAt) }}</span>
+      <span class="bcard-time">{{ dated ? stamp(card.movedAt, Date.now()) : clock(card.movedAt) }}</span>
     </template>
 
     <template v-else>
@@ -573,7 +575,7 @@ function giveMenu(event: MouseEvent): void {
   position: static;
 }
 
-/* Today's done: a compact row. */
+/* Done: a compact row. */
 .bcard.done {
   flex-direction: row;
   align-items: center;

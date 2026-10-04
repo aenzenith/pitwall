@@ -5,15 +5,18 @@ import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
 import { COLUMN_LABELS, COLUMNS, columnCards, type BoardLayout, type CardStatus } from "../../lib/board";
 import type { DropTarget, Ghost } from "../../lib/cardDrag";
-import { t } from "../../lib/i18n";
+import { yesterday } from "../../lib/day";
+import { language, t } from "../../lib/i18n";
+import { ALL, dayShort, type Period } from "../../lib/period";
 import { useSlide } from "../../lib/slide";
 import type { BoardColumn, Card, SessionRow } from "../../lib/types";
 import BoardCard from "./BoardCard.vue";
 import type { CardBusy } from "./context";
 
 /**
- * One project's board: up next, with Claude, to review, done today. `layout`: the four side by
- * side, a lane each (`columns`), or one under the other, a card a row (`list`). While a card is
+ * One project's board: up next, with Claude, to review, done in the days shown (`period`: today,
+ * an earlier day, or every day). `layout`: the four side by side, a lane each (`columns`), or one
+ * under the other, a card a row (`list`). While a card is
  * dragged (`dragging`), the column under the pointer shows where it would land (`target`), and its
  * cards slide aside to make that room; a card that changes places any other way has its
  * neighbours slide too.
@@ -22,7 +25,7 @@ const props = defineProps<{
   path: string;
   layout: BoardLayout;
   cards: Card[];
-  now: number;
+  period: Period;
   selected: string | null;
   statuses: Map<string, CardStatus | null>;
   rowOf: (card: Card) => SessionRow | null;
@@ -50,7 +53,7 @@ function slotIndex(column: BoardColumn, cards: Card[]): number {
 /** A column's cards, with the empty place a dragged card would take. */
 const columns = computed(() =>
   COLUMNS.map((column) => {
-    const cards = columnCards(props.cards, props.path, column, props.now);
+    const cards = columnCards(props.cards, props.path, column);
     const entries: Entry[] = [];
     const slotAt = slotIndex(column, cards);
     let at = 0;
@@ -66,8 +69,13 @@ const columns = computed(() =>
   }),
 );
 
+/** The done column says whose days it holds: `Done · today`, `Done · yesterday`, `Done · 2 Oct`;
+ * just `Done` for every day's. */
 function label(column: BoardColumn): string {
-  return column === "done" ? t("board.doneToday") : t(COLUMN_LABELS[column]);
+  const period = props.period;
+  if (column !== "done" || period === ALL) return t(COLUMN_LABELS[column]);
+  if (period === null) return t("board.doneToday");
+  return t("board.doneOn", { when: period === yesterday() ? t("day.yesterday").toLocaleLowerCase(language.value) : dayShort(period) });
 }
 
 /**
@@ -123,6 +131,7 @@ useSlide(root, order);
               :busy="busy[entry.card.id] ?? null"
               :error="errors[entry.card.id] ?? ''"
               :lifted="entry.card.id === dragging"
+              :dated="period === ALL"
               draggable
             />
           </template>

@@ -5,6 +5,7 @@
 import { clock, duration } from "./day";
 import { ago } from "./format";
 import { language, t, type Key } from "./i18n";
+import { inPeriod, type Period } from "./period";
 import { WAIT_RANK } from "./sessions";
 import type { BoardColumn, Card, Project, SessionRow, Turn } from "./types";
 
@@ -34,7 +35,7 @@ export const LANE_LIMIT = 2;
 
 /**
  * A lane on every project's board: a project's cards per column (those the search leaves) and how
- * many it did today. `idle` and `next` are true whatever the search says: it has no card in
+ * many it did in the days shown. `idle` and `next` are true whatever the search says: it has no card in
  * Claude's column at all, and its first card up next. `project` null: a folder no longer among the
  * projects (`name`: its last part), whose cards are kept but never given.
  */
@@ -63,19 +64,19 @@ export function folderName(path: string): string {
 
 /**
  * The lane of `path` (`project`: the listed project there, null for a folder no longer listed):
- * `shown`, the cards the search leaves, per column; `every`, all the cards on the board today, for
- * what the search must not change.
+ * `shown`, the cards the search leaves, per column; `every`, all the cards on the board, for what
+ * the search must not change.
  */
-export function laneOf(path: string, project: Project | null, shown: Card[], every: Card[], now: number): Lane {
+export function laneOf(path: string, project: Project | null, shown: Card[], every: Card[]): Lane {
   const mine = every.filter((card) => card.path === path);
   return {
     path,
     name: project?.name ?? folderName(path),
     project,
-    queued: columnCards(shown, path, "queued", now),
-    claude: columnCards(shown, path, "claude", now),
-    review: columnCards(shown, path, "review", now),
-    done: columnCards(shown, path, "done", now).length,
+    queued: columnCards(shown, path, "queued"),
+    claude: columnCards(shown, path, "claude"),
+    review: columnCards(shown, path, "review"),
+    done: columnCards(shown, path, "done").length,
     idle: !mine.some((card) => card.column === "claude"),
     next: project ? (mine.find((card) => card.column === "queued") ?? null) : null,
   };
@@ -88,16 +89,10 @@ const LINK_GRACE_MS = 60_000;
  * board can come before the project's new terminal does. */
 const TERMINAL_GRACE_MS = 5_000;
 
-/** The same day on the local calendar. */
-export function sameDay(a: number, b: number): boolean {
-  const x = new Date(a);
-  const y = new Date(b);
-  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
-}
-
-/** On the board today: every card but those done on an earlier day. */
-export function onBoard(card: Card, now: number): boolean {
-  return card.column !== "done" || sameDay(card.movedAt, now);
+/** On the board for the days shown (`period`): every card still to do, and those done then. Today
+ * (null), that is every card but those done on an earlier day. */
+export function onBoard(card: Card, period: Period, now: number): boolean {
+  return card.column !== "done" || inPeriod(card.movedAt, period, now);
 }
 
 /** Matches `q` (trimmed) in its title or note, case aside. */
@@ -109,10 +104,10 @@ export function cardMatches(card: Card, q: string): boolean {
 }
 
 /** A project's cards in a column, in the board's order (a card just done goes on top, and like
- * any other it can be moved from there); done: today's only. */
-export function columnCards(cards: Card[], path: string, column: BoardColumn, now: number): Card[] {
-  const found = cards.filter((card) => card.path === path && card.column === column);
-  return column === "done" ? found.filter((card) => sameDay(card.movedAt, now)) : found;
+ * any other it can be moved from there). `cards`: those on the board (`onBoard`), so the done ones
+ * are the shown days' only. */
+export function columnCards(cards: Card[], path: string, column: BoardColumn): Card[] {
+  return cards.filter((card) => card.path === path && card.column === column);
 }
 
 /**

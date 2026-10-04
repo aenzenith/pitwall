@@ -677,6 +677,7 @@
   "board.column.review": "レビュー待ち",
   "board.column.done": "完了",
   "board.doneToday": "完了 · 今日",
+  "board.doneOn": "完了 · {when}",
   "board.give": "Claude に渡す",
   "board.giveOptions": "Claude への渡し方",
   "board.giveNew": "新しい Claude タブで開始",

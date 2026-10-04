@@ -694,6 +694,7 @@
   "board.column.review": "To review",
   "board.column.done": "Done",
   "board.doneToday": "Done · today",
+  "board.doneOn": "Done · {when}",
   "board.give": "Give to Claude",
   "board.giveOptions": "Ways to give it to Claude",
   "board.giveNew": "Start in a new Claude tab",
