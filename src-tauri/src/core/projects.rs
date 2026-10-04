@@ -83,6 +83,22 @@ impl Core {
         self.notify();
     }
 
+    /// The Track page's own settings (its circuit, what the cars carry, how much moves), kept for
+    /// its next opening.
+    pub fn set_track(&self, track: TrackSettings) {
+        let settings = {
+            let mut inner = self.lock();
+            if inner.settings.track.as_ref() == Some(&track) {
+                return;
+            }
+            inner.settings.track = Some(track);
+            inner.settings.clone()
+        };
+
+        settings.save(&self.cfg.settings_file);
+        self.notify();
+    }
+
     pub fn set_project_settings(&self, path: &str, project: ProjectSettings) {
         let settings = {
             let mut inner = self.lock();

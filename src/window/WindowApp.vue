@@ -28,10 +28,11 @@ import ProjectDetail from "./ProjectDetail.vue";
 import SessionsView from "./SessionsView.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
+import TrackView from "./TrackView.vue";
 
 const filter = ref<Filter>("all");
-/** The project list, the day's timeline, Claude's sessions, the board of cards, Claude's fuel, or
- * the projects' dependencies. */
+/** The project list, the track they run on, the day's timeline, Claude's sessions, the board of
+ * cards, Claude's fuel, or the projects' dependencies. */
 const view = ref<"projects" | View>("projects");
 
 /** The sidebar's "26% left" beside Fuel: the session's share left, red when low, grey when stale. */
@@ -289,6 +290,7 @@ function server(project: Project): string {
         </button>
       </nav>
       <div class="nav today">
+        <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="view = 'track'"><Icon name="flag" /> {{ t("track.nav") }}</button>
         <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
         <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="view = 'sessions'">
           <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
@@ -313,6 +315,7 @@ function server(project: Project): string {
     </aside>
 
     <DayView v-if="view === 'day'" />
+    <TrackView v-else-if="view === 'track'" @open-project="revealProject" />
     <FuelView v-else-if="view === 'fuel'" />
     <SessionsView
       v-else-if="view === 'sessions'"

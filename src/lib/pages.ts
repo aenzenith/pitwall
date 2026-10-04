@@ -6,7 +6,7 @@ import type { Project } from "./types";
 /** The project list's filters. */
 export type Filter = "all" | "running" | "favourites" | "waiting";
 /** A page of the window other than the project list. */
-export type View = "day" | "sessions" | "board" | "fuel" | "deps";
+export type View = "track" | "day" | "sessions" | "board" | "fuel" | "deps";
 /** A sidebar entry: `add` asks for a folder, `settings` opens over the page shown. */
 export type Page = Filter | View | "add" | "settings";
 
@@ -21,12 +21,13 @@ export const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "
 export type PageEntry = {
   id: Page;
   label: Key;
-  icon: "grid" | "pulse" | "star" | "chat" | "calendar" | "sparkles" | "board" | "fuel" | "tools" | "plus" | "settings";
+  icon: "grid" | "pulse" | "star" | "chat" | "flag" | "calendar" | "sparkles" | "board" | "fuel" | "tools" | "plus" | "settings";
   test?: (p: Project) => boolean;
 };
 
 export const pages: PageEntry[] = [
   ...filters,
+  { id: "track", label: "track.nav", icon: "flag" },
   { id: "day", label: "day.nav", icon: "calendar" },
   { id: "sessions", label: "sessions.nav", icon: "sparkles" },
   { id: "board", label: "board.nav", icon: "board" },

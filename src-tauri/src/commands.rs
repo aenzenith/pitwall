@@ -7,7 +7,7 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::core::{Action, Snapshot};
 use crate::i18n::t;
-use crate::settings::{ProjectSettings, Settings};
+use crate::settings::{ProjectSettings, Settings, TrackSettings};
 use crate::{apply_shortcut, tray, AppState, POPOVER, SWITCHER};
 use tauri::Manager;
 
@@ -328,7 +328,7 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
     }
 
     // Project overrides, the list order, the shortcut keys, the projects folder, the board shown
-    // last and how it is drawn have their own commands.
+    // last, how it is drawn and the Track page's settings have their own commands.
     let mut settings = settings;
     settings.projects = before.projects;
     settings.order = before.order;
@@ -336,6 +336,7 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
     settings.projects_dir = before.projects_dir;
     settings.board_scope = before.board_scope;
     settings.board_view = before.board_view;
+    settings.track = before.track;
     state.core.set_settings(settings);
     Ok(())
 }
@@ -390,6 +391,12 @@ pub fn set_board_scope(state: State<'_, AppState>, scope: String) {
 #[tauri::command]
 pub fn set_board_view(state: State<'_, AppState>, view: String) {
     state.core.set_board_view(view);
+}
+
+/// The Track page's own settings: its circuit, what the cars carry, how much moves.
+#[tauri::command]
+pub fn set_track(state: State<'_, AppState>, track: TrackSettings) {
+    state.core.set_track(track);
 }
 
 #[tauri::command]

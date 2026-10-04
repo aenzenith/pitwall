@@ -390,6 +390,7 @@ pub fn run() {
             commands::reorder,
             commands::set_board_scope,
             commands::set_board_view,
+            commands::set_track,
             commands::set_shortcut,
             commands::suspend_shortcut,
             commands::resume_shortcut,

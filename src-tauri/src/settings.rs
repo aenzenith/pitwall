@@ -73,6 +73,30 @@ impl Default for Sounds {
     }
 }
 
+/// The Track page's own settings. The page reads them leniently (src/lib/track.ts:
+/// `trackSettings`): a value it doesn't know falls back to its default there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TrackSettings {
+    /// A circuit (`night`, `oval`, `eight`, `street`, `straight`), or `shuffle`: another one each
+    /// time the page opens.
+    pub circuit: String,
+    /// What a car carries: `code` (its project's three letters), `name`, or `hover`.
+    pub labels: String,
+    /// `full`, `calm` (half speed, short trails) or `still`.
+    pub motion: String,
+    /// Stopped projects wait in the pit, under the circuit.
+    pub pit: bool,
+    /// The lights' soft glow.
+    pub glow: bool,
+}
+
+impl Default for TrackSettings {
+    fn default() -> Self {
+        Self { circuit: "night".into(), labels: "code".into(), motion: "full".into(), pit: true, glow: true }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -108,6 +132,9 @@ pub struct Settings {
     /// How the Board page draws a project's board: `columns` or `list`. None until one is picked.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub board_view: Option<String>,
+    /// The Track page's own settings. None until one is changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track: Option<TrackSettings>,
 }
 
 impl Default for Settings {
@@ -129,6 +156,7 @@ impl Default for Settings {
             fuel_alert: true,
             board_scope: None,
             board_view: None,
+            track: None,
         }
     }
 }

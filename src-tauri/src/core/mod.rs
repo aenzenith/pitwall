@@ -26,7 +26,7 @@ use crate::ports::Reservations;
 use crate::process::{self, kill_tree};
 use crate::registry::{now_ms, same_path, Favourite, Issue, PidEntry, Registry, WindowRecord};
 use crate::resolve::PackageManager;
-use crate::settings::{ProjectSettings, Settings};
+use crate::settings::{ProjectSettings, Settings, TrackSettings};
 
 mod activity;
 mod board;

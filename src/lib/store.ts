@@ -20,6 +20,7 @@ import type {
   Snapshot,
   TerminalView,
 } from "./types";
+import type { TrackSettings } from "./track";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -247,6 +248,8 @@ export const api = {
   setBoardScope: (scope: string) => invoke("set_board_scope", { scope }),
   /** How a project's board is drawn: `columns` or `list`. */
   setBoardView: (view: string) => invoke("set_board_view", { view }),
+  /** The Track page's own settings: its circuit, what the cars carry, how much moves. */
+  setTrack: (track: TrackSettings) => invoke("set_track", { track }),
   setShortcut: (keys: string) => invoke("set_shortcut", { keys }),
   suspendShortcut: () => invoke("suspend_shortcut"),
   resumeShortcut: () => invoke("resume_shortcut"),

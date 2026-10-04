@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle";
     size?: number;
   }>(),
   { size: 15 },
@@ -47,6 +47,8 @@ withDefaults(
     <g v-else-if="name === 'tools'" transform="translate(-.5 .5)"><path transform="rotate(45 12 12)" d="M13.6.99A4.6 4.6 0 0 1 13.8 9.53V21.5a1.8 1.8 0 0 1-3.6 0V9.53A4.6 4.6 0 0 1 10.4.99V5h3.2z" /><g transform="rotate(-45 12 12)"><path d="M12 1.4v8.8M12 13.8v2.8" /><rect x="10.3" y="16.6" width="3.4" height="6.8" rx="1.7" /></g></g>
     <g v-else-if="name === 'wifi-off'"><path d="M3.5 3.5l17 17" /><path d="M8.6 16.2a5 5 0 0 1 6.8 0" /><path d="M5 12.6a10 10 0 0 1 5-2.5M14.8 10.3a10 10 0 0 1 4.2 2.3" /><path d="M12 19.5h.01" /></g>
     <g v-else-if="name === 'lock'"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></g>
+    <g v-else-if="name === 'flag'"><path d="M5 21V4" /><path d="M5 4.6c3.4-1.7 6.2 1.7 9.6.2 1.5-.7 2.9-1 4.4-.7v8.4c-1.5-.3-2.9 0-4.4.7-3.4 1.5-6.2-1.9-9.6-.2" /></g>
+    <g v-else-if="name === 'shuffle'"><path d="M4 7h3.5c5 0 5 10 10 10H20" /><path d="M4 17h3.5c1.6 0 2.7-1 3.6-2.4M14 9.4c.9-1.4 2-2.4 3.5-2.4H20" /><path d="m17.5 4.5 2.5 2.5-2.5 2.5M17.5 14.5l2.5 2.5-2.5 2.5" /></g>
     <path v-else-if="name === 'folder'" d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
   </svg>
 </template>
