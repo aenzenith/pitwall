@@ -80,7 +80,8 @@ impl Core {
     /// The sessions of `period`: a day (`YYYY-MM-DD`, local; anything else is today) or `all`.
     /// A day's are those Pitwall wrote down working or waiting then, and those whose log was
     /// made then or has its last message then; `since` is when each was last heard of in those
-    /// days.
+    /// days. With `all`, a row's time is that of the days before today: today's is the live
+    /// row's (`sessions_view`), and the page adds the two.
     pub fn sessions_history(&self, period: &str) -> SessionsView {
         let now = now_ms();
         let every = period == ALL;

@@ -232,7 +232,8 @@ export const api = {
   /** Every Claude Code session today (the Sessions page). */
   claudeSessions: () => invoke<SessionsView>("claude_sessions"),
   /** The sessions of an earlier day (`YYYY-MM-DD`) or of every day kept (`all`), each as an ended
-   * row: the Sessions page looking back. */
+   * row: the Sessions page looking back. With `all`, a row's time is the days before today's; the
+   * page adds today's from the live row. */
   claudeHistory: (period: string) => invoke<SessionsView>("claude_history", { period }),
   /** What Claude last said in a session (Markdown): read when asked, never kept. */
   lastMessage: (session: string) => invoke<string | null>("claude_last_message", { session }),

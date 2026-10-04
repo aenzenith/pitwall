@@ -409,8 +409,10 @@ impl Core {
         session_days(&events, start, until)
     }
 
-    /// The Claude sessions of every day there is a file of, by id: each one's days summed. The
-    /// hours those were made of are left out, as several days don't share a day's axis.
+    /// The Claude sessions of every day before today there is a file of, by id: each one's days
+    /// summed. Today's part is the live list's (`sessions_view`), which goes on counting it, so
+    /// it is left out here and the page adds the two. The hours those were made of are left out
+    /// too, as several days don't share a day's axis.
     pub(super) fn sessions_ever(&self, now: u64) -> HashMap<String, SessionDay> {
         let mut days: Vec<String> = self
             .activity_dir()
@@ -420,8 +422,8 @@ impl Core {
         days.sort();
 
         let mut found: HashMap<String, SessionDay> = HashMap::new();
-        for (start, end) in days.iter().filter_map(|day| day_bounds(day)).filter(|(start, _)| *start <= now) {
-            for (id, day) in self.sessions_on(start, now.min(end)) {
+        for (start, end) in days.iter().filter_map(|day| day_bounds(day)).filter(|(_, end)| *end <= now) {
+            for (id, day) in self.sessions_on(start, end) {
                 match found.get_mut(&id) {
                     Some(known) => known.add(day),
                     None => {

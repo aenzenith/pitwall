@@ -19,9 +19,9 @@ import { dragRegion } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { ALL, dayLong, type Period } from "../lib/period";
 import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, type Layout } from "../lib/sessions";
-import { api, loadSessions, now, sessions, visible } from "../lib/store";
+import { api, loadSessions, now, sessions, today, visible } from "../lib/store";
 import { tabKey } from "../lib/tabs";
-import type { SessionsView } from "../lib/types";
+import type { SessionRow, SessionsView } from "../lib/types";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionList from "./sessions/SessionList.vue";
 import SessionNotice from "./sessions/SessionNotice.vue";
@@ -61,17 +61,27 @@ async function loadHistory(): Promise<void> {
 }
 
 watch(period, () => void loadHistory());
+// Past midnight the earlier days are one more.
+watch(today, () => void loadHistory());
 
 // Back on screen, a fresh look: a day's sessions grow while Claude Code writes its logs.
 watch(visible, (on) => {
   if (on) void loadHistory();
 });
 
+/** A session's time in the days before today and its time today, added up. The hours they were made
+ * of are left out, as several days don't share a day's axis. */
+function summed(before: SessionRow["today"], day: SessionRow["today"]): SessionRow["today"] {
+  if (!before && !day) return null;
+  return { work: (before?.work ?? 0) + (day?.work ?? 0), wait: (before?.wait ?? 0) + (day?.wait ?? 0), turns: (before?.turns ?? 0) + (day?.turns ?? 0), spans: [] };
+}
+
 /**
  * What the page shows. Today: the live sessions. Looking back: the shown days' sessions, each as
- * it stands now when it is still among the live ones (its hours stay the shown days'), and with
- * every day's, the live ones the core has nothing kept of yet. Tokens are today's alone, so they
- * are left out looking back.
+ * it stands now when it is still among the live ones (its hours stay the shown day's). With every
+ * day's, a session's time is the earlier days' as the core summed them and today's from its live
+ * row, which goes on counting; the live ones the core has nothing kept of yet come too. Tokens are
+ * today's alone, so they are left out looking back.
  */
 const view = computed<SessionsView | null>(() => {
   const live = sessions.value;
@@ -79,14 +89,15 @@ const view = computed<SessionsView | null>(() => {
   const past = history.value;
   if (!past) return null;
 
+  const every = period.value === ALL;
   const current = new Map((live?.sessions ?? []).map((row) => [row.id, row]));
   const rows = past.sessions.map((row) => {
     const open = current.get(row.id);
-    return open ? { ...open, today: row.today, spend: null } : row;
+    return open ? { ...open, today: every ? summed(row.today, open.today) : row.today, spend: null } : row;
   });
-  if (period.value === ALL) {
+  if (every) {
     const known = new Set(rows.map((row) => row.id));
-    rows.push(...(live?.sessions ?? []).filter((row) => !known.has(row.id)).map((row) => ({ ...row, spend: null })));
+    rows.push(...(live?.sessions ?? []).filter((row) => !known.has(row.id)).map((row) => ({ ...row, today: summed(null, row.today), spend: null })));
   }
   return { now: past.now, hook: live?.hook ?? past.hook, sessions: rows, unlisted: rows.filter((row) => row.path === null).length };
 });
