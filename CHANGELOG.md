@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/aenzenith/pitwall/compare/v1.2.0...v1.3.0) (2026-10-04)
+
+
+### Features
+
+* **track:** a Track page, every project on a circuit ([a3170f8](https://github.com/aenzenith/pitwall/commit/a3170f8a3a6327022422449e26103190f7dcb2b9))
+
+
+### Bug Fixes
+
+* **board:** a card takes its session however late Claude lists it ([e0672c5](https://github.com/aenzenith/pitwall/commit/e0672c5c2b81cb6663f890756be2ff2458a88f06))
+* **core:** the app leaves the Claude session it was started from ([8e9db7c](https://github.com/aenzenith/pitwall/commit/8e9db7c0cb26d82474fc375ddba95e207eb3d411))
+
 ## [1.2.0](https://github.com/aenzenith/pitwall/compare/v1.1.1...v1.2.0) (2026-10-03)
 
 
