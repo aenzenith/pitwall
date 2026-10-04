@@ -37,6 +37,13 @@ export const outputRequest = ref<{ path: string; job: string } | null>(null);
  */
 export const terminalRequest = ref<{ path: string; id: number; at: number } | null>(null);
 
+/**
+ * The same, when that terminal is a board card's (the card was given to Claude in it): the Board
+ * page shows the card on its project's board, its terminal open in the card's details and the
+ * keyboard in it. Whoever shows it clears it.
+ */
+export const cardRequest = ref<{ id: string; path: string } | null>(null);
+
 /** A collapsed panel keeps only its handle and tab row; its height waits for its return. */
 export const COLLAPSED_HEIGHT = 42;
 export const outputCollapsed = ref(false);

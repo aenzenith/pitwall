@@ -30,7 +30,8 @@ const summary = computed(() => {
   return parts.join(" · ");
 });
 
-/** A click on the row: the project's VS Code window comes to the front, or opens. */
+/** A click on the row: the project's VS Code window comes to the front, or opens. With Claude
+ * waiting on you there, its waiting session comes up where it runs (the core's `open_claude`). */
 function openRow(project: Project): void {
   if (!reorder.isClick()) return;
   void (project.claude ? api.openClaude(project.path) : api.openEditor(project.path));

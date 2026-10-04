@@ -1,5 +1,7 @@
-//! A click on a Claude session (the day view, the Sessions page) brings it up where it runs. In
-//! one of Pitwall's own terminals, the main window shows that terminal. Elsewhere the project's
+//! A click on a Claude session (the day view, the Sessions and Track pages; the popover, the
+//! switcher and a notification, which name only its project: `open_claude`) brings it up where
+//! it runs. In one of Pitwall's own terminals, the main window shows that terminal (the board
+//! card it was given from, else the project's terminal panel). Elsewhere the project's
 //! window comes to the front, and that window's extension (a `reveal-claude` command) shows the
 //! Claude Code tab or the terminal the session runs in; a finished session opens again in a
 //! Claude Code tab. Anything that can't be proven safe only brings the window up: a session
@@ -89,6 +91,22 @@ impl Core {
         let (path, session) = (path.to_string(), session.to_string());
 
         thread::spawn(move || core.reveal_now(&path, &session));
+    }
+
+    /// A project whose Claude waits on you, opened where no one session is named (the popover,
+    /// the switcher, a notification's click): the session that began to wait last comes up
+    /// where it runs, as `reveal_claude` brings it. With none to name (its turn was read from a
+    /// log no running session owns), the project's editor window.
+    pub fn open_claude(self: &Arc<Self>, path: &str) {
+        let waiting = self.lock().claude_sessions.get(path).and_then(|sessions| {
+            let waiting = sessions.iter().filter(|session| session.phase == SessionPhase::Waiting);
+            waiting.max_by_key(|session| session.turn.map(|turn| turn.at)).map(|session| session.id.clone())
+        });
+
+        match waiting {
+            Some(session) => self.reveal_claude(path, &session),
+            None => self.open_editor(path),
+        }
     }
 
     fn reveal_now(&self, path: &str, session: &str) {

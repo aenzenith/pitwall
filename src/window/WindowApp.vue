@@ -13,12 +13,13 @@ import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
 import { filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
-import { outputRequest, terminalRequest } from "../lib/panel";
+import { onBoard } from "../lib/board";
+import { cardRequest, outputRequest, terminalRequest } from "../lib/panel";
 import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
-import { api, connectBoard, connectDeps, connectFuel, connectSessions, deps, fuel, loadBoard, loadSessions, now, snapshot, visible } from "../lib/store";
+import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, visible } from "../lib/store";
 import type { Project } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
@@ -218,11 +219,30 @@ function revealOutput(path: string, job: string): void {
   outputRequest.value = { path, job };
 }
 
-/** A Claude session in one of Pitwall's terminals brought up: the project, its terminal panel
- * open on that tab, the keyboard in it (TerminalPanel takes the request). */
-function revealTerminal(path: string, id: number): void {
-  revealProject(path);
-  terminalRequest.value = { path, id, at: Date.now() };
+/**
+ * A Claude session in one of Pitwall's terminals brought up, from whatever page (or the popover,
+ * the switcher, a notification): it shows where its work was started. Given to Claude from a
+ * card: that card on its project's board, its terminal open in the card's details (BoardView
+ * takes the request). Opened in a project's terminal panel: the project, its panel open on that
+ * tab (TerminalPanel takes the request). Either way the keyboard is in it.
+ */
+async function revealTerminal(path: string, id: number): Promise<void> {
+  settingsOpen.value = false;
+  // The board's cards, to know whether one runs in that terminal.
+  if (!boardLink) boardLink = connectBoard();
+  await boardLink.then(
+    () => undefined,
+    () => undefined,
+  );
+  const session = sessions.value?.sessions.find((row) => row.origin.kind === "pitwall" && row.origin.terminal === id)?.id;
+  const card = board.value?.find((entry) => onBoard(entry, null, now.value) && (entry.terminal === id || (session !== undefined && entry.session === session)));
+  if (card) {
+    cardRequest.value = { id: card.id, path: card.path };
+    view.value = "board";
+  } else {
+    revealProject(path);
+    terminalRequest.value = { path, id, at: Date.now() };
+  }
 }
 
 /** The Sessions page's "Open a Claude terminal": one, in the project selected in the list. */
@@ -239,7 +259,7 @@ onMounted(async () => {
   // A click on the 90 % notification: the Fuel page.
   unlistenFuelReveal = await listen("reveal-fuel", () => (view.value = "fuel"));
   // Bringing up a Claude session that runs in one of Pitwall's terminals: that terminal.
-  unlistenTerminal = await listen<{ path: string; id: number }>("reveal-terminal", (event) => revealTerminal(event.payload.path, event.payload.id));
+  unlistenTerminal = await listen<{ path: string; id: number }>("reveal-terminal", (event) => void revealTerminal(event.payload.path, event.payload.id));
   // `/` in the switcher: one of the sidebar's pages.
   unlistenPage = await listen<{ page: Page }>("reveal-page", (event) => revealPage(event.payload.page));
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.

@@ -23,7 +23,7 @@ import { SETTLE_MS, useCardDrag, type DropTarget } from "../lib/cardDrag";
 import { useCardImages } from "../lib/cardImages";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
-import { detailTerminalHeight } from "../lib/panel";
+import { cardRequest, detailTerminalHeight } from "../lib/panel";
 import { ALL as EVERY_DAY, type Period } from "../lib/period";
 import { dragRegion, keys, primary } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
@@ -258,6 +258,34 @@ watch(
   },
   { immediate: true },
 );
+
+/** A card whose Claude session was brought up from elsewhere (another page, the popover, a
+ * notification): its project's board, the card selected whatever the search or the days shown
+ * hid, its terminal open in its details and the keyboard in it, as the card's own button does
+ * (`reveal`). */
+function takeRequest(): void {
+  const request = cardRequest.value;
+  if (!request) return;
+  cardRequest.value = null;
+  if (scope.value !== request.path) show(request.path);
+  // After the board's own pick of a card.
+  void nextTick(() => {
+    const card = byId.value.get(request.id);
+    if (!card) return;
+    if (!shownIds.value.has(card.id)) {
+      query.value = "";
+      period.value = null;
+    }
+    selectedId.value = card.id;
+    const terminal = terminalOf(card);
+    if (!terminal) return;
+    opened.value = card.id;
+    void nextTick(() => focusView(terminal.id));
+  });
+}
+
+watch(cardRequest, takeRequest);
+onMounted(takeRequest);
 
 /* ---------- the selected card's details ---------- */
 

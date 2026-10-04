@@ -305,10 +305,12 @@ pub fn open_editor(app: AppHandle, state: State<'_, AppState>, path: String) {
     state.core.open_editor(&path);
 }
 
+/// A project whose Claude waits on you, opened from the popover or the switcher: its waiting
+/// session comes up where it runs (`Core::open_claude`).
 #[tauri::command]
 pub fn open_claude(app: AppHandle, state: State<'_, AppState>, path: String) {
     step_aside(&app);
-    state.core.open_editor(&path);
+    state.core.open_claude(&path);
 }
 
 /// Brings a Claude session up where it runs: `path` is its project, or the folder it runs in when

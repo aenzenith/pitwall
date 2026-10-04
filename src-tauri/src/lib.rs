@@ -131,7 +131,8 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
     }
 }
 
-/// A system notification; clicking it opens the project and counts the turn as seen.
+/// A system notification; clicking it brings the project's waiting Claude session up where it
+/// runs (without one, the project's editor window) and counts the turn as seen.
 pub(crate) fn notify(app: &AppHandle, path: String, title: String, body: String) {
     let image = claude_mark(app);
     notify::post(path, title, body, image.as_deref().map(std::path::Path::new));
@@ -240,7 +241,7 @@ pub fn run() {
                     tray::show_main(&clicks);
                     let _ = clicks.emit("reveal-fuel", ());
                 } else if let Some(state) = clicks.try_state::<AppState>() {
-                    state.core.open_editor(&path);
+                    state.core.open_claude(&path);
                 }
             });
 
