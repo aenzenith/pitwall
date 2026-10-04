@@ -696,6 +696,8 @@
   "board.imagesPrompt": "Las imágenes a las que se refiere el texto de arriba son estos archivos. Mira cada una antes de empezar:",
   "board.images": "Imágenes",
   "board.image": "Imagen {n}",
+  "board.imagePrevious": "Imagen anterior",
+  "board.imageNext": "Imagen siguiente",
   "board.untitledSession": "Sesión sin nombre",
   "board.giveNext": "Dar la siguiente",
   "board.giveNextTitle": "Dar «{title}» a Claude",

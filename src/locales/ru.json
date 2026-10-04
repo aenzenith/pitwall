@@ -726,6 +726,8 @@
   "board.imagesPrompt": "Изображения, на которые ссылается текст выше, — это следующие файлы. Посмотри каждое, прежде чем начать:",
   "board.images": "Изображения",
   "board.image": "Изображение {n}",
+  "board.imagePrevious": "Предыдущее изображение",
+  "board.imageNext": "Следующее изображение",
   "board.untitledSession": "Сессия без названия",
   "board.giveNext": "Отдать следующую",
   "board.giveNextTitle": "Отдать «{title}» Claude",

@@ -675,6 +675,8 @@
   "board.imagesPrompt": "上文提到的图片是以下文件。开始之前请逐一查看：",
   "board.images": "图片",
   "board.image": "图片 {n}",
+  "board.imagePrevious": "上一张图片",
+  "board.imageNext": "下一张图片",
   "board.untitledSession": "未命名会话",
   "board.giveNext": "交出下一张",
   "board.giveNextTitle": "把“{title}”交给 Claude",

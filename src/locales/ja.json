@@ -675,6 +675,8 @@
   "board.imagesPrompt": "上の文章が指す画像は次のファイルです。始める前にそれぞれ確認してください：",
   "board.images": "画像",
   "board.image": "画像 {n}",
+  "board.imagePrevious": "前の画像",
+  "board.imageNext": "次の画像",
   "board.untitledSession": "無題のセッション",
   "board.giveNext": "次を渡す",
   "board.giveNextTitle": "「{title}」を Claude に渡す",

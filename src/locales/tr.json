@@ -680,6 +680,8 @@
   "board.imagesPrompt": "Yukarıdaki metnin andığı görseller şu dosyalardır. Başlamadan önce her birine bak:",
   "board.images": "Görseller",
   "board.image": "Görsel {n}",
+  "board.imagePrevious": "Önceki görsel",
+  "board.imageNext": "Sonraki görsel",
   "board.untitledSession": "Adsız oturum",
   "board.giveNext": "Sıradakini ver",
   "board.giveNextTitle": "“{title}” kartını Claude'a ver",

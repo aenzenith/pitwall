@@ -1,21 +1,36 @@
 <script setup lang="ts">
+import { ref } from "vue";
+
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
 import type { Shot } from "../../lib/cardImages";
 import { t } from "../../lib/i18n";
+import ImageLightbox from "./ImageLightbox.vue";
 
 /**
- * The images of a card's note, small, each with its number (the `n` of `[Image #n]`). `removable`:
- * each has a button that takes it out of the note (the dialog's).
+ * The images of a card's note, small, each with its number (the `n` of `[Image #n]`). A click on
+ * one shows it large, over the window. `removable`: each has a button that takes it out of the
+ * note (the dialog's).
  */
 defineProps<{ images: Shot[]; removable?: boolean }>();
 const emit = defineEmits<{ remove: [n: number] }>();
+
+const strip = ref<HTMLElement | null>(null);
+/** The image shown large (its number), or none. */
+const opened = ref<number | null>(null);
+
+/** The small image of `n`: where its large one grows from and goes back to. */
+function thumb(n: number): HTMLElement | null {
+  return strip.value?.querySelector<HTMLElement>(`[data-n="${n}"] img`) ?? null;
+}
 </script>
 
 <template>
-  <ul class="shots" :aria-label="t('board.images')">
-    <li v-for="image in images" :key="image.n" class="shot" :title="t('board.image', { n: image.n })">
-      <img v-if="image.src" :src="image.src" :alt="t('board.image', { n: image.n })" draggable="false" />
+  <ul ref="strip" class="shots" :aria-label="t('board.images')">
+    <li v-for="image in images" :key="image.n" class="shot" :data-n="image.n" :title="t('board.image', { n: image.n })">
+      <button v-if="image.src" type="button" class="shot-open" :aria-label="t('board.image', { n: image.n })" @click="opened = image.n">
+        <img :src="image.src" alt="" draggable="false" />
+      </button>
       <Spinner v-else :size="11" />
       <span class="shot-n" aria-hidden="true">{{ image.n }}</span>
       <button v-if="removable" type="button" class="shot-remove" :aria-label="t('board.dialog.removeImage', { n: image.n })" @click="emit('remove', image.n)">
@@ -23,6 +38,7 @@ const emit = defineEmits<{ remove: [n: number] }>();
       </button>
     </li>
   </ul>
+  <ImageLightbox v-if="opened !== null" :images="images" :start="opened" :thumb="thumb" @close="opened = null" />
 </template>
 
 <style scoped>
@@ -46,9 +62,29 @@ const emit = defineEmits<{ remove: [n: number] }>();
   background: var(--bg-input);
   color: var(--text-subtle);
   overflow: hidden;
+  transition: border-color 0.12s ease;
+}
+
+.shot:hover {
+  border-color: #3f4550;
+}
+
+/* The whole tile opens its image. */
+.shot-open {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* Inside the tile, which cuts what is past its edge. */
+.shot-open:focus-visible {
+  outline-offset: -2px;
 }
 
 .shot img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -56,6 +92,7 @@ const emit = defineEmits<{ remove: [n: number] }>();
 
 /* Its number, as the note writes it. */
 .shot-n {
+  pointer-events: none;
   position: absolute;
   left: 3px;
   bottom: 3px;
