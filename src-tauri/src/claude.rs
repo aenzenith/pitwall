@@ -321,6 +321,35 @@ fn read_file_tail(file: &Path, size: u64) -> Option<Verdict> {
     scan_tail(file, size, |lines| read_tail(lines).map(|verdict| Verdict { title: read_title(lines), ..verdict }))
 }
 
+/// All that is read of an earlier day's session, from its log's last lines: its name, the folder
+/// it runs in, and when it last said or was told something.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LogBrief {
+    pub title: Option<String>,
+    pub cwd: Option<String>,
+    /// The time on the conversation's last line. The file's own time is no stand-in: a session
+    /// only opened again writes to its log too.
+    pub at: Option<u64>,
+}
+
+/// The brief of the session logged in `file`: its last line of the conversation itself
+/// (side-chain and meta entries are skipped) tells the folder and the time, the same lines the
+/// name. Nothing of what was said is read. `None` when no line tells.
+pub fn log_brief(file: &Path, size: u64) -> Option<LogBrief> {
+    scan_tail(file, size, |lines| {
+        let (cwd, at) = lines.iter().rev().find_map(|line| {
+            let entry = serde_json::from_str::<Value>(line.trim()).ok()?;
+            let flag = |key: &str| entry.get(key).and_then(Value::as_bool).unwrap_or(false);
+            if !matches!(entry.get("type").and_then(Value::as_str), Some("user") | Some("assistant")) || flag("isSidechain") || flag("isMeta") {
+                return None;
+            }
+            let text = |key: &str| entry.get(key).and_then(Value::as_str);
+            Some((text("cwd").map(str::to_string), text("timestamp").and_then(parse_iso_ms)))
+        })?;
+        Some(LogBrief { title: read_title(lines), cwd, at })
+    })
+}
+
 /// A session log as last read.
 struct Log {
     modified: SystemTime,

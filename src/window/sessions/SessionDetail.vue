@@ -9,6 +9,7 @@ import { ago, editorName } from "../../lib/format";
 import type { Shot } from "../../lib/cardImages";
 import { compactText, moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
+import { stamp, type Period } from "../../lib/period";
 import { dragRegion, isMac, isWindows } from "../../lib/platform";
 import { endedAt, lastActive, modelsText, runsElsewhere, sessionTerminal, sessionTitle, unlinkedEditor } from "../../lib/sessions";
 import { snapshot } from "../../lib/store";
@@ -29,7 +30,9 @@ import SessionTerminal from "./SessionTerminal.vue";
  * project); `error`: why adding its folder failed; `terminal`: the Pitwall terminal to show, as
  * the caller knows it (a board card's; null: none), left out: the one its origin names; `note`:
  * a board card's note, shown once its work is over, with `images`, the images it names;
- * `lastMessage`: what Claude last said in it (Markdown). `hold`: the keyboard is in its terminal.
+ * `lastMessage`: what Claude last said in it (Markdown); `period`: the days the page shows (left
+ * out: today), whose hours its day is, and looking back its tokens, today's alone, are left out.
+ * `hold`: the keyboard is in its terminal.
  */
 const props = defineProps<{
   row: SessionRow;
@@ -40,6 +43,7 @@ const props = defineProps<{
   note?: string;
   images?: Shot[];
   lastMessage?: string;
+  period?: Period;
 }>();
 const emit = defineEmits<{ markSeen: []; hold: [on: boolean] }>();
 
@@ -89,7 +93,10 @@ const cardSub = computed(() => {
     }
     case "ended": {
       const at = endedAt(row);
-      return at ? t("sessions.card.endedAt", { time: clock(at) }) : "";
+      if (!at) return "";
+      // On another day, the day goes with the time.
+      const when = stamp(at, now);
+      return when === clock(at) ? t("sessions.card.endedAt", { time: when }) : t("sessions.status.ended", { time: when });
     }
   }
 });
@@ -176,10 +183,10 @@ const fuel = computed(() => {
         <CardImages v-if="images?.length" :images="images" />
       </section>
 
-      <!-- Today's hours are kept for the listed projects only. -->
-      <SessionDay v-if="row.today" :row="row" :now="now" />
+      <!-- The hours are kept for the listed projects only. -->
+      <SessionDay v-if="row.today" :row="row" :now="now" :period="period ?? null" />
 
-      <section class="block" :aria-label="t('fuel.title')">
+      <section v-if="!period" class="block" :aria-label="t('fuel.title')">
         <div class="section-label">{{ t("fuel.title") }}</div>
         <template v-if="fuel">
           <div class="fuel-line">

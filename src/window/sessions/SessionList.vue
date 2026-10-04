@@ -12,9 +12,10 @@ import OriginLabel from "./OriginLabel.vue";
  * The sessions, section by section, as one Tab stop (lib/rows): ↑/↓, Home and End move, ↵
  * brings the session up, Space marks its project seen, ⌘↵ (Ctrl+Enter) opens the project, ⌘C
  * (Ctrl+C) copies the command that resumes it. `hold` says when the pointer or the keyboard is on
- * the list, so the page keeps its order still meanwhile.
+ * the list, so the page keeps its order still meanwhile. `plain`: the rows without their tokens
+ * (today's alone, so left out when the page looks back).
  */
-const props = defineProps<{ layout: Layout; rows: Map<string, SessionRow>; selected: string | null; now: number; label: string }>();
+const props = defineProps<{ layout: Layout; rows: Map<string, SessionRow>; selected: string | null; now: number; label: string; plain?: boolean }>();
 const emit = defineEmits<{
   select: [id: string];
   bringUp: [id: string];
@@ -76,7 +77,8 @@ function onFocusIn(): void {
 const groups = computed(() =>
   props.layout.map((group) => ({
     section: group.section,
-    label: `${t(SECTION_LABELS[group.section])} · ${group.ids.length}`,
+    // Looking back, the ended ones didn't end today.
+    label: `${t(props.plain && group.section === "ended" ? "sessions.filter.endedPast" : SECTION_LABELS[group.section])} · ${group.ids.length}`,
     items: group.ids.flatMap((id) => {
       const row = props.rows.get(id);
       return row ? [{ id, row, title: sessionTitle(row), status: statusLine(row, props.now), spend: spendText(row.spend, language.value) }] : [];
@@ -96,7 +98,7 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
 
 <template>
   <span id="session-keys" class="sr-only">{{ keyHint() }}</span>
-  <div class="grid" role="grid" :aria-label="label" aria-describedby="session-keys">
+  <div :class="['grid', { plain }]" role="grid" :aria-label="label" aria-describedby="session-keys">
     <div
       class="rows"
       role="rowgroup"
@@ -129,8 +131,11 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
             <span class="meta">
               <span class="project">{{ item.row.project }}</span>
               <span v-if="!item.row.path" class="outside">{{ t("sessions.outside") }}</span>
-              <span aria-hidden="true">·</span>
-              <OriginLabel :origin="item.row.origin" :project="item.row.project" />
+              <!-- Where an ended one ran, when that is known: of an earlier day's it isn't. -->
+              <template v-if="item.row.phase !== 'ended' || item.row.origin.kind !== 'unknown'">
+                <span aria-hidden="true">·</span>
+                <OriginLabel :origin="item.row.origin" :project="item.row.project" />
+              </template>
             </span>
           </span>
           <span :class="['status', item.status.tone]" role="gridcell">{{ item.status.text }}</span>
@@ -164,7 +169,7 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
 .srow {
   display: grid;
   /* Fixed outer columns, so every row's status starts at the same place. */
-  grid-template-columns: 16px minmax(0, 1.35fr) minmax(0, 1fr) 156px;
+  grid-template-columns: 16px minmax(0, 1.35fr) minmax(0, 1fr) var(--spend-column, 156px);
   grid-template-areas: "mark names status spend";
   gap: 12px;
   align-items: center;
@@ -314,6 +319,15 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Without the tokens, their column's room goes to the status. */
+.plain {
+  --spend-column: 0px;
+}
+
+.plain .spend {
+  display: none;
 }
 
 /* Narrower: no spend (the details have it). */

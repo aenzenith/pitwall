@@ -3,17 +3,20 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import { clock, clockRange, duration, hourTicks, pct } from "../../lib/day";
 import { t } from "../../lib/i18n";
+import { ALL, periodLabel, type Period } from "../../lib/period";
 import { sessionRange } from "../../lib/sessions";
 import type { SessionRow } from "../../lib/types";
 
 /** A session's day: its work (solid) and its waits on you (hatched) on the hours around them,
- * and what they add up to. */
-const props = defineProps<{ row: SessionRow; now: number }>();
+ * and what they add up to. `period`: the days shown (null: today); every day's has the sums
+ * alone, no hours to draw them on. */
+const props = withDefaults(defineProps<{ row: SessionRow; now: number; period?: Period }>(), { period: null });
 
 const today = computed(() => props.row.today);
 const spans = computed(() => today.value?.spans ?? []);
-/** Still running: the hours reach now, and now is marked. */
-const live = computed(() => props.row.phase !== "ended");
+/** Still running, today: the hours reach now, and now is marked. */
+const live = computed(() => props.period === null && props.row.phase !== "ended");
+const label = computed(() => periodLabel(props.period));
 const range = computed(() => sessionRange(spans.value, props.now, live.value));
 
 /** The hour row's width, so labels are spaced to fit and step aside for now. */
@@ -67,8 +70,8 @@ const stats = computed(() => {
 </script>
 
 <template>
-  <section class="block" :aria-label="t('day.today')">
-    <div class="section-label">{{ t("day.today") }}</div>
+  <section class="block" :aria-label="label">
+    <div class="section-label">{{ label }}</div>
 
     <template v-if="range">
       <div class="track" role="img" :aria-label="summary">
@@ -83,7 +86,7 @@ const stats = computed(() => {
         }}</span>
       </div>
     </template>
-    <p v-else class="none">{{ t("sessions.day.none") }}</p>
+    <p v-else-if="period !== ALL" class="none">{{ t("sessions.day.none") }}</p>
 
     <dl v-if="stats.length" class="stats" :style="{ '--columns': stats.length === 4 ? 2 : 3 }">
       <div v-for="stat in stats" :key="stat.key" class="stat">

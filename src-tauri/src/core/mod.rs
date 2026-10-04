@@ -32,6 +32,7 @@ mod activity;
 mod board;
 mod claude_state;
 mod dependencies;
+mod history;
 mod jobs;
 mod open;
 mod output;

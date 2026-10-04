@@ -362,6 +362,7 @@ pub fn run() {
             commands::open_extension_page,
             commands::day_summary,
             commands::claude_sessions,
+            commands::claude_history,
             commands::claude_last_message,
             commands::play_sound,
             commands::open_terminal,

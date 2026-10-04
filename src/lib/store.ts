@@ -227,6 +227,9 @@ export const api = {
   revealClaude: (path: string, session: string) => invoke("reveal_claude", { path, session }),
   /** Every Claude Code session today (the Sessions page). */
   claudeSessions: () => invoke<SessionsView>("claude_sessions"),
+  /** The sessions of an earlier day (`YYYY-MM-DD`) or of every day kept (`all`), each as an ended
+   * row: the Sessions page looking back. */
+  claudeHistory: (period: string) => invoke<SessionsView>("claude_history", { period }),
   /** What Claude last said in a session (Markdown): read when asked, never kept. */
   lastMessage: (session: string) => invoke<string | null>("claude_last_message", { session }),
   /** Every listed project's dependencies (the Garage page). */

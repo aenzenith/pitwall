@@ -2,11 +2,12 @@
 // its status line says, where it runs, its spend and its hours. No component state; what reads
 // the language (`t`, `clock`, `duration`) follows it.
 
-import { clock, duration, HOUR, type TimeRange } from "./day";
+import { duration, HOUR, type TimeRange } from "./day";
 import { ago, editorName } from "./format";
 import { compactText, modelName, moneyText } from "./fuel";
 import { fuzzy } from "./fuzzy";
 import { t, type Key } from "./i18n";
+import { stamp } from "./period";
 import type { Project, SessionOrigin, SessionRow, SessionSpan, TerminalView, Turn } from "./types";
 
 /** The list's sections, top to bottom. `open`: running, nothing going on, nothing unseen. */
@@ -140,7 +141,8 @@ function lasting(ms: number): string {
   return duration(Math.max(ms, 1));
 }
 
-/** The row's status: `Bash wants permission · 3 min`, `Working for 6 min`, `Ended · 19:12`. */
+/** The row's status: `Bash wants permission · 3 min`, `Working for 6 min`, `Ended · 19:12` (with
+ * its day, when that isn't today: `Ended · 2 Oct 19:12`). */
 export function statusLine(row: SessionRow, now: number): Status {
   switch (row.phase) {
     case "waiting": {
@@ -164,7 +166,7 @@ export function statusLine(row: SessionRow, now: number): Status {
     }
     case "ended": {
       const at = endedAt(row);
-      return { text: at ? t("sessions.status.ended", { time: clock(at) }) : t("sessions.status.endedNow"), tone: "quiet" };
+      return { text: at ? t("sessions.status.ended", { time: stamp(at, now) }) : t("sessions.status.endedNow"), tone: "quiet" };
     }
   }
 }

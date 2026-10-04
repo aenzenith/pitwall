@@ -148,6 +148,15 @@ pub async fn claude_sessions(app: AppHandle) -> Result<crate::core::SessionsView
     .map_err(|error| error.to_string())
 }
 
+/// The Sessions page looking back: the sessions of an earlier day (`YYYY-MM-DD`) or of every day
+/// there is something kept of (`all`). It goes through Claude Code's log folders, so it runs off
+/// the main thread.
+#[tauri::command]
+pub async fn claude_history(app: AppHandle, period: String) -> Result<crate::core::SessionsView, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.sessions_history(&period)).await.map_err(|error| error.to_string())
+}
+
 /// What Claude last said in a session, for its details (the Sessions page's, a board card's):
 /// read from its log off the main thread, never kept.
 #[tauri::command]

@@ -11,27 +11,85 @@ const listedOnly = ref(false);
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue";
 
+import PeriodPicker from "../components/PeriodPicker.vue";
 import Spinner from "../components/Spinner.vue";
-import { t } from "../lib/i18n";
+import { t, type Key } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
 import { dragRegion } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
+import { ALL, dayLong, type Period } from "../lib/period";
 import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, type Layout } from "../lib/sessions";
-import { api, loadSessions, now, sessions } from "../lib/store";
+import { api, loadSessions, now, sessions, visible } from "../lib/store";
 import { tabKey } from "../lib/tabs";
+import type { SessionsView } from "../lib/types";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionList from "./sessions/SessionList.vue";
 import SessionNotice from "./sessions/SessionNotice.vue";
 
-/** Every Claude Code session today, live. `claudeProject`: where "Open a Claude terminal" would
- * open one (the project list's selection), if anywhere. */
+/** Every Claude Code session today, live; or, looking back, those of an earlier day or of every
+ * day there is something kept of. `claudeProject`: where "Open a Claude terminal" would open one
+ * (the project list's selection), if anywhere. */
 defineProps<{ claudeProject: string | null }>();
 const emit = defineEmits<{ openProject: [path: string]; openSettings: []; openClaude: [] }>();
 
 /** The least an action's spinner shows, so one the core answers at once still shows. */
 const MIN_SPIN_MS = 400;
 
-const view = computed(() => sessions.value);
+/* ---------- which days ---------- */
+
+/** The days shown: today (null), an earlier day, or every day. Today again each time the page
+ * opens. */
+const period = ref<Period>(null);
+
+/** The shown days' sessions as the core last told them (`claude_history`), each an ended row;
+ * null until it has. The last answer stays while the next is on its way. */
+const history = ref<SessionsView | null>(null);
+let asked = 0;
+
+async function loadHistory(): Promise<void> {
+  const wanted = period.value;
+  if (wanted === null) return;
+  const ask = ++asked;
+  let found: SessionsView;
+  try {
+    found = await api.claudeHistory(wanted);
+  } catch {
+    // A core that can't tell them shows none.
+    found = { now: Date.now(), hook: true, sessions: [], unlisted: 0 };
+  }
+  if (ask === asked) history.value = found;
+}
+
+watch(period, () => void loadHistory());
+
+// Back on screen, a fresh look: a day's sessions grow while Claude Code writes its logs.
+watch(visible, (on) => {
+  if (on) void loadHistory();
+});
+
+/**
+ * What the page shows. Today: the live sessions. Looking back: the shown days' sessions, each as
+ * it stands now when it is still among the live ones (its hours stay the shown days'), and with
+ * every day's, the live ones the core has nothing kept of yet. Tokens are today's alone, so they
+ * are left out looking back.
+ */
+const view = computed<SessionsView | null>(() => {
+  const live = sessions.value;
+  if (period.value === null) return live;
+  const past = history.value;
+  if (!past) return null;
+
+  const current = new Map((live?.sessions ?? []).map((row) => [row.id, row]));
+  const rows = past.sessions.map((row) => {
+    const open = current.get(row.id);
+    return open ? { ...open, today: row.today, spend: null } : row;
+  });
+  if (period.value === ALL) {
+    const known = new Set(rows.map((row) => row.id));
+    rows.push(...(live?.sessions ?? []).filter((row) => !known.has(row.id)).map((row) => ({ ...row, spend: null })));
+  }
+  return { now: past.now, hook: live?.hook ?? past.hook, sessions: rows, unlisted: rows.filter((row) => row.path === null).length };
+});
 const all = computed(() => view.value?.sessions ?? []);
 const byId = computed(() => new Map(all.value.map((row) => [row.id, row])));
 
@@ -52,6 +110,8 @@ const counts = computed(() => {
 });
 
 const current = computed(() => FILTERS.find((f) => f.id === filter.value) ?? FILTERS[0]);
+/** A tab's name; looking back, the ended ones didn't end today. */
+const filterLabel = (f: (typeof FILTERS)[number]): string => t(f.id === "ended" && period.value !== null ? "sessions.filter.endedPast" : f.label);
 const fresh = computed(() => layout(pool.value, current.value.sections));
 
 /**
@@ -178,7 +238,13 @@ function rowMenu(event: MouseEvent, id: string): void {
 
 /* ---------- text ---------- */
 
-const subtitle = computed(() => t(view.value && !view.value.hook ? "sessions.subtitleLogs" : "sessions.subtitle"));
+const subtitle = computed(() => {
+  if (period.value !== null) return t("sessions.subtitleOn", { when: period.value === ALL ? t("period.all") : dayLong(period.value) });
+  return t(view.value && !view.value.hook ? "sessions.subtitleLogs" : "sessions.subtitle");
+});
+
+/** No session at all in the days shown. */
+const emptyTitle = computed<Key>(() => (period.value === null ? "sessions.empty.title" : period.value === ALL ? "sessions.empty.titleAll" : "sessions.empty.titlePast"));
 
 const noneText = computed(() => {
   if (q.value) return t("sessions.none.search");
@@ -188,9 +254,9 @@ const noneText = computed(() => {
     case "working":
       return t("sessions.none.working");
     case "ended":
-      return t("sessions.none.ended");
+      return t(period.value === null ? "sessions.none.ended" : "sessions.none.endedPast");
     default:
-      return t("sessions.none.listed");
+      return t(period.value === null ? "sessions.none.listed" : "sessions.none.listedPast");
   }
 });
 
@@ -210,12 +276,13 @@ onMounted(() => void loadSessions());
 <template>
   <div class="sessions">
     <main class="column">
-      <!-- Its heading and free space drag the window; the search box stays clickable. -->
+      <!-- Its heading and free space drag the window; the days and the search box stay clickable. -->
       <header class="bar" :data-tauri-drag-region="dragRegion">
         <div class="heading">
           <span class="title">{{ t("sessions.title") }}</span>
           <span class="subtitle">{{ subtitle }}</span>
         </div>
+        <PeriodPicker v-model="period" />
         <label class="sr-only" for="session-search">{{ t("sessions.search") }}</label>
         <input id="session-search" v-model="query" type="search" :placeholder="t('sessions.search')" @keydown.down.prevent="focusSelected" />
       </header>
@@ -231,12 +298,12 @@ onMounted(() => void loadSessions());
             :aria-selected="filter === f.id"
             :tabindex="filter === f.id ? 0 : -1"
             :class="{ on: filter === f.id }"
-            :title="t(f.label)"
+            :title="filterLabel(f)"
             @click="filter = f.id"
             @keydown="onTabKey($event, i)"
           >
             <span v-if="f.id !== 'all'" :class="['tab-mark', f.id]" aria-hidden="true"></span>
-            <span :class="['tab-label', { markable: f.id !== 'all' }]">{{ t(f.label) }}</span>
+            <span :class="['tab-label', { markable: f.id !== 'all' }]">{{ filterLabel(f) }}</span>
             <span v-if="view" :class="['tab-count', { hot: f.id === 'waiting' && counts.waiting > 0 }]">{{ counts[f.id] }}</span>
           </button>
         </div>
@@ -261,9 +328,9 @@ onMounted(() => void loadSessions());
             <span>{{ t("sessions.loading") }}</span>
           </div>
 
-          <SessionNotice v-else-if="!all.length" :tag="t('sessions.empty.tag')" :title="t('sessions.empty.title')">
-            {{ t("sessions.empty.body") }}
-            <template v-if="claudeProject" #action>
+          <SessionNotice v-else-if="!all.length" :tag="t('sessions.empty.tag')" :title="t(emptyTitle)">
+            {{ t(period === null ? "sessions.empty.body" : "sessions.empty.bodyPast") }}
+            <template v-if="claudeProject && period === null" #action>
               <button type="button" class="control" :title="t('sessions.empty.openClaudeTitle', { project: claudeProject })" @click="emit('openClaude')">
                 {{ t("sessions.empty.openClaude") }}
               </button>
@@ -277,7 +344,8 @@ onMounted(() => void loadSessions());
               :rows="byId"
               :selected="selectedId"
               :now="now"
-              :label="t(current.label)"
+              :label="filterLabel(current)"
+              :plain="period !== null"
               @select="selectedId = $event"
               @bring-up="bringUp"
               @mark-seen="markSeen"
@@ -301,6 +369,7 @@ onMounted(() => void loadSessions());
       :others="others"
       :error="addError?.id === selected.id ? addError.text : ''"
       :last-message="lastMessage"
+      :period="period"
       @mark-seen="markSeen(selected.id)"
       @hold="hold('terminal', $event)"
     />
@@ -334,6 +403,18 @@ onMounted(() => void loadSessions());
   align-items: center;
   gap: 12px;
   padding: 0 20px;
+  container-type: inline-size;
+}
+
+/* Without room for the days' tabs beside the search, one button holds them (PeriodPicker). */
+@container (max-width: 760px) {
+  .bar :deep(.period-full) {
+    display: none;
+  }
+
+  .bar :deep(.period-compact) {
+    display: inline-flex;
+  }
 }
 
 .heading {

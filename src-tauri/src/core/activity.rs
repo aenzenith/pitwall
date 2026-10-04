@@ -87,6 +87,22 @@ pub(super) struct SessionDay {
     pub end: u64,
 }
 
+impl SessionDay {
+    /// The same session's part in a later day, added to this one: the sums of both, under the
+    /// later one's name and project.
+    fn add(&mut self, other: SessionDay) {
+        self.work += other.work;
+        self.wait += other.wait;
+        self.turns += other.turns;
+        self.spans.extend(other.spans);
+        if other.end >= self.end {
+            self.end = other.end;
+            self.path = other.path;
+            self.title = other.title.or(self.title.take());
+        }
+    }
+}
+
 /// The day files' events as last read, by the files' size and modification time: read again
 /// only when one changed.
 #[derive(Default)]
@@ -381,36 +397,80 @@ impl Core {
             *cache = DayCache { stamps, events };
         }
 
-        let day = fold_day(&cache.events, start, now.max(start));
-        let mut found = HashMap::new();
+        session_days(&cache.events, start, now.max(start))
+    }
 
-        for (path, built) in day.projects {
-            for session in built.sessions.into_iter().filter(|s| s.work + s.wait > 0) {
-                let mut spans: Vec<(u64, u64, bool)> = built
-                    .work
-                    .iter()
-                    .map(|span| (span, true))
-                    .chain(built.wait.iter().map(|span| (span, false)))
-                    .filter(|(span, _)| span.session.as_deref() == Some(session.id.as_str()))
-                    .map(|(span, working)| (span.start, span.end, working))
-                    .collect();
-                spans.sort_unstable();
+    /// The Claude sessions of the day that starts at `start`, by id, as far as `until`: from
+    /// that day's file and the day before's.
+    pub(super) fn sessions_on(&self, start: u64, until: u64) -> HashMap<String, SessionDay> {
+        let mut events = self.read_day(&day_name(start.saturating_sub(1)));
+        events.extend(self.read_day(&day_name(start)));
+        events.sort_by_key(|event| event.t);
+        session_days(&events, start, until)
+    }
 
-                let day = SessionDay {
-                    path: path.clone(),
-                    title: session.title,
-                    work: session.work,
-                    wait: session.wait,
-                    turns: session.turns,
-                    spans,
-                    end: session.end,
-                };
-                found.insert(session.id, day);
+    /// The Claude sessions of every day there is a file of, by id: each one's days summed. The
+    /// hours those were made of are left out, as several days don't share a day's axis.
+    pub(super) fn sessions_ever(&self, now: u64) -> HashMap<String, SessionDay> {
+        let mut days: Vec<String> = self
+            .activity_dir()
+            .and_then(|dir| fs::read_dir(dir).ok())
+            .map(|entries| entries.flatten().filter_map(|entry| entry.file_name().to_str()?.strip_suffix(".jsonl").map(str::to_string)).collect())
+            .unwrap_or_default();
+        days.sort();
+
+        let mut found: HashMap<String, SessionDay> = HashMap::new();
+        for (start, end) in days.iter().filter_map(|day| day_bounds(day)).filter(|(start, _)| *start <= now) {
+            for (id, day) in self.sessions_on(start, now.min(end)) {
+                match found.get_mut(&id) {
+                    Some(known) => known.add(day),
+                    None => {
+                        found.insert(id, day);
+                    }
+                }
             }
+        }
+        for day in found.values_mut() {
+            day.spans.clear();
         }
 
         found
     }
+}
+
+/// The Claude sessions of the day that starts at `start`, by id, as far as `until`: each one's
+/// working and waiting spans and their sums, from `events` (the day's and the day before's, in
+/// order).
+fn session_days(events: &[Event], start: u64, until: u64) -> HashMap<String, SessionDay> {
+    let day = fold_day(events, start, until);
+    let mut found = HashMap::new();
+
+    for (path, built) in day.projects {
+        for session in built.sessions.into_iter().filter(|s| s.work + s.wait > 0) {
+            let mut spans: Vec<(u64, u64, bool)> = built
+                .work
+                .iter()
+                .map(|span| (span, true))
+                .chain(built.wait.iter().map(|span| (span, false)))
+                .filter(|(span, _)| span.session.as_deref() == Some(session.id.as_str()))
+                .map(|(span, working)| (span.start, span.end, working))
+                .collect();
+            spans.sort_unstable();
+
+            let day = SessionDay {
+                path: path.clone(),
+                title: session.title,
+                work: session.work,
+                wait: session.wait,
+                turns: session.turns,
+                spans,
+                end: session.end,
+            };
+            found.insert(session.id, day);
+        }
+    }
+
+    found
 }
 
 /// The day's Claude, server and command events folded into each project's spans, cut to the
@@ -653,7 +713,7 @@ fn day_commits(path: &str, start: u64, end: u64) -> Vec<DayCommit> {
 }
 
 /// The local midnight starting a `YYYY-MM-DD` day, and the next one.
-fn day_bounds(date: &str) -> Option<(u64, u64)> {
+pub(super) fn day_bounds(date: &str) -> Option<(u64, u64)> {
     let mut parts = date.split('-').map(|part| part.parse::<i32>().ok());
     let (year, month, day) = (parts.next()??, parts.next()??, parts.next()??);
     if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {

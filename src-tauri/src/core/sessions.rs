@@ -199,6 +199,8 @@ pub(super) struct SessionsCache {
     day: DayCache,
     /// When each session was first seen in its phase, where nothing better tells.
     first: HashMap<String, (RowPhase, u64)>,
+    /// The names and folders read from the logs of earlier days' sessions (`history.rs`).
+    pub(super) briefs: HashMap<String, super::history::Brief>,
 }
 
 /// The process and its parents, nearest first.
@@ -342,7 +344,7 @@ fn draft<'a>(order: &mut Vec<String>, drafts: &'a mut HashMap<String, Draft>, id
 }
 
 impl Core {
-    fn sessions_cache(&self) -> MutexGuard<'_, SessionsCache> {
+    pub(super) fn sessions_cache(&self) -> MutexGuard<'_, SessionsCache> {
         self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
