@@ -51,8 +51,8 @@ const FILE_VERSION: u32 = 1;
 /// A session opened again is given this long to show among the running ones; until then its old
 /// end doesn't send its card on.
 const RESUME_GRACE_MS: u64 = 60_000;
-/// A card given in a terminal takes a session that starts there within this long of the give;
-/// a `claude` started in that tab later is somebody else's work.
+/// A card given in a terminal takes the session of a Claude started there within this long of
+/// the give; a `claude` started in that tab later is somebody else's work.
 const ADOPT_MS: u64 = 2 * 60 * 1000;
 /// Each card's images are in a folder of its own under this one, beside the board's file.
 const IMAGES_DIR: &str = "board-images";
@@ -857,7 +857,9 @@ impl Core {
         // Read again when Claude's sessions folder changed, else at most every 30 s.
         let running = self.running_cached();
 
-        // Each waiting terminal's session: the first one started in it, soon after the give.
+        // Each waiting terminal's session: that of the first Claude started in it, soon after
+        // the give. Its process's start tells, not the session's own `startedAt`: Claude Code
+        // lists a session only once its folder is trusted, however long that question stood.
         let mut links: HashMap<u64, (String, u64)> = HashMap::new();
         if let (false, Some(running)) = (unlinked.is_empty(), &running) {
             let shells = self.terminal_shells();
@@ -868,10 +870,11 @@ impl Core {
                 let Some(&(_, given)) = unlinked.iter().find(|(id, _)| *id == terminal) else {
                     continue;
                 };
-                if run.started_at.is_some_and(|at| at > given + ADOPT_MS) {
+                let born = process::started_at(run.pid).or(run.started_at);
+                if born.is_some_and(|at| at > given + ADOPT_MS) {
                     continue;
                 }
-                let started = run.started_at.unwrap_or(u64::MAX);
+                let started = born.unwrap_or(u64::MAX);
                 if links.get(&terminal).is_none_or(|(_, first)| started < *first) {
                     links.insert(terminal, (session.clone(), started));
                 }
