@@ -18,6 +18,9 @@ export const COLUMN_LABELS: Record<BoardColumn, Key> = {
   done: "board.column.done",
 };
 
+/** The mark at a column's head, before its name; Claude's column has Claude's own (ClaudeLogo). */
+export const COLUMN_ICONS = { queued: "clock", review: "eye", done: "check" } as const;
+
 /** A project in the board picker's list while Claude waits on you on its board: its name, and on
  * what. */
 export const WAIT_LABELS: Record<Turn["kind"], Key> = {

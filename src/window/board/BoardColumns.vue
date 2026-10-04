@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 
 import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
-import { COLUMN_LABELS, COLUMNS, columnCards, type BoardLayout, type CardStatus } from "../../lib/board";
+import { COLUMN_ICONS, COLUMN_LABELS, COLUMNS, columnCards, type BoardLayout, type CardStatus } from "../../lib/board";
 import type { DropTarget, Ghost } from "../../lib/cardDrag";
 import { yesterday } from "../../lib/day";
 import { language, t } from "../../lib/i18n";
@@ -107,7 +107,10 @@ useSlide(root, order);
     <section v-for="(col, x) in columns" :key="col.column" :class="['bcol', col.column]" :data-column="col.column" :data-colx="x" :aria-labelledby="`bcol-${col.column}`">
       <div class="bcol-top">
         <h2 :id="`bcol-${col.column}`" class="bcol-head">
-          <ClaudeLogo v-if="col.column === 'claude'" :size="12" />
+          <span class="bcol-mark">
+            <ClaudeLogo v-if="col.column === 'claude'" :size="12" />
+            <Icon v-else :name="COLUMN_ICONS[col.column]" :size="14" />
+          </span>
           <span class="bcol-name">{{ label(col.column) }}</span>
           <span class="bcol-count">{{ col.count }}</span>
         </h2>
@@ -204,6 +207,15 @@ useSlide(root, order);
 :lang(zh) .bcol-head,
 :lang(ja) .bcol-head {
   letter-spacing: 0;
+}
+
+/* One box for every column's mark, so the names start level when the heads sit one under the
+   other (a list). */
+.bcol-mark {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 14px;
 }
 
 .bcol-name {

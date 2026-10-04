@@ -2,9 +2,10 @@
 import { computed } from "vue";
 
 import ClaudeLogo from "../../components/ClaudeLogo.vue";
+import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
 import StatusIcon from "../../components/StatusIcon.vue";
-import { COLUMN_LABELS, LANE_LIMIT, laneDrawn, type CardStatus, type Lane } from "../../lib/board";
+import { COLUMN_ICONS, COLUMN_LABELS, LANE_LIMIT, laneDrawn, type CardStatus, type Lane } from "../../lib/board";
 import { gitLine, phase } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import type { MenuPoint } from "../../lib/nativeMenu";
@@ -76,10 +77,17 @@ function rehome(event: MouseEvent, path: string): void {
   <div class="blanes">
     <div class="blanes-head" aria-hidden="true">
       <span>{{ t("window.col.project") }}</span>
-      <span>{{ t(COLUMN_LABELS.queued) }}</span>
-      <span class="blanes-claude"><ClaudeLogo :size="11" />{{ t(COLUMN_LABELS.claude) }}</span>
-      <span>{{ t(COLUMN_LABELS.review) }}</span>
-      <span class="blanes-done">{{ t(COLUMN_LABELS.done) }}</span>
+      <span v-for="cell in CELLS" :key="cell" class="blanes-col">
+        <span class="blanes-mark">
+          <ClaudeLogo v-if="cell === 'claude'" :size="11" />
+          <Icon v-else :name="COLUMN_ICONS[cell]" :size="13" />
+        </span>
+        <span class="blanes-name">{{ t(COLUMN_LABELS[cell]) }}</span>
+      </span>
+      <span class="blanes-col blanes-done">
+        <span class="blanes-mark"><Icon :name="COLUMN_ICONS.done" :size="13" /></span>
+        <span class="blanes-name">{{ t(COLUMN_LABELS.done) }}</span>
+      </span>
     </div>
 
     <!-- Only the lanes scroll, never the page. -->
@@ -204,14 +212,28 @@ function rehome(event: MouseEvent, path: string): void {
   text-overflow: ellipsis;
 }
 
-.blanes-claude {
+/* A column's mark and its name; the name gives way, the mark never does. */
+.blanes-col {
   display: flex;
   align-items: center;
   gap: 7px;
 }
 
+.blanes-mark {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 13px;
+}
+
+.blanes-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .blanes-done {
-  text-align: right;
+  justify-content: flex-end;
 }
 
 .blanes-scroll {
