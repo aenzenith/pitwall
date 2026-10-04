@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
@@ -10,16 +10,17 @@ import { moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { stamp } from "../../lib/period";
 import { keys } from "../../lib/platform";
+import { useGrow } from "../../lib/slide";
 import type { Card, SessionRow } from "../../lib/types";
 import OriginLabel from "../sessions/OriginLabel.vue";
 import { useBoardActions, type CardBusy } from "./context";
 
 /**
  * One card. `full`: a project's board (title, note, its session, buttons when selected); `row`:
- * the same board drawn as a list (the title with a line of its note under it, then its session's
- * state and where it runs each in a column of their own; selected, the whole title and more of the
- * note); `compact`: a lane of every project's board (one line, its status); `done`: a row of the
- * done column, with when it was done (`dated`: its day too, among every day's).
+ * the same board drawn as a list (the title with a line of its note under it, cut to the row
+ * selected or not, then its session's state and where it runs each in a column of their own);
+ * `compact`: a lane of every project's board (one line, its status); `done`: a row of the done
+ * column, with when it was done (`dated`: its day too, among every day's).
  * `lifted`: being dragged (its place stays empty); `ghost`: the image that follows the pointer.
  * `givable` false: a card of a folder no longer listed, which is never given to Claude (no button
  * offers it).
@@ -75,6 +76,12 @@ const buttons = computed<"give" | "closed" | "review" | "bringUp" | null>(() => 
   return null;
 });
 
+const root = ref<HTMLElement | null>(null);
+
+// Its buttons come and go with the selection, an error with what they did: the card grows to hold
+// them and shrinks back, rather than jumping there, and the cards under it follow.
+useGrow(root, () => `${buttons.value} ${props.error}`);
+
 function onClick(): void {
   if (actions.isClick()) actions.select(props.card.id);
 }
@@ -105,6 +112,7 @@ function giveMenu(event: MouseEvent): void {
 
 <template>
   <div
+    ref="root"
     :class="['bcard', variant, { selected, lifted, ghost, closed: status?.closed, stated: !!status }]"
     role="listitem"
     :data-card="ghost ? undefined : card.id"
@@ -233,6 +241,16 @@ function giveMenu(event: MouseEvent): void {
 /* The keyboard's card: the ring inside, so the column's edge never cuts it. */
 .bcard:focus-visible {
   outline-offset: -2px;
+}
+
+/* On its way to a new height (useGrow), as its buttons come or go: it shows them as far as it has
+   got, and its lines keep their own height meanwhile rather than being squeezed into it. */
+.bcard[data-growing] {
+  overflow: hidden;
+}
+
+.bcard:not(.row)[data-growing] :is(.bcard-title, .bcard-note, .bcard-status, .bcard-where, .bcard-actions, .bcard-error) {
+  flex-shrink: 0;
 }
 
 .bcard.compact {
@@ -523,22 +541,12 @@ function giveMenu(event: MouseEvent): void {
   text-overflow: ellipsis;
 }
 
-/* Under the title: one line, as much as fits. */
+/* Under the title: one line, as much as fits. Selected, both stay cut: the details show them
+   whole. */
 .row .bcard-note {
   display: block;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-/* Selected: the whole title, and more of its note. */
-.row.selected .bcard-title {
-  white-space: normal;
-}
-
-.row.selected .bcard-note {
-  display: -webkit-box;
-  white-space: pre-line;
-  -webkit-line-clamp: 3;
 }
 
 .row .bcard-status {
