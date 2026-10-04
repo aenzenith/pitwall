@@ -633,6 +633,9 @@
   "sessions.fuel.none": "Bugün onun için token okunmadı.",
   "sessions.privacy": "Konuşmadan yalnızca Claude'un son mesajı gösterilir; bakıldığında okunur, saklanmaz.",
   "sessions.lastMessage": "Son mesaj",
+  "sessions.terminalResize": "Terminali yeniden boyutlandır",
+  "sessions.terminalCollapse": "Terminali daralt",
+  "sessions.terminalExpand": "Terminali genişlet",
   "sessions.hiddenCount": {
     "other": "Projelerinin dışındaki klasörlerde {count} oturum gizli."
   },

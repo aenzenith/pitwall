@@ -630,6 +630,9 @@
   "sessions.fuel.none": "今天没有读到它的 token。",
   "sessions.privacy": "对话中只显示 Claude 的最后一条消息：查看时读取，从不保存。",
   "sessions.lastMessage": "最后一条消息",
+  "sessions.terminalResize": "调整终端大小",
+  "sessions.terminalCollapse": "收起终端",
+  "sessions.terminalExpand": "展开终端",
   "sessions.hiddenCount": {
     "other": "已隐藏项目以外文件夹中的 {count} 个会话。"
   },

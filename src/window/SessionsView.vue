@@ -16,8 +16,8 @@ import { t } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
 import { dragRegion } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
-import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionTerminal, type Layout } from "../lib/sessions";
-import { api, loadSessions, now, sessions, snapshot } from "../lib/store";
+import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, type Layout } from "../lib/sessions";
+import { api, loadSessions, now, sessions } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionList from "./sessions/SessionList.vue";
@@ -95,10 +95,10 @@ const selected = computed(() => (selectedId.value ? (byId.value.get(selectedId.v
 /** The selected session's project's other sessions waiting on you: marking it seen clears them too. */
 const others = computed(() => (selected.value ? othersWaiting(selected.value, all.value) : 0));
 
-/** What Claude last said in the selected session: its details show it unless it runs in one of
- * Pitwall's terminals, which shows the conversation itself. */
+/** What Claude last said in the selected session: its details show it, beside its terminal when it
+ * runs in one of Pitwall's. */
 const lastMessage = useLastMessage(
-  () => (selected.value && !sessionTerminal(selected.value, snapshot.value?.projects ?? []) ? selected.value.id : null),
+  () => selected.value?.id ?? null,
   () => messageState(selected.value, now.value),
 );
 

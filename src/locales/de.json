@@ -644,6 +644,9 @@
   "sessions.fuel.none": "Heute keine Tokens für sie gelesen.",
   "sessions.privacy": "Vom Gespräch wird nur Claudes letzte Nachricht gezeigt: beim Ansehen gelesen, nie gespeichert.",
   "sessions.lastMessage": "Letzte Nachricht",
+  "sessions.terminalResize": "Größe des Terminals ändern",
+  "sessions.terminalCollapse": "Terminal zuklappen",
+  "sessions.terminalExpand": "Terminal aufklappen",
   "sessions.hiddenCount": {
     "one": "{count} Sitzung in einem Ordner außerhalb deiner Projekte ist ausgeblendet.",
     "other": "{count} Sitzungen in Ordnern außerhalb deiner Projekte sind ausgeblendet."

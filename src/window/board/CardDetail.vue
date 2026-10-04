@@ -13,8 +13,8 @@ import CardImages from "./CardImages.vue";
  * starting): what the card says, and its Pitwall terminal once it has one. A card with a session
  * shows that session's details instead (sessions/SessionDetail). `project`: its project's name;
  * `images`: the images its note names; `lastMessage`: what Claude last said in its session
- * (Markdown), for a card whose work is over and whose session has left the list. `hold`: the
- * keyboard is in its terminal.
+ * (Markdown), for a card whose session isn't in the list (yet, or any more). `hold`: the keyboard
+ * is in its terminal.
  */
 defineProps<{ card: Card; project: string; status: CardStatus | null; terminal: TerminalView | null; images: Shot[]; lastMessage: string }>();
 const emit = defineEmits<{ hold: [on: boolean] }>();
@@ -33,7 +33,7 @@ const emit = defineEmits<{ hold: [on: boolean] }>();
       <div class="path" :title="card.path">{{ card.path }}</div>
     </header>
 
-    <div class="body">
+    <div :class="['body', { 'over-terminal': terminal }]">
       <section v-if="status" class="block" :aria-label="t('window.col.claude')">
         <div class="section-label">{{ t("window.col.claude") }}</div>
         <span :class="['state', status.tone]">{{ status.text }}</span>
@@ -45,14 +45,17 @@ const emit = defineEmits<{ hold: [on: boolean] }>();
         <CardImages v-if="images.length" :images="images" />
       </section>
 
-      <!-- In the terminal's place once its work is over: what Claude last said. -->
-      <SessionTerminal v-if="terminal" :terminal="terminal" @hold="emit('hold', $event)" />
-      <section v-else-if="lastMessage" class="block" :aria-label="t('sessions.lastMessage')">
+      <!-- What Claude last said. A terminal shows the conversation itself, so the line on what is
+           shown of it goes. -->
+      <section v-if="lastMessage" class="block" :aria-label="t('sessions.lastMessage')">
         <div class="section-label">{{ t("sessions.lastMessage") }}</div>
         <Markdown :text="lastMessage" />
-        <span class="said-note">{{ t("sessions.privacy") }}</span>
+        <span v-if="!terminal" class="said-note">{{ t("sessions.privacy") }}</span>
       </section>
     </div>
+
+    <!-- Under the sections, which scroll above it. -->
+    <SessionTerminal v-if="terminal" :terminal="terminal" @hold="emit('hold', $event)" />
   </section>
 </template>
 

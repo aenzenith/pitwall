@@ -20,17 +20,16 @@ import SessionNotice from "./SessionNotice.vue";
 import SessionTerminal from "./SessionTerminal.vue";
 
 /**
- * One session: what it is doing, its day and its tokens, and under them its terminal when it runs
- * in one of Pitwall's, else what Claude last said in it. The Sessions page's details, and a
- * board card's once it has a session.
+ * One session: what it is doing, its day and its tokens, what Claude last said in it, and under
+ * them its terminal when it runs in one of Pitwall's. The Sessions page's details, and a board
+ * card's once it has a session.
  * Claude's state reads as a project's Claude card does (detail/ClaudeCard), its one button the
  * same; bringing it up, opening or adding its project are the list's (double-click, Enter, the
  * context menu). `others`: the other sessions of its project that wait on you (seen is kept per
  * project); `error`: why adding its folder failed; `terminal`: the Pitwall terminal to show, as
  * the caller knows it (a board card's; null: none), left out: the one its origin names; `note`:
  * a board card's note, shown once its work is over, with `images`, the images it names;
- * `lastMessage`: what Claude last said in it (Markdown), shown in the terminal's place. `hold`:
- * the keyboard is in its terminal.
+ * `lastMessage`: what Claude last said in it (Markdown). `hold`: the keyboard is in its terminal.
  */
 const props = defineProps<{
   row: SessionRow;
@@ -141,7 +140,7 @@ const fuel = computed(() => {
       <div class="path" :title="row.folder">{{ row.folder }}</div>
     </header>
 
-    <div class="body">
+    <div :class="['body', { 'over-terminal': ownTerminal }]">
       <section class="block" :aria-label="t('window.col.claude')">
         <div class="section-label">{{ t("window.col.claude") }}</div>
         <div :class="['card', { hot: waiting }]">
@@ -194,17 +193,17 @@ const fuel = computed(() => {
         <span v-else class="note">{{ t("sessions.fuel.none") }}</span>
       </section>
 
-      <!-- Its terminal shows the conversation itself, so the line on what is shown of it goes.
-           In its place, what Claude last said. -->
-      <SessionTerminal v-if="ownTerminal" :terminal="ownTerminal" @hold="emit('hold', $event)" />
-      <template v-else>
-        <section v-if="lastMessage" class="block" :aria-label="t('sessions.lastMessage')">
-          <div class="section-label">{{ t("sessions.lastMessage") }}</div>
-          <Markdown :text="lastMessage" />
-        </section>
-        <p class="privacy"><Icon name="lock" :size="12" />{{ t("sessions.privacy") }}</p>
-      </template>
+      <!-- What Claude last said, with its terminal or without. A terminal shows the conversation
+           itself, so the line on what is shown of it goes. -->
+      <section v-if="lastMessage" class="block" :aria-label="t('sessions.lastMessage')">
+        <div class="section-label">{{ t("sessions.lastMessage") }}</div>
+        <Markdown :text="lastMessage" />
+      </section>
+      <p v-if="!ownTerminal" class="privacy"><Icon name="lock" :size="12" />{{ t("sessions.privacy") }}</p>
     </div>
+
+    <!-- Under the sections, which scroll above it. -->
+    <SessionTerminal v-if="ownTerminal" :terminal="ownTerminal" @hold="emit('hold', $event)" />
   </section>
 </template>
 

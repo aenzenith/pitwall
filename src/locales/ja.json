@@ -630,6 +630,9 @@
   "sessions.fuel.none": "今日はこのセッションのトークンを読み取っていません。",
   "sessions.privacy": "会話のうち表示するのは Claude の最後のメッセージだけです。表示するときに読み取り、保存はしません。",
   "sessions.lastMessage": "最後のメッセージ",
+  "sessions.terminalResize": "ターミナルのサイズを変更",
+  "sessions.terminalCollapse": "ターミナルを折りたたむ",
+  "sessions.terminalExpand": "ターミナルを展開",
   "sessions.hiddenCount": {
     "other": "プロジェクト外のフォルダーにある {count} 件のセッションを非表示にしています。"
   },

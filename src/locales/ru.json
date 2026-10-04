@@ -672,6 +672,9 @@
   "sessions.fuel.none": "Сегодня токенов для неё не прочитано.",
   "sessions.privacy": "Из переписки показывается только последнее сообщение Claude: читается при просмотре и не сохраняется.",
   "sessions.lastMessage": "Последнее сообщение",
+  "sessions.terminalResize": "Изменить размер терминала",
+  "sessions.terminalCollapse": "Свернуть терминал",
+  "sessions.terminalExpand": "Развернуть терминал",
   "sessions.hiddenCount": {
     "one": "{count} сессия в папке вне ваших проектов скрыта.",
     "few": "{count} сессии в папках вне ваших проектов скрыты.",

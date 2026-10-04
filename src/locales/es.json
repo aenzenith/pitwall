@@ -646,6 +646,9 @@
   "sessions.fuel.none": "Hoy no se leyeron tokens para ella.",
   "sessions.privacy": "De la conversación solo se muestra el último mensaje de Claude: se lee al mirarla y nunca se guarda.",
   "sessions.lastMessage": "Último mensaje",
+  "sessions.terminalResize": "Cambiar el tamaño de la terminal",
+  "sessions.terminalCollapse": "Contraer la terminal",
+  "sessions.terminalExpand": "Expandir la terminal",
   "sessions.hiddenCount": {
     "one": "{count} sesión en una carpeta fuera de tus proyectos está oculta.",
     "other": "{count} sesiones en carpetas fuera de tus proyectos están ocultas."

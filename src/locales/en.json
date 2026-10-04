@@ -644,6 +644,9 @@
   "sessions.fuel.none": "No tokens read for it today.",
   "sessions.privacy": "Of the conversation, only Claude's last message is shown: read when you look, never stored.",
   "sessions.lastMessage": "Last message",
+  "sessions.terminalResize": "Resize terminal",
+  "sessions.terminalCollapse": "Collapse terminal",
+  "sessions.terminalExpand": "Expand terminal",
   "sessions.hiddenCount": {
     "one": "{count} session in a folder outside your projects is hidden.",
     "other": "{count} sessions in folders outside your projects are hidden."

@@ -81,3 +81,9 @@
   overflow-y: auto;
   padding-bottom: 20px;
 }
+
+/* Over a terminal (sessions/SessionTerminal), pinned under it with its own height: the sections
+   scroll in what it leaves, down to its top line. */
+.body.over-terminal {
+  padding-bottom: 0;
+}

@@ -12,6 +12,15 @@ const PANEL_DEFAULT = 240;
 
 export const outputHeight = ref(PANEL_DEFAULT);
 export const terminalHeight = ref(PANEL_DEFAULT);
+/**
+ * A session's terminal under its details (sessions/SessionTerminal): pinned there with its own
+ * height, as the terminals are under the list, and the same for every session. Every launch
+ * starts it at this default; its handle takes it down to the minimum and up to the details' top.
+ * Collapsed, it keeps only its handle and label row, as a bottom panel does.
+ */
+const DETAIL_TERMINAL_DEFAULT = 350;
+export const detailTerminalHeight = ref(DETAIL_TERMINAL_DEFAULT);
+export const detailTerminalCollapsed = ref(false);
 /** The output is on screen (not while the project's settings fill the details). */
 export const outputShown = ref(false);
 

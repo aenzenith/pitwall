@@ -22,6 +22,7 @@ import { SETTLE_MS, useCardDrag, type DropTarget } from "../lib/cardDrag";
 import { useCardImages } from "../lib/cardImages";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
+import { detailTerminalHeight } from "../lib/panel";
 import { dragRegion, keys, primary } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { originView, othersWaiting, sessionTerminal } from "../lib/sessions";
@@ -291,10 +292,11 @@ watch(selectedId, (id) => {
 /** The images the selected card's note names, for its details. */
 const selectedImages = useCardImages(() => selected.value);
 
-/** What Claude last said in the selected card's session, once its work is over: the summary the
- * card asked for. Asked for again when the card or its session moves on. */
+/** What Claude last said in the selected card's session, beside its terminal while it works and
+ * once its work is over: the summary the card asked for. Asked for again when the card or its
+ * session moves on. */
 const lastMessage = useLastMessage(
-  () => (selectedOver.value ? (selected.value?.session ?? null) : null),
+  () => selected.value?.session ?? null,
   () => `${selected.value?.column} ${messageState(selectedRow.value, now.value)}`,
 );
 
@@ -385,12 +387,13 @@ async function run(id: string, kind: Exclude<CardBusy, null>, work: () => Promis
 }
 
 /** The size the card's details will give the new Claude tab, so its shell starts at that size: the
- * details' width (380) less the terminal's room around it (57), and roughly the height its
- * session's sections leave under the head. */
+ * details' width (380) less the terminal's room around it (57), and the height the details'
+ * terminal is kept at (lib/panel), as far as the window goes, less its handle, label and room
+ * (76). */
 function terminalSize(): { cols: number; rows: number } | null {
   const host = document.createElement("div");
   const width = 323;
-  const height = Math.max(184, window.innerHeight - 550);
+  const height = Math.min(detailTerminalHeight.value, window.innerHeight) - 76;
   host.style.cssText = `position: fixed; left: -10000px; top: 0; width: ${width}px; height: ${height}px; visibility: hidden`;
   document.body.appendChild(host);
   try {
