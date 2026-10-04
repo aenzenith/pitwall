@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.1](https://github.com/aenzenith/pitwall/compare/v1.4.0...v1.4.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* **claude:** a session comes up at the card given last ([64be2da](https://github.com/aenzenith/pitwall/commit/64be2daf8808f5c6fc1f2833b748fe0a660ac143))
+* **registry:** other participants' servers shown within a second ([7ebd1af](https://github.com/aenzenith/pitwall/commit/7ebd1afcff268b63779090f220274d882333f4d1))
+* **sessions:** all time keeps counting a session's time ([0f3e4f4](https://github.com/aenzenith/pitwall/commit/0f3e4f42259be0487d85a2214c40b97711688d3a))
+* **ui:** the days picker follows the clock past midnight ([0a7f6ff](https://github.com/aenzenith/pitwall/commit/0a7f6ff4a139d8ea2dcf66902b07075dfe37174e))
+
 ## [1.4.0](https://github.com/aenzenith/pitwall/compare/v1.3.0...v1.4.0) (2026-10-04)
 
 
