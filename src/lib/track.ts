@@ -1,13 +1,14 @@
 // The Track page: its circuits, and what the projects put on them. A running dev server is a green
-// light lapping the circuit, Claude at work an orange one; Claude waiting on you stands at the pit
-// wall, a crashed server stands where it stopped, and a stopped project waits in the pit.
+// light lapping the circuit, each Claude session at work an orange one; a session waiting on you has
+// driven to the pit wall and stands there, a crashed server stands where it stopped. A stopped
+// project is off the circuit: in the tower only (on the straight, at its lane's start).
 
 import type { Project, Turn } from "./types";
 
 export type CircuitId = "night" | "oval" | "eight" | "street" | "straight";
 
-/** The picker's order. `straight` gives every project a lane of its own. */
-export const CIRCUITS: CircuitId[] = ["night", "oval", "eight", "street", "straight"];
+/** The picker's order, the default first. `straight` gives every project a lane of its own. */
+export const CIRCUITS: CircuitId[] = ["street", "night", "oval", "eight", "straight"];
 
 /** The page's own settings, as the core keeps them (`settings.track`). */
 export type TrackSettings = {
@@ -17,13 +18,11 @@ export type TrackSettings = {
   labels: "code" | "name" | "hover";
   /** `calm`: half speed, short trails; `still`: nothing moves. */
   motion: "full" | "calm" | "still";
-  /** Stopped projects wait in the pit, under the circuit. */
-  pit: boolean;
   /** The lights' soft glow. */
   glow: boolean;
 };
 
-export const TRACK_DEFAULTS: TrackSettings = { circuit: "night", labels: "code", motion: "full", pit: true, glow: true };
+export const TRACK_DEFAULTS: TrackSettings = { circuit: "street", labels: "code", motion: "full", glow: true };
 
 /** What the settings file holds, read leniently: an unknown value falls back to the default. */
 export function trackSettings(stored: Partial<Record<keyof TrackSettings, unknown>> | null | undefined): TrackSettings {
@@ -32,7 +31,6 @@ export function trackSettings(stored: Partial<Record<keyof TrackSettings, unknow
     circuit: pick(stored?.circuit, [...CIRCUITS, "shuffle"] as const, TRACK_DEFAULTS.circuit),
     labels: pick(stored?.labels, ["code", "name", "hover"] as const, TRACK_DEFAULTS.labels),
     motion: pick(stored?.motion, ["full", "calm", "still"] as const, TRACK_DEFAULTS.motion),
-    pit: typeof stored?.pit === "boolean" ? stored.pit : TRACK_DEFAULTS.pit,
     glow: typeof stored?.glow === "boolean" ? stored.glow : TRACK_DEFAULTS.glow,
   };
 }
@@ -55,8 +53,9 @@ export type Circuit = {
   /** Half the road's width; 0 on the straight, whose lanes are the projects'. */
   half: number;
   /** Where the lap comes nearest the viewer: the start line, the pit wall outside it (`side`: which
-   * way is outside). On the straight the wall is the far end. */
-  wall: { t: number; side: number };
+   * way is outside; `room`: how long the straight it lies along is, in world units, 0 on a bend).
+   * On the straight the wall is the far end. */
+  wall: { t: number; side: number; room: number };
   /** The camera looks at the circuit from in front and above (world units). */
   camera: { height: number; distance: number; target: number };
 };
@@ -178,7 +177,16 @@ function lap(id: CircuitId, points: Point[]): Circuit {
   const line = closedLine(points);
   let nearest = 0;
   for (let k = 1; k < LINE_SAMPLES; k++) if (line.z[k] > line.z[nearest]) nearest = k;
-  return { id, line, half: HALF, wall: { t: nearest / LINE_SAMPLES, side: line.nz[nearest] >= 0 ? 1 : -1 }, camera: LAP_CAMERA };
+  // Nearest along a straight (the street circuit's): the middle of it, so the wall lies along the
+  // straight and not round the corner it starts at.
+  const level = (k: number): boolean => line.z[((k % LINE_SAMPLES) + LINE_SAMPLES) % LINE_SAMPLES] > line.z[nearest] - 0.001;
+  let first = nearest;
+  let last = nearest;
+  while (last - first < LINE_SAMPLES && level(first - 1)) first--;
+  while (last - first < LINE_SAMPLES && level(last + 1)) last++;
+  nearest = (((first + last) >> 1) + LINE_SAMPLES) % LINE_SAMPLES;
+  const room = ((last - first) / LINE_SAMPLES) * line.length;
+  return { id, line, half: HALF, wall: { t: nearest / LINE_SAMPLES, side: line.nz[nearest] >= 0 ? 1 : -1, room: room >= 1 ? room : 0 }, camera: LAP_CAMERA };
 }
 
 const built = new Map<CircuitId, Circuit>();
@@ -188,7 +196,7 @@ export function circuit(id: CircuitId): Circuit {
   if (!made) {
     made =
       id === "straight"
-        ? { id, line: straightLine(), half: 0, wall: { t: 1, side: 1 }, camera: { height: 9.5, distance: 0.2, target: 0 } }
+        ? { id, line: straightLine(), half: 0, wall: { t: 1, side: 1, room: 0 }, camera: { height: 9.5, distance: 0.2, target: 0 } }
         : lap(id, id === "night" ? sampled(night) : id === "oval" ? sampled(oval) : id === "eight" ? sampled(eight) : street());
     built.set(id, made);
   }
@@ -208,6 +216,11 @@ export function onLine(line: Line, t: number, offset: number): Point {
   return [line.x[i] + (line.x[j] - line.x[i]) * u + (nx / l) * offset, line.z[i] + (line.z[j] - line.z[i]) * u + (nz / l) * offset];
 }
 
+/** The first place on the grid: where a server that was never seen starting sets off from. */
+export function gridPlace(on: Circuit, offset: number): { t: number; offset: number } {
+  return on.id === "straight" ? { t: 0, offset } : { t: on.wall.t - GRID / on.line.length, offset };
+}
+
 /** The straight's lanes: each project's distance from the centre line, the first at the back. */
 export function laneOffsets(count: number): number[] {
   const gap = Math.min(0.6, 4.6 / Math.max(1, count - 1));
@@ -216,7 +229,13 @@ export function laneOffsets(count: number): number[] {
 
 /* ---------- what runs ---------- */
 
-/** A light on the move: a dev server (green; amber with an issue) or Claude at work (orange). */
+/** A project's Claude sessions in one phase: at work, or waiting on you. Each has a light of its own. */
+export function sessionsIn(project: Project, phase: "working" | "waiting"): Project["claudeSessions"] {
+  return project.claudeSessions.filter((session) => session.phase === phase);
+}
+
+/** A light on the move: a dev server (green; amber with an issue) or a Claude session at work
+ * (orange). */
 export type Mover = {
   key: string;
   path: string;
@@ -231,20 +250,26 @@ export type Mover = {
   speed: number;
   /** How much of the line its trail covers, in world units. */
   trail: number;
-  /** It carries its project's tag (a project's two lights share one). */
+  /** It carries its project's tag (a project's lights share one). */
   tagged: boolean;
 };
 
-/** A light standing still: Claude waiting on you at the pit wall, a crashed server where it
- * stopped, a server starting or stopping at the pit exit, a stopped project at its lane's start. */
+/** A light standing still: a Claude session waiting on you at the pit wall, a crashed server where it
+ * stopped, a server starting on the grid (in its lane, behind the start line), one stopping in the
+ * pit just past the wall, a stopped project at its lane's start. */
 export type Stander = {
   key: string;
   path: string;
   kind: "waiting" | "crashed" | "busy" | "stopped";
   t: number;
   offset: number;
-  /** While waiting: on what. */
+  /** While waiting: on what, and which session. */
   turn: Turn | null;
+  session: string | null;
+  /** While waiting: the lane Claude's light laps in and its trail there (world units), for its way
+   * to the wall when it had no light on the lap. */
+  lane: number;
+  trail: number;
 };
 
 export type Grid = { movers: Mover[]; standers: Stander[] };
@@ -261,61 +286,151 @@ function hash(text: string): number {
 
 /** World units a second: the website's lap, in about 34 s. */
 const SPEED = 0.46;
-/** Claude's light runs beside its project's server: this far behind it, and each this far off
- * their lane's middle, so the two trails stay two (world units). */
+/** A project's lights run in formation: its server ahead, Claude's sessions beside it, each place
+ * this far behind the one before. Two abreast are each `PAIR` off their lane's middle, three are
+ * `TRIO` apart, so the trails stay apart (world units). */
 const TANDEM = 0.3;
 const PAIR = 0.035;
+const TRIO = 0.06;
+/** The straight: a project's waiting lights stand this far apart, from its lane's far end back
+ * (world units). */
+const STACK = 0.22;
 /** The lanes of a lap, in half road widths. */
 const LANES = [-0.55, 0, 0.55];
+/** The grid: the first place this far behind the start line, the next ones this far apart, or as
+ * far as a tag is wide, up to `GRID_REACH` (world units). */
+const GRID = 0.14;
+const GRID_GAP = 0.42;
+const GRID_REACH = 1.2;
+
+/** Each project's row of Claude lights as last dealt: a session's place in it, by its id. */
+const rows = new Map<string, Map<string, number>>();
+
+/**
+ * A project's sessions' places in its row of lights, the first at the front. A session keeps its
+ * place for as long as it works or waits, so no light moves along the lap when another of its
+ * project's comes or goes; one that comes takes the first place free.
+ */
+function rowOf(project: Project): Map<string, number> {
+  const before = rows.get(project.path);
+  const row = new Map<string, number>();
+  for (const session of project.claudeSessions) {
+    const place = before?.get(session.id);
+    if (place !== undefined) row.set(session.id, place);
+  }
+  const taken = new Set(row.values());
+  let free = 0;
+  for (const session of project.claudeSessions) {
+    if (row.has(session.id)) continue;
+    while (taken.has(free)) free++;
+    taken.add(free);
+    row.set(session.id, free);
+  }
+  if (row.size) rows.set(project.path, row);
+  else rows.delete(project.path);
+  return row;
+}
 
 /**
  * The projects (in the tower's order) as lights on `on`. `gap`: how far apart the pit wall's
- * places are, in world units (the page knows how wide a tag is on screen).
+ * places are, in world units (the page knows how wide a tag is on screen); `slot`: the same for the
+ * grid's, where a tag is a name alone.
  */
-export function grid(projects: Project[], on: Circuit, gap: number): Grid {
+export function grid(projects: Project[], on: Circuit, gap: number, slot = 0): Grid {
   const movers: Mover[] = [];
   const standers: Stander[] = [];
   const straight = on.id === "straight";
   const lanes = straight ? laneOffsets(projects.length) : [];
-  const waiting = projects.filter((project) => project.claude);
+  /** How many wait at the wall, and how many of them have their place so far. */
+  const waiting = projects.reduce((count, project) => count + sessionsIn(project, "waiting").length, 0);
+  let placed = 0;
   // Places round the lap are dealt evenly, by path: they stay put while the tower's order changes,
   // and no two projects start on top of each other.
   const places = new Map([...projects.map((project) => project.path)].sort().map((path, place) => [path, place]));
   let starting = 0;
+  let stopping = 0;
 
   projects.forEach((project, index) => {
     const seed = ((places.get(project.path) ?? 0) + 0.35 * hash(project.path)) / projects.length;
     const offset = straight ? lanes[index] : LANES[Math.floor(hash(`${project.path}#lane`) * LANES.length)] * on.half;
     const speed = SPEED * (0.82 + 0.4 * hash(`${project.path}#pace`));
     const running = project.status === "running";
-    const working = project.claudeWorking && !project.claude;
+    // The formation: the server's column, then Claude's two, as far as the project's sessions fill
+    // them (those at work and those at the wall, whose place is kept); the lane's middle between
+    // them all. Claude's sessions take the two columns in turn, in the order of their places.
+    const row = rowOf(project);
+    const order = [...row.values()].sort((a, b) => a - b);
+    const abreast = (running ? 1 : 0) + Math.min(2, order.length);
+    const column = (nth: number): number => offset + (nth - (abreast - 1) / 2) * (abreast > 2 ? TRIO : 2 * PAIR);
 
     if (running) {
-      movers.push({ key: `${project.path}#server`, path: project.path, kind: "server", warn: project.issue !== null, offset: working ? offset - PAIR : offset, phase: seed, speed, trail: 3.2 + 1.6 * hash(`${project.path}#trail`), tagged: !straight });
+      movers.push({ key: `${project.path}#server`, path: project.path, kind: "server", warn: project.issue !== null, offset: column(0), phase: seed, speed, trail: 3.2 + 1.6 * hash(`${project.path}#trail`), tagged: !straight });
     } else if (project.status === "crashed") {
-      standers.push({ key: `${project.path}#crashed`, path: project.path, kind: "crashed", t: straight ? 0.25 + 0.5 * seed : seed, offset, turn: null });
+      standers.push({ key: `${project.path}#crashed`, path: project.path, kind: "crashed", t: straight ? 0.25 + 0.5 * seed : seed, offset, turn: null, session: null, lane: offset, trail: 0 });
     } else if (project.status === "busy") {
-      // At the pit exit, just past the wall; on the straight, on its own start line.
-      const t = straight ? 0 : on.wall.t + (1.5 + gap * (0.5 + starting++)) / on.line.length;
-      standers.push({ key: `${project.path}#busy`, path: project.path, kind: "busy", t, offset: straight ? offset : on.wall.side * on.half * 1.6, turn: null });
+      // Starting: on the grid, in its lane behind the start line, from where it sets off. Stopping
+      // (or restarting): in the pit, just past the wall. On the straight, its own start line.
+      const onGrid = project.phase === "starting…";
+      const t = straight ? 0 : onGrid ? on.wall.t - (GRID + Math.max(GRID_GAP, Math.min(slot, GRID_REACH)) * starting++) / on.line.length : on.wall.t + (1.5 + gap * (0.5 + stopping++)) / on.line.length;
+      standers.push({ key: `${project.path}#busy`, path: project.path, kind: "busy", t, offset: straight || onGrid ? offset : on.wall.side * on.half * 1.6, turn: null, session: null, lane: offset, trail: 0 });
     } else if (straight) {
-      standers.push({ key: `${project.path}#stopped`, path: project.path, kind: "stopped", t: 0, offset, turn: null });
+      standers.push({ key: `${project.path}#stopped`, path: project.path, kind: "stopped", t: 0, offset, turn: null, session: null, lane: offset, trail: 0 });
     }
 
-    if (working) {
-      // Beside its server and a little behind; alone, it has the lane and carries the tag itself.
-      const behind = running ? TANDEM / on.line.length : 0;
-      movers.push({ key: `${project.path}#claude`, path: project.path, kind: "claude", warn: false, offset: running ? offset + PAIR : offset, phase: seed - behind, speed, trail: 2.6 + 1.2 * hash(`${project.path}#trail`), tagged: !straight && !running });
-    }
-
-    if (project.claude) {
-      const place = waiting.indexOf(project);
-      const t = straight ? 1 : on.wall.t + ((place - (waiting.length - 1) / 2) * gap) / on.line.length;
-      standers.push({ key: `${project.path}#waiting`, path: project.path, kind: "waiting", t, offset: straight ? offset : on.wall.side * on.half * 1.6, turn: project.claude });
-    }
+    // Claude's lights, one a session: beside the server and a little behind, the next one beside
+    // that and a little behind again. The project's tag rides with its server, else with the first
+    // of them at work.
+    const trail = 2.6 + 1.2 * hash(`${project.path}#trail`);
+    const lead = Math.min(...sessionsIn(project, "working").map((session) => row.get(session.id) ?? 0));
+    let stood = 0;
+    project.claudeSessions.forEach((session) => {
+      const place = row.get(session.id) ?? 0;
+      const lane = column((running ? 1 : 0) + (order.indexOf(place) % 2));
+      if (session.phase === "working") {
+        const behind = (((running ? 1 : 0) + place) * TANDEM) / on.line.length;
+        movers.push({ key: `${project.path}#claude:${session.id}`, path: project.path, kind: "claude", warn: false, offset: lane, phase: seed - behind, speed, trail, tagged: !straight && !running && place === lead });
+      } else if (session.phase === "waiting") {
+        // A place each at the wall; on the straight, at its lane's far end and back from it.
+        const t = straight ? 1 - (stood++ * STACK) / on.line.length : on.wall.t + ((placed++ - (waiting - 1) / 2) * gap) / on.line.length;
+        standers.push({ key: `${project.path}#waiting:${session.id}`, path: project.path, kind: "waiting", t, offset: straight ? offset : on.wall.side * on.half * 1.6, turn: session.turn, session: session.id, lane, trail });
+      }
+    });
   });
 
   return { movers, standers };
+}
+
+/* ---------- to the pit wall and back ---------- */
+
+/** A light leaves the road this far before its place at the wall, and is back on it this far after
+ * (world units). */
+export const PIT_LANE = 1.3;
+
+const clamp = (x: number, from: number, to: number): number => Math.min(to, Math.max(from, x));
+
+/** 0 to 1 over `from` to `to`, gently off and gently in. */
+export function smooth(from: number, to: number, x: number): number {
+  const u = clamp((x - from) / (to - from), 0, 1);
+  return u * u * (3 - 2 * u);
+}
+
+/** The dash to the wall, 0–1 of the way over 0–1 of its time: flat out for the first third, on the
+ * brakes for the rest, and standing at the end. */
+export function dash(u: number): number {
+  const lift = 0.35;
+  const top = 6 / (2 + lift);
+  const x = clamp(u, 0, 1);
+  return x <= lift ? (top / (2 * lift)) * x * x : 1 - (top / (3 * (1 - lift) ** 2)) * (1 - x) ** 3;
+}
+
+/** Seconds the dash takes over `distance` world units: a full lap in about three. */
+export function dashTime(distance: number): number {
+  return clamp(0.9 + 0.11 * distance, 1, 3.2);
+}
+
+/** Seconds a light takes from the wall to its place on the lap, `distance` world units ahead. */
+export function leaveTime(distance: number): number {
+  return clamp(1.2 + 0.1 * distance, 1.2, 3);
 }
 
 /** The tower's order: who waits on you, then Claude at work, then what runs, crashed, and the rest;

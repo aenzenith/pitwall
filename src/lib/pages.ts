@@ -27,10 +27,10 @@ export type PageEntry = {
 
 export const pages: PageEntry[] = [
   ...filters,
-  { id: "track", label: "track.nav", icon: "flag" },
   { id: "day", label: "day.nav", icon: "calendar" },
   { id: "sessions", label: "sessions.nav", icon: "sparkles" },
   { id: "board", label: "board.nav", icon: "board" },
+  { id: "track", label: "track.nav", icon: "flag" },
   { id: "fuel", label: "fuel.nav", icon: "fuel" },
   { id: "deps", label: "deps.nav", icon: "tools" },
   { id: "add", label: "window.addProject", icon: "plus" },

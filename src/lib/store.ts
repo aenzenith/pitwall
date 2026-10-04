@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 import type {
   BoardColumn,
@@ -20,7 +20,7 @@ import type {
   Snapshot,
   TerminalView,
 } from "./types";
-import type { TrackSettings } from "./track";
+import { trackSettings, type TrackSettings } from "./track";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -291,3 +291,16 @@ export const api = {
   boardRehome: (from: string, to: string) => invoke("board_rehome", { from, to }),
   quit: () => invoke("quit"),
 };
+
+/** The Track page's settings as just picked, on the page or in Settings: shown at once, the core
+ * keeps them for the next opening. */
+const trackPicked = ref<TrackSettings | null>(null);
+
+/** The Track page's settings as they show. */
+export const track = computed(() => trackPicked.value ?? trackSettings(snapshot.value?.settings.track));
+
+export function setTrack(next: TrackSettings): void {
+  trackPicked.value = next;
+  // An older core doesn't know the command: the choice then lasts as long as the window.
+  void api.setTrack(next).catch(() => undefined);
+}

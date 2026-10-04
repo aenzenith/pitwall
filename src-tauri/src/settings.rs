@@ -78,22 +78,20 @@ impl Default for Sounds {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TrackSettings {
-    /// A circuit (`night`, `oval`, `eight`, `street`, `straight`), or `shuffle`: another one each
+    /// A circuit (`street`, `night`, `oval`, `eight`, `straight`), or `shuffle`: another one each
     /// time the page opens.
     pub circuit: String,
     /// What a car carries: `code` (its project's three letters), `name`, or `hover`.
     pub labels: String,
     /// `full`, `calm` (half speed, short trails) or `still`.
     pub motion: String,
-    /// Stopped projects wait in the pit, under the circuit.
-    pub pit: bool,
     /// The lights' soft glow.
     pub glow: bool,
 }
 
 impl Default for TrackSettings {
     fn default() -> Self {
-        Self { circuit: "night".into(), labels: "code".into(), motion: "full".into(), pit: true, glow: true }
+        Self { circuit: "street".into(), labels: "code".into(), motion: "full".into(), glow: true }
     }
 }
 

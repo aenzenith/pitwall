@@ -1,27 +1,27 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
 import { dragRegion } from "../lib/platform";
-import { api, snapshot } from "../lib/store";
-import { circuit, CIRCUITS, codes, towerOrder, trackSettings, type TrackSettings } from "../lib/track";
+import { api, setTrack, snapshot, track as settings } from "../lib/store";
+import { circuit, CIRCUITS, codes, towerOrder } from "../lib/track";
 import type { Project } from "../lib/types";
 import TrackCanvas from "./track/TrackCanvas.vue";
 import TrackCard from "./track/TrackCard.vue";
-import TrackOptions from "./track/TrackOptions.vue";
+import TrackLegend from "./track/TrackLegend.vue";
 import TrackPicker from "./track/TrackPicker.vue";
-import TrackPit from "./track/TrackPit.vue";
 import TrackTower from "./track/TrackTower.vue";
 
 /**
- * The Track page: every project on the website's night circuit. A running dev server is a green
- * light lapping it, Claude at work an orange one; Claude waiting on you stands at the pit wall, a
- * crashed server stands where it stopped, and a stopped project waits in the pit. The tower beside
- * the circuit lists the same projects for the keyboard, and the card under it acts on the one
- * selected.
+ * The Track page: every project on a circuit. A running dev server is a green light lapping it,
+ * each Claude session at work an orange one; one waiting on you has driven to the pit wall and
+ * stands there, a crashed server stands where it stopped, and a stopped project is off the circuit, in the tower
+ * only. The tower beside the circuit lists every project for the keyboard, and the card under it
+ * acts on the one selected. Its settings are in Settings, under Track.
  */
-const emit = defineEmits<{ "open-project": [path: string] }>();
+const emit = defineEmits<{ "open-project": [path: string]; "open-settings": [] }>();
 
 /** The tower and the card, from the stage's left edge: narrower in a narrow window, where the
  * circuit needs the room more. */
@@ -29,21 +29,10 @@ const COLUMN = 272;
 const COLUMN_NARROW = 232;
 const NARROW = 780;
 const EDGE = 16;
-/** The pit strip's height. */
-const PIT = 50;
+/** The legend's room from the stage's bottom edge. */
+const LEGEND_EDGE = 14;
 
-/* ---------- the page's settings ---------- */
-
-const stored = computed(() => trackSettings(snapshot.value?.settings.track));
-/** What was just picked: shown at once, the core keeps it for the next opening. */
-const picked = ref<TrackSettings | null>(null);
-const settings = computed(() => picked.value ?? stored.value);
-
-function change(next: TrackSettings): void {
-  picked.value = next;
-  // An older core doesn't know the command: the choice then lasts as long as the page.
-  void api.setTrack(next).catch(() => undefined);
-}
+/* ---------- the circuit ---------- */
 
 /** `shuffle`'s pick for this opening. */
 const dealt = CIRCUITS[Math.floor(Math.random() * CIRCUITS.length)];
@@ -59,12 +48,6 @@ const projects = computed(() => towerOrder(listed.value));
 const letters = computed(() => codes(listed.value));
 const tags = computed(() => (settings.value.labels === "name" ? new Map(listed.value.map((project) => [project.path, project.name])) : letters.value));
 
-const stoppedProjects = computed(() => projects.value.filter((project) => project.status === "stopped"));
-const anyBusy = computed(() => listed.value.some((project) => project.status === "busy"));
-const anyRunning = computed(() => listed.value.some((project) => project.status === "running"));
-/** The straight gives every project a lane, the stopped ones too: it needs no pit. */
-const pitShown = computed(() => settings.value.pit && !straight.value && listed.value.length > 0);
-
 const selectedPath = ref<string | null>(null);
 /** The project pointed at in the tower: its light brightens, its tag shows. */
 const hot = ref<string | null>(null);
@@ -79,6 +62,28 @@ watch(
   { immediate: true },
 );
 
+/** The first session of a project's that waits on you. */
+function waitingSession(path: string): string | null {
+  return listed.value.find((entry) => entry.path === path)?.claudeSessions.find((session) => session.phase === "waiting")?.id ?? null;
+}
+
+/** What Claude waits with, brought up where its session runs: its editor window or terminal; in
+ * one of Pitwall's own terminals, its card on the board or the project's terminal panel
+ * (WindowApp: `revealTerminal`). A light at the wall names its own session; the tower, the
+ * project's first. */
+function bring(path: string, session = waitingSession(path)): void {
+  selectedPath.value = path;
+  if (session) void api.revealClaude(path, session);
+  else emit("open-project", path);
+}
+
+/** Return or a double click in the tower: a project whose Claude waits on you goes to that
+ * session, any other to the project in the list. */
+function open(path: string): void {
+  if (waitingSession(path)) bring(path);
+  else emit("open-project", path);
+}
+
 function toggle(project: Project): void {
   void api.act(project.path, project.status === "running" ? "stop" : "start");
 }
@@ -89,22 +94,52 @@ const stage = ref<HTMLElement | null>(null);
 const narrow = ref(false);
 let observer: ResizeObserver | null = null;
 
+/** What the lights mean, along the stage's bottom: one line, or more in a narrow window. */
+const legend = ref<{ $el: HTMLElement } | null>(null);
+const legendHeight = ref(0);
+let legendObserver: ResizeObserver | null = null;
+/** The legend is measured: the circuit is first laid out with its room known, so nothing moves once
+ * it is drawn. */
+const measured = ref(false);
+
 onMounted(() => {
   if (!stage.value) return;
   observer = new ResizeObserver(([entry]) => (narrow.value = entry.contentRect.width < NARROW));
   observer.observe(stage.value);
+  narrow.value = stage.value.clientWidth < NARROW;
+  // As the observer will measure it: the same number, to the fraction.
+  legendHeight.value = legend.value?.$el.getBoundingClientRect().height ?? 0;
+  measured.value = true;
 });
 
-onBeforeUnmount(() => observer?.disconnect());
+// The legend comes and goes with the projects.
+watch(
+  legend,
+  (shown) => {
+    legendObserver?.disconnect();
+    if (!shown) {
+      legendHeight.value = 0;
+      return;
+    }
+    legendObserver ??= new ResizeObserver(([entry]) => (legendHeight.value = entry.contentRect.height));
+    legendObserver.observe(shown.$el);
+  },
+  { flush: "post" },
+);
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  legendObserver?.disconnect();
+});
 
 const column = computed(() => (narrow.value ? COLUMN_NARROW : COLUMN));
 
 /** The room kept round the circuit: the column on its left, its tags above and to the right, the
- * pit wall's tags and the pit under it. */
+ * pit wall's tags under it, and the legend under those. */
 const inset = computed<Inset>(() => ({
   top: 48,
   right: narrow.value ? 44 : 60,
-  bottom: (pitShown.value ? PIT + EDGE : 0) + (straight.value ? 40 : 76),
+  bottom: (straight.value ? 40 : 76) + (legendHeight.value ? legendHeight.value + LEGEND_EDGE : 0),
   left: (listed.value.length ? EDGE + column.value : 0) + (narrow.value ? 24 : 36),
 }));
 </script>
@@ -121,14 +156,17 @@ const inset = computed<Inset>(() => ({
           <span v-if="snapshot.crashed" class="tally"><span class="dot crash" aria-hidden="true"></span>{{ t("track.crashed", { count: snapshot.crashed }) }}</span>
         </span>
       </div>
-      <TrackPicker :picked="settings.circuit" :shown="shown" @pick="change({ ...settings, circuit: $event })" />
-      <TrackOptions :settings="settings" @change="change" />
+      <TrackPicker :picked="settings.circuit" :shown="shown" @pick="setTrack({ ...settings, circuit: $event })" />
+      <button type="button" class="options" :aria-label="t('track.options')" :title="t('track.options')" @click="emit('open-settings')">
+        <Icon name="settings" :size="16" />
+      </button>
     </header>
 
     <div ref="stage" class="stage">
       <div class="sky" aria-hidden="true"></div>
 
       <TrackCanvas
+        v-if="measured"
         :circuit="course"
         :projects="projects"
         :tags="tags"
@@ -138,6 +176,7 @@ const inset = computed<Inset>(() => ({
         :inset="inset"
         @select="selectedPath = $event"
         @open="emit('open-project', $event)"
+        @bring="bring"
       />
 
       <div v-if="listed.length" class="column" :style="{ width: `${column}px` }">
@@ -146,14 +185,14 @@ const inset = computed<Inset>(() => ({
           :codes="letters"
           :selected="selectedPath"
           @select="selectedPath = $event"
-          @open="emit('open-project', $event)"
+          @open="open"
           @toggle="toggle"
           @hover="hot = $event"
         />
         <TrackCard v-if="selected" :project="selected" @open="emit('open-project', $event)" />
       </div>
 
-      <TrackPit v-if="pitShown" class="pit-strip" :style="{ left: `${EDGE * 2 + column}px` }" :projects="stoppedProjects" :codes="letters" :selected="selectedPath" :busy="anyBusy" :running="anyRunning" @select="selectedPath = $event" />
+      <TrackLegend v-if="listed.length" ref="legend" class="legend" :style="{ left: `${EDGE * 2 + column}px`, bottom: `${LEGEND_EDGE}px` }" />
 
       <p v-if="snapshot && !listed.length" class="none">{{ t("window.emptyLine1") }}</p>
     </div>
@@ -231,6 +270,26 @@ const inset = computed<Inset>(() => ({
   background: var(--crash);
 }
 
+/* The page's settings open in Settings: a quiet button, as the other pages' are. */
+.options {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.options:hover {
+  background: #262a33;
+  color: var(--text-strong);
+}
+
 /* The night the circuit lies in: darker than the window, as the output panel is. */
 .stage {
   position: relative;
@@ -263,10 +322,10 @@ const inset = computed<Inset>(() => ({
   pointer-events: auto;
 }
 
-.pit-strip {
+/* Under the circuit, in the room beside the column. */
+.legend {
   position: absolute;
   right: 16px;
-  bottom: 16px;
 }
 
 .none {

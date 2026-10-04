@@ -13,20 +13,23 @@ import { keys, shortcutModifiers } from "../lib/platform";
 import { api, snapshot } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings } from "../lib/types";
+import TrackOptions from "./track/TrackOptions.vue";
 
-type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "about";
+type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "track" | "about";
 
-/** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's). */
+/** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
+ * page's settings button Track's). */
 const props = defineProps<{ startTab?: Tab }>();
 const emit = defineEmits<{ close: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
-const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" }> = [
+const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" | "flag" }> = [
   { id: "general", label: "settings.general", icon: "settings" },
   { id: "servers", label: "settings.servers", icon: "server" },
   { id: "editor", label: "settings.editor", icon: "editor" },
   { id: "claude", label: "settings.claude", icon: "claude" },
   { id: "sounds", label: "settings.sounds", icon: "speaker" },
+  { id: "track", label: "track.nav", icon: "flag" },
 ];
 
 /** Pitwall's sounds (src-tauri/sounds). */
@@ -423,6 +426,12 @@ async function save(): Promise<void> {
             </button>
           </div>
           <small v-if="!form.notify" class="hint">{{ t("settings.soundsClaudeOff") }}</small>
+        </fieldset>
+
+        <!-- The Track page's own: each change goes to the core by its own command, never with the
+             form (`@change.stop`). -->
+        <fieldset v-show="tab === 'track'" :aria-label="t('track.nav')" @change.stop>
+          <TrackOptions />
         </fieldset>
 
         <fieldset v-show="tab === 'editor'" :aria-label="t('settings.editor')">

@@ -70,13 +70,14 @@ const depsBadge = computed(() => {
   return (deps.value ?? []).filter((report) => listed.has(report.path) && needsAttention(report)).length;
 });
 
-// The sessions' only once a page showing them (Sessions, Board) first opens: until then the core
-// doesn't work them out. The Sessions page asks for a fresh look itself on each opening; the
-// board's cards follow their sessions, so the Board page's opening asks for both here.
+// The sessions' only once a page showing them (Sessions, Board, Track) first opens: until then the
+// core doesn't work them out. The Sessions page asks for a fresh look itself on each opening; the
+// board's cards follow their sessions, so the Board page's opening asks for both here; the Track
+// page names a project's sessions on its card.
 watch(view, (shown) => {
-  if (shown === "sessions" || shown === "board") {
+  if (shown === "sessions" || shown === "board" || shown === "track") {
     if (!sessionsLink) sessionsLink = connectSessions();
-    else if (shown === "board") void loadSessions();
+    else if (shown !== "sessions") void loadSessions();
   }
   if (shown === "board") {
     if (!boardLink) boardLink = connectBoard();
@@ -94,14 +95,15 @@ onBeforeUnmount(() => {
 // up if it is shown.
 watch(visible, (on) => {
   if (!on) return;
-  if (view.value === "sessions" || view.value === "board") void loadSessions();
+  if (view.value === "sessions" || view.value === "board" || view.value === "track") void loadSessions();
   if (view.value === "board") void loadBoard();
 });
 const settingsOpen = ref(false);
-/** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's. */
-const settingsTab = ref<"claude" | undefined>(undefined);
+/** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's, the Track
+ * page's settings button on Track's. */
+const settingsTab = ref<"claude" | "track" | undefined>(undefined);
 
-function openSettings(tab?: "claude"): void {
+function openSettings(tab?: "claude" | "track"): void {
   settingsTab.value = tab;
   settingsOpen.value = true;
 }
@@ -310,7 +312,6 @@ function server(project: Project): string {
         </button>
       </nav>
       <div class="nav today">
-        <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="view = 'track'"><Icon name="flag" /> {{ t("track.nav") }}</button>
         <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
         <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="view = 'sessions'">
           <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
@@ -318,6 +319,7 @@ function server(project: Project): string {
         <button type="button" :class="{ on: view === 'board' }" :aria-current="view === 'board' ? 'page' : undefined" @click="view = 'board'">
           <Icon name="board" /> <span class="nav-label">{{ t("board.nav") }}</span>
         </button>
+        <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="view = 'track'"><Icon name="flag" /> {{ t("track.nav") }}</button>
         <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="view = 'fuel'">
           <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
           <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
@@ -335,7 +337,7 @@ function server(project: Project): string {
     </aside>
 
     <DayView v-if="view === 'day'" />
-    <TrackView v-else-if="view === 'track'" @open-project="revealProject" />
+    <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
     <FuelView v-else-if="view === 'fuel'" />
     <SessionsView
       v-else-if="view === 'sessions'"

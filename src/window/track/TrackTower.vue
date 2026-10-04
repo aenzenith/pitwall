@@ -4,6 +4,7 @@ import { claudeState, meta } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { rowKeys } from "../../lib/rows";
 import { now } from "../../lib/store";
+import { sessionsIn } from "../../lib/track";
 import type { Project } from "../../lib/types";
 
 /**
@@ -18,14 +19,24 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [path: string]; open: [path: string]; toggle: [project: Project]; hover: [path: string | null] }>();
 
+/** Claude's state in a project; with several sessions waiting on you, or none and several at work,
+ * how many (the row has room for one of the two: the card under the tower tells both). */
+function claudeText(project: Project): string {
+  const waits = sessionsIn(project, "waiting").length;
+  if (waits > 1) return t("popover.waiting", { count: waits });
+  const works = sessionsIn(project, "working").length;
+  return !waits && works > 1 ? t("track.working", { count: works }) : claudeState(project, now.value);
+}
+
 /** Where it runs, then Claude's state when there is one to tell, else how long it has been up. */
 function line(project: Project): { server: string; claude: string } {
-  const claude = claudeState(project, now.value);
+  const claude = claudeText(project);
   if (!claude) return { server: meta(project, now.value), claude: "" };
   return { server: project.status === "running" && project.port ? `:${project.port}` : meta(project, now.value), claude };
 }
 
-/** One Tab stop: arrows move the selection, ↵ goes to the project, Space starts or stops it. */
+/** One Tab stop: arrows move the selection, ↵ goes to the project (to its session, when Claude
+ * waits on you there), Space starts or stops it. */
 function onKey(event: KeyboardEvent): void {
   rowKeys(event, {
     move: (path) => emit("select", path),

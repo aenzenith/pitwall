@@ -216,50 +216,52 @@ onBeforeUnmount(hide);
     </button>
 
     <!-- A press on an option leaves the keyboard in the list. -->
-    <div
-      v-if="open"
-      ref="list"
-      class="tpick-list"
-      role="listbox"
-      tabindex="-1"
-      :aria-label="t('track.picker.title')"
-      :aria-activedescendant="optionId(active)"
-      :style="place"
-      @keydown="onKey"
-      @mousedown.prevent
-    >
+    <Transition name="tpick-pop">
       <div
-        v-for="(option, i) in options"
-        :id="optionId(i)"
-        :key="option.id"
-        :class="['tpick-option', { on: i === active, picked: option.id === picked }]"
-        role="option"
-        :aria-selected="option.id === picked"
-        :aria-label="`${option.name}: ${option.hint}`"
-        @mousemove="active = i"
-        @click="pick(option.id)"
+        v-if="open"
+        ref="list"
+        class="tpick-list"
+        role="listbox"
+        tabindex="-1"
+        :aria-label="t('track.picker.title')"
+        :aria-activedescendant="optionId(active)"
+        :style="place"
+        @keydown="onKey"
+        @mousedown.prevent
       >
-        <span class="tpick-sketch" aria-hidden="true">
-          <Icon v-if="option.id === 'shuffle'" name="shuffle" :size="26" />
-          <svg v-else class="sketch" :viewBox="`0 0 ${WIDTH} ${HEIGHT}`" fill="none">
-            <path v-for="d in option.paths" :key="d" :d="d" class="road" />
-            <path
-              v-for="(light, n) in option.lights"
-              :key="n"
-              :d="option.paths[light.path]"
-              pathLength="1"
-              :class="['glide', { claude: light.claude }]"
-              :style="{ animationDuration: `${option.seconds}s`, animationDelay: `${(-light.at * option.seconds).toFixed(2)}s` }"
-            />
-          </svg>
-        </span>
-        <span class="tpick-name">
-          <span class="tpick-name-text">{{ option.name }}</span>
-          <Icon v-if="option.id === picked" name="check" :size="13" />
-        </span>
-        <span class="tpick-hint">{{ option.hint }}</span>
+        <div
+          v-for="(option, i) in options"
+          :id="optionId(i)"
+          :key="option.id"
+          :class="['tpick-option', { on: i === active, picked: option.id === picked }]"
+          role="option"
+          :aria-selected="option.id === picked"
+          :aria-label="`${option.name}: ${option.hint}`"
+          @mousemove="active = i"
+          @click="pick(option.id)"
+        >
+          <span class="tpick-sketch" aria-hidden="true">
+            <Icon v-if="option.id === 'shuffle'" name="shuffle" :size="26" />
+            <svg v-else class="sketch" :viewBox="`0 0 ${WIDTH} ${HEIGHT}`" fill="none">
+              <path v-for="d in option.paths" :key="d" :d="d" class="road" />
+              <path
+                v-for="(light, n) in option.lights"
+                :key="n"
+                :d="option.paths[light.path]"
+                pathLength="1"
+                :class="['glide', { claude: light.claude }]"
+                :style="{ animationDuration: `${option.seconds}s`, animationDelay: `${(-light.at * option.seconds).toFixed(2)}s` }"
+              />
+            </svg>
+          </span>
+          <span class="tpick-name">
+            <span class="tpick-name-text">{{ option.name }}</span>
+            <Icon v-if="option.id === picked" name="check" :size="13" />
+          </span>
+          <span class="tpick-hint">{{ option.hint }}</span>
+        </div>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -280,17 +282,19 @@ onBeforeUnmount(hide);
   gap: 7px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: var(--radius-control);
-  background: var(--bg-control);
+  background: transparent;
   font-size: 12px;
-  color: #c7ccd3;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
+/* Quiet, as the settings button beside it. */
 .tpick-button:hover,
 .tpick-button[aria-expanded="true"] {
-  background: #2c3039;
+  background: #262a33;
+  color: var(--text-strong);
 }
 
 .tpick-button svg {
@@ -319,6 +323,28 @@ onBeforeUnmount(hide);
   border-radius: var(--radius-panel);
   background: var(--bg-panel);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  transform-origin: top right;
+}
+
+/* It opens out of the picker, from the corner under it, and fades away. */
+.tpick-pop-enter-active {
+  transition:
+    opacity 0.16s ease-out,
+    transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tpick-pop-leave-active {
+  transition: opacity 0.1s ease-in;
+  pointer-events: none;
+}
+
+.tpick-pop-enter-from {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+}
+
+.tpick-pop-leave-to {
+  opacity: 0;
 }
 
 /* The keyboard's place is the lit option, not a ring round the list. */
@@ -395,6 +421,11 @@ onBeforeUnmount(hide);
 @media (prefers-reduced-motion: reduce) {
   .glide {
     animation: none;
+  }
+
+  .tpick-pop-enter-active,
+  .tpick-pop-leave-active {
+    transition: none;
   }
 }
 

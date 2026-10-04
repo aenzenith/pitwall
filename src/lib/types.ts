@@ -97,7 +97,7 @@ export type Settings = {
   /** How a project's board is drawn: `columns` (side by side) or `list` (one under the other). */
   boardView?: string;
   /** The Track page's own settings (lib/track: TrackSettings), read leniently. */
-  track?: { circuit?: string; labels?: string; motion?: string; pit?: boolean; glow?: boolean };
+  track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
 };
 
 /** An open project terminal. */
