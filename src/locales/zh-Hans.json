@@ -94,7 +94,7 @@
   "window.filter.all": "所有项目",
   "window.filter.running": "运行中",
   "window.filter.favourites": "收藏",
-  "window.filter.waiting": "Claude 在等你",
+  "window.filter.waiting": "待处理",
   "window.addProject": "添加项目",
   "window.col.project": "项目",
   "window.col.branch": "分支",

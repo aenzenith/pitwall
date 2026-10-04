@@ -94,7 +94,7 @@
   "window.filter.all": "すべてのプロジェクト",
   "window.filter.running": "実行中",
   "window.filter.favourites": "お気に入り",
-  "window.filter.waiting": "Claudeが入力待ち",
+  "window.filter.waiting": "要確認",
   "window.addProject": "プロジェクトを追加",
   "window.col.project": "プロジェクト",
   "window.col.branch": "ブランチ",

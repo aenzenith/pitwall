@@ -96,7 +96,7 @@
   "window.filter.all": "Todos los proyectos",
   "window.filter.running": "En ejecución",
   "window.filter.favourites": "Favoritos",
-  "window.filter.waiting": "Claude te espera",
+  "window.filter.waiting": "Por revisar",
   "window.addProject": "Agregar proyecto",
   "window.col.project": "Proyecto",
   "window.col.branch": "Rama",

@@ -97,7 +97,7 @@
   "window.filter.all": "Все проекты",
   "window.filter.running": "Запущенные",
   "window.filter.favourites": "Избранное",
-  "window.filter.waiting": "Claude ждёт",
+  "window.filter.waiting": "Требуют внимания",
   "window.addProject": "Добавить проект",
   "window.col.project": "Проект",
   "window.col.branch": "Ветка",

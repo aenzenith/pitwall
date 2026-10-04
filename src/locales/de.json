@@ -95,7 +95,7 @@
   "window.filter.all": "Alle Projekte",
   "window.filter.running": "Aktiv",
   "window.filter.favourites": "Favoriten",
-  "window.filter.waiting": "Claude wartet",
+  "window.filter.waiting": "Zu prüfen",
   "window.addProject": "Projekt hinzufügen",
   "window.col.project": "Projekt",
   "window.col.branch": "Branch",

@@ -95,7 +95,7 @@
   "window.filter.all": "Tüm projeler",
   "window.filter.running": "Çalışanlar",
   "window.filter.favourites": "Favoriler",
-  "window.filter.waiting": "Claude bekliyor",
+  "window.filter.waiting": "Bakılacaklar",
   "window.addProject": "Proje ekle",
   "window.col.project": "Proje",
   "window.col.branch": "Dal",
