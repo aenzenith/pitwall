@@ -289,8 +289,8 @@ pub fn run() {
             // The main window and the switcher are made on first use (`windows`).
             windows::setup(app.handle());
 
-            // One loop for everything periodic: commands every second, heartbeat and Claude every
-            // 5 s, health every 30 s.
+            // One loop for everything periodic: commands and peers every second, heartbeat and
+            // Claude every 5 s, health every 30 s.
             thread::spawn(move || {
                 let mut tick: u64 = 0;
                 loop {

@@ -61,10 +61,6 @@ impl Core {
         self.notify();
     }
 
-    pub(super) fn has_pending(&self) -> bool {
-        !self.lock().pending.is_empty()
-    }
-
     pub(super) fn act_now(self: &Arc<Self>, path: &str, action: Action) {
         let (running_here, stoppable, runner, root_owner) = {
             let inner = self.lock();

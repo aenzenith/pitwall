@@ -275,8 +275,9 @@ impl Core {
 
         self.follow_peer_output();
 
-        // While a spinner waits on another participant, read its state every second.
-        if self.has_pending() && !tick.is_multiple_of(HEARTBEAT_EVERY) {
+        // The other participants' state is read every second, not only with the heartbeat: a
+        // server started or stopped in a VS Code window shows here as soon as it does there.
+        if !tick.is_multiple_of(HEARTBEAT_EVERY) {
             let peers = self.registry.read_peers();
             self.lock().peers = peers;
             self.notify();
