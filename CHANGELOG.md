@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.0](https://github.com/aenzenith/pitwall/compare/v1.3.0...v1.4.0) (2026-10-04)
+
+
+### Features
+
+* **board:** a mark at each column's head ([e94ff91](https://github.com/aenzenith/pitwall/commit/e94ff9125c98a3287b44d4bbbe298c96dc02ee7f))
+* **board:** a note's image opens large ([38b3abf](https://github.com/aenzenith/pitwall/commit/38b3abf89ca6715bd4620d354443a7081f8ce070))
+* **board:** the done cards of earlier days ([9f4fade](https://github.com/aenzenith/pitwall/commit/9f4fade02da5d0acd906fd6271d2f7861041fb17))
+* **claude:** a session comes up where it was started ([36000a1](https://github.com/aenzenith/pitwall/commit/36000a129664d9cc05b03ed0f636ecd6d14e19a1))
+* **sessions:** a session's terminal sits under its details ([255c291](https://github.com/aenzenith/pitwall/commit/255c291148b927e47ea9501d84446c9b7a0fa9d9))
+* **sessions:** the sessions of earlier days ([e139598](https://github.com/aenzenith/pitwall/commit/e139598ee0b09ef1aa4b58b43b01eae2215141e3))
+* **track:** each Claude session a light that drives to the pit wall ([03e56e9](https://github.com/aenzenith/pitwall/commit/03e56e9fd62a49294353e71451e5e146c19fd4a9))
+* **ui:** the folder picker opens in the projects folder ([2f21681](https://github.com/aenzenith/pitwall/commit/2f21681005bfc59f05b6df1666bf6b5556274f15))
+
+
+### Bug Fixes
+
+* **board:** a selected card grows to its buttons instead of jumping ([e7f97ec](https://github.com/aenzenith/pitwall/commit/e7f97ecc99a7027053310cafb4371225559abc09))
+* **fuel:** an ember's glow no longer ends at its cell's edge ([3b56fd8](https://github.com/aenzenith/pitwall/commit/3b56fd834e73f8861bba2b66f2ec3a31b5fbcdf3))
+* **tray:** the popover fades in ([2b2000c](https://github.com/aenzenith/pitwall/commit/2b2000cc92f8821de27ee242f05a3156cbd409dc))
+* **window:** the Claude filter is named "Needs attention" ([5611652](https://github.com/aenzenith/pitwall/commit/5611652f67ebbb7fb96d50a573d490b2bfeaac84))
+
 ## [1.3.0](https://github.com/aenzenith/pitwall/compare/v1.2.0...v1.3.0) (2026-10-04)
 
 
