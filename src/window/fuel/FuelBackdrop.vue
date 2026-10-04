@@ -71,6 +71,18 @@ float fbm(vec2 p) {
   return v;
 }
 
+// The ember of one cell of the grid, if it has one, seen from f: a place measured from that cell's centre.
+float ember(vec2 id, vec2 f, float seed) {
+  float h = hash(id + seed);
+  if (h < 0.82 - 0.3 * uHeat) return 0.0;
+  vec2 at = (vec2(hash(id + seed + 1.3), hash(id + seed + 7.1)) - 0.5) * 0.6;
+  float size = 0.035 + 0.05 * hash(id + seed + 3.7);
+  float flicker = 0.55 + 0.45 * sin(uTime * 2.0 + h * 40.0);
+  float d = length(f - at);
+  // A hot core in a soft halo.
+  return flicker * (smoothstep(size, 0.0, d) + 0.35 * exp(-d * d / (size * size * 6.0)));
+}
+
 // One layer of embers: a spark in some cells of a grid that drifts up, sways and flickers.
 float embers(vec2 uv, float aspect, float scale, float speed, float seed) {
   vec2 p = vec2(uv.x * aspect, uv.y) * scale;
@@ -78,14 +90,13 @@ float embers(vec2 uv, float aspect, float scale, float speed, float seed) {
   p.x += sin(p.y * 0.9 + seed) * 0.25;
   vec2 id = floor(p);
   vec2 f = fract(p) - 0.5;
-  float h = hash(id + seed);
-  vec2 at = (vec2(hash(id + seed + 1.3), hash(id + seed + 7.1)) - 0.5) * 0.6;
-  float size = 0.035 + 0.05 * hash(id + seed + 3.7);
-  float flicker = 0.55 + 0.45 * sin(uTime * 2.0 + h * 40.0);
-  float lit = step(0.82 - 0.3 * uHeat, h);
-  float d = length(f - at);
-  // A hot core in a soft halo.
-  return lit * flicker * (smoothstep(size, 0.0, d) + 0.35 * exp(-d * d / (size * size * 6.0)));
+  // The cell drawn in and the three nearest it: a big ember's halo reaches past its own cell, and
+  // drawn from one cell alone it would end at that cell's edge.
+  vec2 side = step(0.0, f) * 2.0 - 1.0;
+  return ember(id, f, seed)
+    + ember(id + vec2(side.x, 0.0), f - vec2(side.x, 0.0), seed)
+    + ember(id + vec2(0.0, side.y), f - vec2(0.0, side.y), seed)
+    + ember(id + side, f - side, seed);
 }
 
 // One layer of sparks circling a pod just outside its bezel, drawn like the rising embers (round, a
@@ -96,21 +107,26 @@ float embers(vec2 uv, float aspect, float scale, float speed, float seed) {
 float orbit(vec2 v, float band, float radius, float n, float turns, float seed) {
   float d = length(v);
   float s = (atan(v.y, v.x) / 6.2831853 + 0.5) * n - uTime * n * turns;
-  float id = mod(floor(s), n);
-  float h = hash(vec2(id, seed));
-  float wander = 0.1 * sin(uTime * (0.12 + 0.36 * hash(vec2(id, seed + 5.3))) + h * 31.0);
-  float reach = hash(vec2(id, seed + 9.1));
-  float lane = 0.035 + 0.24 * reach * reach + 0.015 * sin(uTime * 0.4 + h * 17.0);
-  float along = (fract(s) - 0.5 - wander) * 6.2831853 * d / n;
-  float across = (band - lane) * radius;
-  // The embers' sizes, in the embers' units: a share of the canvas's height.
-  float size = (0.035 + 0.05 * hash(vec2(id, seed + 3.1))) * uRes.y / 16.0;
-  float lit = step(0.6 - 0.3 * uHeat, hash(vec2(id, seed + 7.7)));
-  float dist = length(vec2(along, across));
-  float flicker = 0.55 + 0.45 * sin(uTime * 2.0 + h * 40.0);
-  // Faded out at its slot's ends, so no edge cuts a spark's glow.
-  float inSlot = smoothstep(0.0, 0.2, fract(s)) * smoothstep(1.0, 0.8, fract(s));
-  return lit * flicker * inSlot * (smoothstep(size, 0.0, dist) + 0.35 * exp(-dist * dist / (size * size * 6.0)));
+  float sum = 0.0;
+  // The slot drawn in and the one on either side of it: a halo is wider than its slot, and drawn
+  // from one slot alone it would end at that slot's ends.
+  for (int k = -1; k <= 1; k++) {
+    float slot = floor(s) + float(k);
+    float id = mod(slot, n);
+    if (hash(vec2(id, seed + 7.7)) < 0.6 - 0.3 * uHeat) continue;
+    float h = hash(vec2(id, seed));
+    float wander = 0.1 * sin(uTime * (0.12 + 0.36 * hash(vec2(id, seed + 5.3))) + h * 31.0);
+    float reach = hash(vec2(id, seed + 9.1));
+    float lane = 0.035 + 0.24 * reach * reach + 0.015 * sin(uTime * 0.4 + h * 17.0);
+    float along = (s - slot - 0.5 - wander) * 6.2831853 * d / n;
+    float across = (band - lane) * radius;
+    // The embers' sizes, in the embers' units: a share of the canvas's height.
+    float size = (0.035 + 0.05 * hash(vec2(id, seed + 3.1))) * uRes.y / 16.0;
+    float dist = length(vec2(along, across));
+    float flicker = 0.55 + 0.45 * sin(uTime * 2.0 + h * 40.0);
+    sum += flicker * (smoothstep(size, 0.0, dist) + 0.35 * exp(-dist * dist / (size * size * 6.0)));
+  }
+  return sum;
 }
 
 void main() {
