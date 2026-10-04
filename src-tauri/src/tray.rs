@@ -101,9 +101,14 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
 
     place_popover(app, &popover);
 
+    // It comes clear and fades in: AppKit would bring it up at once (`make_panel`).
+    #[cfg(target_os = "macos")]
+    fade(&popover, 0.0, Duration::ZERO);
     // Not `set_focus`: on macOS it brings Pitwall to the front, and Pitwall's window with it.
     let _ = windows::show(&popover);
     focus_alone(&popover);
+    #[cfg(target_os = "macos")]
+    fade(&popover, 1.0, FADE);
 
     if let Some(state) = app.try_state::<AppState>() {
         state.core.popover_opened();
@@ -240,6 +245,45 @@ fn focus_alone<R: Runtime>(window: &WebviewWindow<R>) {
     });
 }
 
+/// How long the popover takes to fade in: as long as the switcher's panel does (`.panel.shown`).
+#[cfg(target_os = "macos")]
+const FADE: Duration = Duration::from_millis(160);
+
+/// Takes a window to `alpha` over `time`, easing out as the switcher's panel does, or at once for
+/// no time.
+#[cfg(target_os = "macos")]
+fn fade<R: Runtime>(window: &WebviewWindow<R>, alpha: f64, time: Duration) {
+    let Ok(ns_window) = window.ns_window() else {
+        return;
+    };
+    let ns_window = ns_window as usize;
+
+    let _ = window.run_on_main_thread(move || {
+        use objc2::runtime::AnyObject;
+        use objc2::{class, msg_send};
+        use objc2_foundation::NSString;
+
+        // SAFETY: as in `focus_alone`: this window's NSWindow, on the main thread.
+        let ns_window = unsafe { &*(ns_window as *const objc2_app_kit::NSWindow) };
+        if time.is_zero() {
+            ns_window.setAlphaValue(alpha);
+            return;
+        }
+        // SAFETY: AppKit's and Core Animation's own classes, each message with the types it
+        // declares.
+        unsafe {
+            let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
+            let context: *mut AnyObject = msg_send![class!(NSAnimationContext), currentContext];
+            let _: () = msg_send![context, setDuration: time.as_secs_f64()];
+            let ease: *mut AnyObject = msg_send![class!(CAMediaTimingFunction), functionWithName: &*NSString::from_str("easeOut")];
+            let _: () = msg_send![context, setTimingFunction: ease];
+            let animator: *mut AnyObject = msg_send![ns_window, animator];
+            let _: () = msg_send![animator, setAlphaValue: alpha];
+            let _: () = msg_send![class!(NSAnimationContext), endGrouping];
+        }
+    });
+}
+
 /// Turns the popover or the switcher into a non-activating panel, as a menu bar extra's and
 /// Spotlight's are: it takes the keyboard while the app you are in stays in front. Activating
 /// Pitwall for it raised Pitwall's main window too, and now and then that window took the keyboard:
@@ -255,11 +299,12 @@ pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
         return;
     };
     let ns_window = ns_window as usize;
+    let popover = window.label() == POPOVER;
 
     let _ = window.run_on_main_thread(move || {
         use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, NSObjectProtocol, Sel};
         use objc2::{msg_send, sel, ClassType};
-        use objc2_app_kit::{NSPanel, NSWindow, NSWindowStyleMask};
+        use objc2_app_kit::{NSPanel, NSWindow, NSWindowAnimationBehavior, NSWindowStyleMask};
 
         extern "C-unwind" fn yes(_: &AnyObject, _: Sel) -> Bool {
             Bool::YES
@@ -296,6 +341,11 @@ pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
         // Hiding is the blur handler's job, not AppKit's.
         ns_window.setHidesOnDeactivate(false);
         let _: () = unsafe { msg_send![ns_window, setBecomesKeyOnlyIfNeeded: false] };
+        // AppKit animates a window by its class, and a panel pops in with a bounce. As a utility
+        // window the popover comes at once and fades out; `toggle_popover` fades it in.
+        if popover {
+            ns_window.setAnimationBehavior(NSWindowAnimationBehavior::UtilityWindow);
+        }
     });
 }
 
