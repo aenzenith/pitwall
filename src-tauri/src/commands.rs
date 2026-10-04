@@ -44,12 +44,18 @@ pub fn resolve_address(state: State<'_, AppState>, path: String) -> Option<Strin
     state.core.resolve_url(&path, local)
 }
 
-/// Folder picker; the chosen folder becomes a project.
+/// Folder picker; the chosen folder becomes a project. It opens in the projects folder when one
+/// is set.
 #[tauri::command]
 pub fn pick_folder(app: AppHandle, state: State<'_, AppState>) {
     let core = state.core.clone();
+    let mut dialog = app.dialog().file().set_title(t!("common.addProject"));
 
-    app.dialog().file().set_title(t!("common.addProject")).pick_folder(move |folder| {
+    if let Some(dir) = core.settings().projects_dir.filter(|dir| std::path::Path::new(dir).is_dir()) {
+        dialog = dialog.set_directory(dir);
+    }
+
+    dialog.pick_folder(move |folder| {
         if let Some(path) = folder.and_then(|f| f.into_path().ok()) {
             let _ = core.add_project(&path.to_string_lossy());
         }
