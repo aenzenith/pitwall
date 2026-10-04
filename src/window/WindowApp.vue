@@ -20,7 +20,7 @@ import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, visible } from "../lib/store";
-import type { Project } from "../lib/types";
+import type { Card, Project } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
 import DepsView from "./DepsView.vue";
@@ -236,8 +236,14 @@ async function revealTerminal(path: string, id: number): Promise<void> {
     () => undefined,
     () => undefined,
   );
-  const session = sessions.value?.sessions.find((row) => row.origin.kind === "pitwall" && row.origin.terminal === id)?.id;
-  const card = board.value?.find((entry) => onBoard(entry, null, now.value) && (entry.terminal === id || (session !== undefined && entry.session === session)));
+  const cards = (board.value ?? []).filter((entry) => onBoard(entry, null, now.value));
+  // The session that runs there: as the sessions' list tells it, else as the card started in that
+  // terminal holds it (the list comes only once a page that shows it has opened).
+  const session = sessions.value?.sessions.find((row) => row.origin.kind === "pitwall" && row.origin.terminal === id)?.id ?? cards.find((entry) => entry.terminal === id)?.session ?? null;
+  // A session several cards hold works for the one given last (core/board.rs: `follow_board`).
+  const card = cards
+    .filter((entry) => entry.terminal === id || (session !== null && entry.session === session))
+    .reduce<Card | null>((last, entry) => (!last || (entry.givenAt ?? 0) >= (last.givenAt ?? 0) ? entry : last), null);
   if (card) {
     cardRequest.value = { id: card.id, path: card.path };
     view.value = "board";
