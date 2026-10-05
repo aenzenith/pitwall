@@ -562,7 +562,7 @@ function server(project: Project): string {
 .version {
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 400;
   color: var(--text-subtle);
   white-space: nowrap;
