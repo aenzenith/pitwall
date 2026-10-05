@@ -845,6 +845,9 @@ fn comparator_holds(token: &str, version: Version, flavor: Flavor) -> Option<boo
     let exact = partial.len() == 3;
     let upper = next(&partial)?;
     let in_range = |high: Version| version >= low && version < high;
+    // Composer compares against the version filled up with zeros: `>8.1` is above 8.1.0 (npm:
+    // above every 8.1.x), `<=8.3` up to 8.3.0, `!=8.1` anything but 8.1.0.
+    let filled = exact || matches!(flavor, Flavor::Composer);
 
     Some(match operator {
         "" | "=" | "==" => {
@@ -855,7 +858,7 @@ fn comparator_holds(token: &str, version: Version, flavor: Flavor) -> Option<boo
             }
         }
         "!=" => {
-            if exact {
+            if filled {
                 version != low
             } else {
                 !in_range(upper)
@@ -863,7 +866,7 @@ fn comparator_holds(token: &str, version: Version, flavor: Flavor) -> Option<boo
         }
         ">=" => version >= low,
         ">" => {
-            if exact {
+            if filled {
                 version > low
             } else {
                 version >= upper
@@ -871,7 +874,7 @@ fn comparator_holds(token: &str, version: Version, flavor: Flavor) -> Option<boo
         }
         "<" => version < low,
         "<=" => {
-            if exact {
+            if filled {
                 version <= low
             } else {
                 version < upper
