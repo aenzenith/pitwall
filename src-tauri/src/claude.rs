@@ -593,8 +593,11 @@ impl HookSession {
             if matches!(phase, HookPhase::Idle | HookPhase::Ended | HookPhase::Waiting(TurnKind::Finished)) {
                 self.threads.clear();
             }
+            // A tool call that finishes mid-turn begins nothing: the work began with its prompt.
+            if !(phase == HookPhase::Working && self.phase == HookPhase::Working) {
+                self.since = event.at;
+            }
             self.phase = phase;
-            self.since = event.at;
         }
     }
 
