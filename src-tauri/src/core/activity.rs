@@ -681,7 +681,8 @@ fn phase_name(phase: SessionPhase) -> &'static str {
 }
 
 /// The commits made in `path` between `start` and `end`, on any branch, by whoever the
-/// repository says you are.
+/// repository says you are. Not what `git stash` keeps: its "index on …" and "untracked files
+/// on …" are commits too, reached from `refs/stash` alone.
 fn day_commits(path: &str, start: u64, end: u64) -> Vec<DayCommit> {
     if !Path::new(path).join(".git").exists() {
         return Vec::new();
@@ -694,7 +695,7 @@ fn day_commits(path: &str, start: u64, end: u64) -> Vec<DayCommit> {
         .unwrap_or_default();
 
     let mut command = process::command("git");
-    command.args(["-C", path, "log", "--all", "--no-merges", "--fixed-strings", "--format=%ct%x1f%s"]);
+    command.args(["-C", path, "log", "--exclude=refs/stash", "--all", "--no-merges", "--fixed-strings", "--format=%ct%x1f%s"]);
     command.arg(format!("--since=@{}", start / 1000)).arg(format!("--until=@{}", end / 1000));
     if !email.is_empty() {
         command.arg(format!("--author={email}"));
