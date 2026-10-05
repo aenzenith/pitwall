@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/aenzenith/pitwall/compare/v1.5.0...v1.6.0) (2026-10-05)
+
+
+### Features
+
+* **track:** the page's terminals start collapsed ([89cc967](https://github.com/aenzenith/pitwall/commit/89cc9677ba0c6136384f54414a25c260b1cdfec6))
+
+
+### Bug Fixes
+
+* **terminal:** a collapsed panel leaves the keyboard alone ([ea803b2](https://github.com/aenzenith/pitwall/commit/ea803b2d7105fb50cad58bd1a76f28e207b46af4))
+
 ## [1.5.0](https://github.com/aenzenith/pitwall/compare/v1.4.1...v1.5.0) (2026-10-05)
 
 
