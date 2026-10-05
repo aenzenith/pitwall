@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import ClaudeDot from "../components/ClaudeDot.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import { t } from "../lib/i18n";
@@ -16,7 +17,8 @@ import {
   terminalRequest,
   useResizer,
 } from "../lib/panel";
-import { api } from "../lib/store";
+import { statusLine } from "../lib/sessions";
+import { api, now, sessions } from "../lib/store";
 import { attach, fitView, focusView, measure } from "../lib/terminals";
 import type { Project } from "../lib/types";
 import RenameDialog from "./RenameDialog.vue";
@@ -37,6 +39,19 @@ const opening = ref(false);
 const renaming = ref<{ id: number; name: string } | null>(null);
 
 const terminals = computed(() => props.project.terminals);
+
+/** Claude in a tab's terminal, by the terminal's id: at work, or waiting on you (a turn finished
+ * and not looked at yet, a question, a permission prompt). Nothing for a tab with neither. */
+const live = computed(() => {
+  const states = new Map<number, { phase: "waiting" | "working"; text: string }>();
+  for (const row of sessions.value?.sessions ?? []) {
+    if (row.origin.kind !== "pitwall" || (row.phase !== "waiting" && row.phase !== "working")) continue;
+    // Two in one terminal (one left running in the background): the one that waits on you tells.
+    if (row.phase === "working" && states.get(row.origin.terminal)?.phase === "waiting") continue;
+    states.set(row.origin.terminal, { phase: row.phase, text: statusLine(row, now.value).text });
+  }
+  return states;
+});
 const active = computed(() => {
   const id = chosen.value[props.project.path];
   return terminals.value.find((t) => t.id === id) ?? terminals.value[terminals.value.length - 1] ?? null;
@@ -285,6 +300,7 @@ defineExpose({ openTerminal });
             <ClaudeLogo v-if="term.kind === 'claude'" :size="11" />
             <Icon v-else name="terminal" :size="11" />
             <span>{{ term.name }}</span>
+            <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
           <button
             type="button"

@@ -73,7 +73,8 @@ const depsBadge = computed(() => {
 // The sessions' only once a page showing them (Sessions, Board, Track) first opens: until then the
 // core doesn't work them out. The Sessions page asks for a fresh look itself on each opening; the
 // board's cards follow their sessions, so the Board page's opening asks for both here; the Track
-// page names a project's sessions on its card.
+// page names a project's sessions on its card. The list needs them for its terminal tabs alone
+// (`listTabs`).
 watch(view, (shown) => {
   if (shown === "sessions" || shown === "board" || shown === "track") {
     if (!sessionsLink) sessionsLink = connectSessions();
@@ -95,7 +96,7 @@ onBeforeUnmount(() => {
 // up if it is shown.
 watch(visible, (on) => {
   if (!on) return;
-  if (view.value === "sessions" || view.value === "board" || view.value === "track") void loadSessions();
+  if (view.value === "sessions" || view.value === "board" || view.value === "track" || listTabs.value) void loadSessions();
   if (view.value === "board") void loadBoard();
 });
 const settingsOpen = ref(false);
@@ -126,6 +127,17 @@ const rows = computed(() => {
   return q ? searchProjects(shown, q).map((match) => match.project) : shown;
 });
 const selected = computed(() => projects.value.find((p) => p.path === selectedPath.value) ?? null);
+
+/** The list shows a project with a terminal open: its tabs tell Claude's state in them
+ * (TerminalPanel), which the sessions hold. */
+const listTabs = computed(() => view.value === "projects" && (selected.value?.terminals.length ?? 0) > 0);
+watch(
+  listTabs,
+  (tabs) => {
+    if (tabs && !sessionsLink) sessionsLink = connectSessions();
+  },
+  { immediate: true },
+);
 
 // Keep a selection while there is something to show.
 watch(
