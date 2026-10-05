@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
-import { COLLAPSE_MS, COLLAPSED_HEIGHT, PANEL_MIN, terminalRequest, trackTerminalCollapsed } from "../lib/panel";
+import { COLLAPSED_HEIGHT, terminalRequest } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, setTrack, snapshot, track as settings } from "../lib/store";
 import { circuit, CIRCUITS, codes, towerOrder } from "../lib/track";
@@ -96,19 +96,11 @@ function toggle(project: Project): void {
 const terminals = ref<InstanceType<typeof TerminalPanel> | null>(null);
 
 /**
- * The page's room for the selected project's terminals (TerminalPanel, `track`): its least height,
- * or its tab row while it is collapsed. Taller than that, the panel lies over the stage, so the
- * circuit, the tower and the card stay as they are. Collapsing gives the room up at once (the
- * stage is there as the panel slides off it); expanding takes it once the panel is up.
+ * The page's room for the selected project's terminals (TerminalPanel, `track`): its tab row, the
+ * panel collapsed, and never more. Open, the panel is a layer of its own over the stage, so the
+ * circuit, the tower, the card and the legend stay as they are whatever its height.
  */
-const room = ref(trackTerminalCollapsed.value ? COLLAPSED_HEIGHT : PANEL_MIN);
-let settle: ReturnType<typeof setTimeout> | undefined;
-
-watch(trackTerminalCollapsed, (collapsed) => {
-  clearTimeout(settle);
-  if (collapsed) room.value = COLLAPSED_HEIGHT;
-  else settle = setTimeout(() => (room.value = PANEL_MIN), COLLAPSE_MS);
-});
+const ROOM = COLLAPSED_HEIGHT;
 
 // A Claude session in a terminal opened here was brought up (WindowApp: `revealTerminal`): its
 // project, and the panel shows its tab.
@@ -175,7 +167,6 @@ watch(
 onBeforeUnmount(() => {
   observer?.disconnect();
   legendObserver?.disconnect();
-  clearTimeout(settle);
 });
 
 const column = computed(() => (narrow.value ? COLUMN_NARROW : COLUMN));
@@ -208,7 +199,7 @@ const inset = computed<Inset>(() => ({
       </button>
     </header>
 
-    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${room}px` : undefined }" @pointerdown="foldTerminals">
+    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${ROOM}px` : undefined }" @pointerdown="foldTerminals">
       <div class="sky" aria-hidden="true"></div>
 
       <TrackCanvas
@@ -243,7 +234,7 @@ const inset = computed<Inset>(() => ({
       <p v-if="snapshot && !listed.length" class="none">{{ t("window.emptyLine1") }}</p>
     </div>
 
-    <!-- The selected project's terminals, over the page's bottom: `room` of it is theirs. -->
+    <!-- The selected project's terminals, over the page's bottom: its tab row's height (`ROOM`) is theirs. -->
     <TerminalPanel v-if="selected" ref="terminals" :project="selected" track />
   </div>
 </template>

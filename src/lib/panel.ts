@@ -53,8 +53,8 @@ export const terminalCollapsed = ref(false);
  * The Track page's terminals: the list's panel (window/TerminalPanel), pinned to the page's bottom
  * with a height and a collapsed state of its own. Every launch starts it collapsed, its tab row
  * alone, and expanded at this default: room for a Claude session, where the least height leaves
- * two rows. Only the least height of the page is its room: taller, as it starts, it lies over the
- * circuit and the tower, which stay as they are, and a press on them collapses it again.
+ * two rows. Only its tab row's height of the page is its room: open, it lies over the circuit and
+ * the tower, which stay as they are, and a press on them collapses it again.
  */
 const TRACK_TERMINAL_DEFAULT = 350;
 export const trackTerminalHeight = ref(TRACK_TERMINAL_DEFAULT);
