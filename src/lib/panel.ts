@@ -54,7 +54,7 @@ export const terminalCollapsed = ref(false);
  * with a height and a collapsed state of its own. Every launch starts it collapsed, its tab row
  * alone, and expanded at this default: room for a Claude session, where the least height leaves
  * two rows. Only the least height of the page is its room: taller, as it starts, it lies over the
- * circuit and the tower, which stay as they are.
+ * circuit and the tower, which stay as they are, and a press on them collapses it again.
  */
 const TRACK_TERMINAL_DEFAULT = 350;
 export const trackTerminalHeight = ref(TRACK_TERMINAL_DEFAULT);

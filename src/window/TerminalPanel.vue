@@ -33,7 +33,7 @@ const REQUEST_MS = 5_000;
  * The selected project's terminals. `track`: the Track page's, the same panel with one difference:
  * it lies over the page's bottom instead of taking its room from what is above it, so nothing there
  * is laid out again (or scrolls in less room) as it grows. Its height and collapsed state are that
- * page's own (lib/panel).
+ * page's own (lib/panel), and a press on what it lies over folds it away (`collapse`).
  */
 const props = defineProps<{ project: Project; track?: boolean }>();
 
@@ -91,6 +91,14 @@ function toggleCollapsed(): void {
     animating.value = false;
     if (!collapsed.value && active.value) fitView(active.value.id);
   }, COLLAPSE_MS + 40);
+}
+
+/**
+ * The Track page's panel folds away on a press on the stage behind it (TrackView), its tab row
+ * left. Not while a tab is opening: its shell starts at the open panel's size.
+ */
+function collapse(): void {
+  if (!collapsed.value && !opening.value) toggleCollapsed();
 }
 
 /** The handle doesn't drag a collapsed panel; the button brings it back. */
@@ -269,7 +277,7 @@ onBeforeUnmount(() => {
   clearTimeout(settle);
 });
 
-defineExpose({ openTerminal });
+defineExpose({ openTerminal, collapse });
 </script>
 
 <template>

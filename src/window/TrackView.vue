@@ -120,6 +120,12 @@ watch(
   { immediate: true },
 );
 
+/** A press on the stage, anywhere behind the panel: the terminals fold away to their tab row and
+ * the page is the circuit's again. */
+function foldTerminals(): void {
+  terminals.value?.collapse();
+}
+
 /** ⌘T: a new terminal in the selected project (WindowApp: `onKey`). */
 function openTerminal(claude = false): void {
   void terminals.value?.openTerminal(claude);
@@ -202,7 +208,7 @@ const inset = computed<Inset>(() => ({
       </button>
     </header>
 
-    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${room}px` : undefined }">
+    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${room}px` : undefined }" @pointerdown="foldTerminals">
       <div class="sky" aria-hidden="true"></div>
 
       <TrackCanvas
