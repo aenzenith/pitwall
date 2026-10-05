@@ -360,7 +360,8 @@ struct Log {
     verdict: Option<Verdict>,
 }
 
-/// A session counts as working while its log changed this recently and the turn isn't over.
+/// A session counts as working while its log changed this recently and the turn isn't over, or
+/// for as long as Claude Code itself calls it busy.
 pub(crate) const WORKING_WINDOW_MS: u64 = 5 * 60 * 1000;
 /// Hook events, and sessions known only from them, are dropped after a day.
 const EVENT_MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
@@ -601,9 +602,10 @@ impl HookSession {
     /// the log decides. A prompt counts as answered once the log is written again. `busy`:
     /// Claude Code itself calls the session busy, so a turn that ended isn't over: subagents it
     /// left running in the background are at work, and it takes their results up without a
-    /// prompt.
+    /// prompt. Nor is a turn under way idle while it is silent: one tool call can run longer
+    /// than the working window, with no event and no log line until it ends.
     fn state(&mut self, logged: u64, baseline: u64, recent: u64, busy: bool) -> Option<(SessionPhase, Option<Turn>)> {
-        let alive = if self.last.max(logged) > recent { SessionPhase::Working } else { SessionPhase::Idle };
+        let alive = if busy || self.last.max(logged) > recent { SessionPhase::Working } else { SessionPhase::Idle };
 
         match self.phase {
             HookPhase::Log => None,
@@ -667,12 +669,12 @@ fn dir_match(dir: &str, encoded: &str) -> Option<bool> {
 }
 
 /// A session decided by its log's last lines. `busy`: Claude Code itself calls it busy, which
-/// keeps a finished turn at work (`HookSession::state`).
+/// keeps a finished turn at work, and a silent one under way (`HookSession::state`).
 fn log_state(verdict: &Verdict, modified: u64, baseline: u64, recent: u64, busy: bool) -> (SessionPhase, Option<Turn>) {
     let phase = match verdict.turn {
         Some(turn) if busy && turn.kind == TurnKind::Finished => SessionPhase::Working,
         Some(turn) if turn.at > baseline => SessionPhase::Waiting,
-        None if modified > recent => SessionPhase::Working,
+        None if busy || modified > recent => SessionPhase::Working,
         _ => SessionPhase::Idle,
     };
 
