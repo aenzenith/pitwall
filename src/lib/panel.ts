@@ -51,12 +51,12 @@ export const terminalCollapsed = ref(false);
 
 /**
  * The Track page's terminals: the list's panel (window/TerminalPanel), pinned to the page's bottom
- * with a height and a collapsed state of its own. Every launch starts it at its least height, and
- * only that much of the page is its room: dragged taller, it lies over the circuit and the tower,
- * which stay as they are.
+ * with a height and a collapsed state of its own. Every launch starts it collapsed, its tab row
+ * alone, and expanded at its least height. Only that much of the page is its room: dragged taller,
+ * it lies over the circuit and the tower, which stay as they are.
  */
 export const trackTerminalHeight = ref(PANEL_MIN);
-export const trackTerminalCollapsed = ref(false);
+export const trackTerminalCollapsed = ref(true);
 
 /**
  * The terminals opened from the Track page's panel, by id (ids are never used twice). A Claude
