@@ -139,7 +139,7 @@ struct Inner {
     /// The board isn't on disk as it is now (`board.rs`).
     board_unsaved: bool,
     claude_scanned: bool,
-    /// Turn timestamps already announced, per project.
+    /// The newest turn announced, per project; none older is announced after it.
     notified: HashMap<String, u64>,
     /// Waiting turns seen once, not announced yet: (turn time, first seen).
     candidates: HashMap<String, (u64, Instant)>,

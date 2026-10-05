@@ -136,7 +136,11 @@ fn due_notifications(inner: &mut Inner, waiting: &HashMap<String, Turn>) -> Vec<
     let mut due = Vec::new();
 
     for (path, turn) in waiting {
-        if inner.notified.get(path) == Some(&turn.at) {
+        // Not newer than the turn announced last: another session's, which waited all along, or
+        // the same turn as its log dates it (the hook's event comes after the log's line).
+        if inner.notified.get(path).is_some_and(|announced| turn.at <= *announced) {
+            // A newer turn that was about to be announced went back to work meanwhile.
+            inner.candidates.remove(path);
             continue;
         }
 
