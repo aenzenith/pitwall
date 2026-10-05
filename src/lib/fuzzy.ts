@@ -91,7 +91,18 @@ export function searchProjects(projects: Project[], q: string): ProjectMatch[] {
   return found.sort((a, b) => b.score - a.score);
 }
 
-/** `text` character by character, each marked if the match hit it. */
+/**
+ * `text` character by character, each marked if the match hit it. A hit is a place in the string
+ * as `fuzzy` counts it (`indexOf`), and a character outside the basic plane (an emoji) takes two.
+ */
 export function segments(text: string, hits: Set<number>): Array<{ text: string; hit: boolean }> {
-  return [...text].map((ch, i) => ({ text: ch, hit: hits.has(i) }));
+  const parts: Array<{ text: string; hit: boolean }> = [];
+  let at = 0;
+
+  for (const ch of text) {
+    parts.push({ text: ch, hit: hits.has(at) });
+    at += ch.length;
+  }
+
+  return parts;
 }
