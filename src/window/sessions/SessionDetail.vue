@@ -25,9 +25,9 @@ import SessionTerminal from "./SessionTerminal.vue";
  * them its terminal when it runs in one of Pitwall's. The Sessions page's details, and a board
  * card's once it has a session.
  * Claude's state reads as a project's Claude card does (detail/ClaudeCard), its one button the
- * same; bringing it up, opening or adding its project are the list's (double-click, Enter, the
+ * same; bringing it up and opening its project are the list's (double-click, Enter, the
  * context menu). `others`: the other sessions of its project that wait on you (seen is kept per
- * project); `error`: why adding its folder failed; `terminal`: the Pitwall terminal to show, as
+ * project); `terminal`: the Pitwall terminal to show, as
  * the caller knows it (a board card's; null: none), left out: the one its origin names; `note`:
  * a board card's note, shown once its work is over, with `images`, the images it names;
  * `lastMessage`: what Claude last said in it (Markdown); `period`: the days the page shows (left
@@ -38,7 +38,6 @@ const props = defineProps<{
   row: SessionRow;
   now: number;
   others: number;
-  error: string;
   terminal?: TerminalView | null;
   note?: string;
   images?: Shot[];
@@ -168,7 +167,6 @@ const fuel = computed(() => {
           </button>
         </div>
         <p v-if="seenHint" id="session-seen-hint" class="hint">{{ seenHint }}</p>
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
 
         <SessionNotice v-if="elsewhere" compact icon="info" :tag="elsewhereNotice.tag" :title="elsewhereNotice.title">{{ elsewhereNotice.body }}</SessionNotice>
         <template v-else-if="unknown">
@@ -283,16 +281,11 @@ const fuel = computed(() => {
   background: var(--claude-text);
 }
 
-.hint,
-.error {
+.hint {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-subtle);
-}
-
-.error {
-  color: var(--crash-text);
 }
 
 /* ---------- fuel ---------- */

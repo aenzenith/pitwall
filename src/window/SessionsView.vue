@@ -3,23 +3,25 @@ import { ref } from "vue";
 
 import type { Filter } from "../lib/sessions";
 
-/** The filter tab and "listed projects only": kept while the app runs, never stored. */
+/** The filter tab and the project picked (null: every project, as the app opens on): kept while
+ * the app runs, never stored. */
 const filter = ref<Filter>("all");
-const listedOnly = ref(false);
+const scope = ref<string | null>(null);
 </script>
 
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue";
 
 import PeriodPicker from "../components/PeriodPicker.vue";
+import ProjectPicker from "../components/ProjectPicker.vue";
 import Spinner from "../components/Spinner.vue";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
 import { dragRegion } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { ALL, dayLong, type Period } from "../lib/period";
-import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, type Layout } from "../lib/sessions";
-import { api, loadSessions, now, sessions, today, visible } from "../lib/store";
+import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionWaits, type Layout } from "../lib/sessions";
+import { api, loadSessions, now, sessions, snapshot, today, visible } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { SessionRow, SessionsView } from "../lib/types";
 import SessionDetail from "./sessions/SessionDetail.vue";
@@ -106,10 +108,27 @@ const byId = computed(() => new Map(all.value.map((row) => [row.id, row])));
 
 /* ---------- what the list shows ---------- */
 
+const projects = computed(() => snapshot.value?.projects ?? []);
+
+// A project taken off the list leaves every project's sessions.
+watch(
+  projects,
+  (list) => {
+    if (snapshot.value && scope.value && !list.some((p) => p.path === scope.value)) scope.value = null;
+  },
+  { immediate: true },
+);
+
+/** What Claude waits on you with in each project (a finished turn not seen yet, a question, a
+ * permission prompt): the picker marks those projects with Claude's dot. Picking one marks nothing
+ * seen: that stays the row's to do. */
+const waits = computed(() => sessionWaits(all.value));
+
 const query = ref("");
 const q = computed(() => query.value.trim().toLowerCase());
-/** The sessions the search and "listed projects only" leave; the tabs pick from these. */
-const pool = computed(() => all.value.filter((row) => (!listedOnly.value || row.path !== null) && matches(row, q.value)));
+/** The sessions the project picked and the search leave, the listed projects' alone (a folder
+ * outside them has none here); the tabs pick from these. */
+const pool = computed(() => all.value.filter((row) => (scope.value ? row.path === scope.value : row.path !== null) && matches(row, q.value)));
 
 const counts = computed(() => {
   const found: Record<Filter, number> = { all: pool.value.length, waiting: 0, working: 0, ended: 0 };
@@ -143,8 +162,8 @@ function hold(by: keyof typeof held, on: boolean): void {
   frozen.value = holding.value ? (frozen.value ?? fresh.value) : null;
 }
 
-// A new filter or search is a new list: its order is taken as it stands.
-watch([filter, q, listedOnly], () => {
+// A new filter, project or search is a new list: its order is taken as it stands.
+watch([filter, q, scope], () => {
   if (holding.value) frozen.value = fresh.value;
 });
 
@@ -186,29 +205,19 @@ function onTabKey(event: KeyboardEvent, at: number): void {
 
 /* ---------- actions ---------- */
 
-/** The action on its way (its button spins), and why adding a folder failed. */
-const pending = ref<{ id: string; action: "bringUp" | "addProject" } | null>(null);
-const addError = ref<{ id: string; text: string } | null>(null);
+/** The session on its way up: nothing else is brought up meanwhile. */
+const pending = ref<string | null>(null);
 
-async function run(id: string, action: "bringUp" | "addProject", work: () => Promise<unknown>): Promise<void> {
-  if (pending.value) return;
-  pending.value = { id, action };
+/** Where it runs: its tab or terminal comes up; an ended one opens again in the editor. */
+async function bringUp(id: string): Promise<void> {
+  const row = byId.value.get(id);
+  if (!row || pending.value) return;
+  pending.value = id;
   const started = Date.now();
-  try {
-    await work();
-    if (action === "addProject") addError.value = null;
-  } catch (error) {
-    if (action === "addProject") addError.value = { id, text: String(error) };
-  }
+  await api.revealClaude(row.path ?? row.folder, row.id).catch(() => undefined);
   const rest = MIN_SPIN_MS - (Date.now() - started);
   if (rest > 0) await new Promise((resolve) => window.setTimeout(resolve, rest));
   pending.value = null;
-}
-
-/** Where it runs: its tab or terminal comes up; an ended one opens again in the editor. */
-function bringUp(id: string): void {
-  const row = byId.value.get(id);
-  if (row) void run(id, "bringUp", () => api.revealClaude(row.path ?? row.folder, row.id));
 }
 
 /** Seen is kept per project: every session of the project stops waiting on you. */
@@ -220,11 +229,6 @@ function markSeen(id: string): void {
 function openProject(id: string): void {
   const path = byId.value.get(id)?.path;
   if (path) emit("openProject", path);
-}
-
-function addProject(id: string): void {
-  const row = byId.value.get(id);
-  if (row) void run(id, "addProject", () => api.addProject(row.folder));
 }
 
 function copyResume(id: string): void {
@@ -239,19 +243,23 @@ function rowMenu(event: MouseEvent, id: string): void {
   const row = byId.value.get(id);
   if (!row) return;
   void menu.popup(event, [
-    { text: t(bringKeys(row).label), action: () => bringUp(id) },
+    { text: t(bringKeys(row).label), action: () => void bringUp(id) },
     { text: t("sessions.menu.markSeen", { project: row.project }), enabled: row.phase === "waiting", action: () => markSeen(id) },
     { text: t("sessions.copyResume"), action: () => copyResume(id) },
     "separator",
-    row.path ? { text: t("sessions.openProject"), action: () => openProject(id) } : { text: t("window.addProject"), action: () => addProject(id) },
+    { text: t("sessions.openProject"), action: () => openProject(id) },
   ]);
 }
 
 /* ---------- text ---------- */
 
+/** The project picked, while it is listed. */
+const project = computed(() => (scope.value ? (projects.value.find((p) => p.path === scope.value) ?? null) : null));
+
 const subtitle = computed(() => {
-  if (period.value !== null) return t("sessions.subtitleOn", { when: period.value === ALL ? t("period.all") : dayLong(period.value) });
-  return t(view.value && !view.value.hook ? "sessions.subtitleLogs" : "sessions.subtitle");
+  const where = project.value?.name ?? t("sessions.everyProject");
+  if (period.value !== null) return t("sessions.subtitleOn", { scope: where, when: period.value === ALL ? t("period.all") : dayLong(period.value) });
+  return t(view.value && !view.value.hook ? "sessions.subtitleLogs" : "sessions.subtitle", { scope: where });
 });
 
 /** No session at all in the days shown. */
@@ -267,13 +275,15 @@ const noneText = computed(() => {
     case "ended":
       return t(period.value === null ? "sessions.none.ended" : "sessions.none.endedPast");
     default:
+      if (project.value) return t(period.value === null ? "sessions.none.project" : "sessions.none.projectPast", { project: project.value.name });
       return t(period.value === null ? "sessions.none.listed" : "sessions.none.listedPast");
   }
 });
 
-/** "Listed projects only" hides the sessions outside them: how many. */
+/** The sessions in folders outside the listed projects are left out: how many, under every
+ * project's (a project picked says whose are shown). */
 const hiddenText = computed(() => {
-  const count = listedOnly.value ? all.value.filter((row) => row.path === null).length : 0;
+  const count = scope.value ? 0 : all.value.filter((row) => row.path === null).length;
   return count ? t("sessions.hiddenCount", { count }) : "";
 });
 
@@ -318,10 +328,7 @@ onMounted(() => void loadSessions());
             <span v-if="view" :class="['tab-count', { hot: f.id === 'waiting' && counts.waiting > 0 }]">{{ counts[f.id] }}</span>
           </button>
         </div>
-        <label class="check" :title="t('sessions.listedOnlyTitle')">
-          <input v-model="listedOnly" type="checkbox" role="switch" />
-          <span class="check-text">{{ t("sessions.listedOnly") }}</span>
-        </label>
+        <ProjectPicker class="picker" :projects="projects" :scope="scope" :waits="waits" label="sessions.pickerLabel" @pick="scope = $event" />
       </div>
 
       <!-- Only the list scrolls, never the window. -->
@@ -378,7 +385,6 @@ onMounted(() => void loadSessions());
       :row="selected"
       :now="now"
       :others="others"
-      :error="addError?.id === selected.id ? addError.text : ''"
       :last-message="lastMessage"
       :period="period"
       @mark-seen="markSeen(selected.id)"
@@ -522,8 +528,9 @@ input[type="search"]::placeholder {
   text-overflow: ellipsis;
 }
 
-/* In a narrow list the tabs but "All" show the rows' marks in place of their names (still their
-   tooltips, and read out): a filled dot waits, a ring works, a grey ring ended. */
+/* In a list without room for them beside the project picker, the tabs but "All" show the rows'
+   marks in place of their names (still their tooltips, and read out): a filled dot waits, a ring
+   works, a grey ring ended. */
 .tab-mark {
   display: none;
   width: 8px;
@@ -547,7 +554,7 @@ input[type="search"]::placeholder {
   border: 1.5px solid var(--idle-ring);
 }
 
-@container (max-width: 420px) {
+@container (max-width: 500px) {
   .tab-mark {
     display: inline-block;
   }
@@ -590,60 +597,31 @@ input[type="search"]::placeholder {
   font-weight: 600;
 }
 
-.check {
-  flex-shrink: 0;
+/* The project picker, at the row's end: a long project name gives way before a tab's does. */
+.filters > .picker {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
+  flex-shrink: 1000;
 }
 
-/* A small switch, like the app's other on/off chips, not a form checkbox. */
-.check input {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  flex-shrink: 0;
-  width: 26px;
-  height: 14px;
-  margin: 0;
-  border-radius: 7px;
-  background: #3a3f48;
-  transition: background 0.15s;
-}
+/* The window at its narrowest: the picker is its icon alone (its name stays as its tooltip, and
+   read out), so the tabs keep their room. */
+@container (max-width: 350px) {
+  .filters > .picker {
+    min-width: 0;
+    flex-shrink: 0;
+  }
 
-.check input::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--bg-app);
-  transition: transform 0.15s;
-}
+  .filters :deep(.ppick-text),
+  .filters :deep(.ppick-more) {
+    display: none;
+  }
 
-.check input:checked {
-  background: var(--text-muted);
-}
+  .filters :deep(.ppick-every) {
+    display: block;
+  }
 
-.check input:checked::before {
-  transform: translateX(12px);
-}
-
-/* A narrow list keeps the box; its name stays as its tooltip and for screen readers. */
-@container (max-width: 520px) {
-  .check-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+  .filters :deep(.ppick-button) {
+    padding: 0 8px;
   }
 }
 

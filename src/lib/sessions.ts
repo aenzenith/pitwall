@@ -239,6 +239,22 @@ export function othersWaiting(row: SessionRow, rows: SessionRow[]): number {
   return rows.filter((other) => other.id !== row.id && other.phase === "waiting" && (other.path ?? other.folder) === where).length;
 }
 
+/**
+ * What Claude waits on you with in each listed project, by the project's path: the most pressing
+ * of its sessions' waits (a permission prompt, a question, then a finished turn not seen yet).
+ * A project where nothing waits has no entry.
+ */
+export function sessionWaits(rows: SessionRow[]): Map<string, Turn["kind"]> {
+  const waits = new Map<string, Turn["kind"]>();
+  for (const row of rows) {
+    if (row.path === null || row.phase !== "waiting") continue;
+    const kind = row.turn?.kind ?? "finished";
+    const known = waits.get(row.path);
+    if (!known || WAIT_RANK[kind] < WAIT_RANK[known]) waits.set(row.path, kind);
+  }
+  return waits;
+}
+
 /** The command that continues it in a terminal. */
 export function resumeCommand(row: SessionRow): string {
   return `claude --resume ${row.id}`;

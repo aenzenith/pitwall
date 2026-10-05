@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRaw, wa
 
 import Icon from "../components/Icon.vue";
 import PeriodPicker from "../components/PeriodPicker.vue";
+import ProjectPicker from "../components/ProjectPicker.vue";
 import Spinner from "../components/Spinner.vue";
 import {
   boardWaits,
@@ -34,7 +35,6 @@ import type { BoardColumn, Card, SessionRow, TerminalView } from "../lib/types";
 import BoardCard from "./board/BoardCard.vue";
 import BoardColumns from "./board/BoardColumns.vue";
 import BoardLanes from "./board/BoardLanes.vue";
-import BoardPicker from "./board/BoardPicker.vue";
 import CardDetail from "./board/CardDetail.vue";
 import CardDialog from "./board/CardDialog.vue";
 import { BOARD_ACTIONS, type BoardActions, type CardBusy } from "./board/context";
@@ -822,7 +822,7 @@ const ghostStyle = computed(() =>
           <Icon name="search" :size="13" />
           <input v-model="query" type="search" :placeholder="t('board.search')" :aria-label="t('board.search')" spellcheck="false" @keydown.down.prevent="focusSelected()" />
         </label>
-        <BoardPicker :projects="projects" :scope="scope" :waits="waits" @pick="show" />
+        <ProjectPicker :projects="projects" :scope="scope" :waits="waits" label="board.pickerLabel" @pick="show" />
         <button type="button" class="board-add" :title="t('board.addCard')" :disabled="!projects.length" @click="openAdd">
           <Icon name="plus" :size="13" />
           <span class="board-add-text">{{ t("board.addCard") }}</span>
@@ -918,7 +918,6 @@ const ghostStyle = computed(() =>
       :row="selectedRow"
       :now="now"
       :others="others"
-      error=""
       :terminal="selectedTerminal"
       :note="selectedOver ? selected.note : ''"
       :images="selectedOver ? selectedImages : []"

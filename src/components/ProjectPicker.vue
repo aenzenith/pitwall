@@ -1,28 +1,35 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 
-import ClaudeDot from "../../components/ClaudeDot.vue";
-import Icon from "../../components/Icon.vue";
-import { WAIT_LABELS } from "../../lib/board";
-import { language, t } from "../../lib/i18n";
-import type { Project, Turn } from "../../lib/types";
+import ClaudeDot from "./ClaudeDot.vue";
+import Icon from "./Icon.vue";
+import { WAIT_LABELS } from "../lib/board";
+import { language, t, type Key } from "../lib/i18n";
+import type { Project, Turn } from "../lib/types";
 
 /**
- * The board picker: the board shown (a project's, or every project's) and, under it, the list to
- * pick another from. It follows the boards out of sight: a project Claude waits on you in
- * (`waits`: a finished turn not seen yet, a question, a permission prompt) carries Claude's dot
- * in the list, and the picker itself on its corner. Never the project whose board shows: that
- * one is in sight. Picking a project is seeing it (the Board page marks it).
+ * The project picker of the Board and Sessions pages: the project shown (or every project) and,
+ * under it, the list to pick another from. It follows the projects out of sight: one Claude waits
+ * on you in (`waits`: a finished turn not seen yet, a question, a permission prompt) carries
+ * Claude's dot in the list, and the picker itself on its corner. Never the project shown: that
+ * one is in sight. What picking a project counts as seen is the page's to say (the Board page
+ * marks it; the Sessions page leaves that to the row).
  *
  * The list is drawn here rather than as a native menu: a menu's line holds a check mark or an
  * image, never both, and none in Claude's colour.
+ *
+ * Where the page has no room for its name, the page's container query hides `ppick-text` and
+ * `ppick-more` and shows `ppick-every` (every project's icon, out of sight otherwise): its icon
+ * alone, its name still its tooltip and read out.
  */
 const props = defineProps<{
   projects: Project[];
-  /** The project whose board shows; null for every project's. */
+  /** The project shown; null for every project. */
   scope: string | null;
-  /** What Claude waits on you with on each project's board, by the project's path. */
+  /** What Claude waits on you with in each project, by the project's path. */
   waits: Map<string, Turn["kind"]>;
+  /** What the picker is read out as; `{name}` is the project shown. */
+  label: Key;
 }>();
 const emit = defineEmits<{ pick: [path: string | null] }>();
 
@@ -31,8 +38,8 @@ const TYPED_MS = 700;
 
 type Option = { path: string | null; name: string; label: string; waits: boolean };
 
-/** Every project's board, then each project's: with Claude's dot, what it waits on you with too.
- * The board shown has none. */
+/** Every project, then each one: with Claude's dot, what it waits on you with too. The one shown
+ * has none. */
 const options = computed<Option[]>(() => [
   { path: null, name: t("board.allProjects"), label: t("board.allProjects"), waits: false },
   ...props.projects.map((p) => {
@@ -44,12 +51,12 @@ const options = computed<Option[]>(() => [
 const shown = computed(() => props.projects.find((p) => p.path === props.scope) ?? null);
 const name = computed(() => shown.value?.name ?? t("board.allProjects"));
 
-/** The projects Claude waits in other than the one shown: the boards out of sight. Every
- * project's board has them all in sight. */
+/** The projects Claude waits in other than the one shown: those out of sight. With every project
+ * shown they all are in sight. */
 const elsewhere = computed(() => (shown.value ? props.projects.filter((p) => p.path !== props.scope && props.waits.has(p.path)) : []));
 
 const label = computed(() => {
-  const text = t("board.pickerLabel", { name: name.value });
+  const text = t(props.label, { name: name.value });
   const names = elsewhere.value.map((p) => p.name).join(", ");
   return names ? `${text} · ${t("board.picker.waiting", { projects: names })}` : text;
 });
@@ -67,7 +74,7 @@ const active = ref(0);
 const place = ref<Record<string, string>>({});
 
 function optionId(index: number): string {
-  return `board-picker-${index}`;
+  return `project-picker-${index}`;
 }
 
 function move(index: number): void {
@@ -122,7 +129,7 @@ function pick(option: Option, keyed = false): void {
 let typed = "";
 let typedTimer: number | undefined;
 
-/** Letters go to the first board whose name starts with them, as in a menu. */
+/** Letters go to the first project whose name starts with them, as in a menu. */
 function type(letter: string): void {
   const lower = (text: string): string => text.toLocaleLowerCase(language.value);
   window.clearTimeout(typedTimer);
@@ -174,11 +181,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="bpick">
+  <div ref="root" class="ppick">
     <button
       ref="button"
       type="button"
-      class="bpick-button"
+      class="ppick-button"
       aria-haspopup="listbox"
       :aria-expanded="open"
       :aria-label="label"
@@ -188,16 +195,17 @@ onBeforeUnmount(() => {
       @keydown.up.prevent="show"
     >
       <Icon v-if="shown" name="folder" :size="13" />
-      <span class="bpick-text">{{ name }}</span>
-      <Icon name="chevron-down" :size="11" />
-      <span v-if="elsewhere.length" class="bpick-mark" aria-hidden="true"></span>
+      <Icon v-else name="grid" :size="13" class="ppick-every" />
+      <span class="ppick-text">{{ name }}</span>
+      <Icon name="chevron-down" :size="11" class="ppick-more" />
+      <span v-if="elsewhere.length" class="ppick-mark" aria-hidden="true"></span>
     </button>
 
     <!-- A press on an option leaves the keyboard in the list. -->
     <ul
       v-if="open"
       ref="list"
-      class="bpick-list"
+      class="ppick-list"
       role="listbox"
       tabindex="-1"
       :aria-label="t('common.projects')"
@@ -207,11 +215,11 @@ onBeforeUnmount(() => {
       @mousedown.prevent
     >
       <template v-for="(option, i) in options" :key="option.path ?? ''">
-        <!-- Every project's board, then a line, then the projects. -->
-        <li v-if="i === 1" class="bpick-line" role="presentation"></li>
+        <!-- Every project, then a line, then the projects. -->
+        <li v-if="i === 1" class="ppick-line" role="presentation"></li>
         <li
           :id="optionId(i)"
-          :class="['bpick-option', { on: i === active }]"
+          :class="['ppick-option', { on: i === active }]"
           role="option"
           :aria-selected="option.path === scope"
           :aria-label="option.label"
@@ -219,8 +227,8 @@ onBeforeUnmount(() => {
           @mousemove="active = i"
           @click="pick(option)"
         >
-          <span class="bpick-check"><Icon v-if="option.path === scope" name="check" :size="12" /></span>
-          <span class="bpick-name">{{ option.name }}</span>
+          <span class="ppick-check"><Icon v-if="option.path === scope" name="check" :size="12" /></span>
+          <span class="ppick-name">{{ option.name }}</span>
           <ClaudeDot v-if="option.waits" :live="{ phase: 'waiting', text: '' }" />
         </li>
       </template>
@@ -230,14 +238,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* A long project name gives way; the arrow never does. */
-.bpick {
+.ppick {
   flex-shrink: 1;
   display: flex;
   min-width: 90px;
   max-width: 220px;
 }
 
-.bpick-button {
+.ppick-button {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
@@ -254,24 +262,29 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.bpick-button:hover,
-.bpick-button[aria-expanded="true"] {
+.ppick-button:hover,
+.ppick-button[aria-expanded="true"] {
   background: #2c3039;
 }
 
-.bpick-button svg {
+.ppick-button svg {
   flex-shrink: 0;
 }
 
-.bpick-text {
+.ppick-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Claude waits on you on another board: its dot on the picker's corner, as on a project's
+/* Every project's icon: only where the page shows the picker without its name. */
+.ppick-every {
+  display: none;
+}
+
+/* Claude waits on you in another project: its dot on the picker's corner, as on a project's
    status. */
-.bpick-mark {
+.ppick-mark {
   position: absolute;
   top: -3px;
   right: -3px;
@@ -283,7 +296,7 @@ onBeforeUnmount(() => {
 }
 
 /* Over the page, wherever the bar's edges are: only the list scrolls. */
-.bpick-list {
+.ppick-list {
   position: fixed;
   z-index: 60;
   max-width: min(320px, calc(100vw - 16px));
@@ -300,11 +313,11 @@ onBeforeUnmount(() => {
 }
 
 /* The keyboard's place is the lit option, not a ring round the list. */
-.bpick-list:focus-visible {
+.ppick-list:focus-visible {
   outline: none;
 }
 
-.bpick-option {
+.ppick-option {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -316,31 +329,31 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.bpick-option.on {
+.ppick-option.on {
   background: #2c3039;
   color: var(--text-strong);
 }
 
-/* The board shown: a check, in a place every option keeps so the names line up. */
-.bpick-check {
+/* The project shown: a check, in a place every option keeps so the names line up. */
+.ppick-check {
   width: 12px;
   flex-shrink: 0;
   display: inline-flex;
   color: var(--text-muted);
 }
 
-.bpick-name {
+.ppick-name {
   flex-grow: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.bpick-option .claude-dot {
+.ppick-option .claude-dot {
   margin-left: 8px;
 }
 
-.bpick-line {
+.ppick-line {
   height: 1px;
   margin: 4px 6px;
   background: var(--line-strong);

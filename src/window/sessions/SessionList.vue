@@ -130,7 +130,6 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
             <span :class="['title', { untitled: !item.row.title }]">{{ item.title }}</span>
             <span class="meta">
               <span class="project">{{ item.row.project }}</span>
-              <span v-if="!item.row.path" class="outside">{{ t("sessions.outside") }}</span>
               <!-- Where an ended one ran, when that is known: of an earlier day's it isn't. -->
               <template v-if="item.row.phase !== 'ended' || item.row.origin.kind !== 'unknown'">
                 <span aria-hidden="true">·</span>
@@ -271,16 +270,6 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
   max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.outside {
-  flex-shrink: 0;
-  padding: 0 5px;
-  border-radius: 5px;
-  background: var(--bg-control);
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--text-muted);
 }
 
 .meta .origin {
