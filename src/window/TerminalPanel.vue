@@ -121,6 +121,12 @@ function show(id: number): void {
   chosen.value = { ...chosen.value, [props.project.path]: id };
 }
 
+/** A tab asked for by a click, Return or Space: shown, and a collapsed panel comes up with it. */
+function open(id: number): void {
+  show(id);
+  if (collapsed.value) toggleCollapsed();
+}
+
 function close(id: number): void {
   void api.closeTerminal(id);
 }
@@ -170,7 +176,7 @@ function onTabKey(event: KeyboardEvent, id: number): void {
     case "Enter":
     case " ":
       event.preventDefault();
-      show(id);
+      open(id);
       focusView(id);
       return;
     case "Delete":
@@ -197,15 +203,16 @@ function onTabKey(event: KeyboardEvent, id: number): void {
 }
 
 // The shown terminal goes into the viewport; the others keep running out of sight. It takes the
-// keyboard, unless the arrows on the tabs are picking it.
+// keyboard, unless the arrows on the tabs are picking it, or the panel is collapsed: a terminal
+// out of sight leaves the keyboard where it is.
 watch(
   () => active.value?.id,
   async (id) => {
-    const focus = !stayOnTabs;
+    const onTabs = stayOnTabs;
     stayOnTabs = false;
     await nextTick();
-    if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, focus);
-    if (!focus) focusTab(id);
+    if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value);
+    if (onTabs) focusTab(id);
   },
   { immediate: true },
 );
@@ -298,7 +305,7 @@ defineExpose({ openTerminal });
           :class="['tab', { on: active?.id === term.id }]"
           role="none"
           :title="t('terminal.renameHint')"
-          @click="show(term.id)"
+          @click="open(term.id)"
           @dblclick="renaming = { id: term.id, name: term.name }"
         >
           <div
