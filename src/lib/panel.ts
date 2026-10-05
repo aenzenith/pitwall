@@ -57,6 +57,12 @@ export const terminalCollapsed = ref(false);
  */
 export const trackTerminalHeight = ref(PANEL_MIN);
 export const trackTerminalCollapsed = ref(false);
+
+/**
+ * The terminals opened from the Track page's panel, by id (ids are never used twice). A Claude
+ * session brought up shows where its work was started: one of these, on the Track page.
+ */
+export const trackTerminals = new Set<number>();
 /** Collapsing and expanding animate for this long (ms). */
 export const COLLAPSE_MS = 220;
 

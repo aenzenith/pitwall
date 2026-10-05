@@ -17,6 +17,7 @@ import {
   terminalRequest,
   trackTerminalCollapsed,
   trackTerminalHeight,
+  trackTerminals,
   useResizer,
 } from "../lib/panel";
 import { statusLine } from "../lib/sessions";
@@ -109,6 +110,7 @@ async function openTerminal(claude = false): Promise<void> {
     }
     const size = viewport.value ? measure(viewport.value) : null;
     const view = await api.openTerminal(props.project.path, claude, size);
+    if (props.track) trackTerminals.add(view.id);
     chosen.value = { ...chosen.value, [props.project.path]: view.id };
   } finally {
     opening.value = false;

@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
-import { COLLAPSE_MS, COLLAPSED_HEIGHT, PANEL_MIN, trackTerminalCollapsed } from "../lib/panel";
+import { COLLAPSE_MS, COLLAPSED_HEIGHT, PANEL_MIN, terminalRequest, trackTerminalCollapsed } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, setTrack, snapshot, track as settings } from "../lib/store";
 import { circuit, CIRCUITS, codes, towerOrder } from "../lib/track";
@@ -109,6 +109,16 @@ watch(trackTerminalCollapsed, (collapsed) => {
   if (collapsed) room.value = COLLAPSED_HEIGHT;
   else settle = setTimeout(() => (room.value = PANEL_MIN), COLLAPSE_MS);
 });
+
+// A Claude session in a terminal opened here was brought up (WindowApp: `revealTerminal`): its
+// project, and the panel shows its tab.
+watch(
+  terminalRequest,
+  (request) => {
+    if (request && listed.value.some((project) => project.path === request.path)) selectedPath.value = request.path;
+  },
+  { immediate: true },
+);
 
 /** ⌘T: a new terminal in the selected project (WindowApp: `onKey`). */
 function openTerminal(claude = false): void {

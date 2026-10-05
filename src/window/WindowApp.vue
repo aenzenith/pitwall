@@ -14,7 +14,7 @@ import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
 import { filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
 import { onBoard } from "../lib/board";
-import { cardRequest, outputRequest, terminalRequest } from "../lib/panel";
+import { cardRequest, outputRequest, terminalRequest, trackTerminals } from "../lib/panel";
 import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
@@ -241,7 +241,8 @@ function revealOutput(path: string, job: string): void {
  * the switcher, a notification): it shows where its work was started. Given to Claude from a
  * card: that card on its project's board, its terminal open in the card's details (BoardView
  * takes the request). Opened in a project's terminal panel: the project, its panel open on that
- * tab (TerminalPanel takes the request). Either way the keyboard is in it.
+ * tab (TerminalPanel takes the request), on the page it was opened from: the Track page, else the
+ * list. Either way the keyboard is in it.
  */
 async function revealTerminal(path: string, id: number): Promise<void> {
   settingsOpen.value = false;
@@ -263,7 +264,9 @@ async function revealTerminal(path: string, id: number): Promise<void> {
     cardRequest.value = { id: card.id, path: card.path };
     view.value = "board";
   } else {
-    revealProject(path);
+    // Opened from the Track page's panel: there (the page selects the project in its tower).
+    if (trackTerminals.has(id)) view.value = "track";
+    else revealProject(path);
     terminalRequest.value = { path, id, at: Date.now() };
   }
 }
