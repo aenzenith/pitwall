@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.1](https://github.com/aenzenith/pitwall/compare/v1.7.0...v1.7.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **claude:** a session stays at work through a long tool call ([c521d7b](https://github.com/aenzenith/pitwall/commit/c521d7b2005dea4831f89b458694806fb7be19c6))
+* **claude:** a turn is announced once ([ee2eddb](https://github.com/aenzenith/pitwall/commit/ee2eddb30dcd70a892db5a1cdaad5e2f3c5fb7c8))
+* **day:** a stash isn't listed among the day's commits ([771df75](https://github.com/aenzenith/pitwall/commit/771df756d652b3aa549fb2c8826c87f2d7c5cb09))
+* **deps:** PHP's "&gt;8.1" and "&lt;=8.3" read as Composer reads them ([01102e7](https://github.com/aenzenith/pitwall/commit/01102e7ae781b69d26459cd49123d72580309213))
+* **sessions:** "Working for" counts from the prompt ([50f22e1](https://github.com/aenzenith/pitwall/commit/50f22e12f33972041c14a4b13cf3d4ef2e2116ce))
+* **switcher:** the highlight keeps to the match after an emoji ([da83e0f](https://github.com/aenzenith/pitwall/commit/da83e0f09e1c6352c779f3947ad481846ba4720c))
+* **ui:** the sidebar's version is set smaller ([6dea488](https://github.com/aenzenith/pitwall/commit/6dea488190495cd405978d20da3c03bf52a05f94))
+
 ## [1.7.0](https://github.com/aenzenith/pitwall/compare/v1.6.0...v1.7.0) (2026-10-05)
 
 
