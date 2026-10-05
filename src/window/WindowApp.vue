@@ -19,7 +19,7 @@ import { dragRegion, terminalChord } from "../lib/platform";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
-import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, visible } from "../lib/store";
+import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
 import type { Card, Project } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
@@ -30,6 +30,7 @@ import SessionsView from "./SessionsView.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
 import TrackView from "./TrackView.vue";
+import UpdateDialog from "./UpdateDialog.vue";
 
 const filter = ref<Filter>("all");
 /** The project list, the track they run on, the day's timeline, Claude's sessions, the board of
@@ -63,6 +64,22 @@ onMounted(() => {
 onBeforeUnmount(() => {
   void depsLink?.then((unlisten) => unlisten(), () => undefined);
 });
+
+/** The app's own update: from the start too, for the brand row's version and button. */
+let updateLink: Promise<UnlistenFn> | null = null;
+onMounted(() => {
+  updateLink = connectUpdate();
+});
+onBeforeUnmount(() => {
+  void updateLink?.then((unlisten) => unlisten(), () => undefined);
+});
+
+/** The brand row's button: a new version to install (`ready`), to fetch by hand (`available`), or
+ * going in right now (`installing`, its spinner). */
+const updateButton = computed(() => update.value?.status === "ready" || update.value?.status === "available" || update.value?.status === "installing");
+const installing = computed(() => update.value?.status === "installing");
+/** The update dialog: opened from the brand row's button and from Settings › About. */
+const updateOpen = ref(false);
 
 /** Beside Garage: how many listed projects need you (lib/deps: needsAttention). */
 const depsBadge = computed(() => {
@@ -321,6 +338,25 @@ function server(project: Project): string {
       <div class="brand" :data-tauri-drag-region="dragRegion">
         <PitwallGlyph :size="30" lamps="var(--run)" />
         <span>Pitwall</span>
+        <!-- Across from the logo: the installed version, and at the far right the way to a new one.
+             The version drags the window with the rest; the button takes its own click (Tauri
+             leaves a button out of a drag region, as it does the toolbar's). -->
+        <span v-if="update" class="brand-end">
+          <span class="version">{{ update.current }}</span>
+          <button
+            v-if="updateButton"
+            type="button"
+            class="update"
+            :disabled="installing"
+            :aria-busy="installing"
+            :aria-label="installing ? t('about.update.installing', { version: update.version ?? '' }) : t('update.button')"
+            :title="installing ? undefined : t('update.button')"
+            @click="updateOpen = true"
+          >
+            <Spinner v-if="installing" />
+            <Icon v-else name="download" :size="14" />
+          </button>
+        </span>
       </div>
       <nav :aria-label="t('window.filters')" class="nav">
         <button
@@ -471,7 +507,9 @@ function server(project: Project): string {
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
     </template>
 
-    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" />
+    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" />
+    <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
+    <UpdateDialog v-if="updateOpen && update" :update="update" @close="updateOpen = false" />
   </div>
 </template>
 
@@ -510,6 +548,45 @@ function server(project: Project): string {
   font-size: 15px;
   font-weight: 600;
   color: #d7dae0;
+}
+
+/* A long version gives way; the button beside it never does. */
+.brand-end {
+  margin-left: auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The same box with the arrow or the spinner in it. */
+.update {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  color: var(--text);
+}
+
+.update:hover:not(:disabled) {
+  background: #2c3039;
 }
 
 .nav {

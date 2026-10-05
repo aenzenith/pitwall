@@ -6,11 +6,12 @@ import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Rich from "../components/Rich.vue";
+import Spinner from "../components/Spinner.vue";
 import { useBackdropClose } from "../lib/dialog";
-import { editorName, shortcutLabel } from "../lib/format";
+import { ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { keys, shortcutModifiers } from "../lib/platform";
-import { api, snapshot } from "../lib/store";
+import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings } from "../lib/types";
 import TrackOptions from "./track/TrackOptions.vue";
@@ -20,7 +21,7 @@ type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "track" | "a
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
  * page's settings button Track's). */
 const props = defineProps<{ startTab?: Tab }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; openUpdate: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
 const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" | "flag" }> = [
@@ -84,6 +85,7 @@ const form = reactive<Settings>({
   launchAtLogin: false,
   shortcut: true,
   shortcutKeys: "Ctrl+Alt+KeyP",
+  autoUpdate: true,
   projects: {},
   order: [],
 });
@@ -256,6 +258,48 @@ watch(
 /** Leaving a text field: what changed in the snapshot while it was being typed in comes in now. */
 function onFieldBlur(): void {
   if (snapshot.value) takeSettings(snapshot.value.settings);
+}
+
+/* ---------- the app's own update (About) ---------- */
+
+/** One quiet line under the version: where the update stands. Empty for a build that never asks. */
+const updateLine = computed(() => {
+  const state = update.value;
+  if (!state) return "";
+  const version = state.version ?? "";
+  switch (state.status) {
+    case "idle":
+      if (state.offline) return t("about.update.offline");
+      return state.checkedAt === null ? t("about.update.current") : t("about.update.checked", { time: ago(state.checkedAt, now.value) });
+    case "checking":
+      return t("about.update.checking");
+    case "downloading":
+      return state.total === null
+        ? t("about.update.downloadingSome", { version, done: megabytes(state.downloaded) })
+        : t("about.update.downloading", { version, done: megabytes(state.downloaded), total: megabytes(state.total) });
+    case "ready":
+      return t("about.update.ready", { version });
+    case "installing":
+      return t("about.update.installing", { version });
+    case "available":
+      return t("about.update.available", { version });
+    case "failed":
+      return updateError(state.error);
+    default:
+      return "";
+  }
+});
+
+/** How far the download is, 0–100; null when it isn't downloading or the server gave no size. */
+const downloadShare = computed(() => {
+  const state = update.value;
+  if (state?.status !== "downloading" || !state.total) return null;
+  return Math.min(100, Math.max(0, (state.downloaded / state.total) * 100));
+});
+
+/** Asks for a new version now; the answer shows as the state changes. */
+function checkUpdate(): void {
+  void api.updateCheck().catch(() => undefined);
 }
 
 /* ---------- Pitwall for VS Code ---------- */
@@ -510,6 +554,13 @@ async function save(): Promise<void> {
             </div>
             <small>{{ t("settings.projectsFolderHint") }}</small>
           </div>
+          <div class="field">
+            <label class="check">
+              <input v-model="form.autoUpdate" type="checkbox" />
+              <span>{{ t("settings.autoUpdate") }}</span>
+            </label>
+            <small>{{ t("settings.autoUpdateHint") }}</small>
+          </div>
         </fieldset>
 
         <section v-show="tab === 'about'" class="about" :aria-label="t('settings.about')">
@@ -518,7 +569,35 @@ async function save(): Promise<void> {
             <div class="app-text">
               <span class="app-name">Pitwall</span>
               <small v-if="version">{{ t("about.version", { version }) }}</small>
+              <!-- Where the app's own update stands, and at the row's right the one thing to do about it. -->
+              <small v-if="updateLine" class="update-line">{{ updateLine }}</small>
+              <span
+                v-if="downloadShare !== null"
+                class="update-bar"
+                role="progressbar"
+                :aria-label="t('about.update.progress')"
+                :aria-valuenow="Math.round(downloadShare)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <span :style="{ width: `${downloadShare}%` }"></span>
+              </span>
             </div>
+            <button
+              v-if="update?.status === 'idle' || update?.status === 'checking'"
+              type="button"
+              class="control about-button"
+              :disabled="update.status === 'checking'"
+              :aria-busy="update.status === 'checking'"
+              @click="checkUpdate"
+            >
+              <!-- The label keeps its room under the spinner: the button never changes width. -->
+              <span :class="{ hidden: update.status === 'checking' }">{{ t("about.update.check") }}</span>
+              <Spinner v-if="update.status === 'checking'" class="over" :size="12" />
+            </button>
+            <button v-else-if="update?.status === 'ready'" type="button" class="control primary about-button" @click="emit('openUpdate')">{{ t("common.restart") }}</button>
+            <button v-else-if="update?.status === 'available'" type="button" class="control about-button" @click="api.openLink('releases')">{{ t("update.openPage") }}</button>
+            <button v-else-if="update?.status === 'failed'" type="button" class="control about-button" @click="checkUpdate">{{ t("about.update.retry") }}</button>
           </div>
           <p class="about-text">{{ t("about.blurb") }}</p>
 
@@ -938,6 +1017,27 @@ code {
   background: #2c3039;
 }
 
+.control.primary {
+  background: #2a3a30;
+  border-color: #3d5446;
+  color: #cdebd8;
+}
+
+.control.primary:hover {
+  background: #33473a;
+}
+
+/* A busy button's label stays, unseen, under its spinner. */
+.control .hidden {
+  visibility: hidden;
+}
+
+.control .over {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
 .about {
   padding-top: 24px;
   display: flex;
@@ -953,6 +1053,8 @@ code {
 }
 
 .app-text {
+  flex-grow: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -966,6 +1068,28 @@ code {
 .app-text small {
   font-size: 12px;
   color: var(--text-subtle);
+}
+
+/* A long one wraps beside its button. */
+.update-line {
+  line-height: 1.5;
+}
+
+/* The download so far: a thin neutral bar, no state colour. */
+.update-bar {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.update-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text-muted);
 }
 
 .about-text {
@@ -998,11 +1122,14 @@ code {
   line-height: 1.55;
 }
 
+/* Its own colour: in the app's row the name's brighter white would reach it. */
 .about-button {
+  position: relative;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  color: var(--text);
   white-space: nowrap;
 }
 

@@ -224,6 +224,8 @@
   "settings.choose": "Auswählen …",
   "settings.clear": "Entfernen",
   "settings.projectsFolderHint": "Wenn kein Projekt passt, durchsucht der Projektumschalter auch die Ordner darin.",
+  "settings.autoUpdate": "Automatisch nach Updates suchen und sie laden",
+  "settings.autoUpdateHint": "Die Versionsabfrage geht an github.com, sonst wird nichts gesendet. Ist das aus, funktioniert nur „Jetzt prüfen“ unter Info.",
   "settings.scriptHint": "npm-Skript, das ausgeführt wird, wenn ein Projekt kein eigenes festlegt. Namen, die mit {build} beginnen, werden abgelehnt.",
   "settings.packageManager": "Paketmanager",
   "settings.packageManagerAuto": "Automatisch (aus der Lock-Datei)",
@@ -274,6 +276,18 @@
   "about.support": "Pitwall unterstützen",
   "about.supportText": "Pitwall ist kostenlos. Wenn es dir Zeit spart, hilft ein Kaffee, es am Laufen zu halten.",
   "about.coffee": "Einen Kaffee spendieren",
+  "about.update.current": "Aktuell",
+  "about.update.checked": "Aktuell · zuletzt geprüft {time}",
+  "about.update.offline": "Die Version ließ sich nicht abfragen; Pitwall versucht es später wieder.",
+  "about.update.check": "Jetzt prüfen",
+  "about.update.checking": "Wird geprüft…",
+  "about.update.downloading": "{version} wird geladen · {done} / {total}",
+  "about.update.downloadingSome": "{version} wird geladen · {done}",
+  "about.update.progress": "Download",
+  "about.update.ready": "{version} ist bereit",
+  "about.update.installing": "{version} wird installiert…",
+  "about.update.available": "{version} ist da; diese Installation kann sich nicht selbst aktualisieren.",
+  "about.update.retry": "Erneut versuchen",
   "day.nav": "Heute",
   "day.title": "Wo ist der Tag geblieben?",
   "day.today": "Heute",
@@ -808,6 +822,59 @@
   "track.legend.claude": "Orange: Claude arbeitet",
   "track.legend.waiting": "Orange, steht an der Boxenmauer: Claude wartet auf dich",
   "track.legend.crashed": "Rot, steht: der Server ist abgestürzt",
+  "update.button": "Aktualisieren",
+  "update.later": "Später",
+  "update.notes": "Neuerungen",
+  "update.openPage": "Download-Seite öffnen",
+  "update.dialog.ready": "Pitwall {version} ist bereit",
+  "update.dialog.available": "Pitwall {version} ist da",
+  "update.dialog.text": "Installiert ist Version {current}. Zum Installieren startet Pitwall neu; alles, was offen ist, kommt zurück.",
+  "update.dialog.textCut": {
+    "one": "Installiert ist Version {current}. Zum Installieren startet Pitwall neu; das meiste kommt zurück, {count} Vorgang wird abgebrochen.",
+    "other": "Installiert ist Version {current}. Zum Installieren startet Pitwall neu; das meiste kommt zurück, {count} Vorgänge werden abgebrochen."
+  },
+  "update.dialog.textAvailable": "Diese Installation kann sich nicht selbst aktualisieren; installiere die neue Version von der Download-Seite.",
+  "update.dialog.onQuit": "Später: beim Beenden installiert.",
+  "update.dialog.cut": "Wird abgebrochen",
+  "update.dialog.back": "Kommt zurück",
+  "update.cut.claude": "Claude arbeitet",
+  "update.cut.claudeOutcome": "Der Durchgang wird abgebrochen, die Sitzung wieder geöffnet",
+  "update.cut.command": "Ein Befehl läuft",
+  "update.cut.commandOutcome": "Der Befehl wird abgebrochen und nicht neu gestartet",
+  "update.back.servers": {
+    "one": "{count} Dev-Server",
+    "other": "{count} Dev-Server"
+  },
+  "update.back.serversOutcome": {
+    "one": "Wird neu gestartet",
+    "other": "Werden neu gestartet"
+  },
+  "update.back.claude": {
+    "one": "{count} Claude-Sitzung",
+    "other": "{count} Claude-Sitzungen"
+  },
+  "update.back.claudeOutcome": {
+    "one": "Öffnet sich an gleicher Stelle",
+    "other": "Öffnen sich an gleicher Stelle"
+  },
+  "update.back.terminals": {
+    "one": "{count} Terminal-Tab",
+    "other": "{count} Terminal-Tabs"
+  },
+  "update.back.terminalsIn": {
+    "one": "in {count} Projekt",
+    "other": "in {count} Projekten"
+  },
+  "update.back.terminalsOutcome": {
+    "one": "Öffnet sich mit der letzten Ausgabe, in neuer Shell",
+    "other": "Öffnen sich mit der letzten Ausgabe, in neuer Shell"
+  },
+  "update.error.download": "Das Update wurde nicht installiert: Die Signatur ließ sich nicht prüfen, oder der Download brach ab.",
+  "update.error.install": "Das Update ließ sich nicht installieren. Die installierte Version läuft unverändert weiter.",
+  "update.restored.title": "Pitwall auf {version} aktualisiert",
+  "update.restored.body": "Wiederhergestellt – Server: {servers}, Tabs: {terminals}, Claude-Sitzungen: {sessions}",
+  "update.restored.line": "Pitwall aktualisiert · {time}",
+  "update.restored.lineCut": "Pitwall aktualisiert · {time} · der laufende Befehl wurde abgebrochen",
   "core.notify.finished": "Claude ist fertig. Du bist dran.",
   "core.notify.asking": "Claude hat dir eine Frage gestellt.",
   "core.notify.permission": "Claude braucht deine Erlaubnis, um weiterzumachen.",

@@ -224,6 +224,8 @@
   "settings.choose": "Seç…",
   "settings.clear": "Temizle",
   "settings.projectsFolderHint": "Hiçbir proje eşleşmezse hızlı geçiş bu klasörün içindeki klasörlerde de arar.",
+  "settings.autoUpdate": "Güncellemeleri kendiliğinden denetle ve indir",
+  "settings.autoUpdateHint": "Sürüm sormak için github.com'a gidilir, başka bir şey gönderilmez. Kapalıyken yalnız Hakkında'daki Şimdi denetle çalışır.",
   "settings.scriptHint": "Proje kendi script'ini belirtmedikçe çalışacak npm script'i. {build} ile başlayan adlar reddedilir.",
   "settings.packageManager": "Paket yöneticisi",
   "settings.packageManagerAuto": "Otomatik (lock dosyasından)",
@@ -274,6 +276,18 @@
   "about.support": "Pitwall'a destek ol",
   "about.supportText": "Pitwall ücretsiz. Sana zaman kazandırıyorsa bir kahve, yaşamasına yardım eder.",
   "about.coffee": "Bana bir kahve ısmarla",
+  "about.update.current": "Güncel",
+  "about.update.checked": "Güncel · son denetim {time}",
+  "about.update.offline": "Sürüm sorulamadı; sonra yeniden denenir.",
+  "about.update.check": "Şimdi denetle",
+  "about.update.checking": "Denetleniyor…",
+  "about.update.downloading": "{version} iniyor · {done} / {total}",
+  "about.update.downloadingSome": "{version} iniyor · {done}",
+  "about.update.progress": "İndirme",
+  "about.update.ready": "{version} hazır",
+  "about.update.installing": "{version} kuruluyor…",
+  "about.update.available": "{version} çıktı; bu kurulum kendini güncelleyemez.",
+  "about.update.retry": "Yeniden dene",
   "day.nav": "Bugün",
   "day.title": "Gün nereye gitti?",
   "day.today": "Bugün",
@@ -796,6 +810,59 @@
   "track.legend.claude": "Turuncu: Claude çalışıyor",
   "track.legend.waiting": "Pit duvarında duran turuncu: Claude seni bekliyor",
   "track.legend.crashed": "Duran kırmızı: sunucu çöktü",
+  "update.button": "Güncelle",
+  "update.later": "Sonra",
+  "update.notes": "Yenilikler",
+  "update.openPage": "İndirme sayfasını aç",
+  "update.dialog.ready": "Pitwall {version} hazır",
+  "update.dialog.available": "Pitwall {version} çıktı",
+  "update.dialog.text": "Kurulu sürüm {current}. Kurmak için Pitwall yeniden başlar; açık olan her şey geri gelir.",
+  "update.dialog.textCut": {
+    "one": "Kurulu sürüm {current}. Kurmak için Pitwall yeniden başlar; çoğu şey geri gelir, {count} iş yarıda kalır.",
+    "other": "Kurulu sürüm {current}. Kurmak için Pitwall yeniden başlar; çoğu şey geri gelir, {count} iş yarıda kalır."
+  },
+  "update.dialog.textAvailable": "Bu kurulum kendini güncelleyemez; yeni sürümü indirme sayfasından kur.",
+  "update.dialog.onQuit": "Sonra dersen çıkışta kurulur.",
+  "update.dialog.cut": "Yarıda kalır",
+  "update.dialog.back": "Geri gelir",
+  "update.cut.claude": "Claude çalışıyor",
+  "update.cut.claudeOutcome": "Tur kesilir, oturum geri açılır",
+  "update.cut.command": "Komut sürüyor",
+  "update.cut.commandOutcome": "Komut kesilir, yeniden başlatılmaz",
+  "update.back.servers": {
+    "one": "{count} dev sunucusu",
+    "other": "{count} dev sunucusu"
+  },
+  "update.back.serversOutcome": {
+    "one": "Yeniden başlatılır",
+    "other": "Yeniden başlatılır"
+  },
+  "update.back.claude": {
+    "one": "{count} Claude oturumu",
+    "other": "{count} Claude oturumu"
+  },
+  "update.back.claudeOutcome": {
+    "one": "Kaldığı yerden açılır",
+    "other": "Kaldığı yerden açılır"
+  },
+  "update.back.terminals": {
+    "one": "{count} terminal sekmesi",
+    "other": "{count} terminal sekmesi"
+  },
+  "update.back.terminalsIn": {
+    "one": "{count} projede",
+    "other": "{count} projede"
+  },
+  "update.back.terminalsOutcome": {
+    "one": "Son çıktısıyla açılır, kabuk yenidir",
+    "other": "Son çıktısıyla açılır, kabuk yenidir"
+  },
+  "update.error.download": "Güncelleme kurulmadı: imza doğrulanamadı ya da indirme yarıda kaldı.",
+  "update.error.install": "Güncelleme kurulamadı. Kurulu sürüm olduğu gibi çalışıyor.",
+  "update.restored.title": "Pitwall güncellendi: {version}",
+  "update.restored.body": "Geri yüklendi — sunucu: {servers}, sekme: {terminals}, Claude oturumu: {sessions}",
+  "update.restored.line": "Pitwall güncellendi · {time}",
+  "update.restored.lineCut": "Pitwall güncellendi · {time} · süren komut kesildi",
   "core.notify.finished": "Claude bitirdi. Sıra sende.",
   "core.notify.asking": "Claude sana bir soru sordu.",
   "core.notify.permission": "Claude devam etmek için izin istiyor.",

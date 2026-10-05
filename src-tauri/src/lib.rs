@@ -23,6 +23,7 @@ mod settings;
 mod sound;
 mod spend;
 mod tray;
+mod update;
 mod usage;
 mod windows;
 
@@ -49,6 +50,7 @@ pub struct AppState {
     pub core: Arc<Core>,
     pub fuel: fuel::Fuel,
     pub sessions: sessions::Sessions,
+    pub update: update::Update,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -211,6 +213,7 @@ pub fn run() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![AUTOSTART_ARG])))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -240,6 +243,8 @@ pub fn run() {
                 if path == fuel::NOTIFICATION_ID {
                     tray::show_main(&clicks);
                     let _ = clicks.emit("reveal-fuel", ());
+                } else if path == update::NOTIFICATION_ID {
+                    tray::show_main(&clicks);
                 } else if let Some(state) = clicks.try_state::<AppState>() {
                     state.core.open_claude(&path);
                 }
@@ -260,12 +265,16 @@ pub fn run() {
             );
 
             let fuel = fuel::Fuel::new(app.handle(), home.join(".claude").join("projects"));
-            app.manage(AppState { core: Arc::clone(&core), fuel, sessions: sessions::Sessions::default() });
+            let update = update::Update::new(app.handle());
+            app.manage(AppState { core: Arc::clone(&core), fuel, sessions: sessions::Sessions::default(), update });
             fuel::Fuel::start(app.handle());
             sessions::Sessions::start(app.handle());
+            update::Update::start(app.handle());
 
             core.reap_orphans();
             core.record_app("start");
+            // After a restart for an update: the servers, tabs and Claude sessions it closed.
+            let restored = core.restore();
 
             // The login item points at whichever binary registered it; re-register from the
             // installed app so it never launches a stale or dev build.
@@ -303,6 +312,9 @@ pub fn run() {
             // Opened by hand, the window comes up; at login the app stays in the menu bar.
             if !std::env::args().any(|arg| arg == AUTOSTART_ARG) {
                 tray::show_main(app.handle());
+            }
+            if let Some(restored) = &restored {
+                update::restored(app.handle(), restored);
             }
 
             Ok(())
@@ -417,6 +429,10 @@ pub fn run() {
             commands::deps_scan_details,
             commands::install_claude_hook,
             commands::uninstall_claude_hook,
+            commands::update_state,
+            commands::update_check,
+            commands::update_plan,
+            commands::update_install,
             commands::open_link,
             commands::quit
         ])
@@ -427,6 +443,8 @@ pub fn run() {
         RunEvent::Exit => {
             if let Some(state) = app.try_state::<AppState>() {
                 state.core.dispose();
+                // An update that waits goes in on the way out; a restart for it took it already.
+                state.update.install_on_quit();
             }
         }
         // Opening the app again (Finder, Dock, Spotlight) while it runs brings the window up.

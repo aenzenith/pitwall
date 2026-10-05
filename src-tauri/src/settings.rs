@@ -124,6 +124,9 @@ pub struct Settings {
     pub projects_dir: Option<String>,
     /// A notification when Claude's session or weekly limit passes 90 %.
     pub fuel_alert: bool,
+    /// Asks for new versions of Pitwall by itself and downloads them (`update.rs`). Off, only
+    /// "Check now" in Settings asks.
+    pub auto_update: bool,
     /// The board the Board page showed last: `all`, or a project's path. None until one is picked.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub board_scope: Option<String>,
@@ -152,6 +155,7 @@ impl Default for Settings {
             order: Vec::new(),
             projects_dir: None,
             fuel_alert: true,
+            auto_update: true,
             board_scope: None,
             board_view: None,
             track: None,

@@ -224,6 +224,8 @@
   "settings.choose": "Choose…",
   "settings.clear": "Clear",
   "settings.projectsFolderHint": "When no project matches, the quick switcher searches the folders in here too.",
+  "settings.autoUpdate": "Check for updates and download them automatically",
+  "settings.autoUpdateHint": "To ask for the latest version Pitwall goes to github.com; nothing else is sent. When off, only Check now in About works.",
   "settings.scriptHint": "npm script to run unless a project sets its own. Names starting with {build} are refused.",
   "settings.packageManager": "Package manager",
   "settings.packageManagerAuto": "Auto (from the lock file)",
@@ -274,6 +276,18 @@
   "about.support": "Support Pitwall",
   "about.supportText": "Pitwall is free. If it saves you time, a coffee helps keep it going.",
   "about.coffee": "Buy me a coffee",
+  "about.update.current": "Up to date",
+  "about.update.checked": "Up to date · last checked {time}",
+  "about.update.offline": "Couldn't ask for the latest version; Pitwall tries again later.",
+  "about.update.check": "Check now",
+  "about.update.checking": "Checking…",
+  "about.update.downloading": "Downloading {version} · {done} / {total}",
+  "about.update.downloadingSome": "Downloading {version} · {done}",
+  "about.update.progress": "Download",
+  "about.update.ready": "{version} is ready",
+  "about.update.installing": "Installing {version}…",
+  "about.update.available": "{version} is out; this install can't update itself.",
+  "about.update.retry": "Try again",
   "day.nav": "Today",
   "day.title": "Where did the day go?",
   "day.today": "Today",
@@ -808,6 +822,59 @@
   "track.legend.claude": "Orange: Claude at work",
   "track.legend.waiting": "Orange, standing at the pit wall: Claude is waiting on you",
   "track.legend.crashed": "Red, standing: the server crashed",
+  "update.button": "Update",
+  "update.later": "Later",
+  "update.notes": "What's new",
+  "update.openPage": "Open the download page",
+  "update.dialog.ready": "Pitwall {version} is ready",
+  "update.dialog.available": "Pitwall {version} is out",
+  "update.dialog.text": "Version {current} is installed. Pitwall restarts to install the new one; everything open comes back.",
+  "update.dialog.textCut": {
+    "one": "Version {current} is installed. Pitwall restarts to install the new one; most things come back, {count} task is cut off.",
+    "other": "Version {current} is installed. Pitwall restarts to install the new one; most things come back, {count} tasks are cut off."
+  },
+  "update.dialog.textAvailable": "This install can't update itself; install the new version from the download page.",
+  "update.dialog.onQuit": "Later installs it on quit.",
+  "update.dialog.cut": "Cut off",
+  "update.dialog.back": "Comes back",
+  "update.cut.claude": "Claude is working",
+  "update.cut.claudeOutcome": "The turn is cut off, the session reopens",
+  "update.cut.command": "A command is running",
+  "update.cut.commandOutcome": "The command is cut off, not started again",
+  "update.back.servers": {
+    "one": "{count} dev server",
+    "other": "{count} dev servers"
+  },
+  "update.back.serversOutcome": {
+    "one": "Started again",
+    "other": "Started again"
+  },
+  "update.back.claude": {
+    "one": "{count} Claude session",
+    "other": "{count} Claude sessions"
+  },
+  "update.back.claudeOutcome": {
+    "one": "Reopens where it left off",
+    "other": "Reopen where they left off"
+  },
+  "update.back.terminals": {
+    "one": "{count} terminal tab",
+    "other": "{count} terminal tabs"
+  },
+  "update.back.terminalsIn": {
+    "one": "in {count} project",
+    "other": "in {count} projects"
+  },
+  "update.back.terminalsOutcome": {
+    "one": "Opens with its last output, in a new shell",
+    "other": "Open with their last output, in new shells"
+  },
+  "update.error.download": "The update wasn't installed: its signature couldn't be verified, or the download was cut short.",
+  "update.error.install": "The update couldn't be installed. The installed version runs on as it is.",
+  "update.restored.title": "Pitwall updated to {version}",
+  "update.restored.body": "Restored — servers: {servers}, tabs: {terminals}, Claude sessions: {sessions}",
+  "update.restored.line": "Pitwall updated · {time}",
+  "update.restored.lineCut": "Pitwall updated · {time} · the running command was cut off",
   "core.notify.finished": "Claude finished. Your turn.",
   "core.notify.asking": "Claude asked you a question.",
   "core.notify.permission": "Claude needs your permission to go on.",

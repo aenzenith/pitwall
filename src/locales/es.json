@@ -226,6 +226,8 @@
   "settings.choose": "Elegir…",
   "settings.clear": "Quitar",
   "settings.projectsFolderHint": "Si ningún proyecto coincide, el selector rápido también busca en las carpetas que contiene.",
+  "settings.autoUpdate": "Buscar actualizaciones y descargarlas automáticamente",
+  "settings.autoUpdateHint": "Para consultar la versión se va a github.com; no se envía nada más. Si está desactivado, solo funciona Comprobar ahora, en Acerca de.",
   "settings.scriptHint": "Script de npm que se ejecuta salvo que el proyecto defina el suyo. Se rechazan los nombres que empiezan con {build}.",
   "settings.packageManager": "Gestor de paquetes",
   "settings.packageManagerAuto": "Automático (según el lockfile)",
@@ -276,6 +278,18 @@
   "about.support": "Apoya a Pitwall",
   "about.supportText": "Pitwall es gratis. Si te ahorra tiempo, un café ayuda a que siga adelante.",
   "about.coffee": "Invítame a un café",
+  "about.update.current": "Al día",
+  "about.update.checked": "Al día · última comprobación {time}",
+  "about.update.offline": "No se pudo consultar la versión; se volverá a intentar más tarde.",
+  "about.update.check": "Comprobar ahora",
+  "about.update.checking": "Comprobando…",
+  "about.update.downloading": "Descargando {version} · {done} / {total}",
+  "about.update.downloadingSome": "Descargando {version} · {done}",
+  "about.update.progress": "Descarga",
+  "about.update.ready": "{version} lista",
+  "about.update.installing": "Instalando {version}…",
+  "about.update.available": "Salió la {version}; esta instalación no puede actualizarse sola.",
+  "about.update.retry": "Reintentar",
   "day.nav": "Hoy",
   "day.title": "¿A dónde se fue el día?",
   "day.today": "Hoy",
@@ -814,6 +828,67 @@
   "track.legend.claude": "Naranja: Claude trabajando",
   "track.legend.waiting": "Naranja, parada en el muro de boxes: Claude te está esperando",
   "track.legend.crashed": "Roja, parada: el servidor se ha caído",
+  "update.button": "Actualizar",
+  "update.later": "Luego",
+  "update.notes": "Novedades",
+  "update.openPage": "Abrir la página de descarga",
+  "update.dialog.ready": "Pitwall {version} está listo",
+  "update.dialog.available": "Salió Pitwall {version}",
+  "update.dialog.text": "La versión instalada es la {current}. Para instalar la nueva, Pitwall se reinicia; todo lo que está abierto vuelve.",
+  "update.dialog.textCut": {
+    "one": "La versión instalada es la {current}. Para instalar la nueva, Pitwall se reinicia; casi todo vuelve, {count} tarea queda a medias.",
+    "many": "La versión instalada es la {current}. Para instalar la nueva, Pitwall se reinicia; casi todo vuelve, {count} tareas quedan a medias.",
+    "other": "La versión instalada es la {current}. Para instalar la nueva, Pitwall se reinicia; casi todo vuelve, {count} tareas quedan a medias."
+  },
+  "update.dialog.textAvailable": "Esta instalación no puede actualizarse sola; instala la nueva versión desde la página de descarga.",
+  "update.dialog.onQuit": "Luego: se instala al salir.",
+  "update.dialog.cut": "Queda a medias",
+  "update.dialog.back": "Vuelve",
+  "update.cut.claude": "Claude está trabajando",
+  "update.cut.claudeOutcome": "El turno se corta, la sesión se vuelve a abrir",
+  "update.cut.command": "Hay un comando en ejecución",
+  "update.cut.commandOutcome": "El comando se corta y no se reinicia",
+  "update.back.servers": {
+    "one": "{count} servidor de desarrollo",
+    "many": "{count} servidores de desarrollo",
+    "other": "{count} servidores de desarrollo"
+  },
+  "update.back.serversOutcome": {
+    "one": "Se reinicia",
+    "many": "Se reinician",
+    "other": "Se reinician"
+  },
+  "update.back.claude": {
+    "one": "{count} sesión de Claude",
+    "many": "{count} sesiones de Claude",
+    "other": "{count} sesiones de Claude"
+  },
+  "update.back.claudeOutcome": {
+    "one": "Se abre donde quedó",
+    "many": "Se abren donde quedaron",
+    "other": "Se abren donde quedaron"
+  },
+  "update.back.terminals": {
+    "one": "{count} pestaña de terminal",
+    "many": "{count} pestañas de terminal",
+    "other": "{count} pestañas de terminal"
+  },
+  "update.back.terminalsIn": {
+    "one": "en {count} proyecto",
+    "many": "en {count} proyectos",
+    "other": "en {count} proyectos"
+  },
+  "update.back.terminalsOutcome": {
+    "one": "Se abre con su última salida, con un shell nuevo",
+    "many": "Se abren con su última salida, con un shell nuevo",
+    "other": "Se abren con su última salida, con un shell nuevo"
+  },
+  "update.error.download": "La actualización no se instaló: no se pudo verificar la firma o la descarga quedó a medias.",
+  "update.error.install": "No se pudo instalar la actualización. La versión instalada sigue funcionando tal cual.",
+  "update.restored.title": "Pitwall se actualizó a {version}",
+  "update.restored.body": "Restaurado — servidores: {servers}, pestañas: {terminals}, sesiones de Claude: {sessions}",
+  "update.restored.line": "Pitwall se actualizó · {time}",
+  "update.restored.lineCut": "Pitwall se actualizó · {time} · el comando en ejecución se cortó",
   "core.notify.finished": "Claude terminó. Te toca.",
   "core.notify.asking": "Claude te hizo una pregunta.",
   "core.notify.permission": "Claude necesita tu permiso para continuar.",

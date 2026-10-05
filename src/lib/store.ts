@@ -15,10 +15,12 @@ import type {
   LinkSuggestion,
   NewImage,
   ProjectSettings,
+  RestartPlan,
   SessionsView,
   Settings,
   Snapshot,
   TerminalView,
+  UpdateView,
 } from "./types";
 import { dayName } from "./day";
 import { trackSettings, type TrackSettings } from "./track";
@@ -199,6 +201,31 @@ export async function connectBoard(): Promise<UnlistenFn> {
   return unlisten;
 }
 
+/** The app's own update: the brand row's version and button, and Settings › About. Null until the
+ * core answers. */
+export const update = ref<UpdateView | null>(null);
+
+/**
+ * The main window's: hears `update` (sent to this window only, on every change) and asks for the
+ * current state. A core that doesn't answer leaves it null: no version, no button.
+ */
+export async function connectUpdate(): Promise<UnlistenFn> {
+  let heard = 0;
+  const unlisten = await getCurrentWindow().listen<UpdateView>("update", (event) => {
+    heard++;
+    update.value = event.payload;
+  });
+  const before = heard;
+  try {
+    const state = await api.updateState();
+    // An event that came in meanwhile is newer.
+    if (heard === before) update.value = state;
+  } catch {
+    // Kept as it was; the next `update` event fills it.
+  }
+  return unlisten;
+}
+
 export type Action = "start" | "stop" | "restart";
 
 export const api = {
@@ -273,7 +300,16 @@ export const api = {
   windowReady: () => invoke("window_ready"),
   installClaudeHook: () => invoke("install_claude_hook"),
   uninstallClaudeHook: () => invoke("uninstall_claude_hook"),
-  openLink: (link: "site" | "coffee") => invoke("open_link", { link }),
+  /** `releases`: the release notes, and where a new version is downloaded by hand. */
+  openLink: (link: "site" | "coffee" | "releases") => invoke("open_link", { link }),
+  updateState: () => invoke<UpdateView>("update_state"),
+  /** Asks for a new version now; the answer comes as an `update` event. */
+  updateCheck: () => invoke("update_check"),
+  /** What a restart for the update would cut off and bring back, as things stand now. */
+  updatePlan: () => invoke<RestartPlan>("update_plan"),
+  /** Installs the ready update and restarts: never answers when it works, rejects with a short
+   * error id (`download`, `signature`, `install`) when it doesn't. */
+  updateInstall: () => invoke("update_install"),
   /** Asks the core to read the limits again (`force`: past the background pace; it still throttles). */
   refreshFuel: (force: boolean) => invoke("refresh_fuel", { force }),
   /** The board: every project's cards (the Board page). */

@@ -87,6 +87,8 @@ export type Settings = {
   shortcut: boolean;
   /** Global-hotkey form: `Ctrl+Alt+KeyP`, `Alt+Space`. */
   shortcutKeys: string;
+  /** Ask for new versions and download them without being asked (Settings › About still can). */
+  autoUpdate: boolean;
   projects: Record<string, ProjectSettings>;
   /** The list order the user dragged into place. */
   order: string[];
@@ -386,3 +388,42 @@ export type CardImage = { n: number; kind: "png" | "jpeg" | "gif" | "webp" };
 /** An image pasted into a card's note, handed to the core with the card's text: its bytes as a
  * `data:` URL. */
 export type NewImage = { n: number; data: string };
+
+/* ---------- Update: the app's own new version (update_state, event `update`) ---------- */
+
+/** The app's own update: what Settings › About and the sidebar's brand row show. */
+export type UpdateView = {
+  /** The installed version. */
+  current: string;
+  /** `off`: this build never asks (a dev run, no signing key). `available`: a new version exists
+   *  but this install can't replace itself (a package manager's, a read-only place). */
+  status: "off" | "idle" | "checking" | "downloading" | "ready" | "available" | "installing" | "failed";
+  /** The new version: from `downloading` on, and with `available` and `failed`. */
+  version: string | null;
+  /** While `downloading`: bytes so far, and in all when the server said. */
+  downloaded: number;
+  total: number | null;
+  /** When it last got an answer (ms since epoch). */
+  checkedAt: number | null;
+  /** The last ask got no answer (offline, GitHub down). Never a failure state of its own. */
+  offline: boolean;
+  /** With `failed`: `download` | `signature` | `install`. */
+  error: string | null;
+  /** A ready update is also installed when the app quits (not on Windows). */
+  onQuit: boolean;
+};
+
+/** What a restart for the update would do to what is open; for the dialog. */
+export type RestartPlan = {
+  /** Cut off for good. `claude`: a Claude turn at work in one of Pitwall's tabs (its session is
+   *  reopened, the turn is lost). `shell`: a command running in a shell tab. `command`: a
+   *  running one-off custom command. `name` is the tab's or the command's name. */
+  cut: Array<{ kind: "claude" | "shell" | "command"; project: string; name: string }>;
+  /** Project names whose dev server is started again. */
+  servers: string[];
+  /** Project names of the Claude sessions opened again, one entry per session. */
+  claude: string[];
+  /** Tabs opened again, and in how many projects. */
+  terminals: number;
+  terminalProjects: number;
+};

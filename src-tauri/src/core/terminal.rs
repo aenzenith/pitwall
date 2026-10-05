@@ -60,6 +60,32 @@ impl Session {
     pub(super) fn pid_entry(&self) -> Option<PidEntry> {
         self.pid.map(|pid| PidEntry { path: self.path.clone(), pid })
     }
+
+    /// Something other than the shell holds the terminal: a command it started is running.
+    #[cfg(unix)]
+    fn foreground(&self) -> bool {
+        match (self.master.process_group_leader(), self.pid) {
+            (Some(group), Some(shell)) => group > 0 && group as u32 != shell,
+            _ => false,
+        }
+    }
+
+    /// Windows has no foreground group; `restore.rs` looks at the shell's children instead.
+    #[cfg(not(unix))]
+    fn foreground(&self) -> bool {
+        false
+    }
+}
+
+/// A tab as a restart finds it (`restore.rs`).
+pub(super) struct TabState {
+    pub(super) id: u64,
+    pub(super) pid: Option<u32>,
+    pub(super) cols: u16,
+    pub(super) rows: u16,
+    /// A command runs in it, as far as its terminal tells.
+    pub(super) foreground: bool,
+    pub(super) scrollback: String,
 }
 
 impl Core {
@@ -295,6 +321,33 @@ impl Core {
     /// Every terminal's shell, for shutdown.
     pub(super) fn terminal_pids(&self) -> Vec<u32> {
         self.terminal_sessions().values().filter_map(|session| session.pid).collect()
+    }
+
+    /// Every open tab's process, size and last output, for a restart (`restore.rs`).
+    pub(super) fn terminal_tabs(&self) -> Vec<TabState> {
+        self.terminal_sessions()
+            .iter()
+            .map(|(id, session)| {
+                let size = session.master.get_size().ok();
+                TabState {
+                    id: *id,
+                    pid: session.pid,
+                    cols: size.as_ref().map_or(0, |size| size.cols),
+                    rows: size.as_ref().map_or(0, |size| size.rows),
+                    foreground: session.foreground(),
+                    scrollback: session.scrollback.clone(),
+                }
+            })
+            .collect()
+    }
+
+    /// Puts `text` before whatever a new tab has shown so far: the output of the tab it stands
+    /// in for after a restart.
+    pub(super) fn seed_terminal(&self, id: u64, text: &str) {
+        if let Some(session) = self.terminal_sessions().get_mut(&id) {
+            session.scrollback.insert_str(0, text);
+            trim_scrollback(&mut session.scrollback);
+        }
     }
 }
 

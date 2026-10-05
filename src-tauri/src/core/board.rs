@@ -804,6 +804,22 @@ impl Core {
         Ok(())
     }
 
+    /// A session opened again in a new tab after a restart (`restore.rs`): its card follows it
+    /// there, and isn't sent to review while the session comes back up.
+    pub(super) fn board_resumed(&self, session: &str, terminal: u64) {
+        let mut board = self.board();
+        board.resumed.insert(session.to_string(), now_ms() + RESUME_GRACE_MS);
+
+        let mut linked = false;
+        for card in board.cards.iter_mut().filter(|card| card.session.as_deref() == Some(session)) {
+            card.terminal = Some(terminal);
+            linked = true;
+        }
+        if linked {
+            self.board_changed(board);
+        }
+    }
+
     /// A terminal closed: a card whose Claude ran in it goes to review.
     pub(super) fn board_terminal_gone(&self, terminal: u64) {
         let now = now_ms();

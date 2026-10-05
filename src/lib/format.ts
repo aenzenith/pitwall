@@ -100,6 +100,17 @@ export function shortcutLabel(hotkey: string): string {
   return keys(hotkey, { ENTER: "↩", ESCAPE: "⎋" });
 }
 
+/** A download's size as the language writes it, one decimal: `6.1 MB`, `6,1 MB` (10⁶ bytes each). */
+export function megabytes(bytes: number): string {
+  return new Intl.NumberFormat(language.value, { style: "unit", unit: "megabyte", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(bytes / 1_000_000);
+}
+
+/** Why an update didn't go in, by the core's error id: what came down can't be trusted (`download`,
+ * `signature`), or it couldn't be put in place (`install`, and anything else). */
+export function updateError(id: string | null): string {
+  return t(id === "download" || id === "signature" ? "update.error.download" : "update.error.install");
+}
+
 const EDITOR_NAMES: Record<string, string> = { vscode: "VS Code", "vscode-insiders": "Insiders", cursor: "Cursor", windsurf: "Windsurf" };
 
 export function editorName(editor: string | undefined): string {

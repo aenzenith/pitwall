@@ -222,6 +222,8 @@
   "settings.choose": "选择…",
   "settings.clear": "清除",
   "settings.projectsFolderHint": "没有匹配的项目时，快速切换器也会搜索此文件夹中的文件夹。",
+  "settings.autoUpdate": "自动检查并下载更新",
+  "settings.autoUpdateHint": "查询版本时会访问 github.com，不会发送其他任何内容。关闭后，只有“关于”中的“立即检查”可用。",
   "settings.scriptHint": "项目未单独指定时要运行的 npm 脚本。以 {build} 开头的名称会被拒绝。",
   "settings.packageManager": "包管理器",
   "settings.packageManagerAuto": "自动（根据 lock 文件）",
@@ -272,6 +274,18 @@
   "about.support": "支持 Pitwall",
   "about.supportText": "Pitwall 是免费的。如果它帮你节省了时间，一杯咖啡能帮它继续走下去。",
   "about.coffee": "请我喝杯咖啡",
+  "about.update.current": "已是最新",
+  "about.update.checked": "已是最新 · 上次检查 {time}",
+  "about.update.offline": "无法查询版本；稍后会重试。",
+  "about.update.check": "立即检查",
+  "about.update.checking": "正在检查…",
+  "about.update.downloading": "正在下载 {version} · {done} / {total}",
+  "about.update.downloadingSome": "正在下载 {version} · {done}",
+  "about.update.progress": "下载",
+  "about.update.ready": "{version} 已就绪",
+  "about.update.installing": "正在安装 {version}…",
+  "about.update.available": "{version} 已发布；此安装无法自行更新。",
+  "about.update.retry": "重试",
   "day.nav": "今天",
   "day.title": "这一天去哪了?",
   "day.today": "今天",
@@ -789,6 +803,51 @@
   "track.legend.claude": "橙色：Claude 正在工作",
   "track.legend.waiting": "停在维修墙边的橙色：Claude 在等你",
   "track.legend.crashed": "停着的红色：服务器已崩溃",
+  "update.button": "更新",
+  "update.later": "稍后",
+  "update.notes": "更新内容",
+  "update.openPage": "打开下载页面",
+  "update.dialog.ready": "Pitwall {version} 已就绪",
+  "update.dialog.available": "Pitwall {version} 已发布",
+  "update.dialog.text": "已安装的版本是 {current}。安装时 Pitwall 会重启；打开的一切都会恢复。",
+  "update.dialog.textCut": {
+    "other": "已安装的版本是 {current}。安装时 Pitwall 会重启；大部分会恢复，{count} 项工作会中断。"
+  },
+  "update.dialog.textAvailable": "此安装无法自行更新；请从下载页面安装新版本。",
+  "update.dialog.onQuit": "选“稍后”则退出时安装。",
+  "update.dialog.cut": "会中断",
+  "update.dialog.back": "会恢复",
+  "update.cut.claude": "Claude 正在工作",
+  "update.cut.claudeOutcome": "本轮中断，会话会重新打开",
+  "update.cut.command": "命令正在运行",
+  "update.cut.commandOutcome": "命令中断，不会重新运行",
+  "update.back.servers": {
+    "other": "{count} 个开发服务器"
+  },
+  "update.back.serversOutcome": {
+    "other": "重新启动"
+  },
+  "update.back.claude": {
+    "other": "{count} 个 Claude 会话"
+  },
+  "update.back.claudeOutcome": {
+    "other": "从上次的位置打开"
+  },
+  "update.back.terminals": {
+    "other": "{count} 个终端标签页"
+  },
+  "update.back.terminalsIn": {
+    "other": "{count} 个项目中"
+  },
+  "update.back.terminalsOutcome": {
+    "other": "带着上次的输出打开，shell 是新的"
+  },
+  "update.error.download": "更新未安装：无法验证签名，或下载中断。",
+  "update.error.install": "无法安装更新。已安装的版本照常运行。",
+  "update.restored.title": "Pitwall 已更新到 {version}",
+  "update.restored.body": "已恢复——服务器：{servers}，标签页：{terminals}，Claude 会话：{sessions}",
+  "update.restored.line": "Pitwall 已更新 · {time}",
+  "update.restored.lineCut": "Pitwall 已更新 · {time} · 正在运行的命令已中断",
   "core.notify.finished": "Claude 完成了。轮到你了。",
   "core.notify.asking": "Claude 向你提了一个问题。",
   "core.notify.permission": "Claude 需要你授权才能继续。",

@@ -543,12 +543,45 @@ pub fn uninstall_claude_hook(state: State<'_, AppState>) -> Result<(), String> {
     state.core.uninstall_claude_hook()
 }
 
+/* ---------- Pitwall's own update ---------- */
+
+#[tauri::command]
+pub fn update_state(state: State<'_, AppState>) -> crate::update::UpdateView {
+    state.update.view()
+}
+
+/// "Check now" in Settings; the answer arrives as `update` events.
+#[tauri::command]
+pub fn update_check(app: AppHandle, state: State<'_, AppState>) {
+    state.update.check(&app);
+}
+
+/// What a restart for the update would cut off and bring back, for the dialog that asks. It
+/// reads the process table, so it runs off the main thread.
+#[tauri::command]
+pub async fn update_plan(app: AppHandle) -> Result<crate::core::RestartPlan, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.restart_plan()).await.map_err(|error| error.to_string())
+}
+
+/// Installs the waiting update and restarts. Answers only when that failed, with the step.
+#[tauri::command]
+pub async fn update_install(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state.update.install(&app).map_err(str::to_string)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 /// Opens one of the About links in the browser. The UI names a link, never an address.
 #[tauri::command]
 pub fn open_link(app: AppHandle, link: String) -> Result<(), String> {
     let url = match link.as_str() {
         "site" => "https://aenzenith.com",
         "coffee" => "https://buymeacoffee.com/aenzenith",
+        "releases" => "https://github.com/aenzenith/pitwall/releases/latest",
         _ => return Err(format!("Unknown link: {link}")),
     };
     app.opener().open_url(url, None::<&str>).map_err(|error| error.to_string())

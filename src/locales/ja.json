@@ -222,6 +222,8 @@
   "settings.choose": "選択…",
   "settings.clear": "消去",
   "settings.projectsFolderHint": "一致するプロジェクトがない場合、クイックスイッチャーはこのフォルダ内のフォルダも検索します。",
+  "settings.autoUpdate": "アップデートを自動で確認してダウンロードする",
+  "settings.autoUpdateHint": "バージョンの確認では github.com に接続します。ほかには何も送信しません。オフのときは「情報」の「今すぐ確認」だけが使えます。",
   "settings.scriptHint": "プロジェクト側で指定がない場合に実行するnpmスクリプトです。{build}で始まる名前は拒否されます。",
   "settings.packageManager": "パッケージマネージャー",
   "settings.packageManagerAuto": "自動（ロックファイルから判定）",
@@ -272,6 +274,18 @@
   "about.support": "Pitwallを支援",
   "about.supportText": "Pitwallは無料です。時間の節約に役立っているなら、コーヒー1杯の支援が開発を続ける力になります。",
   "about.coffee": "コーヒーをおごる",
+  "about.update.current": "最新です",
+  "about.update.checked": "最新です · 最終確認 {time}",
+  "about.update.offline": "バージョンを確認できませんでした。あとで再試行します。",
+  "about.update.check": "今すぐ確認",
+  "about.update.checking": "確認中…",
+  "about.update.downloading": "{version} をダウンロード中 · {done} / {total}",
+  "about.update.downloadingSome": "{version} をダウンロード中 · {done}",
+  "about.update.progress": "ダウンロード",
+  "about.update.ready": "{version} の準備ができました",
+  "about.update.installing": "{version} をインストール中…",
+  "about.update.available": "{version} が出ました。このインストールは自動でアップデートできません。",
+  "about.update.retry": "再試行",
   "day.nav": "今日",
   "day.title": "一日の振り返り",
   "day.today": "今日",
@@ -789,6 +803,51 @@
   "track.legend.claude": "オレンジ：Claudeが作業中",
   "track.legend.waiting": "ピットウォールで止まっているオレンジ：Claudeが入力待ち",
   "track.legend.crashed": "止まっている赤：サーバーがクラッシュ",
+  "update.button": "アップデート",
+  "update.later": "あとで",
+  "update.notes": "新機能",
+  "update.openPage": "ダウンロードページを開く",
+  "update.dialog.ready": "Pitwall {version} の準備ができました",
+  "update.dialog.available": "Pitwall {version} が出ました",
+  "update.dialog.text": "インストール済みのバージョンは {current} です。インストールのため Pitwall が再起動します。開いているものはすべて元に戻ります。",
+  "update.dialog.textCut": {
+    "other": "インストール済みのバージョンは {current} です。インストールのため Pitwall が再起動します。ほとんどは元に戻りますが、{count} 件の作業が中断されます。"
+  },
+  "update.dialog.textAvailable": "このインストールは自動でアップデートできません。ダウンロードページから新しいバージョンをインストールしてください。",
+  "update.dialog.onQuit": "あとでなら終了時に適用されます。",
+  "update.dialog.cut": "中断されるもの",
+  "update.dialog.back": "元に戻るもの",
+  "update.cut.claude": "Claude が作業中",
+  "update.cut.claudeOutcome": "ターンは中断され、セッションは開き直されます",
+  "update.cut.command": "コマンドを実行中",
+  "update.cut.commandOutcome": "コマンドは中断され、再実行されません",
+  "update.back.servers": {
+    "other": "{count} 個の開発サーバー"
+  },
+  "update.back.serversOutcome": {
+    "other": "再起動されます"
+  },
+  "update.back.claude": {
+    "other": "{count} 個の Claude セッション"
+  },
+  "update.back.claudeOutcome": {
+    "other": "続きから開きます"
+  },
+  "update.back.terminals": {
+    "other": "{count} 個のターミナルタブ"
+  },
+  "update.back.terminalsIn": {
+    "other": "{count} 件のプロジェクト"
+  },
+  "update.back.terminalsOutcome": {
+    "other": "最後の出力付きで開きます。シェルは新規です"
+  },
+  "update.error.download": "アップデートはインストールされませんでした。署名を検証できなかったか、ダウンロードが中断されました。",
+  "update.error.install": "アップデートをインストールできませんでした。インストール済みのバージョンはそのまま動作します。",
+  "update.restored.title": "Pitwall を {version} にアップデートしました",
+  "update.restored.body": "復元しました — サーバー: {servers}、タブ: {terminals}、Claude セッション: {sessions}",
+  "update.restored.line": "Pitwall をアップデート · {time}",
+  "update.restored.lineCut": "Pitwall をアップデート · {time} · 実行中のコマンドは中断されました",
   "core.notify.finished": "Claudeの応答が完了しました。あなたの番です。",
   "core.notify.asking": "Claudeから質問があります。",
   "core.notify.permission": "Claudeが続行するには許可が必要です。",
