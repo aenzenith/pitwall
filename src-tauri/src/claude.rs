@@ -4,8 +4,10 @@
 //! that session's details ask for it (`last_message`: the Sessions page, a board card) and
 //! handed over, never kept. Where the opt-in hook is installed (hooks.rs), its events decide
 //! instead: a prompt sent, the turn over, a permission prompt or question open, the session
-//! gone. Logs stay the fallback for sessions the hook hasn't reported. "Seen" state lives in the
-//! shared `claude-seen.json`.
+//! gone. Logs stay the fallback for sessions the hook hasn't reported. Either way a turn that
+//! ended isn't over while Claude Code itself still calls the session busy (`set_busy`): the
+//! subagents it left running in the background are at work. "Seen" state lives in the shared
+//! `claude-seen.json`.
 
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
@@ -553,7 +555,7 @@ impl HookSession {
                     // while the prompt was open (a parallel subagent).
                     _ if prompt_open => (!self.busy.contains(&thread)).then_some(HookPhase::Working),
                     // Another tool's Stop hook can keep the turn going; a subagent left running
-                    // in the background doesn't.
+                    // in the background doesn't: Claude Code's `busy` tells of that one (`state`).
                     HookPhase::Waiting(TurnKind::Finished) => thread.is_empty().then_some(HookPhase::Working),
                     HookPhase::Ended => None,
                     _ => Some(HookPhase::Working),
@@ -596,14 +598,18 @@ impl HookSession {
     }
 
     /// Its phase and the turn it waits with, given when its log was last written; `None` when
-    /// the log decides. A prompt counts as answered once the log is written again.
-    fn state(&mut self, logged: u64, baseline: u64, recent: u64) -> Option<(SessionPhase, Option<Turn>)> {
+    /// the log decides. A prompt counts as answered once the log is written again. `busy`:
+    /// Claude Code itself calls the session busy, so a turn that ended isn't over: subagents it
+    /// left running in the background are at work, and it takes their results up without a
+    /// prompt.
+    fn state(&mut self, logged: u64, baseline: u64, recent: u64, busy: bool) -> Option<(SessionPhase, Option<Turn>)> {
         let alive = if self.last.max(logged) > recent { SessionPhase::Working } else { SessionPhase::Idle };
 
         match self.phase {
             HookPhase::Log => None,
             HookPhase::Idle | HookPhase::Ended => Some((SessionPhase::Idle, None)),
             HookPhase::Working => Some((alive, None)),
+            HookPhase::Waiting(TurnKind::Finished) if busy => Some((SessionPhase::Working, None)),
             HookPhase::Waiting(TurnKind::Finished) if self.since > baseline => {
                 Some((SessionPhase::Waiting, Some(Turn { kind: TurnKind::Finished, at: self.since })))
             }
@@ -660,9 +666,11 @@ fn dir_match(dir: &str, encoded: &str) -> Option<bool> {
     }
 }
 
-/// A session decided by its log's last lines.
-fn log_state(verdict: &Verdict, modified: u64, baseline: u64, recent: u64) -> (SessionPhase, Option<Turn>) {
+/// A session decided by its log's last lines. `busy`: Claude Code itself calls it busy, which
+/// keeps a finished turn at work (`HookSession::state`).
+fn log_state(verdict: &Verdict, modified: u64, baseline: u64, recent: u64, busy: bool) -> (SessionPhase, Option<Turn>) {
     let phase = match verdict.turn {
+        Some(turn) if busy && turn.kind == TurnKind::Finished => SessionPhase::Working,
         Some(turn) if turn.at > baseline => SessionPhase::Waiting,
         None if modified > recent => SessionPhase::Working,
         _ => SessionPhase::Idle,
@@ -687,6 +695,8 @@ pub struct ClaudeWatch {
     extra: HashMap<String, (u64, Log)>,
     /// The projects listed now.
     listed: Vec<String>,
+    /// The sessions Claude Code itself calls busy now, by session id (`set_busy`).
+    busy: HashSet<String>,
     /// A full scan ran; nothing is known before.
     ready: bool,
 }
@@ -702,6 +712,7 @@ impl ClaudeWatch {
             hooked: HashMap::new(),
             extra: HashMap::new(),
             listed: Vec::new(),
+            busy: HashSet::new(),
             ready: false,
         }
     }
@@ -736,6 +747,12 @@ impl ClaudeWatch {
         }
         self.listed = paths.to_vec();
         true
+    }
+
+    /// The sessions Claude Code itself calls busy now: its own `status` in
+    /// `~/.claude/sessions/<pid>.json`, of processes that still run (read by the core).
+    pub fn set_busy(&mut self, sessions: HashSet<String>) {
+        self.busy = sessions;
     }
 
     /// The shared book plus every "I looked" from the legacy books (latest wins). The start
@@ -949,7 +966,7 @@ impl ClaudeWatch {
 
         self.hooked.retain(|_, session| now.saturating_sub(session.last) < EVENT_MAX_AGE_MS);
         self.extra.retain(|_, (asked, _)| now.saturating_sub(*asked) < EXTRA_MAX_AGE_MS);
-        let Self { logs, hooked, listed, extra, .. } = self;
+        let Self { logs, hooked, listed, extra, busy: busy_ids, .. } = self;
 
         for folder_path in listed.iter() {
             let baseline = book.seen(folder_path).unwrap_or(book.since);
@@ -970,14 +987,17 @@ impl ClaudeWatch {
                         }
                     }
 
-                    if hooked.get(id).map_or(0, |h| h.last).max(log.modified_ms) <= since {
+                    // A busy session is followed however long ago it last wrote: its subagents
+                    // log elsewhere.
+                    let busy = busy_ids.contains(id);
+                    if !busy && hooked.get(id).map_or(0, |h| h.last).max(log.modified_ms) <= since {
                         continue;
                     }
 
-                    let (phase, turn) = match hooked.get_mut(id).and_then(|h| h.state(log.modified_ms, baseline, recent)) {
+                    let (phase, turn) = match hooked.get_mut(id).and_then(|h| h.state(log.modified_ms, baseline, recent, busy)) {
                         Some(state) => state,
                         None => match &log.verdict {
-                            Some(verdict) if log.modified_ms > since => log_state(verdict, log.modified_ms, baseline, recent),
+                            Some(verdict) if busy || log.modified_ms > since => log_state(verdict, log.modified_ms, baseline, recent, busy),
                             _ => continue,
                         },
                     };
@@ -987,7 +1007,8 @@ impl ClaudeWatch {
 
             // Sessions the hook reported whose log hasn't been read: not written yet, or older.
             for (id, session) in hooked.iter_mut() {
-                if session.last <= since || states.iter().any(|state| &state.id == id) {
+                let busy = busy_ids.contains(id);
+                if (!busy && session.last <= since) || states.iter().any(|state| &state.id == id) {
                     continue;
                 }
 
@@ -999,7 +1020,7 @@ impl ClaudeWatch {
 
                 let log = log_dir.as_deref().and_then(|dir| logs.get(dir)).and_then(|sessions| sessions.get(id));
 
-                if let Some((phase, turn)) = session.state(log.map_or(0, |log| log.modified_ms), baseline, recent) {
+                if let Some((phase, turn)) = session.state(log.map_or(0, |log| log.modified_ms), baseline, recent, busy) {
                     states.push(session_state(id, folder_path, log, Some(&*session), phase, turn));
                 }
             }
@@ -1038,10 +1059,11 @@ impl ClaudeWatch {
             let baseline = book.seen(&cwd).unwrap_or(book.since);
             let log = extra.get(id).map(|(_, log)| log);
             let logged = session.transcript.as_deref().and_then(modified_ms).unwrap_or(0);
-            let (phase, turn) = match session.state(logged, baseline, recent) {
+            let busy = busy_ids.contains(id);
+            let (phase, turn) = match session.state(logged, baseline, recent, busy) {
                 Some(state) => state,
                 None => match log.and_then(|log| log.verdict.as_ref()) {
-                    Some(verdict) => log_state(verdict, logged, baseline, recent),
+                    Some(verdict) => log_state(verdict, logged, baseline, recent, busy),
                     None => (SessionPhase::Idle, None),
                 },
             };

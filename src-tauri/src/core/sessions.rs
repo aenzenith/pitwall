@@ -79,7 +79,7 @@ struct SessionFile {
     cwd: Option<String>,
     #[serde(default)]
     started_at: Option<f64>,
-    /// `busy` | `idle` | `waiting`
+    /// `busy` | `idle` | `waiting` | `shell`
     #[serde(default)]
     status: Option<String>,
 }
@@ -92,7 +92,8 @@ pub(super) struct Running {
     pub entrypoint: Option<String>,
     pub cwd: Option<String>,
     pub started_at: Option<u64>,
-    /// Claude Code's own word for where it stands: `busy` | `idle` | `waiting`.
+    /// Claude Code's own word for where it stands: `busy` (at work, its background subagents
+    /// included) | `idle` | `waiting` | `shell` (idle, a background command still runs).
     pub status: Option<String>,
     /// The process and its parents, nearest first.
     pub lineage: Vec<u32>,
@@ -303,15 +304,15 @@ fn origin_of(running: &Running, pitwall: &[(u32, u64)], peers: &[WindowRecord]) 
 }
 
 /// Where a session stands by Claude Code's own `status`, for a session whose phase the hook
-/// doesn't decide: busy is working, waiting is a prompt open; idle at the prompt keeps a
-/// finished turn that still waits on you.
+/// doesn't decide: busy is working, waiting is a prompt open; idle at the prompt (`shell`: with
+/// a background command of its still running) keeps a finished turn that still waits on you.
 pub(super) fn status_phase(status: Option<&str>, scanned: Option<(RowPhase, Option<Turn>)>) -> Option<(RowPhase, Option<Turn>)> {
     let waiting_turn = scanned.and_then(|(phase, turn)| turn.filter(|_| phase == RowPhase::Waiting));
 
     match status? {
         "busy" => Some((RowPhase::Working, None)),
         "waiting" => Some((RowPhase::Waiting, waiting_turn.filter(|turn| turn.kind != TurnKind::Finished))),
-        "idle" => Some(match waiting_turn {
+        "idle" | "shell" => Some(match waiting_turn {
             Some(turn) if turn.kind == TurnKind::Finished => (RowPhase::Waiting, Some(turn)),
             _ => (RowPhase::Idle, None),
         }),
@@ -380,6 +381,13 @@ impl Core {
         cache.read_at = Some(Instant::now());
         cache.stale = false;
         Some(running)
+    }
+
+    /// The sessions Claude Code itself calls busy now, by session id: a turn of theirs that ended
+    /// isn't over (`ClaudeWatch::set_busy`). Empty when the running sessions can't be told.
+    pub(super) fn busy_sessions(&self) -> HashSet<String> {
+        let running = self.running_cached().unwrap_or_default();
+        running.into_iter().filter(|(_, run)| run.status.as_deref() == Some("busy")).map(|(id, _)| id).collect()
     }
 
     /// The running sessions as last read; again when the folder changed, or 30 s on.

@@ -305,7 +305,8 @@ impl Core {
 
         self.deps_heads_changed(changes.heads.into_iter().collect());
 
-        let claude_changed = changes.rescan || changes.events || !changes.logs.is_empty();
+        // A session's own status too: `busy` keeps a turn that ended at work.
+        let claude_changed = changes.rescan || changes.events || changes.sessions || !changes.logs.is_empty();
         let mut git: Vec<String> = changes.git.into_iter().collect();
 
         if claude_changed {
