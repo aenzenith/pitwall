@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0](https://github.com/aenzenith/pitwall/compare/v1.4.1...v1.5.0) (2026-10-05)
+
+
+### Features
+
+* **claude:** a session comes up on the Track page when started there ([3ab01ce](https://github.com/aenzenith/pitwall/commit/3ab01cec6b5c33f3d21f333008579992d3382a13))
+* **terminal:** Claude's state on a terminal's tab ([761078e](https://github.com/aenzenith/pitwall/commit/761078e8e862b8c707bd240078e3a72ef30bdaaf))
+* **track:** the selected project's terminals along the page's bottom ([02c38d5](https://github.com/aenzenith/pitwall/commit/02c38d522d2c0892758227f427e51e3cff5bbedb))
+
+
+### Bug Fixes
+
+* **claude:** a session stays at work while its subagents run ([c4b59de](https://github.com/aenzenith/pitwall/commit/c4b59deec039a6ce5b4a21c747e8876bade196bf))
+
 ## [1.4.1](https://github.com/aenzenith/pitwall/compare/v1.4.0...v1.4.1) (2026-10-04)
 
 
