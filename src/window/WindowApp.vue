@@ -190,12 +190,15 @@ const fullscreen = ref(false);
 let unlistenResize: UnlistenFn | null = null;
 
 const terminalPanel = ref<InstanceType<typeof TerminalPanel> | null>(null);
+const trackPage = ref<InstanceType<typeof TrackView> | null>(null);
 
-/** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the selected project. */
+/** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the
+ * selected project: the list's, or on the Track page the tower's. */
 function onKey(event: KeyboardEvent): void {
-  if (terminalChord(event) && event.code === "KeyT" && terminalPanel.value) {
+  const terminals = terminalPanel.value ?? trackPage.value;
+  if (terminalChord(event) && event.code === "KeyT" && terminals) {
     event.preventDefault();
-    void terminalPanel.value.openTerminal();
+    void terminals.openTerminal();
   }
 }
 
@@ -355,7 +358,7 @@ function server(project: Project): string {
     </aside>
 
     <DayView v-if="view === 'day'" />
-    <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
+    <TrackView v-else-if="view === 'track'" ref="trackPage" @open-project="revealProject" @open-settings="openSettings('track')" />
     <FuelView v-else-if="view === 'fuel'" />
     <SessionsView
       v-else-if="view === 'sessions'"

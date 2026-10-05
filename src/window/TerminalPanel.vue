@@ -15,6 +15,8 @@ import {
   terminalCollapsed,
   terminalHeight,
   terminalRequest,
+  trackTerminalCollapsed,
+  trackTerminalHeight,
   useResizer,
 } from "../lib/panel";
 import { statusLine } from "../lib/sessions";
@@ -23,12 +25,22 @@ import { attach, fitView, focusView, measure } from "../lib/terminals";
 import type { Project } from "../lib/types";
 import RenameDialog from "./RenameDialog.vue";
 
-/** Room above the panel that always stays: the toolbar (56) and the table header (38). */
-const HEADER = 94;
 /** How long a `reveal-terminal` request waits for its project and tab to show up. */
 const REQUEST_MS = 5_000;
 
-const props = defineProps<{ project: Project }>();
+/**
+ * The selected project's terminals. `track`: the Track page's, the same panel with one difference:
+ * it lies over the page's bottom instead of taking its room from what is above it, so nothing there
+ * is laid out again (or scrolls in less room) as it grows. Its height and collapsed state are that
+ * page's own (lib/panel).
+ */
+const props = defineProps<{ project: Project; track?: boolean }>();
+
+/** Room above the panel that always stays: the toolbar (56), and under it the list's table header
+ * (38). */
+const HEADER = props.track ? 56 : 94;
+const height = props.track ? trackTerminalHeight : terminalHeight;
+const collapsed = props.track ? trackTerminalCollapsed : terminalCollapsed;
 
 const panel = ref<HTMLElement | null>(null);
 const viewport = ref<HTMLElement | null>(null);
@@ -58,31 +70,31 @@ const active = computed(() => {
 });
 
 const resizer = useResizer(
-  terminalHeight,
+  height,
   () => (panel.value?.parentElement?.clientHeight ?? 0) - HEADER,
-  () => (outputShown.value && !outputCollapsed.value ? outputHeight.value : null),
+  () => (!props.track && outputShown.value && !outputCollapsed.value ? outputHeight.value : null),
 );
 const dragging = resizer.dragging;
 
 /** Collapsed, only the tab row shows; the chosen height comes back on expanding. */
-const shownHeight = computed(() => (terminalCollapsed.value ? COLLAPSED_HEIGHT : terminalHeight.value));
+const shownHeight = computed(() => (collapsed.value ? COLLAPSED_HEIGHT : height.value));
 /** While the panel animates, the shell keeps its size: no resize per frame, no squeeze. */
 const animating = ref(false);
 let settle: ReturnType<typeof setTimeout> | undefined;
 
 function toggleCollapsed(): void {
-  terminalCollapsed.value = !terminalCollapsed.value;
+  collapsed.value = !collapsed.value;
   animating.value = true;
   clearTimeout(settle);
   settle = setTimeout(() => {
     animating.value = false;
-    if (!terminalCollapsed.value && active.value) fitView(active.value.id);
+    if (!collapsed.value && active.value) fitView(active.value.id);
   }, COLLAPSE_MS + 40);
 }
 
 /** The handle doesn't drag a collapsed panel; the button brings it back. */
 function startDrag(event: PointerEvent): void {
-  if (!terminalCollapsed.value) resizer.start(event);
+  if (!collapsed.value) resizer.start(event);
 }
 
 /** A new tab: the shell, or with `claude` a Claude Code session. */
@@ -91,7 +103,7 @@ async function openTerminal(claude = false): Promise<void> {
   opening.value = true;
   try {
     // A new terminal is meant to be seen, and its shell starts at the open panel's size.
-    if (terminalCollapsed.value) {
+    if (collapsed.value) {
       toggleCollapsed();
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
@@ -190,7 +202,7 @@ watch(
     const focus = !stayOnTabs;
     stayOnTabs = false;
     await nextTick();
-    if (id !== undefined && viewport.value) attach(id, viewport.value, !terminalCollapsed.value && !animating.value, focus);
+    if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, focus);
     if (!focus) focusTab(id);
   },
   { immediate: true },
@@ -220,7 +232,7 @@ watch(
     }
     if (request.path !== path || !list.some((term) => term.id === request.id)) return;
     terminalRequest.value = null;
-    if (terminalCollapsed.value) toggleCollapsed();
+    if (collapsed.value) toggleCollapsed();
     const shown = active.value?.id === request.id;
     show(request.id);
     // Already the shown tab: the watch on it won't run, so the keyboard goes there from here.
@@ -238,7 +250,7 @@ let observer: ResizeObserver | null = null;
 
 onMounted(() => {
   observer = new ResizeObserver(() => {
-    if (active.value && !terminalCollapsed.value && !animating.value) fitView(active.value.id);
+    if (active.value && !collapsed.value && !animating.value) fitView(active.value.id);
   });
   if (viewport.value) observer.observe(viewport.value);
 });
@@ -254,7 +266,7 @@ defineExpose({ openTerminal });
 <template>
   <section
     ref="panel"
-    :class="['term-panel', { animated: !dragging, collapsed: terminalCollapsed }]"
+    :class="['term-panel', { animated: !dragging, collapsed, over: track }]"
     :style="{ height: `${shownHeight}px` }"
     :aria-label="t('terminal.panel', { name: project.name })"
   >
@@ -323,10 +335,10 @@ defineExpose({ openTerminal });
       </button>
       <button
         type="button"
-        :class="['icon', 'collapse', { up: terminalCollapsed }]"
-        :aria-expanded="!terminalCollapsed"
-        :aria-label="t(terminalCollapsed ? 'terminal.expand' : 'terminal.collapse')"
-        :title="t(terminalCollapsed ? 'common.expand' : 'common.collapse')"
+        :class="['icon', 'collapse', { up: collapsed }]"
+        :aria-expanded="!collapsed"
+        :aria-label="t(collapsed ? 'terminal.expand' : 'terminal.collapse')"
+        :title="t(collapsed ? 'common.expand' : 'common.collapse')"
         @click="toggleCollapsed"
       >
         <Icon name="chevron" :size="13" />
@@ -354,6 +366,17 @@ defineExpose({ openTerminal });
   flex-direction: column;
   border-top: 1px solid var(--line);
   box-shadow: 0 -12px 24px rgba(0, 0, 0, 0.22);
+}
+
+/* The Track page's: over the page's bottom, on a ground of its own, up to the page's bar. */
+.term-panel.over {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  max-height: calc(100% - 56px);
+  background: var(--bg-app);
 }
 
 /* Collapsing and expanding slide (COLLAPSE_MS in lib/panel); a drag follows the pointer. */

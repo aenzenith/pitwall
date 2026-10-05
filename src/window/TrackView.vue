@@ -4,10 +4,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
+import { COLLAPSE_MS, COLLAPSED_HEIGHT, PANEL_MIN, trackTerminalCollapsed } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, setTrack, snapshot, track as settings } from "../lib/store";
 import { circuit, CIRCUITS, codes, towerOrder } from "../lib/track";
 import type { Project } from "../lib/types";
+import TerminalPanel from "./TerminalPanel.vue";
 import TrackCanvas from "./track/TrackCanvas.vue";
 import TrackCard from "./track/TrackCard.vue";
 import TrackLegend from "./track/TrackLegend.vue";
@@ -19,7 +21,8 @@ import TrackTower from "./track/TrackTower.vue";
  * each Claude session at work an orange one; one waiting on you has driven to the pit wall and
  * stands there, a crashed server stands where it stopped, and a stopped project is off the circuit, in the tower
  * only. The tower beside the circuit lists every project for the keyboard, and the card under it
- * acts on the one selected. Its settings are in Settings, under Track.
+ * acts on the one selected. That project's terminals are along the page's bottom. Its settings are
+ * in Settings, under Track.
  */
 const emit = defineEmits<{ "open-project": [path: string]; "open-settings": [] }>();
 
@@ -88,6 +91,32 @@ function toggle(project: Project): void {
   void api.act(project.path, project.status === "running" ? "stop" : "start");
 }
 
+/* ---------- the terminals ---------- */
+
+const terminals = ref<InstanceType<typeof TerminalPanel> | null>(null);
+
+/**
+ * The page's room for the selected project's terminals (TerminalPanel, `track`): its least height,
+ * or its tab row while it is collapsed. Taller than that, the panel lies over the stage, so the
+ * circuit, the tower and the card stay as they are. Collapsing gives the room up at once (the
+ * stage is there as the panel slides off it); expanding takes it once the panel is up.
+ */
+const room = ref(trackTerminalCollapsed.value ? COLLAPSED_HEIGHT : PANEL_MIN);
+let settle: ReturnType<typeof setTimeout> | undefined;
+
+watch(trackTerminalCollapsed, (collapsed) => {
+  clearTimeout(settle);
+  if (collapsed) room.value = COLLAPSED_HEIGHT;
+  else settle = setTimeout(() => (room.value = PANEL_MIN), COLLAPSE_MS);
+});
+
+/** ⌘T: a new terminal in the selected project (WindowApp: `onKey`). */
+function openTerminal(claude = false): void {
+  void terminals.value?.openTerminal(claude);
+}
+
+defineExpose({ openTerminal });
+
 /* ---------- the stage ---------- */
 
 const stage = ref<HTMLElement | null>(null);
@@ -130,6 +159,7 @@ watch(
 onBeforeUnmount(() => {
   observer?.disconnect();
   legendObserver?.disconnect();
+  clearTimeout(settle);
 });
 
 const column = computed(() => (narrow.value ? COLUMN_NARROW : COLUMN));
@@ -162,7 +192,7 @@ const inset = computed<Inset>(() => ({
       </button>
     </header>
 
-    <div ref="stage" class="stage">
+    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${room}px` : undefined }">
       <div class="sky" aria-hidden="true"></div>
 
       <TrackCanvas
@@ -196,11 +226,15 @@ const inset = computed<Inset>(() => ({
 
       <p v-if="snapshot && !listed.length" class="none">{{ t("window.emptyLine1") }}</p>
     </div>
+
+    <!-- The selected project's terminals, over the page's bottom: `room` of it is theirs. -->
+    <TerminalPanel v-if="selected" ref="terminals" :project="selected" track />
   </div>
 </template>
 
 <style scoped>
 .track {
+  position: relative;
   flex-grow: 1;
   min-width: 0;
   display: flex;

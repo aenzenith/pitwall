@@ -71,7 +71,10 @@ function onKey(event: KeyboardEvent): void {
         <span class="place" role="gridcell">{{ index + 1 }}</span>
         <span role="gridcell" class="mark"><StatusIcon :project="project" :ring="project.path === selected ? 'var(--bg-selected)' : '#13151a'" /></span>
         <span class="who" role="gridcell">
-          <span class="who-name">{{ project.name }}</span>
+          <span class="who-line">
+            <span class="who-name">{{ project.name }}</span>
+            <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
+          </span>
           <span class="who-meta">
             <span :class="{ bad: project.status === 'crashed' }">{{ line(project).server }}</span>
             <template v-if="line(project).claude">
@@ -162,11 +165,31 @@ function onKey(event: KeyboardEvent): void {
   min-width: 0;
 }
 
+/* Name and terminal badge on one line, as in the project list: a long name gives way, the badge
+   never does. */
+.who-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
 .who-name {
+  min-width: 0;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.term-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--bg-control);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .who-meta {
