@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.7.0](https://github.com/aenzenith/pitwall/compare/v1.6.0...v1.7.0) (2026-10-05)
+
+
+### Features
+
+* **sessions:** a project picker in place of "Listed projects only" ([dc261c5](https://github.com/aenzenith/pitwall/commit/dc261c5663e5753ad09585325cc2e6c8952b7c67))
+* **update:** Pitwall updates itself and puts back what was open ([d52e274](https://github.com/aenzenith/pitwall/commit/d52e274149ec0b3f19d069545126ad8a67b6eda6))
+
+
+### Bug Fixes
+
+* **track:** a press on the stage folds the page's terminals ([2580fc3](https://github.com/aenzenith/pitwall/commit/2580fc3370d853425a117e8960fce58fc4c52993))
+* **track:** an opening terminal panel leaves the circuit as it is ([93d460c](https://github.com/aenzenith/pitwall/commit/93d460c63505fb04b11f2cd6a352d798cd48b4f5))
+* **track:** the page's terminals come up at 350 px ([5eca79e](https://github.com/aenzenith/pitwall/commit/5eca79ed71a7340dd77b0f49cd7c1c7ee7dcc7e9))
+
 ## [1.6.0](https://github.com/aenzenith/pitwall/compare/v1.5.0...v1.6.0) (2026-10-05)
 
 

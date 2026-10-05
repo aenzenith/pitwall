@@ -1,6 +1,6 @@
 [package]
 name = "pitwall"
-version = "1.6.0"
+version = "1.7.0"
 description = "Dev servers and Claude sessions in the menu bar"
 authors = ["Mustafa Sarı"]
 edition = "2021"
