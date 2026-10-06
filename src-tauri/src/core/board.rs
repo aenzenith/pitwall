@@ -501,8 +501,8 @@ fn new_id(cards: &[Card], now: u64) -> String {
     }
 }
 
-/// A tab's title from a card's: one line, cut to `TAB_NAME_CHARS`.
-fn tab_name(title: &str) -> String {
+/// A tab's title from a card's, or from its session's name: one line, cut to `TAB_NAME_CHARS`.
+pub(super) fn tab_name(title: &str) -> String {
     let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
     if title.chars().count() <= TAB_NAME_CHARS {
         return title;
@@ -732,7 +732,7 @@ impl Core {
             _ => None,
         };
 
-        let view = self.open_terminal_as(&card.path, &launch, Some(tab_name(&card.title)), size)?;
+        let view = self.open_terminal_as(&card.path, &launch, Some(tab_name(&card.title)), false, size)?;
 
         let now = now_ms();
         let mut board = self.board();

@@ -89,6 +89,8 @@ impl Core {
         self.notify();
         // Cards given to Claude follow their sessions from the state just read.
         self.follow_board();
+        // And a Claude tab takes its session's name.
+        self.name_terminals();
         true
     }
 

@@ -62,6 +62,9 @@ pub struct Restored {
 struct Tab {
     path: String,
     name: String,
+    /// The user gave it that name: it doesn't take its session's.
+    #[serde(default)]
+    renamed: bool,
     /// The Claude session running in it.
     session: Option<String>,
     /// That session was at work, or (without one) a command was running.
@@ -156,6 +159,7 @@ impl Core {
                 Some(Tab {
                     path: view.path.clone(),
                     name: view.name.clone(),
+                    renamed: view.renamed,
                     session: session.map(|(id, _)| id.clone()),
                     cut: session.map_or(running, |(_, busy)| *busy),
                     cols: state.cols,
@@ -258,7 +262,7 @@ impl Core {
             };
             let name: String = tab.name.trim().chars().take(40).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
-            let Ok(view) = self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), size) else {
+            let Ok(view) = self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size) else {
                 continue;
             };
 
@@ -311,7 +315,7 @@ mod tests {
 
     #[cfg(unix)]
     fn tab(path: &str, session: Option<&str>) -> Tab {
-        Tab { path: path.into(), name: "zsh".into(), session: session.map(str::to_string), cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
+        Tab { path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
     }
 
     fn write(core: &Core, at: u64, servers: Vec<String>, tabs: Vec<Tab>) {

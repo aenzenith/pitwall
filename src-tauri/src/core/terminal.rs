@@ -7,6 +7,7 @@ use std::io::Write;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
+use super::board::tab_name;
 use super::reveal::is_session_id;
 use super::*;
 
@@ -22,6 +23,9 @@ pub struct TerminalView {
     pub name: String,
     /// `shell` | `claude`: a Claude Code session started from its own button.
     pub kind: String,
+    /// The user gave it its name: it no longer takes its session's (`name_terminals`).
+    #[serde(skip)]
+    pub renamed: bool,
 }
 
 /// A terminal's recent output and the number of its last chunk, so a view can draw the history
@@ -99,16 +103,18 @@ impl Core {
     /// prompt for that width, and zsh leaves its partial-line mark behind.
     pub fn open_terminal(self: &Arc<Self>, path: &str, claude: bool, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
         let launch = if claude { Launch::Claude { prompt: None, plan: false, images: None } } else { Launch::Shell };
-        self.open_terminal_as(path, &launch, None, size)
+        self.open_terminal_as(path, &launch, None, false, size)
     }
 
     /// `open_terminal`, starting with `launch`; `name` is the tab's title instead of the
-    /// numbered `claude` / shell name.
+    /// numbered `claude` / shell name, and `renamed` says the user chose it (a tab put back
+    /// after a restart).
     pub(super) fn open_terminal_as(
         self: &Arc<Self>,
         path: &str,
         launch: &Launch,
         name: Option<String>,
+        renamed: bool,
         size: Option<(u16, u16)>,
     ) -> Result<TerminalView, String> {
         // A folder that is gone would start the shell in the home folder instead, unasked.
@@ -172,7 +178,7 @@ impl Core {
                 None if same == 0 => base,
                 None => format!("{base} {}", same + 1),
             };
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into() };
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), renamed };
             inner.terminal_list.push(view.clone());
             view
         };
@@ -224,18 +230,20 @@ impl Core {
         }
     }
 
-    /// A new title for a tab; an empty one keeps the old.
+    /// A new title for a tab, from the user; an empty one keeps the old, and so does the one it
+    /// has. The tab keeps that title from here on, whatever its session is called.
     pub fn rename_terminal(&self, id: u64, name: &str) {
-        let name = name.trim();
+        let name: String = name.trim().chars().take(40).collect();
         if name.is_empty() {
             return;
         }
 
         let renamed = {
             let mut inner = self.lock();
-            match inner.terminal_list.iter_mut().find(|t| t.id == id) {
+            match inner.terminal_list.iter_mut().find(|t| t.id == id && t.name != name) {
                 Some(view) => {
-                    view.name = name.chars().take(40).collect();
+                    view.name = name;
+                    view.renamed = true;
                     true
                 }
                 None => false,
@@ -243,6 +251,71 @@ impl Core {
         };
 
         if renamed {
+            self.notify();
+        }
+    }
+
+    /// Gives each Claude tab the name of the session that runs in it, as Claude Code shows it in
+    /// `/resume`: once the session has one, and again when it changes (`/rename`, or another
+    /// session in the tab). A tab the user renamed keeps their title, and a session without a
+    /// name leaves the tab's as it is. Runs after every refresh of Claude's state
+    /// (`refresh_claude`) and costs nothing while no tab is left to name.
+    pub(super) fn name_terminals(&self) {
+        let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == "claude" && !t.renamed).map(|t| t.id).collect();
+        if open.is_empty() {
+            return;
+        }
+        // Before the watch is locked: it may read the process table.
+        let Some(running) = self.running_cached() else {
+            return;
+        };
+
+        // Each tab's session: the Claude nearest its shell (one that Claude started itself runs
+        // further down), the one started last of two as near.
+        let shells = self.terminal_shells();
+        let mut sessions: HashMap<u64, (usize, u64, &String, &str)> = HashMap::new();
+        for (session, run) in &running {
+            let Some((depth, terminal, path)) =
+                shells.iter().find_map(|(shell, terminal, path)| Some((run.lineage.iter().position(|pid| pid == shell)?, *terminal, path.as_str())))
+            else {
+                continue;
+            };
+            if !open.contains(&terminal) {
+                continue;
+            }
+            let started = run.started_at.unwrap_or(0);
+            let nearer = sessions.get(&terminal).is_none_or(|&(near, last, id, _)| (depth, std::cmp::Reverse(started), session) < (near, std::cmp::Reverse(last), id));
+            if nearer {
+                sessions.insert(terminal, (depth, started, session, run.cwd.as_deref().unwrap_or(path)));
+            }
+        }
+        if sessions.is_empty() {
+            return;
+        }
+
+        let names: Vec<(u64, String)> = match self.claude.lock() {
+            Ok(mut watch) => sessions
+                .iter()
+                .filter_map(|(terminal, (_, _, session, folder))| Some((*terminal, tab_name(&watch.peek(session, folder)?.title?))))
+                .filter(|(_, name)| !name.is_empty())
+                .collect(),
+            Err(_) => return,
+        };
+
+        let named = {
+            let mut inner = self.lock();
+            let mut named = false;
+            for (terminal, name) in names {
+                // Renamed by the user meanwhile: theirs stays.
+                if let Some(view) = inner.terminal_list.iter_mut().find(|t| t.id == terminal && !t.renamed && t.name != name) {
+                    view.name = name;
+                    named = true;
+                }
+            }
+            named
+        };
+
+        if named {
             self.notify();
         }
     }
