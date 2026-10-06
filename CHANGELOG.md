@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/aenzenith/pitwall/compare/v1.7.1...v1.8.0) (2026-10-06)
+
+
+### Features
+
+* **sessions:** a session that just stopped opens again in a terminal ([3e08eb9](https://github.com/aenzenith/pitwall/commit/3e08eb9bbb72f72283e51bf1a89f9bef1094e36c))
+* **terminal:** a Claude tab takes its session's name ([db9b622](https://github.com/aenzenith/pitwall/commit/db9b622c83a292c8a274c0f92d500fb4042d6943))
+
+
+### Bug Fixes
+
+* **deps:** a migrate is confirmed in a dialog ([654dccc](https://github.com/aenzenith/pitwall/commit/654dccc35d098d9d3c700518c8dc84082f942849))
+
 ## [1.7.1](https://github.com/aenzenith/pitwall/compare/v1.7.0...v1.7.1) (2026-10-05)
 
 
