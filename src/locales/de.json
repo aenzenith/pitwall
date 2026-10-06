@@ -416,7 +416,6 @@
   "deps.db.toolMissing": "Werkzeug nicht gefunden; ausstehende Migrationen konnten nicht gelesen werden",
   "deps.migrate": "Migrieren…",
   "deps.migrateConfirm": "Migrationen ausführen?",
-  "deps.migrateConfirmLabel": "Migration bestätigen",
   "deps.migrateAfterInstall": "Nach der Installation",
   "deps.job.migrate": "migrate",
   "deps.framework": "{name} {version}",

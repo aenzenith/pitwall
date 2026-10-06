@@ -11,21 +11,17 @@ import type { DepReport, Project } from "../../lib/types";
 /**
  * One line of a topic, the same columns whatever it is about: its tool, what it says with a
  * note beside it (under it, where the two don't fit), and at the line's end the one button that
- * acts on it. `asking`: this line's migrate is being confirmed under it, so its button gives
- * way to the question. A scan's counts are buttons of their own: each asks for what it counts
- * (`details`).
+ * acts on it. A migrate is only asked for here (`migrate`): the page confirms it in a dialog.
+ * A scan's counts are buttons of their own: each asks for what it counts (`details`).
  */
-const props = defineProps<{ line: DepLine; project: Project; report: DepReport; asking?: boolean }>();
-const emit = defineEmits<{ migrate: [event: MouseEvent, tool: string]; openOutput: [job: string]; details: [ecosystem: string, view: ScanView] }>();
+const props = defineProps<{ line: DepLine; project: Project; report: DepReport }>();
+const emit = defineEmits<{ migrate: [tool: string]; openOutput: [job: string]; details: [ecosystem: string, view: ScanView] }>();
 
 /** The least a re-check's spinner shows, so one the core answers at once still shows. */
 const MIN_SPIN_MS = 500;
 
 /** One install at a time in a project: while one runs, the other lines' buttons wait. */
 const installing = computed(() => anyInstalling(props.report));
-
-/** The question under the line says where the migrate would go: the note gives way to it. */
-const note = computed(() => (props.asking ? "" : props.line.note));
 
 /** The project's lock files and installed packages read again: what a manager put on this
  * machine meanwhile waits for. */
@@ -59,7 +55,7 @@ async function recheck(): Promise<void> {
         </span>
         <span v-else class="dep-line-text" :title="line.state">{{ line.state }}</span>
       </span>
-      <span v-if="note" :class="['dep-line-note', { mono: line.kind === 'migration' }]" :title="note">{{ note }}</span>
+      <span v-if="line.note" :class="['dep-line-note', { mono: line.kind === 'migration' }]" :title="line.note">{{ line.note }}</span>
     </span>
     <span class="dep-line-action">
       <template v-if="line.kind === 'install'">
@@ -85,15 +81,15 @@ async function recheck(): Promise<void> {
           <span class="dep-btn-text">{{ line.command }}</span>
         </button>
       </template>
-      <!-- Asks first, under the line: the command, and where it would go. -->
+      <!-- Asks first, in a dialog: the command, and where it would go. -->
       <button
-        v-else-if="line.kind === 'migration' && line.pending.length && !asking"
+        v-else-if="line.kind === 'migration' && line.pending.length"
         type="button"
         class="dep-btn"
         :disabled="installing || line.migrating || line.blocked"
         :aria-busy="line.migrating"
         :title="installing ? t('deps.migrateAfterInstall') : line.command"
-        @click="emit('migrate', $event, line.tool)"
+        @click="emit('migrate', line.tool)"
       >
         <span class="dep-btn-text">{{ t("deps.migrate") }}</span>
       </button>

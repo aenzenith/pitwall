@@ -74,13 +74,3 @@
 .dep-btn :deep(.spinner) {
   color: var(--text-muted);
 }
-
-.dep-btn.primary {
-  background: #2a3a30;
-  border-color: #3d5446;
-  color: #cdebd8;
-}
-
-.dep-btn.primary:hover:not(:disabled) {
-  background: #33473a;
-}

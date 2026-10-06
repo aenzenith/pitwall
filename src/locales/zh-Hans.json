@@ -406,7 +406,6 @@
   "deps.db.toolMissing": "未找到工具；未能读取待执行的迁移",
   "deps.migrate": "迁移…",
   "deps.migrateConfirm": "运行迁移？",
-  "deps.migrateConfirmLabel": "确认迁移",
   "deps.migrateAfterInstall": "安装完成后",
   "deps.job.migrate": "migrate",
   "deps.framework": "{name} {version}",

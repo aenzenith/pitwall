@@ -418,7 +418,6 @@
   "deps.db.toolMissing": "No se encontró la herramienta; no se pudieron leer las migraciones pendientes",
   "deps.migrate": "Migrar…",
   "deps.migrateConfirm": "¿Ejecutar las migraciones?",
-  "deps.migrateConfirmLabel": "Confirmar migración",
   "deps.migrateAfterInstall": "Cuando termine la instalación",
   "deps.job.migrate": "migrate",
   "deps.framework": "{name} {version}",

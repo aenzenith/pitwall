@@ -406,7 +406,6 @@
   "deps.db.toolMissing": "ツールが見つかりません。未実行のマイグレーションを読み取れません",
   "deps.migrate": "マイグレート…",
   "deps.migrateConfirm": "マイグレーションを実行しますか?",
-  "deps.migrateConfirmLabel": "マイグレーションの確認",
   "deps.migrateAfterInstall": "インストール完了後",
   "deps.job.migrate": "migrate",
   "deps.framework": "{name} {version}",

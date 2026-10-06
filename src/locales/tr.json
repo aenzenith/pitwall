@@ -408,7 +408,6 @@
   "deps.db.toolMissing": "Araç bulunamadı; bekleyen migration'lar okunamadı",
   "deps.migrate": "Migrate…",
   "deps.migrateConfirm": "Migrate çalıştırılsın mı?",
-  "deps.migrateConfirmLabel": "Migrate onayı",
   "deps.migrateAfterInstall": "Kurulum bitince",
   "deps.job.migrate": "migrate",
   "deps.framework": "{name} {version}",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 import Spinner from "../../components/Spinner.vue";
 import {
@@ -8,7 +8,6 @@ import {
   depTopics,
   installFailure,
   installJob,
-  isMigrating,
   isScanning,
   migrate,
   migrateJob,
@@ -21,6 +20,7 @@ import { ago } from "../../lib/format";
 import { t, type Key } from "../../lib/i18n";
 import { api } from "../../lib/store";
 import type { DepPackage, DepReport, Project } from "../../lib/types";
+import DepMigrateDialog from "./DepMigrateDialog.vue";
 import DepScanDialog from "./DepScanDialog.vue";
 import DepTopicLine from "./DepTopicLine.vue";
 
@@ -28,10 +28,11 @@ import DepTopicLine from "./DepTopicLine.vue";
  * The selected project, beside the list: its name, framework and last check, then a card a
  * topic (packages, database, runtime, updates), each with its own mark and its lines. Under a
  * line, what it is about: the packages its install would change (and a failed install's last
- * word), the pending migrations and, once asked, the confirm that shows the command and where
- * it would go. The scan's one button is under the managers it would scan, beside what it
- * needs; a scan's counts open what they count (DepScanDialog). `hidden`: the ecosystems the language filter turned off. The page keys it by the
- * project, so what is asked here (a confirm, a failure's line) goes with the selection.
+ * word), the pending migrations. A migrate asks first, in a dialog that shows the command and
+ * where it would go (DepMigrateDialog). The scan's one button is under the managers it would
+ * scan, beside what it needs; a scan's counts open what they count (DepScanDialog). `hidden`:
+ * the ecosystems the language filter turned off. The page keys it by the project, so what is
+ * asked here (a confirm, a failure's line) goes with the selection.
  */
 const props = defineProps<{ project: Project; report: DepReport; hidden: string[]; now: number }>();
 const emit = defineEmits<{ openProject: []; openOutput: [job: string] }>();
@@ -112,30 +113,20 @@ function failureLine(ecosystem: string): string {
 
 /* ---------- migrations ---------- */
 
-/** The tool whose migrate is being confirmed, under its line. */
+type Migration = Extract<DepLine, { kind: "migration" }>;
+
+/** The tool whose migrate is being confirmed, in a dialog; and its line, which the dialog shows. */
 const confirming = ref<string | null>(null);
-const body = ref<HTMLElement | null>(null);
+const asked = computed(() => lines.value.find((line): line is Migration => line.kind === "migration" && line.tool === confirming.value) ?? null);
 
-/** The question takes the button's place: scrolled into view and, asked from the keyboard, its
- * first button (Cancel) takes the focus. */
-async function ask(event: MouseEvent, tool: string): Promise<void> {
-  confirming.value = tool;
-  await nextTick();
-  const question = body.value?.querySelector<HTMLElement>(".dep-confirm");
-  if (!question) return;
-  question.scrollIntoView({ block: "nearest" });
-  if (event.detail === 0) question.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
-}
-
-async function runMigrate(tool: string): Promise<void> {
-  await migrate(props.project.path, tool);
-  if (confirming.value === tool) confirming.value = null;
+/** Confirmed: the dialog closes itself, and the line shows the migrate running. */
+function runMigrate(): void {
+  if (confirming.value) void migrate(props.project.path, confirming.value);
 }
 
 // An install starting meanwhile takes the question back: migrate waits for it.
 watch(installing, (on) => {
-  const tool = confirming.value;
-  if (on && tool && !isMigrating(props.project.path, tool)) confirming.value = null;
+  if (on) confirming.value = null;
 });
 
 // Nothing pending any more (the database read again): no question left to answer.
@@ -177,7 +168,7 @@ const scanShown = ref<{ ecosystem: string; view: ScanView } | null>(null);
       <button type="button" class="dep-btn" @click="emit('openProject')">{{ t("sessions.openProject") }}</button>
     </header>
 
-    <div ref="body" class="dep-detail-body">
+    <div class="dep-detail-body">
       <div v-if="topics.length" class="dep-topics">
         <div v-for="topic in topics" :key="topic.topic" class="dep-topic">
           <span class="dep-topic-mark">
@@ -190,8 +181,7 @@ const scanShown = ref<{ ecosystem: string; view: ScanView } | null>(null);
                 :line="line"
                 :project="project"
                 :report="report"
-                :asking="line.kind === 'migration' && confirming === line.tool"
-                @migrate="ask"
+                @migrate="confirming = $event"
                 @open-output="emit('openOutput', $event)"
                 @details="(ecosystem: string, view: ScanView) => (scanShown = { ecosystem, view })"
               />
@@ -210,29 +200,16 @@ const scanShown = ref<{ ecosystem: string; view: ScanView } | null>(null);
                 <span v-if="morePackages(line)" class="dep-more">{{ t("deps.pkg.more", { count: morePackages(line) }) }}</span>
               </div>
 
-              <!-- The pending migrations and, once asked, the question: the command as it would
-                   run and, when known, where it would go. -->
+              <!-- The pending migrations, and what the last migrate left to say. -->
               <div v-else-if="line.kind === 'migration' && (line.pending.length || line.failure || line.ran)" class="dep-under">
                 <span v-if="line.readError" class="dep-text">{{ line.readError }}</span>
                 <div v-if="line.pending.length" class="dep-names">
                   <span v-for="name in line.pending.slice(0, LIST_MAX)" :key="name" :title="name">{{ name }}</span>
                 </div>
                 <span v-if="line.pending.length > LIST_MAX" class="dep-more">{{ t("deps.more", { count: line.pending.length - LIST_MAX }) }}</span>
-                <div v-if="confirming === line.tool" class="dep-confirm" role="group" :aria-label="t('deps.migrateConfirmLabel')">
-                  <span class="dep-confirm-title">{{ t("deps.migrateConfirm") }}</span>
-                  <span class="dep-confirm-command" :title="line.command">{{ line.command }}</span>
-                  <div class="dep-confirm-row">
-                    <span class="dep-confirm-db" :title="line.note || undefined">{{ line.note }}</span>
-                    <button type="button" class="dep-btn" :disabled="line.migrating" @click="confirming = null">{{ t("common.cancel") }}</button>
-                    <button type="button" class="dep-btn primary" :disabled="line.migrating || installing" :aria-busy="line.migrating" @click="runMigrate(line.tool)">
-                      <Spinner v-if="line.migrating" :size="11" />
-                      {{ t("common.run") }}
-                    </button>
-                  </div>
-                </div>
                 <span v-if="line.failure" class="dep-failure-line selectable">{{ line.failure }}</span>
                 <!-- A migrate that ran this session: its output has a tab. -->
-                <button v-if="line.ran && confirming !== line.tool" type="button" class="dep-btn" @click="emit('openOutput', migrateJob(line.tool))">{{ t("deps.showOutput") }}</button>
+                <button v-if="line.ran" type="button" class="dep-btn" @click="emit('openOutput', migrateJob(line.tool))">{{ t("deps.showOutput") }}</button>
               </div>
             </template>
 
@@ -255,6 +232,7 @@ const scanShown = ref<{ ecosystem: string; view: ScanView } | null>(null);
       </div>
     </div>
 
+    <DepMigrateDialog v-if="asked" :project="project" :line="asked" :installing="installing" @run="runMigrate" @close="confirming = null" />
     <DepScanDialog v-if="scanShown" :project="project" :report="report" :ecosystem="scanShown.ecosystem" :view="scanShown.view" :now="now" @close="scanShown = null" />
   </section>
 </template>
@@ -498,57 +476,6 @@ const scanShown = ref<{ ecosystem: string; view: ScanView } | null>(null);
   color: var(--crash-text);
   overflow-wrap: anywhere;
   cursor: text;
-}
-
-/* The question, in the place the line's button had. */
-.dep-confirm {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 2px;
-  padding: 9px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--bg-detail);
-}
-
-.dep-confirm-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-strong);
-}
-
-.dep-confirm-command {
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: #c7ccd3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* In a narrow pane the buttons drop under the database's name. */
-.dep-confirm-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 2px;
-}
-
-.dep-confirm-db {
-  flex: 1 1 60px;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .dep-untracked {

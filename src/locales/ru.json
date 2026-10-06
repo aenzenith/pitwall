@@ -436,7 +436,6 @@
   "deps.db.toolMissing": "Инструмент не найден; невыполненные миграции не прочитаны",
   "deps.migrate": "Мигрировать…",
   "deps.migrateConfirm": "Запустить миграции?",
-  "deps.migrateConfirmLabel": "Подтверждение миграции",
   "deps.migrateAfterInstall": "После установки",
   "deps.job.migrate": "migrate",
   "deps.framework": "{name} {version}",

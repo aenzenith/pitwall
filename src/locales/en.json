@@ -416,7 +416,6 @@
   "deps.db.toolMissing": "Tool not found; pending migrations couldn't be read",
   "deps.migrate": "Migrate…",
   "deps.migrateConfirm": "Run the migrations?",
-  "deps.migrateConfirmLabel": "Confirm migrate",
   "deps.migrateAfterInstall": "After the install finishes",
   "deps.job.migrate": "migrate",
   "deps.framework": "{name} {version}",
