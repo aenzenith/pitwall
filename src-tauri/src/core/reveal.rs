@@ -4,16 +4,22 @@
 //! card it was given from, else the project's terminal panel). Elsewhere the project's
 //! window comes to the front, and that window's extension (a `reveal-claude` command) shows the
 //! Claude Code tab or the terminal the session runs in; a finished session opens again in a
-//! Claude Code tab. Anything that can't be proven safe only brings the window up: a session
-//! opened a second time would have two processes writing one log.
+//! Claude Code tab. One that has just stopped (no process of Claude Code's runs it, its log
+//! written a moment ago) opens again in a Pitwall terminal, wherever it ran. Anything that can't
+//! be proven safe only brings the window up: a session opened a second time would have two
+//! processes writing one log.
 //!
 //! Which sessions run, and under which processes, comes from Claude Code's
 //! `~/.claude/sessions/<pid>.json` (see `sessions.rs` for what is read of it).
 
+use super::terminal::Launch;
 use super::*;
 
 /// How long a finished session waits for its project's window to open and take the command.
 const WINDOW_WAIT: Duration = Duration::from_secs(15);
+
+/// In `SessionsCache::reopened`, a session whose tab is being opened right now.
+const OPENING: u64 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Liveness {
@@ -21,8 +27,11 @@ pub(super) enum Liveness {
     /// parents, nearest first.
     Running { entrypoint: Option<String>, lineage: Vec<u32> },
     Ended,
+    /// Claude Code lists its running sessions and this one isn't among them, though its log
+    /// changed a moment ago: it has just stopped, wherever it ran.
+    Stopped,
     /// No way to tell: Claude Code keeps no sessions folder, the process table can't be read,
-    /// or the log changed a moment ago without a running process (an older Claude Code).
+    /// or the session has no log.
     Unknown,
 }
 
@@ -31,8 +40,34 @@ pub(super) enum Reveal {
     /// Bring `raise` to the front and ask `target` to show the session; `terminal` is the shell
     /// pid of the terminal it runs in.
     Command { target: String, raise: String, terminal: Option<u32> },
+    /// Open it again in one of Pitwall's own terminals.
+    Reopen,
     /// Only bring the project's window to the front.
     Window,
+}
+
+/// What bringing up a session that has just stopped does about its tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Claim {
+    /// Nobody holds it: the caller opens its tab, and says which once it is open.
+    Open,
+    /// It was opened again in this tab, which is still there.
+    Tab(u64),
+    /// Another click is opening its tab right now.
+    Opening,
+}
+
+/// Takes the opening of `session`'s tab, unless it has one (`open`: that tab is still there) or
+/// one is on its way: asked twice before its process is listed, it is opened once.
+fn claim(reopened: &mut HashMap<String, u64>, session: &str, open: impl Fn(u64) -> bool) -> Claim {
+    match reopened.get(session).copied() {
+        Some(OPENING) => Claim::Opening,
+        Some(tab) if open(tab) => Claim::Tab(tab),
+        _ => {
+            reopened.insert(session.to_string(), OPENING);
+            Claim::Open
+        }
+    }
 }
 
 /// Session ids are the log's file name, a UUID; anything else never reaches a path or a command.
@@ -77,6 +112,7 @@ pub(super) fn plan_reveal(path: &str, liveness: &Liveness, peers: &[WindowRecord
             Some(peer) => Reveal::Command { target: peer.window_id.clone(), raise: path.to_string(), terminal: None },
             None => Reveal::Window,
         },
+        Liveness::Stopped => Reveal::Reopen,
         Liveness::Unknown => Reveal::Window,
     }
 }
@@ -109,7 +145,7 @@ impl Core {
         }
     }
 
-    fn reveal_now(&self, path: &str, session: &str) {
+    fn reveal_now(self: &Arc<Self>, path: &str, session: &str) {
         let liveness = if is_session_id(session) { self.liveness(session) } else { Liveness::Unknown };
 
         // One of our own terminals: the window shows it.
@@ -125,7 +161,9 @@ impl Core {
                 self.launch_editor(&raise);
                 self.registry.send_reveal(&target, path, session, terminal);
             }
-            Reveal::Window => {
+            Reveal::Reopen if self.reopen(path, session) => {}
+            // Without a terminal to open it in, the window as well.
+            Reveal::Reopen | Reveal::Window => {
                 self.launch_editor(path);
 
                 // A finished session can wait for the window that is opening now.
@@ -134,6 +172,46 @@ impl Core {
                 }
             }
         }
+    }
+
+    /// Opens a session that has just stopped again (`claude --resume`) in a new tab of its
+    /// project's terminals and shows it; a card that holds it follows it there. `false` when
+    /// there is no such tab to open: a folder that isn't listed has no terminals, and Claude Code
+    /// finds a session only from the folder it ran in. Asked again before its process is listed,
+    /// the tab it was opened in comes up instead: never a second process on one log.
+    fn reopen(self: &Arc<Self>, path: &str, session: &str) -> bool {
+        let Some(path) = self.listed_paths().into_iter().find(|listed| same_path(listed, path)) else {
+            return false;
+        };
+        let log = self.cfg.claude_dir.join(crate::claude::encode_project_path(&path)).join(format!("{session}.jsonl"));
+        if !log.is_file() {
+            return false;
+        }
+
+        let claimed = {
+            let mut cache = self.sessions_cache();
+            claim(&mut cache.reopened, session, |tab| self.terminal_sessions().contains_key(&tab))
+        };
+        let tab = match claimed {
+            Claim::Opening => return true,
+            Claim::Tab(tab) => tab,
+            Claim::Open => {
+                let opened = self.open_terminal_as(&path, &Launch::Resume { session: session.to_string() }, None, false, None);
+                let mut cache = self.sessions_cache();
+                let Ok(view) = opened else {
+                    cache.reopened.remove(session);
+                    return false;
+                };
+                cache.reopened.insert(session.to_string(), view.id);
+                drop(cache);
+
+                self.board_resumed(session, view.id);
+                view.id
+            }
+        };
+
+        self.emit(CoreEvent::RevealTerminal { path, id: tab });
+        true
     }
 
     fn reveal_when_open(&self, path: &str, session: &str) {
@@ -160,7 +238,8 @@ impl Core {
 
         match self.log_modified(session) {
             Some(modified) if now_ms().saturating_sub(modified) > crate::claude::WORKING_WINDOW_MS => Liveness::Ended,
-            _ => Liveness::Unknown,
+            Some(_) => Liveness::Stopped,
+            None => Liveness::Unknown,
         }
     }
 
@@ -236,6 +315,8 @@ mod tests {
             (Liveness::Ended, vec![window(host, false, &[])], Reveal::Window),
             // A finished session opens again in a window that has the project.
             (Liveness::Ended, vec![window(host, true, &[])], command(host, None)),
+            // Just stopped: one of Pitwall's own terminals, although a window has the project.
+            (Liveness::Stopped, vec![window(host, true, &[])], Reveal::Reopen),
             // Unsure whether it runs: only the window.
             (Liveness::Unknown, vec![window(host, true, &[])], Reveal::Window),
         ];
@@ -249,5 +330,48 @@ mod tests {
         for bad in ["", "../../etc/passwd", "9bb85e86-f618-4861-9858-03ec8fc36c2/", "9bb85e86f61848619858103ec8fc36c28aa"] {
             assert!(!is_session_id(bad), "{bad}");
         }
+    }
+
+    /// A session opens again only when Claude Code's own list says no process runs it: without
+    /// that list a fresh log may be a running session's. And asked twice before the new process
+    /// is listed, it is opened once: two would write one log.
+    #[test]
+    fn a_session_opens_again_only_once_and_only_when_it_is_known_to_have_stopped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let claude = tmp.path().join("claude");
+        let id = "9bb85e86-f618-4861-9858-03ec8fc36c28";
+        let core = Core::new(
+            CoreConfig {
+                registry_dir: tmp.path().join("registry"),
+                claude_dir: claude.join("projects"),
+                settings_file: tmp.path().join("config").join("settings.json"),
+                claude_settings: claude.join("settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            Arc::new(|_| {}),
+        );
+
+        let folder = claude.join("projects").join(crate::claude::encode_project_path(PROJECT));
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join(format!("{id}.jsonl")), "{}\n").unwrap();
+
+        // No sessions folder (an older Claude Code): nothing tells that it stopped.
+        assert_eq!(core.liveness(id), Liveness::Unknown);
+        fs::create_dir_all(claude.join("sessions")).unwrap();
+        assert_eq!(core.liveness(id), Liveness::Stopped);
+        // Without a log there is nothing to open again.
+        assert_eq!(core.liveness("1a2b3c4d-f618-4861-9858-03ec8fc36c28"), Liveness::Unknown);
+
+        let mut reopened = HashMap::new();
+        let open = |tab: u64| tab == 7;
+        assert_eq!(claim(&mut reopened, id, open), Claim::Open);
+        assert_eq!(claim(&mut reopened, id, open), Claim::Opening);
+        reopened.insert(id.to_string(), 7);
+        assert_eq!(claim(&mut reopened, id, open), Claim::Tab(7));
+        // That tab closed: the next one is opened once again.
+        reopened.insert(id.to_string(), 8);
+        assert_eq!(claim(&mut reopened, id, open), Claim::Open);
+        assert_eq!(claim(&mut reopened, id, open), Claim::Opening);
     }
 }

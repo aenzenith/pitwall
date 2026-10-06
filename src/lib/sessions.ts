@@ -118,7 +118,7 @@ export function keepOrder(frozen: Layout, next: Layout, present: Set<string> = n
 
 /** What bringing a session up does, as its button and menu say it: an ended one opens again in
  * the editor, one running where Pitwall can't reach only has the project's window come up, the
- * rest come up where they run. */
+ * rest come up where they run (one that has just stopped: in a Pitwall terminal, opened again). */
 export function bringKeys(row: SessionRow): { label: Key; title: Key } {
   if (row.phase === "ended") return { label: "sessions.action.reopen", title: "sessions.action.reopenTitle" };
   if (runsElsewhere(row)) return { label: "common.openInEditor", title: unlinkedEditor(row.origin) ? "sessions.unlinked.body" : "sessions.elsewhere.body" };
@@ -215,10 +215,12 @@ export function unlinkedEditor(origin: SessionOrigin): boolean {
 
 /**
  * Running somewhere Pitwall can't reach into (a terminal app, the SDK…): bringing it up only
- * brings up the project's window, as a running session is never opened a second time.
+ * brings up the project's window, as a running session is never opened a second time. One whose
+ * process is gone, its row not ended yet, isn't there any more: it opens again in a Pitwall
+ * terminal.
  */
 export function runsElsewhere(row: SessionRow): boolean {
-  return row.phase !== "ended" && row.running !== false && (row.origin.kind === "terminal" || row.origin.kind === "other");
+  return row.phase !== "ended" && row.running === true && (row.origin.kind === "terminal" || row.origin.kind === "other");
 }
 
 /** The Pitwall terminal it runs (or ran) in, while that tab is still open. */

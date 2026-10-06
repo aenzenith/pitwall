@@ -202,6 +202,8 @@ pub(super) struct SessionsCache {
     first: HashMap<String, (RowPhase, u64)>,
     /// The names and folders read from the logs of earlier days' sessions (`history.rs`).
     pub(super) briefs: HashMap<String, super::history::Brief>,
+    /// The tab each session that had stopped was opened again in (`reveal.rs`: `reopen`).
+    pub(super) reopened: HashMap<String, u64>,
 }
 
 /// The process and its parents, nearest first.

@@ -624,7 +624,7 @@
   "sessions.limits.body": "VS Code 窗口会来到前台；在此系统上无法选中终端标签页。",
   "sessions.unknown.tag": "来源未知",
   "sessions.unknown.title": "无法判断它在哪里运行",
-  "sessions.unknown.body": "Pitwall 只把项目窗口调到前台，以免正在运行的会话被打开两次。",
+  "sessions.unknown.body": "如果没有进程在运行它，Pitwall 会在自己的终端中重新打开它。无法判断时，只把项目窗口调到前台，以免正在运行的会话被打开两次。",
   "sessions.card.permissionTool": "Claude 需要你授权使用 {tool}",
   "sessions.card.idle": "已打开，没有动静",
   "sessions.card.ended": "会话已结束",

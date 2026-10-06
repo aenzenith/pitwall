@@ -208,7 +208,8 @@ function onTabKey(event: KeyboardEvent, at: number): void {
 /** The session on its way up: nothing else is brought up meanwhile. */
 const pending = ref<string | null>(null);
 
-/** Where it runs: its tab or terminal comes up; an ended one opens again in the editor. */
+/** Where it runs: its tab or terminal comes up; an ended one opens again in the editor, one that
+ * has just stopped in a Pitwall terminal. */
 async function bringUp(id: string): Promise<void> {
   const row = byId.value.get(id);
   if (!row || pending.value) return;

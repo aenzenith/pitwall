@@ -624,7 +624,7 @@
   "sessions.limits.body": "VS Code のウィンドウは前面に出ますが、このシステムではターミナルのタブを選べません。",
   "sessions.unknown.tag": "実行場所不明",
   "sessions.unknown.title": "どこで実行しているか分かりません",
-  "sessions.unknown.body": "実行中のセッションを二重に開かないよう、Pitwall はプロジェクトのウィンドウだけを前面に出します。",
+  "sessions.unknown.body": "実行中のプロセスがなければ、Pitwall は自身のターミナルで開き直します。それが分からない場合は、実行中のセッションを二重に開かないよう、プロジェクトのウィンドウだけを前面に出します。",
   "sessions.card.permissionTool": "Claude が {tool} の許可を求めています",
   "sessions.card.idle": "開いていますが、動きはありません",
   "sessions.card.ended": "セッションは終了しました",

@@ -627,7 +627,7 @@
   "sessions.limits.body": "VS Code pencereleri öne gelir; terminal sekmeleri bu sistemde seçilemez.",
   "sessions.unknown.tag": "Kaynak bilinmiyor",
   "sessions.unknown.title": "Nerede çalıştığı anlaşılamıyor",
-  "sessions.unknown.body": "Pitwall yalnızca projenin penceresini öne getirir; böylece çalışan bir oturum iki kez açılmaz.",
+  "sessions.unknown.body": "Çalışan bir işlemi yoksa Pitwall onu kendi terminalinde yeniden açar. Bu anlaşılamazsa yalnızca projenin penceresi öne gelir; böylece çalışan bir oturum iki kez açılmaz.",
   "sessions.card.permissionTool": "Claude {tool} için izin istiyor",
   "sessions.card.idle": "Açık, bir şey olmuyor",
   "sessions.card.ended": "Oturum bitti",

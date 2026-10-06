@@ -639,7 +639,7 @@
   "sessions.limits.body": "Las ventanas de VS Code pasan al frente; las pestañas de terminal no se pueden elegir en este sistema.",
   "sessions.unknown.tag": "Origen desconocido",
   "sessions.unknown.title": "No se puede saber dónde se ejecuta",
-  "sessions.unknown.body": "Pitwall solo trae al frente la ventana del proyecto, para que una sesión en curso nunca se abra dos veces.",
+  "sessions.unknown.body": "Si ningún proceso la ejecuta, Pitwall la vuelve a abrir en uno de sus terminales. Si no se puede saber, solo trae al frente la ventana del proyecto, para que una sesión en curso nunca se abra dos veces.",
   "sessions.card.permissionTool": "Claude pide permiso para {tool}",
   "sessions.card.idle": "Abierta, sin actividad",
   "sessions.card.ended": "Sesión terminada",

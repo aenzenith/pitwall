@@ -637,7 +637,7 @@
   "sessions.limits.body": "VS-Code-Fenster kommen nach vorn; Terminal-Tabs lassen sich auf diesem System nicht auswählen.",
   "sessions.unknown.tag": "Herkunft unbekannt",
   "sessions.unknown.title": "Wo sie läuft, lässt sich nicht sagen",
-  "sessions.unknown.body": "Pitwall holt nur das Fenster des Projekts nach vorn, damit eine laufende Sitzung nie zweimal geöffnet wird.",
+  "sessions.unknown.body": "Läuft kein Prozess mehr dafür, öffnet Pitwall sie erneut in einem eigenen Terminal. Lässt sich das nicht sagen, kommt nur das Fenster des Projekts nach vorn, damit eine laufende Sitzung nie zweimal geöffnet wird.",
   "sessions.card.permissionTool": "Claude braucht Erlaubnis für {tool}",
   "sessions.card.idle": "Offen, nichts los",
   "sessions.card.ended": "Sitzung beendet",

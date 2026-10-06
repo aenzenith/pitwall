@@ -52,7 +52,8 @@ const ownTerminal = computed(() => (props.terminal === undefined ? sessionTermin
 const waiting = computed(() => props.row.phase === "waiting");
 const permission = computed(() => waiting.value && props.row.turn?.kind === "permission");
 const elsewhere = computed(() => runsElsewhere(props.row));
-/** Where it runs isn't known, and it runs (an ended one reopens in the editor either way). */
+/** Where it runs isn't known, and it isn't ended (an ended one reopens in the editor either way):
+ * with no process running it, it opens again in a Pitwall terminal. */
 const unknown = computed(() => props.row.origin.kind === "unknown" && props.row.phase !== "ended");
 
 const spark = computed(() => (waiting.value ? "waiting" : props.row.phase === "working" ? "working" : "quiet"));

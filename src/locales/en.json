@@ -637,7 +637,7 @@
   "sessions.limits.body": "VS Code windows come forward; terminal tabs can't be picked on this system.",
   "sessions.unknown.tag": "Unknown origin",
   "sessions.unknown.title": "Where it runs can't be told",
-  "sessions.unknown.body": "Pitwall only brings up the project's window, so a running session is never opened twice.",
+  "sessions.unknown.body": "With no process running it, Pitwall opens it again in one of its own terminals. When that can't be told, only the project's window comes up, so a running session is never opened twice.",
   "sessions.card.permissionTool": "Claude needs permission for {tool}",
   "sessions.card.idle": "Open, nothing going on",
   "sessions.card.ended": "Session ended",

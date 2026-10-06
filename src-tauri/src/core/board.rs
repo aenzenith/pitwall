@@ -482,8 +482,8 @@ fn carry(session: bool, starting: bool, liveness: &Liveness, logged: bool, ended
         Liveness::Running { .. } => Carry::Follow,
         _ if !logged => Carry::Fresh,
         Liveness::Ended => Carry::Resume,
-        Liveness::Unknown if ended => Carry::Resume,
-        Liveness::Unknown => Carry::Follow,
+        Liveness::Stopped | Liveness::Unknown if ended => Carry::Resume,
+        Liveness::Stopped | Liveness::Unknown => Carry::Follow,
     }
 }
 
@@ -804,8 +804,9 @@ impl Core {
         Ok(())
     }
 
-    /// A session opened again in a new tab after a restart (`restore.rs`): its card follows it
-    /// there, and isn't sent to review while the session comes back up.
+    /// A session opened again in a new tab, after a restart (`restore.rs`) or brought up once it
+    /// had stopped (`reveal.rs`): its card follows it there, and isn't sent to review while the
+    /// session comes back up.
     pub(super) fn board_resumed(&self, session: &str, terminal: u64) {
         let mut board = self.board();
         board.resumed.insert(session.to_string(), now_ms() + RESUME_GRACE_MS);
