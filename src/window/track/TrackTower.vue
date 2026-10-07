@@ -3,7 +3,7 @@ import StatusIcon from "../../components/StatusIcon.vue";
 import { claudeState, meta } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { rowKeys } from "../../lib/rows";
-import { now } from "../../lib/store";
+import { api, now } from "../../lib/store";
 import { sessionsIn } from "../../lib/track";
 import type { Project } from "../../lib/types";
 
@@ -36,7 +36,8 @@ function line(project: Project): { server: string; claude: string } {
 }
 
 /** One Tab stop: arrows move the selection, ↵ goes to the project (to its session, when Claude
- * waits on you there), Space starts or stops it. */
+ * waits on you there), Space starts or stops it. A double click opens the editor, as in the
+ * project list. */
 function onKey(event: KeyboardEvent): void {
   rowKeys(event, {
     move: (path) => emit("select", path),
@@ -65,7 +66,7 @@ function onKey(event: KeyboardEvent): void {
         :aria-selected="project.path === selected"
         :class="['tower-row', { on: project.path === selected }]"
         @click="emit('select', project.path)"
-        @dblclick="emit('open', project.path)"
+        @dblclick="api.openEditor(project.path)"
         @mouseenter="emit('hover', project.path)"
       >
         <span class="place" role="gridcell">{{ index + 1 }}</span>

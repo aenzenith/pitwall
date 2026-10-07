@@ -80,8 +80,8 @@ function bring(path: string, session = waitingSession(path)): void {
   else emit("open-project", path);
 }
 
-/** Return or a double click in the tower: a project whose Claude waits on you goes to that
- * session, any other to the project in the list. */
+/** Return in the tower: a project whose Claude waits on you goes to that session, any other to the
+ * project in the list. */
 function open(path: string): void {
   if (waitingSession(path)) bring(path);
   else emit("open-project", path);
