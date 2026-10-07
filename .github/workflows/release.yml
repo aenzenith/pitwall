@@ -16,17 +16,26 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # The release waits for CI's run on the pushed commit.
+  actions: read
 
 jobs:
   # Conventional Commits decide the next version: feat → minor, fix/perf → patch, feat! → major.
   # The release PR bumps package.json, tauri.conf.json, Cargo.toml and Cargo.lock together.
+  #
+  # Nobody merges that PR by hand: once CI has passed on the pushed commit it is merged here and
+  # the release cut in the same run. The merge is made with the workflow's own token, which
+  # starts no run of its own, so the second pass below is what tags it.
   release-please:
     name: Release Please
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.cut.outputs.release_created || steps.release.outputs.release_created }}
+      tag_name: ${{ steps.cut.outputs.tag_name || steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -34,6 +43,72 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Find the release PR
+        id: pr
+        run: |
+          number="$(gh pr list --state open --base main --label 'autorelease: pending' --json number --jq '.[0].number // empty')"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      # CI starts alongside this run, so its run may not be listed yet. Anything but a pass (a
+      # failure, or a run cancelled by the next push) leaves the PR open.
+      - name: Wait for CI
+        id: ci
+        if: ${{ steps.pr.outputs.number != '' }}
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          run=""
+          for _ in $(seq 30); do
+            run="$(gh run list --workflow ci.yml --event push --commit "$GITHUB_SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            [ -n "$run" ] && break
+            sleep 10
+          done
+          if [ -z "$run" ]; then
+            echo "::notice::No CI run for $GITHUB_SHA: the release PR stays open."
+            exit 0
+          fi
+
+          while [ "$(gh run view "$run" --json status --jq .status)" != completed ]; do
+            sleep 20
+          done
+          conclusion="$(gh run view "$run" --json conclusion --jq .conclusion)"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          if [ "$conclusion" != success ]; then
+            echo "::notice::CI ended as $conclusion: the release PR stays open."
+          fi
+
+      # A push that came in meanwhile has a run of its own, and the PR is being written for it.
+      - name: Merge the release PR
+        id: merge
+        if: ${{ steps.ci.outputs.conclusion == 'success' }}
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/$GH_REPO/commits/main" --jq .sha)"
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "::notice::main moved on to $head: that push's run takes the release."
+            exit 0
+          fi
+          gh api -X PUT "repos/$GH_REPO/pulls/$PR/merge" -f merge_method=squash
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+
+      - uses: googleapis/release-please-action@v4
+        id: cut
+        if: ${{ steps.merge.outputs.merged == 'true' }}
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+
+      # Merged and untagged, nothing would say so: the next run of this job cuts it.
+      - name: Check the release was cut
+        if: ${{ steps.merge.outputs.merged == 'true' && steps.cut.outputs.release_created != 'true' }}
+        run: |
+          echo "::error::The release PR was merged but no release was cut: run this job again."
+          exit 1
 
   # When a release is cut, the app is built from its tag on each platform and the installers are
   # attached to the release. Unsigned until the app is signed (and notarized on macOS).
