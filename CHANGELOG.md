@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/aenzenith/pitwall/compare/v1.8.0...v1.8.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **track:** a double click in the tower opens the editor ([130dfb5](https://github.com/aenzenith/pitwall/commit/130dfb5276217e566cd93df5aa14ef8bc988dcb2))
+
 ## [1.8.0](https://github.com/aenzenith/pitwall/compare/v1.7.1...v1.8.0) (2026-10-06)
 
 
