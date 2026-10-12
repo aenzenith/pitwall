@@ -328,6 +328,11 @@
   "settings.appearance": "外観",
   "settings.suggestProjects": "このフォルダに新しいプロジェクトが現れたら提案する",
   "settings.openSetup": "セットアップ手順を開く",
+  "settings.startup": "起動時",
+  "settings.resumeHint": "動いていた開発サーバー、コマンド、ターミナルタブ。",
+  "settings.resume.ask": "確認する",
+  "settings.resume.always": "常に復元",
+  "settings.resume.never": "しない",
   "about.version": "バージョン {version}",
   "about.blurb": "プロジェクトの開発サーバーとClaudeのセッションに、メニューバーからワンクリックでアクセスできます。MITライセンスの無料オープンソースソフトウェアです。",
   "about.madeBy": "Aenzenithが開発",
@@ -888,6 +893,21 @@
   "board.noHook.update": "フックを更新",
   "board.none.search": "検索に一致するカードはありません",
   "board.noProjects": "まずプロジェクトを追加してから、そのカードを書きましょう。",
+  "resume.title": "終了時に開いていたもの",
+  "resume.quitToday": "今日 {time} に Pitwall を終了",
+  "resume.quitYesterday": "昨日 {time} に Pitwall を終了",
+  "resume.quitOn": "{date} {time} に Pitwall を終了",
+  "resume.server": "サーバー",
+  "resume.tabs": {
+    "other": "タブ {count} 個"
+  },
+  "resume.always": "次回から確認せず、常に復元する",
+  "resume.dismiss": "空で始める",
+  "resume.restore": "復元",
+  "resume.banner": {
+    "other": "終了時に {count} 件開いていました"
+  },
+  "resume.more": "{names} ほか {count} 件",
   "track.nav": "コース",
   "track.title": "コース",
   "track.crashed": "クラッシュ {count}",

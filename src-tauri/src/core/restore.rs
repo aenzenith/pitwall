@@ -59,14 +59,14 @@ pub struct Restored {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Tab {
-    path: String,
-    name: String,
+pub(super) struct Tab {
+    pub(super) path: String,
+    pub(super) name: String,
     /// The user gave it that name: it doesn't take its session's.
     #[serde(default)]
-    renamed: bool,
+    pub(super) renamed: bool,
     /// The Claude session running in it.
-    session: Option<String>,
+    pub(super) session: Option<String>,
     /// That session was at work, or (without one) a command was running.
     cut: bool,
     cols: u16,
@@ -94,11 +94,11 @@ struct Record {
 }
 
 /// Everything that runs under this app right now.
-struct Standing {
-    servers: Vec<String>,
+pub(super) struct Standing {
+    pub(super) servers: Vec<String>,
     /// Running custom commands: project, id, name, and whether it is started again.
-    commands: Vec<(String, String, String, bool)>,
-    tabs: Vec<Tab>,
+    pub(super) commands: Vec<(String, String, String, bool)>,
+    pub(super) tabs: Vec<Tab>,
 }
 
 /// The tab's last output with a line under it that says where the old shell ended.
@@ -109,7 +109,7 @@ fn replay(scrollback: &str, cut: bool, at: u64) -> String {
 }
 
 /// The record's file, readable by the user alone: it holds what the terminals showed.
-fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
+pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
     use std::io::Write;
 
     if let Some(parent) = file.parent() {
@@ -132,7 +132,7 @@ impl Core {
         self.cfg.settings_file.with_file_name(FILE)
     }
 
-    fn standing(&self) -> Standing {
+    pub(super) fn standing(&self) -> Standing {
         // Each tab's Claude session, by the shell among the session's parents.
         let mut sessions: HashMap<u64, (String, bool)> = HashMap::new();
         for (id, run) in self.read_running().unwrap_or_default() {

@@ -321,7 +321,8 @@ impl Update {
     }
 
     /// The app quits with an update waiting: it is installed on the way out, where that asks
-    /// nothing (`quiet_install`). Nothing is restored after a quit the user chose.
+    /// nothing (`quiet_install`). This is a quit the user chose, not a restart: what was open
+    /// comes back at the next start only as Settings says (`core/resume.rs`).
     pub fn install_on_quit(&self) {
         if !lock(&self.view).on_quit {
             return;

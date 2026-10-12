@@ -166,6 +166,9 @@ pub struct Settings {
     /// The list's teams, in the order they are drawn (`core/teams.rs`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub teams: Vec<Team>,
+    /// What was open at the last quit, at the next start (`core/resume.rs`): `ask`, `always` or
+    /// `never`.
+    pub resume: String,
     /// The first run's steps were finished or put off: they don't come up by themselves again.
     pub onboarded: bool,
     /// A project that appears in the projects folder is offered under the list
@@ -204,6 +207,7 @@ impl Default for Settings {
             track: None,
             theme: "system".into(),
             teams: Vec::new(),
+            resume: "ask".into(),
             onboarded: false,
             suggest_projects: false,
             seen_folders: Vec::new(),

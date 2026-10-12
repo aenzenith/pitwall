@@ -40,6 +40,7 @@ mod output;
 mod peers;
 mod projects;
 mod restore;
+mod resume;
 mod reveal;
 mod routing;
 mod servers;
@@ -52,6 +53,7 @@ mod watch;
 pub use activity::DaySummary;
 pub use board::{Card, Give, NewImage};
 pub use discover::{Candidate, Discovery};
+pub use resume::ResumeOffer;
 pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
 pub use projects::Folder;
@@ -162,6 +164,8 @@ struct Inner {
     statuses: HashMap<String, &'static str>,
     /// Projects that appeared in the projects folder, offered under the list (`discover.rs`).
     suggestions: Vec<Candidate>,
+    /// What was open at the last quit, while it waits for the user's answer (`resume.rs`).
+    resume: Option<resume::Kept>,
     /// Each team's start under way, by its number: a stop takes it out, and the start goes no
     /// further (`teams.rs`).
     team_runs: HashMap<String, u64>,

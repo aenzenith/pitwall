@@ -129,6 +129,8 @@ export type Settings = {
   theme: Theme;
   /** The list's teams, in the order they are drawn; changed through the `team*` commands only. */
   teams?: Team[];
+  /** What was open at the last quit, at the next start: asked for, put back, or left. */
+  resume: "ask" | "always" | "never";
   /** The first run's steps were finished or put off. */
   onboarded: boolean;
   /** A project that appears in the projects folder is offered under the list. */
@@ -160,6 +162,9 @@ export type Snapshot = {
   language: Language;
   /** The system's language, for the "System" choice in Settings. */
   systemLanguage: Language;
+  /** What was open when Pitwall last quit, while it is still to be answered (Settings' `resume`
+   * is `ask`); null otherwise. */
+  resume: ResumeOffer | null;
   /** Projects that appeared in the projects folder, offered under the list. */
   suggestions: Candidate[];
 };
@@ -174,6 +179,15 @@ export type Candidate = { path: string; name: string; kind: string; changedAt: n
 /** The projects folder looked through. `dir` null: none is set; `folders`: how many subfolders
  * it has in all. */
 export type Discovery = { dir: string | null; folders: number; candidates: Candidate[] };
+
+/* ---------- Resume: what was open at the last quit (snapshot.resume) ---------- */
+
+/** One project of the last quit: its dev server ran, the commands that ran (their names), and
+ * how many terminal tabs it had. */
+export type ResumeProject = { path: string; name: string; server: boolean; commands: string[]; terminals: number };
+
+/** What was open when Pitwall last quit (`quitAt`, ms). */
+export type ResumeOffer = { quitAt: number; projects: ResumeProject[] };
 
 /** A stretch of the day; Claude's name their session. */
 export type DaySpan = { start: number; end: number; session?: string };

@@ -328,6 +328,11 @@
   "settings.appearance": "外观",
   "settings.suggestProjects": "此文件夹中出现新项目时提示添加",
   "settings.openSetup": "打开初始设置步骤",
+  "settings.startup": "启动",
+  "settings.resumeHint": "运行中的开发服务器、命令和终端标签页。",
+  "settings.resume.ask": "询问",
+  "settings.resume.always": "总是恢复",
+  "settings.resume.never": "从不",
   "about.version": "版本 {version}",
   "about.blurb": "你各个项目的开发服务器和 Claude 会话，在菜单栏中一键即达。基于 MIT 许可证免费开源。",
   "about.madeBy": "由 Aenzenith 制作",
@@ -888,6 +893,21 @@
   "board.noHook.update": "更新 Hook",
   "board.none.search": "没有符合搜索的卡片",
   "board.noProjects": "先添加一个项目，再写它的卡片。",
+  "resume.title": "退出时打开的内容",
+  "resume.quitToday": "Pitwall 于今天 {time} 退出",
+  "resume.quitYesterday": "Pitwall 于昨天 {time} 退出",
+  "resume.quitOn": "Pitwall 于 {date} {time} 退出",
+  "resume.server": "服务器",
+  "resume.tabs": {
+    "other": "{count} 个标签页"
+  },
+  "resume.always": "不再询问，总是恢复",
+  "resume.dismiss": "从空白开始",
+  "resume.restore": "恢复",
+  "resume.banner": {
+    "other": "退出时有 {count} 个项目打开着"
+  },
+  "resume.more": "{names} 及其他 {count} 个",
   "track.nav": "赛道",
   "track.title": "赛道",
   "track.crashed": "{count} 个已崩溃",

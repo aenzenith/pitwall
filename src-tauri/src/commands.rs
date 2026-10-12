@@ -577,6 +577,21 @@ pub fn set_onboarded(state: State<'_, AppState>) {
     state.core.set_onboarded();
 }
 
+/* ---------- what was open at the last quit ---------- */
+
+/// Puts back what was open at the last quit (`always`: from now on without asking). It opens
+/// shells, so it runs off the main thread.
+#[tauri::command]
+pub async fn resume_restore(app: AppHandle, always: bool) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.resume_restore(always)).await.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn resume_dismiss(state: State<'_, AppState>) {
+    state.core.resume_dismiss();
+}
+
 /// Esc in the popover: close it and go back to the app from before.
 #[tauri::command]
 pub fn hide_popover(app: AppHandle) {

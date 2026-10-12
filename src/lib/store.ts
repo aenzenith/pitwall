@@ -363,6 +363,12 @@ export const api = {
   /** The first run's steps are over (finished or put off). */
   setOnboarded: () => invoke("set_onboarded"),
 
+  /* What was open at the last quit (core/resume.rs): `snapshot.resume`. */
+  /** Puts it back. `always`: from now on without asking (Settings' `resume`). */
+  resumeRestore: (always = false) => invoke("resume_restore", { always }),
+  /** Starts empty; the offer is gone. */
+  resumeDismiss: () => invoke("resume_dismiss"),
+
   quit: () => invoke("quit"),
 };
 

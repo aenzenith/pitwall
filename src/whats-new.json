@@ -63,6 +63,27 @@
         "ja": "設定 › 一般 › セットアップ手順を開く：プロジェクトフォルダのプロジェクト、Claude のフック、VS Code 拡張機能、ショートカット。このフォルダに現れた新しいプロジェクトを Pitwall が提案することもできます。同じ場所でオンにします。",
         "zh-Hans": "设置 › 通用 › 打开初始设置步骤：项目文件夹中的项目、Claude 的 Hook、VS Code 扩展和快捷键。Pitwall 还可以在该文件夹中出现新项目时提示添加；在同一位置开启。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Pick up where you left off",
+        "tr": "Kaldığın yerden",
+        "de": "Dort weitermachen, wo du aufgehört hast",
+        "es": "Sigue donde lo dejaste",
+        "ru": "Продолжайте с того же места",
+        "ja": "前回の続きから",
+        "zh-Hans": "从上次离开的地方继续"
+      },
+      "body": {
+        "en": "When Pitwall starts, it offers to bring back the dev servers and terminal tabs that were open when it quit.",
+        "tr": "Pitwall açılınca, çıkışta açık olan sunucuları ve terminal sekmelerini geri getirmeyi önerir.",
+        "de": "Beim Start bietet Pitwall an, die Dev-Server und Terminal-Tabs zurückzuholen, die beim Beenden offen waren.",
+        "es": "Al iniciarse, Pitwall ofrece recuperar los servidores de desarrollo y las pestañas de terminal que estaban abiertos al salir.",
+        "ru": "При запуске Pitwall предлагает вернуть dev-серверы и вкладки терминала, которые были открыты при выходе.",
+        "ja": "起動時に、終了時に開いていた開発サーバーとターミナルのタブを元に戻すか尋ねます。",
+        "zh-Hans": "启动时，Pitwall 会询问是否恢复退出时打开的开发服务器和终端标签页。"
+      }
     }
   ]
 }

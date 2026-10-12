@@ -15,6 +15,7 @@ import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
 import { applyDrop, teamOf, teams } from "../lib/teams";
 import type { Project } from "../lib/types";
 import FuelStrip from "./FuelStrip.vue";
+import ResumeBanner from "./ResumeBanner.vue";
 
 const MAX_HEIGHT = 620;
 /** Kept between the popover's foot and the screen's, when the fuel strip makes it taller. */
@@ -143,6 +144,10 @@ onBeforeUnmount(() => {
         <Icon name="power" :size="16" />
       </button>
     </header>
+
+    <!-- What was open at the last quit, while that is still to be answered: it comes and goes with
+         the snapshot, which fits the window again. -->
+    <ResumeBanner v-if="snapshot?.resume" />
 
     <section v-if="waiting.length" class="claude" :aria-label="t('popover.claudeWaiting')">
       <div class="claude-label"><span class="claude-dot" aria-hidden="true"></span>{{ t("popover.claudeWaiting") }}</div>

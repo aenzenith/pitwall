@@ -76,6 +76,13 @@ impl Core {
         self.route(path, action, true);
     }
 
+    /// A start nobody clicked (what was open at the last quit, a team that starts with
+    /// Pitwall), wherever it belongs like any other: nothing while it runs here or a participant
+    /// runs it. No browser opens for it.
+    pub(super) fn start_quietly(self: &Arc<Self>, path: &str) {
+        self.route(path, Action::Start, false);
+    }
+
     /// `open_url`: a server started here opens its address, when Settings says so.
     pub(super) fn route(self: &Arc<Self>, path: &str, action: Action, open_url: bool) {
         let (running_here, stoppable, runner, root_owner) = {

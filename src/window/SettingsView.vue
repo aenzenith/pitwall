@@ -101,6 +101,7 @@ const form = reactive<Settings>({
   projects: {},
   order: [],
   theme: "system",
+  resume: "ask",
   onboarded: false,
   suggestProjects: false,
 });
@@ -109,6 +110,13 @@ const hookBusy = ref(false);
 
 /** How often the core may ask Anthropic for the limits, in minutes: the paces it takes. */
 const FUEL_EVERY = [1, 5, 15];
+
+/** What was open at the last quit, at the next start: asked for, put back, or left. */
+const RESUME: Array<{ id: Settings["resume"]; label: Key }> = [
+  { id: "ask", label: "settings.resume.ask" },
+  { id: "always", label: "settings.resume.always" },
+  { id: "never", label: "settings.resume.never" },
+];
 
 /* ---------- shortcut recorder ---------- */
 
@@ -359,6 +367,12 @@ async function save(): Promise<void> {
 function setFuelEvery(minutes: number): void {
   if (form.fuelEvery === minutes) return;
   form.fuelEvery = minutes;
+  void save();
+}
+
+function setResume(mode: Settings["resume"]): void {
+  if (form.resume === mode) return;
+  form.resume = mode;
   void save();
 }
 
@@ -633,6 +647,19 @@ function setTheme(theme: Theme): void {
               <span>{{ t("settings.autoUpdate") }}</span>
             </label>
             <small>{{ t("settings.autoUpdateHint") }}</small>
+          </div>
+
+          <div class="section section-label">{{ t("settings.startup") }}</div>
+          <div class="hook">
+            <div class="hook-text">
+              <span id="resume-mode">{{ t("resume.title") }}</span>
+              <small>{{ t("settings.resumeHint") }}</small>
+            </div>
+            <span class="seg" role="group" aria-labelledby="resume-mode">
+              <button v-for="mode in RESUME" :key="mode.id" type="button" :aria-pressed="form.resume === mode.id" @click="setResume(mode.id)">
+                {{ t(mode.label) }}
+              </button>
+            </span>
           </div>
         </fieldset>
 

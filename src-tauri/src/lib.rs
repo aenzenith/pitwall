@@ -286,6 +286,8 @@ pub fn run() {
             core.record_app("start");
             // After a restart for an update: the servers, tabs and Claude sessions it closed.
             let restored = core.restore();
+            // After a quit: what was open, put back or offered as Settings says.
+            core.resume_start(restored.is_some());
             // Not after that restart: what ran came back, and what was stopped stays stopped.
             if restored.is_none() {
                 core.start_launch_teams();
@@ -463,6 +465,8 @@ pub fn run() {
             commands::add_projects,
             commands::dismiss_suggestion,
             commands::set_onboarded,
+            commands::resume_restore,
+            commands::resume_dismiss,
             commands::quit
         ])
         .build(tauri::generate_context!())
@@ -471,6 +475,8 @@ pub fn run() {
     app.run(|app, event| match event {
         RunEvent::Exit => {
             if let Some(state) = app.try_state::<AppState>() {
+                // What is open, for the next start; then every server goes.
+                state.core.save_last_session();
                 state.core.dispose();
                 // An update that waits goes in on the way out; a restart for it took it already.
                 state.update.install_on_quit();

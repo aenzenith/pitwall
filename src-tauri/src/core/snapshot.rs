@@ -78,6 +78,8 @@ pub struct Snapshot {
     pub language: &'static str,
     /// The system's language, for the "System" choice in Settings.
     pub system_language: &'static str,
+    /// What was open at the last quit, while the user hasn't answered (`resume.rs`).
+    pub resume: Option<ResumeOffer>,
     /// Projects that appeared in the projects folder (`discover.rs`).
     pub suggestions: Vec<Candidate>,
 }
@@ -275,6 +277,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         settings: Settings { seen_folders: Vec::new(), ..inner.settings.clone() },
         language: i18n::resolve(&inner.settings.language),
         system_language: i18n::system(),
+        resume: super::resume::offer(inner),
         suggestions: inner.suggestions.clone(),
         projects,
     }

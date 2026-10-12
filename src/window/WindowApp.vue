@@ -31,6 +31,7 @@ import DepsView from "./DepsView.vue";
 import FuelView from "./FuelView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
 import ProjectSuggestions from "./ProjectSuggestions.vue";
+import ResumeDialog from "./ResumeDialog.vue";
 import SessionsView from "./SessionsView.vue";
 import SetupView from "./SetupView.vue";
 import TeamDetail from "./TeamDetail.vue";
@@ -157,6 +158,11 @@ function openSetup(): void {
   view.value = "projects";
   setupOpen.value = true;
 }
+
+/** What was open at the last quit, while that is still to be answered and wasn't closed in this
+ * window; never over the first run's steps. */
+const resumeClosed = ref(false);
+const resumeOffer = computed(() => (resumeClosed.value || setupOpen.value ? null : (snapshot.value?.resume ?? null)));
 
 const query = ref("");
 const selectedPath = ref<string | null>(null);
@@ -879,6 +885,8 @@ function server(project: Project): string {
     <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" />
     <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
     <UpdateDialog v-if="updateOpen && update" :update="update" @close="updateOpen = false" />
+    <!-- What was open at the last quit, asked once. -->
+    <ResumeDialog v-if="resumeOffer" :offer="resumeOffer" @close="resumeClosed = true" />
     <!-- Naming a team (a new one, or a rename) and deleting one, asked for from the sidebar, the
          list or the team's details (lib/teams: teamAsk). -->
     <TeamNameDialog v-if="teamAsk?.kind === 'create'" :name="null" :choices="teamChoices" :picked="teamAsk.projects" @save="saveTeamName" @close="teamAsk = null" />
