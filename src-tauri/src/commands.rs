@@ -577,7 +577,18 @@ pub fn set_onboarded(state: State<'_, AppState>) {
     state.core.set_onboarded();
 }
 
-/* ---------- what was open at the last quit ---------- */
+/* ---------- what's new, and what was open at the last quit ---------- */
+
+/// This version's notes (`src/whats-new.json`), in the language spoken.
+#[tauri::command]
+pub fn whats_new(state: State<'_, AppState>) -> crate::whatsnew::WhatsNew {
+    state.core.whats_new()
+}
+
+#[tauri::command]
+pub fn whats_new_seen(state: State<'_, AppState>) {
+    state.core.whats_new_seen();
+}
 
 /// Puts back what was open at the last quit (`always`: from now on without asking). It opens
 /// shells, so it runs off the main thread.

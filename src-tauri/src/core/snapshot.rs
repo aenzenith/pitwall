@@ -80,6 +80,8 @@ pub struct Snapshot {
     pub system_language: &'static str,
     /// What was open at the last quit, while the user hasn't answered (`resume.rs`).
     pub resume: Option<ResumeOffer>,
+    /// This version's notes are still to be shown (`whatsnew.rs`).
+    pub whats_new: bool,
     /// Projects that appeared in the projects folder (`discover.rs`).
     pub suggestions: Vec<Candidate>,
 }
@@ -278,6 +280,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         language: i18n::resolve(&inner.settings.language),
         system_language: i18n::system(),
         resume: super::resume::offer(inner),
+        whats_new: inner.whats_new,
         suggestions: inner.suggestions.clone(),
         projects,
     }

@@ -22,9 +22,10 @@ import TrackOptions from "./track/TrackOptions.vue";
 type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "track" | "about";
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
- * page's settings button Track's). `openSetup`: the first run's steps are asked for again. */
+ * page's settings button Track's). `openSetup`: the first run's steps are asked for again;
+ * `openWhatsNew`: this version's notes. */
 const props = defineProps<{ startTab?: Tab }>();
-const emit = defineEmits<{ close: []; openUpdate: []; openSetup: [] }>();
+const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNew: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
 const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" | "flag" }> = [
@@ -123,6 +124,21 @@ const RESUME: Array<{ id: Settings["resume"]; label: Key }> = [
 /** The moved folders' list (backup/MissingProjects): an import may bring in projects whose folder
  * isn't on this machine. */
 const missing = ref<InstanceType<typeof MissingProjects> | null>(null);
+
+/** This version has notes to show: asked of the core when About opens, and the way to them is
+ * there only then. */
+const hasNotes = ref(false);
+watch(
+  tab,
+  (shown) => {
+    if (shown !== "about") return;
+    void api.whatsNew().then(
+      (news) => (hasNotes.value = !!news?.notes?.length),
+      () => (hasNotes.value = false),
+    );
+  },
+  { immediate: true },
+);
 
 /* ---------- shortcut recorder ---------- */
 
@@ -685,7 +701,10 @@ function setTheme(theme: Theme): void {
             <PitwallGlyph :size="40" lamps="var(--run)" />
             <div class="app-text">
               <span class="app-name">Pitwall</span>
-              <small v-if="version">{{ t("about.version", { version }) }}</small>
+              <span v-if="version" class="version-row">
+                <small>{{ t("about.version", { version }) }}</small>
+                <button v-if="hasNotes" type="button" class="link" @click="emit('openWhatsNew')">{{ t("about.whatsNew") }}</button>
+              </span>
               <!-- Where the app's own update stands, and at the row's right the one thing to do about it. -->
               <small v-if="updateLine" class="update-line">{{ updateLine }}</small>
               <span
@@ -1251,6 +1270,39 @@ code {
 .app-text small {
   font-size: 12px;
   color: var(--text-subtle);
+}
+
+/* The version, and beside it the way to its notes. */
+.version-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.version-row small {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* A link in the row's flow. */
+.link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link:hover {
+  color: var(--text-strong);
+  text-decoration-color: currentColor;
 }
 
 /* A long one wraps beside its button. */

@@ -13,6 +13,7 @@ import type {
   ImportReport,
   MissingProject,
   Team,
+  WhatsNew,
   DepReport,
   DepScanDetails,
   ExtensionStatus,
@@ -366,6 +367,11 @@ export const api = {
   dismissSuggestion: (path: string) => invoke("dismiss_suggestion", { path }),
   /** The first run's steps are over (finished or put off). */
   setOnboarded: () => invoke("set_onboarded"),
+
+  /* What's new (whatsnew.rs). */
+  whatsNew: () => invoke<WhatsNew>("whats_new"),
+  /** The notes were shown: they don't come up by themselves again. */
+  whatsNewSeen: () => invoke("whats_new_seen"),
 
   /* What was open at the last quit (core/resume.rs): `snapshot.resume`. */
   /** Puts it back. `always`: from now on without asking (Settings' `resume`). */

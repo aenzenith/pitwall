@@ -25,6 +25,7 @@ mod spend;
 mod tray;
 mod update;
 mod usage;
+mod whatsnew;
 mod windows;
 
 use std::path::PathBuf;
@@ -467,6 +468,8 @@ pub fn run() {
             commands::add_projects,
             commands::dismiss_suggestion,
             commands::set_onboarded,
+            commands::whats_new,
+            commands::whats_new_seen,
             commands::resume_restore,
             commands::resume_dismiss,
             commands::backup_export,

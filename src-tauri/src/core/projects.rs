@@ -32,10 +32,10 @@ impl Core {
 
     /// The Settings page's form takes hold. Project overrides, the list order, the shortcut
     /// keys, the projects folder, the board shown last, how it is drawn, the Track page's
-    /// settings, the teams and what the core notes for itself (the first run, the folders
-    /// known) have their own commands: those stay as they are here, whatever the form holds
-    /// of them, which may be older. Taken and put back under one lock, so nothing changes in
-    /// between.
+    /// settings, the teams and what the core notes for itself (the version seen, the first run,
+    /// the folders known) have their own commands: those stay as they are here, whatever the
+    /// form holds of them, which may be older. Taken and put back under one lock, so nothing
+    /// changes in between.
     pub fn set_settings_form(&self, form: Settings) {
         let language = form.language.clone();
         {
@@ -52,6 +52,7 @@ impl Core {
                 board_view: kept.board_view,
                 track: kept.track,
                 teams: kept.teams,
+                seen_version: kept.seen_version,
                 onboarded: kept.onboarded,
                 seen_folders,
                 ..form
@@ -161,6 +162,30 @@ impl Core {
         }
 
         self.save_settings();
+        self.notify();
+    }
+
+    /// This version's notes, in the language spoken.
+    pub fn whats_new(&self) -> crate::whatsnew::WhatsNew {
+        let inner = self.lock();
+        crate::whatsnew::view(inner.settings.seen_version.as_deref(), inner.whats_new, i18n::current())
+    }
+
+    /// The notes were shown: they don't come up by themselves again.
+    pub fn whats_new_seen(&self) {
+        let noted = {
+            let mut inner = self.lock();
+            inner.whats_new = false;
+            let noted = inner.settings.seen_version.as_deref() != Some(crate::whatsnew::CURRENT);
+            if noted {
+                inner.settings.seen_version = Some(crate::whatsnew::CURRENT.to_string());
+            }
+            noted
+        };
+
+        if noted {
+            self.save_settings();
+        }
         self.notify();
     }
 

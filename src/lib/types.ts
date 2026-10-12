@@ -131,6 +131,8 @@ export type Settings = {
   teams?: Team[];
   /** What was open at the last quit, at the next start: asked for, put back, or left. */
   resume: "ask" | "always" | "never";
+  /** The newest version whose notes were shown. */
+  seenVersion?: string;
   /** The first run's steps were finished or put off. */
   onboarded: boolean;
   /** A project that appears in the projects folder is offered under the list. */
@@ -165,6 +167,8 @@ export type Snapshot = {
   /** What was open when Pitwall last quit, while it is still to be answered (Settings' `resume`
    * is `ask`); null otherwise. */
   resume: ResumeOffer | null;
+  /** This version's notes haven't been shown yet (after an update). */
+  whatsNew: boolean;
   /** Projects that appeared in the projects folder, offered under the list. */
   suggestions: Candidate[];
 };
@@ -179,6 +183,17 @@ export type Candidate = { path: string; name: string; kind: string; changedAt: n
 /** The projects folder looked through. `dir` null: none is set; `folders`: how many subfolders
  * it has in all. */
 export type Discovery = { dir: string | null; folders: number; candidates: Candidate[] };
+
+/* ---------- What's new (whats_new) ---------- */
+
+/** One thing this version brought, in the language shown: something new, or a fix. */
+export type ReleaseNote = { kind: "new" | "fix"; title: string; body: string | null };
+
+/** This version's notes, written for each release in every language (src/whats-new.json).
+ * `pending`: they haven't been shown yet; `from`: the version updated from, when known; `date`:
+ * the release's day (`YYYY-MM-DD`), when it has one. No `notes`: there are none for this build,
+ * and nothing is to be shown or offered. */
+export type WhatsNew = { current: string; date: string | null; pending: boolean; from: string | null; notes: ReleaseNote[] };
 
 /* ---------- Resume: what was open at the last quit (snapshot.resume) ---------- */
 

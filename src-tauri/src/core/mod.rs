@@ -168,6 +168,8 @@ struct Inner {
     suggestions: Vec<Candidate>,
     /// What was open at the last quit, while it waits for the user's answer (`resume.rs`).
     resume: Option<resume::Kept>,
+    /// This version's notes are still to be shown (`whatsnew.rs`).
+    whats_new: bool,
     /// Each team's start under way, by its number: a stop takes it out, and the start goes no
     /// further (`teams.rs`).
     team_runs: HashMap<String, u64>,
@@ -220,9 +222,22 @@ impl Core {
         let claude = ClaudeWatch::new(cfg.claude_dir.clone(), &cfg.registry_dir).with_legacy_seen(legacy_seen);
         let hook = ClaudeHook::new(cfg.claude_settings.clone(), &cfg.registry_dir);
         let hook_status = hook.status();
-        let settings = Settings::load(&cfg.settings_file);
-        i18n::set(i18n::resolve(&settings.language));
         let favourites = registry.read_favourites();
+        // A first start has seen this version's notes: they are for those who update to it.
+        // No settings file alone makes no first start: an install whose settings were never
+        // changed has none, but it has its day records beside where the file would be.
+        let ran_before = cfg.settings_file.parent().is_some_and(|dir| fs::read_dir(dir.join("activity")).is_ok_and(|mut days| days.next().is_some()));
+        let first_start = !cfg.settings_file.exists() && !ran_before;
+        let mut settings = Settings::load(&cfg.settings_file);
+        if first_start && settings.seen_version.is_none() {
+            settings.seen_version = Some(crate::whatsnew::CURRENT.to_string());
+        }
+        if first_start {
+            // Written at once: the next start is no first one, whatever was changed meanwhile.
+            settings.save(&cfg.settings_file);
+        }
+        let whats_new = crate::whatsnew::is_pending(settings.seen_version.as_deref());
+        i18n::set(i18n::resolve(&settings.language));
         let peers = registry.read_peers();
         // Beside the settings, on this Mac only.
         let board = board::Board::load(cfg.settings_file.with_file_name("board.json"), now_ms());
@@ -237,6 +252,7 @@ impl Core {
                 claude_hook: hook_status.installed,
                 claude_hook_outdated: hook_status.outdated,
                 board_unsaved: board.read_only(),
+                whats_new,
                 ..Inner::default()
             }),
             terminals: Mutex::new(HashMap::new()),

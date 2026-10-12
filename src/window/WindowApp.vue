@@ -39,6 +39,7 @@ import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
 import TrackView from "./TrackView.vue";
 import UpdateDialog from "./UpdateDialog.vue";
+import WhatsNewDialog from "./WhatsNewDialog.vue";
 import TeamDeleteDialog from "./team/TeamDeleteDialog.vue";
 import TeamHead from "./team/TeamHead.vue";
 import TeamNameDialog from "./team/TeamNameDialog.vue";
@@ -163,6 +164,20 @@ function openSetup(): void {
  * window; never over the first run's steps. */
 const resumeClosed = ref(false);
 const resumeOffer = computed(() => (resumeClosed.value || setupOpen.value ? null : (snapshot.value?.resume ?? null)));
+
+/** This version's notes: once by themselves after an update (when the offer above is out of the
+ * way), and whenever Settings asks for them. */
+const whatsNewOpen = ref(false);
+let whatsNewOffered = false;
+watch(
+  () => snapshot.value?.whatsNew === true && !resumeOffer.value && !setupOpen.value,
+  (due) => {
+    if (!due || whatsNewOffered) return;
+    whatsNewOffered = true;
+    whatsNewOpen.value = true;
+  },
+  { immediate: true },
+);
 
 const query = ref("");
 const selectedPath = ref<string | null>(null);
@@ -882,11 +897,13 @@ function server(project: Project): string {
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
     </template>
 
-    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" />
+    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" @open-whats-new="whatsNewOpen = true" />
     <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
     <UpdateDialog v-if="updateOpen && update" :update="update" @close="updateOpen = false" />
-    <!-- What was open at the last quit, asked once. -->
+    <!-- What was open at the last quit, asked once; then this version's notes, which Settings
+         › About opens too. -->
     <ResumeDialog v-if="resumeOffer" :offer="resumeOffer" @close="resumeClosed = true" />
+    <WhatsNewDialog v-if="whatsNewOpen" @close="whatsNewOpen = false" />
     <!-- Naming a team (a new one, or a rename) and deleting one, asked for from the sidebar, the
          list or the team's details (lib/teams: teamAsk). -->
     <TeamNameDialog v-if="teamAsk?.kind === 'create'" :name="null" :choices="teamChoices" :picked="teamAsk.projects" @save="saveTeamName" @close="teamAsk = null" />

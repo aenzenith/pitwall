@@ -139,7 +139,7 @@ impl General {
             fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
             theme, resume, suggest_projects,
             // This Mac's own: its registration with the system, and what it has shown so far.
-            launch_at_login: _, onboarded: _, seen_folders: _, board_scope: _,
+            launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
             projects: _, order: _, teams: _,
         } = settings.clone();
@@ -1098,7 +1098,7 @@ mod tests {
 
         let file = tmp.path().join("backup.json");
         let parts = json!({
-            "settings": { "script": "dev", "launchAtLogin": true, "onboarded": false },
+            "settings": { "script": "dev", "launchAtLogin": true, "onboarded": false, "seenVersion": "0.0.1" },
             "projects": {
                 "favourites": [{ "path": theirs, "name": "theirs" }],
                 "order": [theirs],
@@ -1115,7 +1115,8 @@ mod tests {
 
         // The file's preference came; what is this Mac's own stayed.
         let settings = core.settings();
-        assert_eq!((settings.script.as_str(), settings.launch_at_login, settings.onboarded), ("dev", false, true));
+        let seen = Some(crate::whatsnew::CURRENT.to_string());
+        assert_eq!((settings.script.as_str(), settings.launch_at_login, settings.onboarded, &settings.seen_version), ("dev", false, true, &seen));
         // Projects, their settings and teams: the file's beside those that were here, and the
         // project both teams named is in the file's alone.
         assert_eq!(listed(&core), [here, theirs]);
