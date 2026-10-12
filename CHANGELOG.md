@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.9.0](https://github.com/aenzenith/pitwall/compare/v1.8.1...v1.9.0) (2026-10-12)
+
+
+### Features
+
+* **fuel:** Settings sets how often Claude's limits are asked for ([f89f0cc](https://github.com/aenzenith/pitwall/commit/f89f0ccf2827fcd592a8c7ea8e7738028c92f3d8))
+* **popover:** Claude's fuel takes the foot of the popover ([6677371](https://github.com/aenzenith/pitwall/commit/667737108dca6dd0e98b983ef5ac5747cc90b5a9))
+* **tray:** coloured counts and Claude's fuel beside the menu bar icon ([3733ff9](https://github.com/aenzenith/pitwall/commit/3733ff96c0e0c5931b3265e2c3dfb4dd0b5b4b80))
+
 ## [1.8.1](https://github.com/aenzenith/pitwall/compare/v1.8.0...v1.8.1) (2026-10-07)
 
 
