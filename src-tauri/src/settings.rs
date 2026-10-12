@@ -146,6 +146,8 @@ pub struct Settings {
     /// The Track page's own settings. None until one is changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<TrackSettings>,
+    /// How the app is drawn: `system` (as the system is), `dark` or `light`.
+    pub theme: String,
 }
 
 impl Default for Settings {
@@ -174,6 +176,7 @@ impl Default for Settings {
             board_scope: None,
             board_view: None,
             track: None,
+            theme: "system".into(),
         }
     }
 }

@@ -20,7 +20,7 @@ import { t } from "../../lib/i18n";
   flex-wrap: wrap;
   gap: 8px 18px;
   padding-top: 12px;
-  border-top: 1px solid #1e2127;
+  border-top: 1px solid var(--line-soft);
   font-size: 12px;
   color: var(--text-subtle);
 }
@@ -39,21 +39,21 @@ import { t } from "../../lib/i18n";
 .key.work {
   width: 20px;
   height: 12px;
-  background: linear-gradient(180deg, #f6a560, #e3792e);
+  background: var(--work);
 }
 
 .key.wait {
   width: 20px;
   height: 12px;
-  border: 1px dashed rgba(240, 136, 62, 0.85);
-  background: repeating-linear-gradient(135deg, rgba(240, 136, 62, 0.32) 0 3px, transparent 3px 7px);
+  border: 1px dashed color-mix(in srgb, var(--claude) 85%, transparent);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--claude) 32%, transparent) 0 3px, transparent 3px 7px);
 }
 
 .key.server {
   width: 20px;
   height: 4px;
   background: var(--run);
-  box-shadow: 0 0 6px rgba(115, 201, 145, 0.5);
+  box-shadow: 0 0 6px var(--run-glow);
 }
 
 .key.commit {
@@ -63,7 +63,7 @@ import { t } from "../../lib/i18n";
   background: var(--text-strong);
   box-shadow:
     0 0 0 2px var(--bg-app),
-    0 0 0 3px #4a515c;
+    0 0 0 3px var(--line-heavy);
 }
 
 .key.crash {
@@ -73,7 +73,7 @@ import { t } from "../../lib/i18n";
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #2a1b1b;
+  background: var(--crash-bg);
   color: var(--crash-text);
   font-size: 9px;
   font-style: normal;

@@ -199,7 +199,7 @@ const inset = computed<Inset>(() => ({
       </button>
     </header>
 
-    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${ROOM}px` : undefined }" @pointerdown="foldTerminals">
+    <div ref="stage" class="stage night" :style="{ marginBottom: selected ? `${ROOM}px` : undefined }" @pointerdown="foldTerminals">
       <div class="sky" aria-hidden="true"></div>
 
       <TrackCanvas
@@ -235,7 +235,7 @@ const inset = computed<Inset>(() => ({
     </div>
 
     <!-- The selected project's terminals, over the page's bottom: its tab row's height (`ROOM`) is theirs. -->
-    <TerminalPanel v-if="selected" ref="terminals" :project="selected" track />
+    <TerminalPanel v-if="selected" ref="terminals" class="night" :project="selected" track />
   </div>
 </template>
 
@@ -327,11 +327,13 @@ const inset = computed<Inset>(() => ({
 }
 
 .options:hover {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
-/* The night the circuit lies in: darker than the window, as the output panel is. */
+/* The night the circuit lies in: darker than the window, as the output panel is. It is drawn for
+   a dark ground, so it and the terminals laid over it keep the dark tokens in the light theme
+   (`night`, styles/tokens.css); the bar above follows the theme. */
 .stage {
   position: relative;
   flex: 1 1 auto;
@@ -340,11 +342,11 @@ const inset = computed<Inset>(() => ({
   background: var(--bg-log);
 }
 
-/* A little light behind the circuit, as on the website. */
+/* A little light behind the circuit, as on the website: the night's own, in both themes. */
 .sky {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 52% 60% at 64% 44%, #171b22 0%, rgba(11, 12, 15, 0) 100%);
+  background: radial-gradient(ellipse 52% 60% at 64% 44%, #171b22 0%, transparent 100%);
 }
 
 /* The tower, and the selected project's card under it: the tower gives way and scrolls. */

@@ -475,7 +475,7 @@ onBeforeUnmount(() => {
           @click="pick(item)"
         >
           <template v-if="item.kind === 'project'">
-            <StatusIcon :project="item.project" :ring="i === index ? '#23272f' : 'var(--bg-panel)'" />
+            <StatusIcon :project="item.project" :ring="i === index ? 'var(--bg-lit)' : 'var(--bg-panel)'" />
             <div class="text">
               <div class="name">
                 <Highlight :text="item.project.name" :hits="item.hits" />
@@ -593,7 +593,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: var(--bg-panel);
-  border: 1px solid var(--line-strong);
+  /* The window is see-through and casts no shadow: this line is the panel's edge on any wallpaper. */
+  border: 1px solid var(--line-panel);
   border-radius: 14px;
   overflow: hidden;
   /* Hidden state; .shown fades it up into place. */
@@ -633,7 +634,7 @@ onBeforeUnmount(() => {
 }
 
 .glyph {
-  color: #d7dae0;
+  color: var(--text-brand);
   flex-shrink: 0;
 }
 
@@ -666,7 +667,7 @@ kbd {
   padding: 1px 5px;
   border: 1px solid var(--line-strong);
   border-radius: 4px;
-  background: #1b1e24;
+  background: var(--bg-key);
 }
 
 .esc {
@@ -716,7 +717,7 @@ kbd {
 }
 
 .row.on {
-  background: #23272f;
+  background: var(--bg-lit);
 }
 
 /* A page: one line, so all of them show at once. */
@@ -735,7 +736,7 @@ kbd {
 .name {
   font-size: 14px;
   font-weight: 500;
-  color: #eef0f3;
+  color: var(--text-name);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -852,7 +853,7 @@ kbd {
 /* "Press ↵ again": the command asks before it runs. */
 .meta.confirm {
   font-family: inherit;
-  color: #f3c29b;
+  color: var(--claude-soft);
 }
 
 .uptime {

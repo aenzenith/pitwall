@@ -158,8 +158,9 @@ onBeforeUnmount(() => shadeObserver.disconnect());
       </button>
     </header>
 
-    <!-- Between the bars, the page's body on its own ground: the smoke, lit round the dials. -->
-    <div class="stage">
+    <!-- Between the bars, the page's body on its own ground: the smoke, lit round the dials. An
+         instrument panel, drawn for a dark ground: it keeps the dark tokens in the light theme. -->
+    <div class="stage night">
       <FuelBackdrop :window="session" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
       <!-- The ground's own colour rising from the bottom, gone by the trip computer's top. -->
       <div v-if="shade" class="shade" :style="{ height: `${shade}px` }" aria-hidden="true"></div>
@@ -261,7 +262,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 }
 
 .refresh:hover {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -378,11 +379,12 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   initial-value: 300px;
 }
 
-.fuel {
+/* Set on the stage, the night the cards stand in: its colours are the dark set's there. */
+.fuel .stage {
   --glow: var(--claude);
 }
 
-.fuel.stale {
+.fuel.stale .stage {
   --glow: var(--idle-ring);
 }
 

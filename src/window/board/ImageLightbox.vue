@@ -140,7 +140,7 @@ watch(index, (at) => {
 
 <template>
   <Teleport to="body">
-    <dialog ref="dialog" :class="['lightbox', { waiting }]" tabindex="-1" :aria-label="label" @close="emit('close')" @cancel.prevent="close" @keydown="onKey">
+    <dialog ref="dialog" :class="['lightbox', 'night', { waiting }]" tabindex="-1" :aria-label="label" @close="emit('close')" @cancel.prevent="close" @keydown="onKey">
       <div class="lb-shade" @click="close"></div>
       <div class="lb-stage">
         <Transition :name="`lb-${direction}`">
@@ -190,7 +190,7 @@ watch(index, (at) => {
 .lb-shade {
   position: absolute;
   inset: 0;
-  background: rgba(8, 9, 11, 0.88);
+  background: var(--scrim-strong);
 }
 
 /* A click beside the image falls through to the shade. */
@@ -221,6 +221,7 @@ watch(index, (at) => {
   visibility: hidden;
 }
 
+/* On the shade, which is dark in both themes (`night`): a little white seen through. */
 .lb-control {
   position: absolute;
   display: grid;

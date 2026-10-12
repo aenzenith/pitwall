@@ -86,11 +86,11 @@ const nowLeft = computed(() => (props.day.today ? `${pct(props.day.now, props.ra
   gap: 5px;
   padding: 0 7px;
   border-radius: 9px;
-  background: #1d2a22;
-  border: 1px solid #2d4537;
+  background: var(--run-bg);
+  border: 1px solid var(--run-line);
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #9ad7b0;
+  color: var(--run-text);
   white-space: nowrap;
 }
 
@@ -105,10 +105,10 @@ const nowLeft = computed(() => (props.day.today ? `${pct(props.day.now, props.ra
 @keyframes pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(115, 201, 145, 0.55);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--run) 55%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 5px rgba(115, 201, 145, 0);
+    box-shadow: 0 0 0 5px transparent;
   }
 }
 

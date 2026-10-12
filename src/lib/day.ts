@@ -248,8 +248,9 @@ export function sessionShare(part: number, session: DaySession): string {
 /* ---------- where the time went ---------- */
 
 /** Project colours, picked at random for now: from the path, so a project keeps its colour.
-    Hues far apart, and none of Claude's orange, the server's green or a crash's red. */
-const PALETTE = ["#7aa2f7", "#c49ef0", "#6fc6d9", "#e5c07b", "#f08fb6", "#a3acc2"];
+    Hues far apart, and none of Claude's orange, the server's green or a crash's red: tokens
+    (styles/tokens.css), each theme with its own six. */
+const PALETTE = ["var(--data-1)", "var(--data-2)", "var(--data-3)", "var(--data-4)", "var(--data-5)", "var(--data-6)"];
 
 function hash(text: string): number {
   let h = 2166136261;

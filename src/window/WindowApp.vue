@@ -547,7 +547,7 @@ function server(project: Project): string {
   padding: 44px 18px 18px;
   font-size: 15px;
   font-weight: 600;
-  color: #d7dae0;
+  color: var(--text-brand);
 }
 
 /* A long version gives way; the button beside it never does. */
@@ -586,7 +586,7 @@ function server(project: Project): string {
 }
 
 .update:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .nav {
@@ -605,16 +605,16 @@ function server(project: Project): string {
   border-radius: var(--radius-control);
   background: transparent;
   font-size: 13px;
-  color: #b4bac3;
+  color: var(--text-nav);
   text-align: left;
 }
 
 .nav button:hover {
-  background: #1f2228;
+  background: var(--bg-nav-hover);
 }
 
 .nav button.on {
-  background: #23272e;
+  background: var(--bg-lit);
   color: var(--text-strong);
 }
 
@@ -733,7 +733,7 @@ input[type="search"]::placeholder {
 }
 
 .control:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 
@@ -767,7 +767,7 @@ input[type="search"]::placeholder {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-subtle);
-  border-bottom: 1px solid #1e2127;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 :lang(zh) .thead,
@@ -797,12 +797,12 @@ input[type="search"]::placeholder {
 }
 
 .trow:hover {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .trow.selected {
   background: var(--bg-selected);
-  box-shadow: inset 0 0 0 1px #2c313a;
+  box-shadow: inset 0 0 0 1px var(--line-selected);
 }
 
 /* Drag to reorder: the dragged row lifts and follows the pointer, the others slide aside to
@@ -821,8 +821,8 @@ input[type="search"]::placeholder {
   z-index: 2;
   background: var(--bg-selected);
   box-shadow:
-    0 14px 22px -14px rgba(0, 0, 0, 0.8),
-    inset 0 0 0 1px #2c313a;
+    0 14px 22px -14px var(--shade-drag),
+    inset 0 0 0 1px var(--line-selected);
 }
 
 .tbody.reordering .trow.dragging {
@@ -880,7 +880,7 @@ input[type="search"]::placeholder {
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 6px;
-  background: #1c1f25;
+  background: var(--bg-well);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 400;
@@ -910,7 +910,7 @@ input[type="search"]::placeholder {
 }
 
 .cell-server.on {
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .cell-server.bad {
@@ -930,7 +930,7 @@ input[type="search"]::placeholder {
 }
 
 .cell-git.dirty {
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .cell-actions {
@@ -952,7 +952,7 @@ input[type="search"]::placeholder {
 }
 
 .icon:hover:not(:disabled) {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 

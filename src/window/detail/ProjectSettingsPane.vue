@@ -147,7 +147,7 @@ function saveSettings(): void {
   gap: 8px;
   padding: 8px 6px 8px 10px;
   border-radius: 8px;
-  background: #181b20;
+  background: var(--bg-tile);
   border: 1px solid var(--line);
 }
 
@@ -165,18 +165,18 @@ function saveSettings(): void {
   border-radius: 9px;
   font-size: 11px;
   white-space: nowrap;
-  background: #23262d;
+  background: var(--bg-tag);
   color: var(--text-muted);
 }
 
 .tag.run {
-  background: #1d2a22;
+  background: var(--run-bg);
   color: var(--run);
 }
 
 .tag.ask {
-  background: #2a1f17;
-  color: #f3c29b;
+  background: var(--btn-claude-bg);
+  color: var(--claude-soft);
 }
 
 .control.add {

@@ -91,6 +91,8 @@ function onKey(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
+/* On the stage, which is night in both themes: its own ground, the circuit showing through a
+   little (the same colour, whole, rings a row's corner dot). */
 .tower {
   flex: 0 1 auto;
   min-height: 118px;
@@ -141,7 +143,7 @@ function onKey(event: KeyboardEvent): void {
 }
 
 .tower-row:hover {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .tower-row.on {

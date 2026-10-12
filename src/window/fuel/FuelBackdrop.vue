@@ -226,9 +226,10 @@ let tint: [number, number, number] = [0, 0, 0];
 const rings = new Float32Array(RINGS * 3);
 let lastMeasured = 0;
 
-/** A colour token as 0–1 RGB; the tokens are `#rrggbb`. */
+/** A colour token as 0–1 RGB; the tokens are `#rrggbb`. Read where the canvas stands: the stage
+ * keeps the dark set in the light theme (styles/tokens.css: `.night`), the page's root doesn't. */
 function token(name: string): [number, number, number] {
-  const hex = getComputedStyle(document.documentElement).getPropertyValue(name).trim().replace("#", "");
+  const hex = getComputedStyle(canvas.value ?? document.documentElement).getPropertyValue(name).trim().replace("#", "");
   const value = Number.parseInt(hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex, 16);
   if (Number.isNaN(value)) return [0, 0, 0];
   return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];

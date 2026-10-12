@@ -53,7 +53,7 @@ const label = computed(() => {
 }
 
 .warn {
-  background: #cca700;
+  background: var(--warn);
 }
 
 .crash {

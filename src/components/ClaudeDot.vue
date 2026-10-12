@@ -25,7 +25,7 @@ defineProps<{ live?: { phase: "waiting" | "working"; text: string } | null }>();
 }
 
 .idle {
-  background: #5c626c;
+  background: var(--claude-idle);
 }
 
 .waiting {

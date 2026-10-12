@@ -171,9 +171,9 @@ onBeforeUnmount(() => window.clearInterval(timer));
   max-width: 340px;
   padding: 9px 11px;
   border-radius: 9px;
-  background: #23272e;
-  border: 1px solid #3a3f48;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  background: var(--bg-tip);
+  border: 1px solid var(--line-bold);
+  box-shadow: var(--shadow-tip);
   font-size: 12px;
   pointer-events: none;
 }
@@ -184,11 +184,11 @@ onBeforeUnmount(() => window.clearInterval(timer));
 }
 
 .tip-title.claude {
-  color: #f3c29b;
+  color: var(--claude-soft);
 }
 
 .tip-title.server {
-  color: #9ad7b0;
+  color: var(--run-text);
 }
 
 .tip-title.crash {

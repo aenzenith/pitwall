@@ -8,6 +8,7 @@ import "./styles/tokens.css";
 import { language } from "./lib/i18n";
 import { isWindows, platform } from "./lib/platform";
 import { connect, visible } from "./lib/store";
+import { followTheme } from "./lib/theme";
 import Popover from "./popover/Popover.vue";
 import Switcher from "./switcher/Switcher.vue";
 import WindowApp from "./window/WindowApp.vue";
@@ -20,6 +21,10 @@ document.documentElement.dataset.surface = label;
 // mac | windows | linux: the styles that differ by system (title bar room, scrollbars, a
 // borderless window's ground) branch on it.
 document.documentElement.dataset.platform = platform;
+
+// dark | light: the token set every surface is drawn with (tokens.css), from Settings › General
+// or the system, and again whenever either changes.
+followTheme();
 
 // WebView2 answers browser keys a desktop app doesn't have: reload, print, find, save, view
 // source, caret browsing. Keys the page uses itself (the switcher's Ctrl+P, a terminal's Ctrl+R)

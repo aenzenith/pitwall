@@ -483,7 +483,7 @@ input[type="search"]::placeholder {
 }
 
 .deps-control:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .deps-control:disabled {
@@ -505,7 +505,7 @@ input[type="search"]::placeholder {
   align-items: center;
   gap: 12px;
   padding: 0 20px 8px;
-  border-bottom: 1px solid #1e2127;
+  border-bottom: 1px solid var(--line-soft);
   container: deps-filters / inline-size;
 }
 
@@ -535,12 +535,12 @@ input[type="search"]::placeholder {
 }
 
 .deps-tabs button:hover:not(.on) {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
   color: var(--text-muted);
 }
 
 .deps-tabs button.on {
-  background: #23272e;
+  background: var(--bg-lit);
   color: var(--text-strong);
 }
 
@@ -559,14 +559,14 @@ input[type="search"]::placeholder {
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  background: var(--bg-control);
+  background: var(--bg-well);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
 }
 
 .deps-tabs button.on .deps-tab-count {
-  background: #2c3039;
+  background: var(--bg-control-on);
   color: var(--text-muted);
 }
 
@@ -587,7 +587,7 @@ input[type="search"]::placeholder {
 }
 
 .deps-languages:hover {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .deps-languages-text {
@@ -668,7 +668,7 @@ input[type="search"]::placeholder {
   flex-direction: column;
   gap: 2px;
   padding: 0 10px 10px;
-  border-right: 1px solid #1e2127;
+  border-right: 1px solid var(--line-soft);
 }
 
 /* In a narrow window (down to its least width) the list gives some of its room to the details. */

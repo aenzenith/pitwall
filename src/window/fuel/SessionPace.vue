@@ -113,7 +113,7 @@ const sentence = computed(() => ({ key: SENTENCES[state.value.kind], out: state.
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .sentence .hot {
@@ -181,7 +181,7 @@ const sentence = computed(() => ({ key: SENTENCES[state.value.kind], out: state.
 /* What is still ahead, dashed: the one gradient allowed. */
 .ahead {
   right: 0;
-  background: repeating-linear-gradient(90deg, rgba(240, 136, 62, 0.38) 0 6px, transparent 6px 10px);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--claude) 38%, transparent) 0 6px, transparent 6px 10px);
 }
 
 .stale .gone {
@@ -189,7 +189,7 @@ const sentence = computed(() => ({ key: SENTENCES[state.value.kind], out: state.
 }
 
 .stale .ahead {
-  background: repeating-linear-gradient(90deg, rgba(125, 131, 141, 0.45) 0 6px, transparent 6px 10px);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--idle-ring) 45%, transparent) 0 6px, transparent 6px 10px);
 }
 
 .mark {

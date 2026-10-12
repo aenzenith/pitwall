@@ -223,7 +223,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: var(--bg-panel);
-  border: 1px solid var(--line-strong);
+  /* The window is see-through and casts no shadow: this line is the panel's edge on any wallpaper. */
+  border: 1px solid var(--line-panel);
   border-radius: var(--radius-panel);
   overflow: hidden;
 }
@@ -280,7 +281,7 @@ onBeforeUnmount(() => {
 }
 
 .icon:hover:not(:disabled) {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -336,7 +337,7 @@ onBeforeUnmount(() => {
 }
 
 .claude-row:hover {
-  background: #3a2a1d;
+  background: var(--claude-bg-hover);
 }
 
 .claude-text {
@@ -355,7 +356,7 @@ onBeforeUnmount(() => {
 
 .claude-what {
   font-size: 12px;
-  color: #c9a88c;
+  color: var(--claude-muted);
 }
 
 .claude-open {
@@ -428,7 +429,7 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 2;
   background: var(--bg-hover);
-  box-shadow: 0 12px 20px -12px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 12px 20px -12px var(--shade-drag);
 }
 
 .list.reordering .row.dragging {
@@ -461,7 +462,7 @@ onBeforeUnmount(() => {
 .name {
   font-size: 13px;
   font-weight: 500;
-  color: #eef0f3;
+  color: var(--text-name);
 }
 
 .meta {

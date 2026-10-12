@@ -126,7 +126,7 @@ async function recheck(): Promise<void> {
 .dep-line-name {
   font-size: 12px;
   line-height: 26px;
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .dep-line-name.mono,
@@ -166,7 +166,7 @@ async function recheck(): Promise<void> {
 }
 
 .dep-line-state.plain {
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .dep-line-state.faint {
@@ -193,12 +193,12 @@ async function recheck(): Promise<void> {
   border-radius: 5px;
   background: transparent;
   font-size: 12px;
-  text-decoration: underline dotted #5d636d;
+  text-decoration: underline dotted var(--line-dotted);
   text-underline-offset: 3px;
 }
 
 .dep-count:hover {
-  background: #262a31;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
   text-decoration-color: var(--text-subtle);
 }

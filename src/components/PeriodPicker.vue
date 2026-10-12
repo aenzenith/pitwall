@@ -151,7 +151,7 @@ function openMenu(event: MouseEvent): void {
 }
 
 .arrow:hover:not(:disabled) {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -202,8 +202,18 @@ function openMenu(event: MouseEvent): void {
 }
 
 .tabs button.on {
-  background: #23272e;
+  background: var(--bg-lit);
   color: var(--text-strong);
+}
+
+/* In the light theme, the segmented control the settings have: a grey trough, the one chosen white. */
+:root[data-theme="light"] .tabs {
+  background: var(--bg-seg);
+}
+
+:root[data-theme="light"] .tabs button.on {
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
 }
 
 /* Out of sight until the page's bar runs out of room for the tabs. */
@@ -217,12 +227,12 @@ function openMenu(event: MouseEvent): void {
   border-radius: var(--radius-control);
   background: var(--bg-control);
   font-size: 12px;
-  color: #c7ccd3;
+  color: var(--text-soft);
   white-space: nowrap;
 }
 
 .period-compact:hover {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .period-compact svg {
@@ -237,6 +247,6 @@ function openMenu(event: MouseEvent): void {
 }
 
 .period-compact.set {
-  background: #2c3039;
+  background: var(--bg-control-on);
 }
 </style>

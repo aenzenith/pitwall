@@ -344,6 +344,8 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
         apply_shortcut(&app, settings.shortcut, &before.shortcut_keys)?;
     }
 
+    let theme = (settings.theme != before.theme).then(|| settings.theme.clone());
+
     // Project overrides, the list order, the shortcut keys, the projects folder, the board shown
     // last, how it is drawn and the Track page's settings have their own commands.
     let mut settings = settings;
@@ -355,6 +357,10 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
     settings.board_view = before.board_view;
     settings.track = before.track;
     state.core.set_settings(settings);
+
+    if let Some(theme) = theme {
+        crate::apply_theme(&app, &theme);
+    }
     Ok(())
 }
 

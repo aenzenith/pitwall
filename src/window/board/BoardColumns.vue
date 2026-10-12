@@ -176,7 +176,7 @@ useSlide(root, order);
 }
 
 .columns .bcol + .bcol {
-  border-left: 1px solid #1e2127;
+  border-left: 1px solid var(--line-soft);
 }
 
 .bcol-top {
@@ -303,7 +303,7 @@ useSlide(root, order);
   flex-shrink: 0;
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-card);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-slot);
 }
 
 .list .bslot {
@@ -344,7 +344,7 @@ useSlide(root, order);
 }
 
 .badd:hover {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 

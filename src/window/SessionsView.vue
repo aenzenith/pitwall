@@ -488,7 +488,7 @@ input[type="search"]::placeholder {
   gap: 12px;
   /* Room below, so the tabs sit closer to the title than to the list. */
   padding: 0 20px 8px;
-  border-bottom: 1px solid #1e2127;
+  border-bottom: 1px solid var(--line-soft);
   container-type: inline-size;
 }
 
@@ -514,12 +514,12 @@ input[type="search"]::placeholder {
 }
 
 .tabs button:hover:not(.on) {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
   color: var(--text-muted);
 }
 
 .tabs button.on {
-  background: #23272e;
+  background: var(--bg-lit);
   color: var(--text-strong);
 }
 
@@ -580,20 +580,20 @@ input[type="search"]::placeholder {
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  background: #1c1f25;
+  background: var(--bg-well);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
 }
 
 .tabs button.on .tab-count {
-  background: #2c3039;
+  background: var(--bg-control-on);
   color: var(--text-muted);
 }
 
 .tab-count.hot,
 .tabs button.on .tab-count.hot {
-  background: #3a2718;
+  background: var(--claude-well);
   color: var(--claude-text);
   font-weight: 600;
 }
@@ -650,7 +650,7 @@ input[type="search"]::placeholder {
 }
 
 .control:hover {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .loading {

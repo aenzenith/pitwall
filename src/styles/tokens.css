@@ -1,5 +1,14 @@
-/* Design tokens — direction A · Graphite list. */
-:root {
+/* Design tokens — direction A · Graphite list. Every colour the app draws with is named here, by
+   what it is for, in two sets: the dark one (the default) and the light one
+   (`:root[data-theme="light"]`, set by lib/theme from Settings › General or the system).
+
+   `.night` puts the dark set back on whatever is drawn for a dark ground and stays so in the
+   light theme: the Track page's stage, the Fuel page's cluster, a picture shown large, a badge
+   laid on a picture. Everything in it keeps reading the same tokens. A dialog opened from inside
+   one (a tab's rename on the Track page) is the app's own again: the light set names it too. */
+:root,
+.night {
+  /* Grounds. */
   --bg-app: #111317;
   --bg-panel: #16181d;
   --bg-sidebar: #15171c;
@@ -10,12 +19,80 @@
   --bg-hover: #20242b;
   --bg-selected: #1d2128;
   --bg-control: #1c1f25;
+  /* A control under the pointer, and one that is on (an open picker, the option the keys are on). */
+  --bg-control-hover: #2c3039;
+  --bg-control-on: #2c3039;
+  /* A row under the pointer (a project, a session, a link, a tab). */
+  --bg-row-hover: #1b1e24;
+  /* A group's head in the project list (a team's, the projects' in none): a shade off the
+     list's ground, so the heads tell apart from the rows; a step further under the pointer. */
+  --bg-group: #16181d;
+  --bg-group-hover: #1c1f25;
+  /* The sidebar's rows: under the pointer, and the page shown (the chosen tab too). */
+  --bg-nav-hover: #1f2228;
+  --bg-lit: #23272e;
+  /* A button with no box of its own, under the pointer. */
+  --bg-icon-hover: #262a33;
+  --bg-dialog: #1b1e24;
+  /* The tabs down a dialog's side (Settings): one under the pointer, and the one shown. */
+  --bg-rail-hover: #23272e;
+  --bg-rail-on: #2a2f37;
+  --bg-tip: #23272e;
+  /* A board card, and one under the pointer. */
+  --bg-card: #1a1d23;
+  --bg-card-hover: #1d2026;
+  /* A boxed value on the details' ground (the day's figures, a command being edited). */
+  --bg-tile: #181b20;
+  /* A small well in a ground: a count's pill, a bar's trough. */
+  --bg-well: #1c1f25;
+  --bg-tag: #23262d;
+  --bg-key: #1b1e24;
+  /* Where a dragged card would land. */
+  --bg-slot: rgba(255, 255, 255, 0.02);
+  /* A segmented control: its trough, the chosen segment and that segment's shadow. */
+  --bg-seg: #0e1013;
+  --bg-seg-on: #2a2f37;
+  --shadow-seg-on: none;
+  /* A small switch that is off. */
+  --switch-off: #3a3f48;
+  /* Over a picture (a badge on it, the ground it is shown large on): the same in both sets. */
+  --scrim: rgba(8, 9, 11, 0.78);
+  --scrim-strong: rgba(8, 9, 11, 0.88);
 
+  /* Lines, from the faintest. */
+  --line-soft: #1e2127;
+  /* The edge of a box of output (the log, a terminal, a code block). */
+  --line-inset: #1f2228;
   --line: #23262d;
+  --line-card: #262a31;
   --line-strong: #2a2e36;
+  /* The edge of a see-through window's panel (the popover, the switcher): it holds on any wallpaper. */
+  --line-panel: #2a2e36;
+  /* The ring round the selected row. */
+  --line-selected: #2c313a;
+  /* A dialog's edge; a panel's grip. */
+  --line-dialog: #2f343d;
+  --line-card-on: #343944;
+  /* A line that stands alone: a tip's edge, a dashed chip. */
+  --line-bold: #3a3f48;
+  --line-lit: #3f4550;
+  /* The heaviest: a grip under the pointer, the ring round a commit's mark. */
+  --line-heavy: #4a515c;
+  /* The edge of the option picked. */
+  --line-picked: #5b626d;
+  /* Under a word that explains itself when pointed at. */
+  --line-dotted: #5d636d;
 
-  --text: #e6e8eb;
+  /* Text, from the strongest. */
+  --text-lit: #fff;
   --text-strong: #f2f3f5;
+  --text-name: #eef0f3;
+  --text: #e6e8eb;
+  /* The pit-wall glyph beside the app's name. */
+  --text-brand: #d7dae0;
+  --text-soft: #c7ccd3;
+  --text-nav: #b4bac3;
+  --text-log: #a9afb8;
   --text-muted: #9aa0aa;
   --text-subtle: #8b919b;
   /* The dimmest text (inactive tabs, placeholders, hour labels, empty values): 5.07:1 on
@@ -25,25 +102,239 @@
   /* Keyboard focus: neutral, never a state colour; 8.5:1 on --bg-app, 6.9:1 on #23272e. */
   --focus-ring: #a9b0ba;
 
+  /* States. Each has its mark's colour, a text of it, and a ground and a line for a box of it. */
   --run: #73c991;
+  --run-text: #9ad7b0;
+  --run-bg: #1d2a22;
+  --run-line: #2d4537;
+  /* The light a running server's line gives off on the day's timeline: on a dark ground only. */
+  --run-glow: rgba(115, 201, 145, 0.45);
   --crash: #f14c4c;
   --crash-text: #f28b8b;
+  --crash-bg: #2a1b1b;
+  --crash-line: #4a2b2b;
   /* Needs your attention (a server with an issue, dependencies to install): small marks only. */
   --warn: #cca700;
+  --warn-text: #d9cf9a;
+  --warn-bg: #1c1d18;
+  --warn-line: #36331f;
   --idle-ring: #7d838d;
   --claude: #f0883e;
   --claude-text: #f3a56b;
+  /* On one of Claude's grounds: its text, and a second line under it. */
+  --claude-soft: #f3c29b;
+  --claude-muted: #c9a88c;
   --claude-bg: #1f1a16;
+  --claude-bg-hover: #3a2a1d;
   --claude-line: #3a2c20;
+  /* A count of Claude's in a pill; Claude's dot with nothing going on; text on Claude's colour. */
+  --claude-well: #3a2718;
+  --claude-idle: #5c626c;
+  --on-claude: #1a110a;
+  /* Claude's symbol in Anthropic's own colour, and the symbol on a square of Claude's colour:
+     the same in both sets. */
+  --claude-logo: #d97757;
+  --on-claude-mark: #fff7f0;
+  /* The cup on Settings › About's "Buy me a coffee": that site's yellow, deeper on a light ground. */
+  --coffee: #ffdd00;
 
+  /* Buttons. The one a dialog is for; start and stop take their state's ground and line. */
+  --btn-primary-bg: #2a3a30;
+  --btn-primary-line: #3d5446;
+  --btn-primary-text: #cdebd8;
+  --btn-primary-hover: #33473a;
+  --btn-start-text: #b9e6c9;
+  --btn-stop-text: #f2b8b8;
+  /* Hands something to Claude, or brings its session up. */
+  --btn-claude-bg: #2a1f17;
+  --btn-claude-line: #4a3523;
+  --btn-claude-hover: #35271c;
+
+  /* The day's timeline: a lane under the pointer and the one picked, the strip the day is drawn
+     on (and that of the lane picked), its hour lines, and Claude at work on it. */
+  --bg-lane-hover: #16191e;
+  --bg-lane-on: #181b20;
+  --bg-timeline: #15171c;
+  --bg-timeline-on: #1b1f26;
+  --grid: #1b1e24;
+  --grid-major: #20242b;
+  --work: linear-gradient(180deg, #f6a560, #e3792e);
+  --work-shine: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  --work-text: #2b1405;
+  /* A project's share of the day (lib/day): hues far apart, none of them a state's. */
+  --data-1: #7aa2f7;
+  --data-2: #c49ef0;
+  --data-3: #6fc6d9;
+  --data-4: #e5c07b;
+  --data-5: #f08fb6;
+  --data-6: #a3acc2;
+
+  /* Shadows: what floats over the window casts one, and a bottom panel on what is above it. */
+  --shadow-popover: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --shadow-dialog: 0 24px 60px rgba(0, 0, 0, 0.5);
+  --shadow-menu: 0 16px 32px -12px rgba(0, 0, 0, 0.75);
+  --shadow-tip: 0 10px 24px rgba(0, 0, 0, 0.45);
+  --shadow-rise: 0 -12px 24px rgba(0, 0, 0, 0.22);
+  /* Under a row lifted to be dragged: the shadow's colour, each row with its own reach. */
+  --shade-drag: rgba(0, 0, 0, 0.8);
+
+  --scroll-thumb: rgba(255, 255, 255, 0.13);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.24);
+  --scroll-thumb-active: rgba(255, 255, 255, 0.32);
+
+  color-scheme: dark;
+}
+
+/* Text set in a night keeps the dark set's own, whatever it would inherit. */
+.night {
+  color: var(--text);
+}
+
+/* The light set: the same roles on a light ground, a neutral grey turned over. Text is 4.5:1 or
+   better on the ground it sits on; a state keeps its hue and is told by its lightness too. */
+:root[data-theme="light"],
+:root[data-theme="light"] .night dialog:not(.night) {
+  --bg-app: #f7f8f9;
+  --bg-panel: #f4f5f6;
+  --bg-sidebar: #eef0f2;
+  --bg-detail: #f1f2f4;
+  --bg-footer: #eceef1;
+  --bg-input: #ffffff;
+  --bg-log: #ffffff;
+  --bg-hover: #e9ecef;
+  --bg-selected: #e6e9ec;
+  --bg-control: #ffffff;
+  --bg-control-hover: #eaedf0;
+  --bg-control-on: #e1e4e8;
+  --bg-row-hover: #eff1f3;
+  --bg-group: #f0f2f4;
+  --bg-group-hover: #e8ebee;
+  --bg-nav-hover: #e5e8eb;
+  --bg-lit: #dfe3e7;
+  --bg-icon-hover: #e1e4e8;
+  --bg-dialog: #ffffff;
+  --bg-rail-hover: #eff1f3;
+  --bg-rail-on: #e4e7eb;
+  --bg-tip: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f4f5f7;
+  --bg-tile: #ffffff;
+  --bg-well: #e6e9ec;
+  --bg-tag: #e3e6ea;
+  --bg-key: #ffffff;
+  --bg-slot: rgba(15, 17, 20, 0.03);
+  --bg-seg: #e6e9ec;
+  --bg-seg-on: #ffffff;
+  --shadow-seg-on: 0 1px 2px rgba(15, 17, 20, 0.16), 0 0 0 0.5px rgba(15, 17, 20, 0.06);
+  --switch-off: #b9bfc7;
+
+  --line-soft: #e3e6ea;
+  --line-inset: #dde0e4;
+  --line: #dde0e4;
+  --line-card: #dde0e4;
+  --line-strong: #cdd2d8;
+  --line-panel: #aab1ba;
+  --line-selected: #c5cad1;
+  --line-dialog: #c5cad1;
+  --line-card-on: #aab1ba;
+  --line-bold: #b9bfc7;
+  --line-lit: #aab1ba;
+  --line-heavy: #8b929c;
+  --line-picked: #7c838d;
+  --line-dotted: #9097a1;
+
+  --text-lit: #0f1114;
+  --text-strong: #0f1114;
+  --text-name: #14171b;
+  --text: #1b1e24;
+  --text-brand: #2a2f37;
+  --text-soft: #343a43;
+  --text-nav: #454b55;
+  --text-log: #3d434c;
+  --text-muted: #4f5661;
+  --text-subtle: #5b626d;
+  /* 5.21:1 on --bg-app, 4.85:1 on --bg-sidebar, 4.54:1 on a selected row. */
+  --text-faint: #626974;
+
+  --focus-ring: #5b626d;
+
+  /* A state's mark is text too (a count, a match): 4.58:1 on a lit row (--bg-lit), the darkest
+     ground there is; --claude 4.57:1. */
+  --run: #17733d;
+  --run-text: #176b3a;
+  --run-bg: #e5f3ea;
+  --run-line: #b3d9c2;
+  --run-glow: transparent;
+  --crash: #d13b3b;
+  --crash-text: #b42a2a;
+  --crash-bg: #fbecec;
+  --crash-line: #efc6c6;
+  --warn: #7a6300;
+  --warn-text: #6b5600;
+  --warn-bg: #fbf6e3;
+  --warn-line: #e6d9a3;
+  /* 3.18:1 on a lit row, as --claude-idle. */
+  --idle-ring: #777e88;
+  --claude: #a5490d;
+  --claude-text: #954509;
+  /* 4.70:1 on the hatch of a wait on the day's timeline, in the lane picked. */
+  --claude-soft: #733608;
+  --claude-muted: #7b5a40;
+  --claude-bg: #fbf1e8;
+  --claude-bg-hover: #f6e4d3;
+  --claude-line: #ecd5bf;
+  --claude-well: #f6e0cb;
+  --claude-idle: #777e88;
+  --on-claude: #ffffff;
+  --coffee: #b8860b;
+
+  --btn-primary-bg: #dff0e6;
+  --btn-primary-line: #a5d1b7;
+  --btn-primary-text: #14562f;
+  --btn-primary-hover: #d0e9da;
+  --btn-start-text: #17643a;
+  --btn-stop-text: #a32626;
+  --btn-claude-bg: #fbeee1;
+  --btn-claude-line: #e8c7a8;
+  --btn-claude-hover: #f6e3d1;
+
+  --bg-lane-hover: #f1f3f5;
+  --bg-lane-on: #eceef1;
+  --bg-timeline: #eef0f2;
+  --bg-timeline-on: #e2e5e9;
+  --grid: #e3e6ea;
+  --grid-major: #d3d8de;
+  --work: var(--claude);
+  --work-shine: none;
+  --work-text: #ffffff;
+  --data-1: #3b6fd9;
+  --data-2: #8d5bd1;
+  --data-3: #1f8fa8;
+  --data-4: #8f7400;
+  --data-5: #c9477f;
+  --data-6: #6b7590;
+
+  --shadow-popover: 0 24px 60px rgba(15, 17, 20, 0.2);
+  --shadow-dialog: 0 24px 60px rgba(15, 17, 20, 0.18);
+  --shadow-menu: 0 16px 32px -12px rgba(15, 17, 20, 0.28);
+  --shadow-tip: 0 10px 24px rgba(15, 17, 20, 0.14);
+  --shadow-rise: 0 -12px 24px rgba(15, 17, 20, 0.05);
+  --shade-drag: rgba(15, 17, 20, 0.3);
+
+  --scroll-thumb: rgba(15, 17, 20, 0.2);
+  --scroll-thumb-hover: rgba(15, 17, 20, 0.34);
+  --scroll-thumb-active: rgba(15, 17, 20, 0.46);
+
+  color-scheme: light;
+}
+
+:root {
   --radius-panel: 12px;
   --radius-card: 9px;
   --radius-control: 7px;
 
   --font: "Geist Variable", -apple-system, "Helvetica Neue", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
-
-  color-scheme: dark;
 }
 
 /* Geist is bundled; past it, what Windows and Linux have for what it lacks (CJK, symbols):
@@ -57,8 +348,8 @@
   box-sizing: border-box;
 }
 
-/* Scrollbars: a thin, rounded thumb on no track, in the graphite of the theme. The transparent
-   border keeps it off the edges; it brightens while hovered or dragged. */
+/* Scrollbars: a thin, rounded thumb on no track, in the grey of the theme. The transparent
+   border keeps it off the edges; it grows stronger while hovered or dragged. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -73,15 +364,15 @@
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.13) padding-box;
+  background: var(--scroll-thumb) padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.24);
+  background-color: var(--scroll-thumb-hover);
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background-color: rgba(255, 255, 255, 0.32);
+  background-color: var(--scroll-thumb-active);
 }
 
 /* WebView2 and WebKitGTK draw classic scrollbars; the rules above (which both honour) make them
@@ -197,6 +488,29 @@ body.grabbing * {
 :where(button, a[href], select, summary, [tabindex], input[type="checkbox"], input[type="radio"]):focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
+}
+
+/* A dialog opened with the keyboard resting on itself (lib/dialogFocus: openUnfocused) is no
+   place to show: the ring is for its controls. */
+dialog:focus-visible {
+  outline: none;
+}
+
+/* Behind a dialog, in both sets. By selector and not by token: a ::backdrop takes custom
+   properties from its dialog only since WebKit 17.4, and before it a var() here is no dim at all.
+   The light one has no weight of its own, so a dialog with its own shade (a picture shown large)
+   keeps that. */
+dialog::backdrop {
+  background: rgba(8, 9, 11, 0.55);
+}
+
+:where(:root[data-theme="light"]) dialog::backdrop {
+  background: rgba(15, 17, 20, 0.3);
+}
+
+/* What a field asks for, in every field. */
+::placeholder {
+  color: var(--text-faint);
 }
 
 /* While the window is off screen (lib/store: visible), nothing animates. */

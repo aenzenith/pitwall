@@ -66,20 +66,16 @@ function run(): void {
   width: 360px;
   max-width: calc(100vw - 32px);
   padding: 0;
-  border: 1px solid #2f343d;
+  border: 1px solid var(--line-dialog);
   border-radius: 12px;
-  background: #1b1e24;
+  background: var(--bg-dialog);
   color: var(--text);
   font-size: 13px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-dialog);
 }
 
 .migrate-dialog[open] {
   animation: md-pop 0.16s ease-out;
-}
-
-.migrate-dialog::backdrop {
-  background: rgba(8, 9, 11, 0.55);
 }
 
 .md-body {
@@ -115,7 +111,7 @@ function run(): void {
   gap: 3px;
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid #1f2228;
+  border: 1px solid var(--line-inset);
   border-radius: 8px;
   background: var(--bg-log);
   font-family: var(--font-mono);
@@ -131,7 +127,7 @@ function run(): void {
 
 .md-command {
   font-size: 12px;
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .md-database {
@@ -156,17 +152,17 @@ function run(): void {
 }
 
 .md-control:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .md-control.primary {
-  background: #2a3a30;
-  border-color: #3d5446;
-  color: #cdebd8;
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-line);
+  color: var(--btn-primary-text);
 }
 
 .md-control.primary:hover:not(:disabled) {
-  background: #33473a;
+  background: var(--btn-primary-hover);
 }
 
 .md-control:disabled {

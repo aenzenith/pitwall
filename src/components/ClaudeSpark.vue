@@ -29,7 +29,7 @@ const traceLines = Array.from({ length: TRACE_STEPS }, (_, i) => {
 <template>
   <span :class="['spark', state]" aria-hidden="true">
     <Icon v-if="lock && state === 'waiting'" name="lock" :size="16" class="lock" />
-    <ClaudeLogo v-else :size="18" :color="state === 'waiting' ? '#fff7f0' : undefined" />
+    <ClaudeLogo v-else :size="18" :color="state === 'waiting' ? 'var(--on-claude-mark)' : undefined" />
     <svg v-if="state === 'working'" class="trace" viewBox="0 0 30 30">
       <rect v-for="(line, i) in traceLines" :key="i" x="0.75" y="0.75" width="28.5" height="28.5" rx="7.25" :style="line" />
     </svg>
@@ -46,7 +46,7 @@ const traceLines = Array.from({ length: TRACE_STEPS }, (_, i) => {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: rgba(217, 119, 87, 0.12);
+  background: color-mix(in srgb, var(--claude-logo) 12%, transparent);
 }
 
 /* Nothing going on: dimmed. */
@@ -86,16 +86,16 @@ const traceLines = Array.from({ length: TRACE_STEPS }, (_, i) => {
 }
 
 .lock {
-  color: #fff7f0;
+  color: var(--on-claude-mark);
 }
 
 @keyframes ping {
   0% {
-    box-shadow: 0 0 0 0 rgba(240, 136, 62, 0.45);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--claude) 45%, transparent);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 8px rgba(240, 136, 62, 0);
+    box-shadow: 0 0 0 8px transparent;
   }
 }
 

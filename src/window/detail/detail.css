@@ -22,7 +22,7 @@
 }
 
 .icon:hover:not(:disabled) {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -43,7 +43,7 @@
 }
 
 .control:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .control:disabled {
@@ -51,25 +51,25 @@
 }
 
 .control.primary {
-  background: #2a3a30;
-  border-color: #3d5446;
-  color: #cdebd8;
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-line);
+  color: var(--btn-primary-text);
 }
 
 .control.primary:hover {
-  background: #33473a;
+  background: var(--btn-primary-hover);
 }
 
 .control.start {
-  background: #1d2a22;
-  border-color: #2d4537;
-  color: #b9e6c9;
+  background: var(--run-bg);
+  border-color: var(--run-line);
+  color: var(--btn-start-text);
 }
 
 .control.stop {
-  background: #2a1b1b;
-  border-color: #4a2b2b;
-  color: #f2b8b8;
+  background: var(--crash-bg);
+  border-color: var(--crash-line);
+  color: var(--btn-stop-text);
 }
 
 .control.busy {
@@ -123,7 +123,7 @@
 }
 
 .text-button:hover {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 

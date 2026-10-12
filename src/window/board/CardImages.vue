@@ -32,8 +32,9 @@ function thumb(n: number): HTMLElement | null {
         <img :src="image.src" alt="" draggable="false" />
       </button>
       <Spinner v-else :size="11" />
-      <span class="shot-n" aria-hidden="true">{{ image.n }}</span>
-      <button v-if="removable" type="button" class="shot-remove" :aria-label="t('board.dialog.removeImage', { n: image.n })" @click="emit('remove', image.n)">
+      <!-- Laid on the picture, whatever it shows: a dark badge in both themes (`night`). -->
+      <span class="shot-n night" aria-hidden="true">{{ image.n }}</span>
+      <button v-if="removable" type="button" class="shot-remove night" :aria-label="t('board.dialog.removeImage', { n: image.n })" @click="emit('remove', image.n)">
         <Icon name="close" :size="10" />
       </button>
     </li>
@@ -66,7 +67,7 @@ function thumb(n: number): HTMLElement | null {
 }
 
 .shot:hover {
-  border-color: #3f4550;
+  border-color: var(--line-lit);
 }
 
 /* The whole tile opens its image. */
@@ -99,7 +100,7 @@ function thumb(n: number): HTMLElement | null {
   min-width: 14px;
   padding: 0 3px;
   border-radius: 4px;
-  background: rgba(8, 9, 11, 0.78);
+  background: var(--scrim);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -118,7 +119,7 @@ function thumb(n: number): HTMLElement | null {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgba(8, 9, 11, 0.78);
+  background: var(--scrim);
   color: var(--text);
   opacity: 0;
 }
@@ -129,6 +130,6 @@ function thumb(n: number): HTMLElement | null {
 }
 
 .shot-remove:hover {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 </style>

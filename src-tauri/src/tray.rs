@@ -615,10 +615,21 @@ fn plain_icon(dark: bool) -> tauri::Result<Image<'static>> {
     Ok(Image::new_owned(rgba, image.width(), image.height()))
 }
 
-/// Whether the menu bar is dark, for the coloured icons: it follows the system's appearance.
+/// Whether the menu bar is dark, for the coloured icons: as the menu bar item itself is drawn
+/// there. Never as Pitwall's windows are: Settings can give those a theme of their own, which
+/// the bar doesn't take. Dark while there is no item to ask.
 #[cfg(target_os = "macos")]
 fn bar_is_dark<R: Runtime>(app: &AppHandle<R>) -> bool {
-    app.get_webview_window(POPOVER).and_then(|w| w.theme().ok()).is_none_or(|theme| theme == tauri::Theme::Dark)
+    use objc2_app_kit::NSAppearanceCustomization as _;
+
+    let item = app.tray_by_id(TRAY_ID).and_then(|tray| {
+        let dark = tray.with_inner_tray_icon(|inner| {
+            let button = inner.ns_status_item()?.button(objc2::MainThreadMarker::new()?)?;
+            Some(bar::is_dark(&button.effectiveAppearance()))
+        });
+        dark.ok().flatten()
+    });
+    item.unwrap_or(true)
 }
 
 /// Whether the taskbar is dark. It has a mode of its own (Settings › Personalisation › Colours,
@@ -709,17 +720,23 @@ mod bar {
         Retained::into_super(text)
     }
 
+    /// Whether `appearance` is a dark one: the nearer of AppKit's two.
+    pub fn is_dark(appearance: &NSAppearance) -> bool {
+        // SAFETY: the names are AppKit's constants.
+        unsafe {
+            let names = NSArray::from_slice(&[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]);
+            appearance.bestMatchFromAppearancesWithNames(&names).is_some_and(|name| *name == *NSAppearanceNameDarkAqua)
+        }
+    }
+
     /// One of Pitwall's colours for the bar: the first of the pair on a dark bar, the second on a
     /// light one. Which it is, is worked out each time it is drawn, so it follows the bar.
     fn tint([dark, light]: [[f64; 3]; 2]) -> Retained<NSColor> {
         let colour = |[red, green, blue]: [f64; 3]| NSColor::colorWithSRGBRed_green_blue_alpha(red / 255.0, green / 255.0, blue / 255.0, 1.0);
         let (dark, light) = (colour(dark), colour(light));
         let pick = block2::RcBlock::new(move |appearance: NonNull<NSAppearance>| -> NonNull<NSColor> {
-            // SAFETY: AppKit hands the block a live appearance; the names are AppKit's constants.
-            let is_dark = unsafe {
-                let names = NSArray::from_slice(&[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]);
-                appearance.as_ref().bestMatchFromAppearancesWithNames(&names).is_some_and(|name| *name == *NSAppearanceNameDarkAqua)
-            };
+            // SAFETY: AppKit hands the block a live appearance.
+            let is_dark = is_dark(unsafe { appearance.as_ref() });
             NonNull::from(if is_dark { &*dark } else { &*light })
         });
         // SAFETY: `colorWithName:dynamicProvider:` with no name and a block of the signature it

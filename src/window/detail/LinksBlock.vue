@@ -135,7 +135,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer));
 }
 
 .link-row:hover {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .link-open {
@@ -199,17 +199,17 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer));
 .chip {
   height: 24px;
   padding: 0 9px;
-  border: 1px dashed #3a3f48;
+  border: 1px dashed var(--line-bold);
   border-radius: 6px;
   background: transparent;
   font-size: 12px;
-  color: #b4bac3;
+  color: var(--text-nav);
   white-space: nowrap;
 }
 
 .chip:hover {
   border-style: solid;
-  background: #1c1f25;
+  background: var(--bg-well);
   color: var(--text-strong);
 }
 </style>

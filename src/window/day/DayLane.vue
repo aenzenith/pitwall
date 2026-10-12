@@ -99,11 +99,11 @@ function onKey(event: KeyboardEvent): void {
 }
 
 .lane:hover {
-  background: #16191e;
+  background: var(--bg-lane-hover);
 }
 
 .lane.on {
-  background: #181b20;
+  background: var(--bg-lane-on);
 }
 
 /* The ring inside: the list clips anything past its sides. */
@@ -156,13 +156,13 @@ function onKey(event: KeyboardEvent): void {
   position: relative;
   flex-grow: 1;
   height: 46px;
-  background: #15171c;
-  box-shadow: inset 0 0 0 1px #1e2127;
+  background: var(--bg-timeline);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
 .lane.on .track {
-  background: #1b1f26;
-  box-shadow: inset 0 0 0 1px #2c313a;
+  background: var(--bg-timeline-on);
+  box-shadow: inset 0 0 0 1px var(--line-selected);
 }
 
 .grid {
@@ -170,12 +170,12 @@ function onKey(event: KeyboardEvent): void {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #1b1e24;
+  background: var(--grid);
   pointer-events: none;
 }
 
 .grid.major {
-  background: #20242b;
+  background: var(--grid-major);
 }
 
 .now {
@@ -208,7 +208,7 @@ function onKey(event: KeyboardEvent): void {
   top: 4px;
   height: 4px;
   background: var(--run);
-  box-shadow: 0 0 6px rgba(115, 201, 145, 0.45);
+  box-shadow: 0 0 6px var(--run-glow);
 }
 
 .block.work,
@@ -220,13 +220,13 @@ function onKey(event: KeyboardEvent): void {
 }
 
 .block.work {
-  background: linear-gradient(180deg, #f6a560, #e3792e);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  background: var(--work);
+  box-shadow: var(--work-shine);
 }
 
 .block.wait {
-  border: 1px dashed rgba(240, 136, 62, 0.85);
-  background: repeating-linear-gradient(135deg, rgba(240, 136, 62, 0.32) 0 3px, transparent 3px 7px);
+  border: 1px dashed color-mix(in srgb, var(--claude) 85%, transparent);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--claude) 32%, transparent) 0 3px, transparent 3px 7px);
 }
 
 .text {
@@ -241,7 +241,7 @@ function onKey(event: KeyboardEvent): void {
 
 .block.work .text {
   font-weight: 600;
-  color: #2b1405;
+  color: var(--work-text);
 }
 
 .block.wait .text {
@@ -249,7 +249,7 @@ function onKey(event: KeyboardEvent): void {
   font-family: var(--font-mono);
   line-height: 14px;
   text-align: center;
-  color: #f3c29b;
+  color: var(--claude-soft);
 }
 
 /* Too narrow to read: no text at all rather than an ellipsis. */
@@ -282,14 +282,14 @@ function onKey(event: KeyboardEvent): void {
   border-radius: 50%;
   background: var(--text-strong);
   box-shadow:
-    0 0 0 2px #15171c,
-    0 0 0 3px #4a515c;
+    0 0 0 2px var(--bg-timeline),
+    0 0 0 3px var(--line-heavy);
 }
 
 .lane.on .block.commit::before {
   box-shadow:
-    0 0 0 2px #1b1f26,
-    0 0 0 3px #4a515c;
+    0 0 0 2px var(--bg-timeline-on),
+    0 0 0 3px var(--line-heavy);
 }
 
 .block.crash {
@@ -301,8 +301,8 @@ function onKey(event: KeyboardEvent): void {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #2a1b1b;
-  box-shadow: 0 0 0 1px #4a2b2b;
+  background: var(--crash-bg);
+  box-shadow: 0 0 0 1px var(--crash-line);
   color: var(--crash-text);
   font-size: 9px;
   font-weight: 700;

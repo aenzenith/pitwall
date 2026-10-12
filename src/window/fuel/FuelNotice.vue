@@ -33,7 +33,7 @@ defineProps<{ tag: string; title: string }>();
   justify-content: center;
   border-radius: 8px;
   background: var(--bg-control);
-  color: #b4bac3;
+  color: var(--text-nav);
 }
 
 .text {
@@ -51,7 +51,7 @@ defineProps<{ tag: string; title: string }>();
 .body {
   font-size: 12px;
   line-height: 1.5;
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .body :deep(code) {

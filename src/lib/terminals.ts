@@ -2,9 +2,11 @@ import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { watch } from "vue";
 
 import { isLinux, isMac, isWindows, terminalChord } from "./platform";
 import { api } from "./store";
+import { resolvedTheme, themeAt, type ResolvedTheme } from "./theme";
 
 /**
  * The window's terminal views. Each open project terminal gets one xterm, made the first time
@@ -12,37 +14,80 @@ import { api } from "./store";
  * only moves its element in and out of the panel.
  */
 
-const theme: ITheme = {
-  background: "#0b0c0f",
-  foreground: "#c9ced6",
-  cursor: "#e6e8eb",
-  cursorAccent: "#0b0c0f",
-  selectionBackground: "rgba(115, 201, 145, 0.28)",
-  scrollbarSliderBackground: "rgba(255, 255, 255, 0.13)",
-  scrollbarSliderHoverBackground: "rgba(255, 255, 255, 0.24)",
-  scrollbarSliderActiveBackground: "rgba(255, 255, 255, 0.32)",
-  black: "#1c1f25",
-  red: "#f28b8b",
-  green: "#73c991",
-  yellow: "#e5c07b",
-  blue: "#7aa2f7",
-  magenta: "#c49ef0",
-  cyan: "#6fc6d9",
-  white: "#c7ccd3",
-  brightBlack: "#5c626c",
-  brightRed: "#ff9e9e",
-  brightGreen: "#8fdcaa",
-  brightYellow: "#f0d08e",
-  brightBlue: "#94b6ff",
-  brightMagenta: "#d6b4ff",
-  brightCyan: "#8ad9e8",
-  brightWhite: "#f2f3f5",
+/**
+ * What a terminal is drawn with in each theme. xterm paints by itself and takes its colours as
+ * text, so these are written out here rather than read from the tokens: the ground, the text and
+ * the scrollbar are the tokens' (--bg-log, --scroll-thumb…), the sixteen colours a shell's own.
+ * On the light ground each of them is dark enough to read as text; its "white" is a grey.
+ */
+const THEMES: Record<ResolvedTheme, ITheme> = {
+  dark: {
+    background: "#0b0c0f",
+    foreground: "#c9ced6",
+    cursor: "#e6e8eb",
+    cursorAccent: "#0b0c0f",
+    selectionBackground: "rgba(115, 201, 145, 0.28)",
+    scrollbarSliderBackground: "rgba(255, 255, 255, 0.13)",
+    scrollbarSliderHoverBackground: "rgba(255, 255, 255, 0.24)",
+    scrollbarSliderActiveBackground: "rgba(255, 255, 255, 0.32)",
+    black: "#1c1f25",
+    red: "#f28b8b",
+    green: "#73c991",
+    yellow: "#e5c07b",
+    blue: "#7aa2f7",
+    magenta: "#c49ef0",
+    cyan: "#6fc6d9",
+    white: "#c7ccd3",
+    brightBlack: "#5c626c",
+    brightRed: "#ff9e9e",
+    brightGreen: "#8fdcaa",
+    brightYellow: "#f0d08e",
+    brightBlue: "#94b6ff",
+    brightMagenta: "#d6b4ff",
+    brightCyan: "#8ad9e8",
+    brightWhite: "#f2f3f5",
+  },
+  light: {
+    background: "#ffffff",
+    foreground: "#2a2f37",
+    cursor: "#1b1e24",
+    cursorAccent: "#ffffff",
+    selectionBackground: "rgba(23, 117, 62, 0.2)",
+    scrollbarSliderBackground: "rgba(15, 17, 20, 0.2)",
+    scrollbarSliderHoverBackground: "rgba(15, 17, 20, 0.34)",
+    scrollbarSliderActiveBackground: "rgba(15, 17, 20, 0.46)",
+    black: "#1b1e24",
+    red: "#b42a2a",
+    green: "#17753e",
+    yellow: "#8a6a00",
+    blue: "#2f5fc4",
+    magenta: "#8447c4",
+    cyan: "#0f7f96",
+    white: "#646b76",
+    brightBlack: "#6f7680",
+    brightRed: "#d13b3b",
+    brightGreen: "#1f8a4c",
+    brightYellow: "#9c7000",
+    brightBlue: "#3b6fd9",
+    brightMagenta: "#8d5bd1",
+    brightCyan: "#178299",
+    brightWhite: "#8a909a",
+  },
 };
+
+/**
+ * The least contrast text keeps with the terminal's ground. A program that colours its output
+ * for a dark terminal (true colour, near white) would vanish on the light one: there xterm
+ * darkens whatever falls short. On the dark ground every colour is drawn as sent.
+ */
+const CONTRAST: Record<ResolvedTheme, number> = { dark: 1, light: 4.5 };
 
 type View = {
   term: Terminal;
   fit: FitAddon;
   element: HTMLElement;
+  /** The theme it is drawn in. */
+  theme: ResolvedTheme;
   /** Chunks up to this number are already drawn (or in the history being drawn). */
   seq: number;
   /** Chunks that arrive while the history is still loading. */
@@ -65,8 +110,23 @@ void listen<{ id: number; seq: number; data: string }>("terminal", (event) => {
 
 void listen<number>("terminal-exit", (event) => dispose(event.payload));
 
+/**
+ * Draws `view` in the theme of where it stands: the app's, or the dark one inside a night (the
+ * Track page's stage, which stays dark in the light theme). Set only when it changes: xterm
+ * draws everything anew.
+ */
+function paint(view: View): void {
+  const theme = themeAt(view.element);
+  if (view.theme === theme) return;
+  view.theme = theme;
+  view.term.options.theme = THEMES[theme];
+  view.term.options.minimumContrastRatio = CONTRAST[theme];
+}
+
+// The theme changed (Settings, or the system's while it is followed): every open terminal with it.
+watch(resolvedTheme, () => views.forEach(paint));
+
 const options = {
-  theme,
   // Geist Mono is bundled; past it (box drawing, symbols), each system's own terminal font.
   fontFamily: isMac ? '"Geist Mono Variable", ui-monospace, Menlo, monospace' : '"Geist Mono Variable", "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace',
   fontSize: 12,
@@ -104,7 +164,9 @@ function create(id: number): View {
   const element = document.createElement("div");
   element.className = "terminal-host";
 
-  const term = new Terminal(options);
+  // The app's theme for now; `attach` looks again once it stands in its panel.
+  const theme = resolvedTheme.value;
+  const term = new Terminal({ ...options, theme: THEMES[theme], minimumContrastRatio: CONTRAST[theme] });
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(element);
@@ -159,7 +221,7 @@ function create(id: number): View {
   });
   term.onData((data) => void api.writeTerminal(id, data));
 
-  const view: View = { term, fit, element, seq: 0, queue: [], cols: 0, rows: 0 };
+  const view: View = { term, fit, element, theme, seq: 0, queue: [], cols: 0, rows: 0 };
   views.set(id, view);
 
   // History first; chunks that arrived meanwhile are kept only if they are newer than it.
@@ -188,6 +250,7 @@ export function attach(id: number, host: HTMLElement, fit = true, focus = true):
   if (view.element.parentElement !== host) {
     host.replaceChildren(view.element);
   }
+  paint(view);
   if (fit) fitView(id);
   if (focus) view.term.focus();
 }

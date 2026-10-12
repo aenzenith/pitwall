@@ -41,6 +41,9 @@ export type CommandView = CustomCommand & {
 
 export type Status = "running" | "stopped" | "crashed" | "busy";
 
+/** How the app is drawn: as the system is, dark, or light. */
+export type Theme = "system" | "dark" | "light";
+
 export type Project = {
   path: string;
   name: string;
@@ -110,6 +113,8 @@ export type Settings = {
   boardView?: string;
   /** The Track page's own settings (lib/track: TrackSettings), read leniently. */
   track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
+  /** How the app is drawn (lib/theme). */
+  theme: Theme;
 };
 
 /** An open project terminal. */

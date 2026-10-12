@@ -172,6 +172,17 @@ pub fn is_bundled() -> bool {
     std::env::current_exe().is_ok_and(|exe| process::installed_app(&exe, appimage))
 }
 
+/// Draws the windows' native side (menus, scroll bars, form controls) as Settings says:
+/// `light`, `dark`, or as the system is. The pages follow the same setting themselves
+/// (src/lib/theme.ts).
+pub fn apply_theme(app: &AppHandle, theme: &str) {
+    app.set_theme(match theme {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    });
+}
+
 /// Registers the quick-switcher shortcut (or none when off). An error means the keys are
 /// invalid or another app already owns them.
 pub fn apply_shortcut(app: &AppHandle, on: bool, keys: &str) -> Result<(), String> {
@@ -284,6 +295,7 @@ pub fn run() {
             }
             let settings = core.settings();
             let _ = apply_shortcut(app.handle(), settings.shortcut, &settings.shortcut_keys);
+            apply_theme(app.handle(), &settings.theme);
             // The popover and the switcher never bring Pitwall to the front, not even while they
             // are made (`tray::without_activating`).
             #[cfg(target_os = "macos")]

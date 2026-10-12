@@ -224,18 +224,18 @@ function giveMenu(event: MouseEvent): void {
   min-width: 0;
   padding: 10px 12px;
   border-radius: var(--radius-card);
-  background: #1a1d23;
-  border: 1px solid #262a31;
+  background: var(--bg-card);
+  border: 1px solid var(--line-card);
   cursor: pointer;
 }
 
 .bcard:hover {
-  background: #1d2026;
+  background: var(--bg-card-hover);
 }
 
 .bcard.selected {
   background: var(--bg-hover);
-  border-color: #343944;
+  border-color: var(--line-card-on);
 }
 
 /* The keyboard's card: the ring inside, so the column's edge never cuts it. */
@@ -275,8 +275,8 @@ function giveMenu(event: MouseEvent): void {
 .bcard.ghost {
   pointer-events: none;
   background: var(--bg-hover);
-  border-color: #343944;
-  box-shadow: 0 16px 32px -12px rgba(0, 0, 0, 0.75);
+  border-color: var(--line-card-on);
+  box-shadow: var(--shadow-menu);
 }
 
 .bcard-title {
@@ -438,7 +438,7 @@ function giveMenu(event: MouseEvent): void {
 }
 
 .bbtn:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .bbtn:disabled {
@@ -458,13 +458,13 @@ function giveMenu(event: MouseEvent): void {
 
 /* Claude's: its colours, as everything that belongs to Claude. */
 .bbtn.claude {
-  border-color: #4a3523;
-  background: #2a1f17;
-  color: #f3c29b;
+  border-color: var(--btn-claude-line);
+  background: var(--btn-claude-bg);
+  color: var(--claude-soft);
 }
 
 .bbtn.claude:hover:not(:disabled) {
-  background: #35271c;
+  background: var(--btn-claude-hover);
 }
 
 .bbtn.square {
@@ -512,7 +512,7 @@ function giveMenu(event: MouseEvent): void {
 }
 
 .bcard.row:hover {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .bcard.row.selected {
@@ -522,7 +522,7 @@ function giveMenu(event: MouseEvent): void {
 /* Dragged: solid, as a done row is. */
 .bcard.row.ghost {
   background: var(--bg-hover);
-  border-color: #343944;
+  border-color: var(--line-card-on);
 }
 
 .row .bcard-text {
@@ -597,18 +597,18 @@ function giveMenu(event: MouseEvent): void {
 }
 
 .bcard.done:hover {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .bcard.done.selected {
   background: var(--bg-selected);
-  border-color: #2c313a;
+  border-color: var(--line-selected);
 }
 
 /* Dragged: solid like any card under the pointer, so the rows it passes don't show through. */
 .bcard.done.ghost {
   background: var(--bg-hover);
-  border-color: #343944;
+  border-color: var(--line-card-on);
 }
 
 .bcard.done .bcard-spin {

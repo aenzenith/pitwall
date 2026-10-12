@@ -140,7 +140,7 @@ onBeforeUnmount(() => (outputShown.value = false));
   overflow: clip;
   background: var(--bg-detail);
   border-top: 1px solid var(--line);
-  box-shadow: 0 -12px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-rise);
 }
 
 /* Collapsing and expanding slide (COLLAPSE_MS in lib/panel); a drag follows the pointer. */
@@ -179,7 +179,7 @@ onBeforeUnmount(() => (outputShown.value = false));
 }
 
 .collapse:hover {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -219,12 +219,12 @@ onBeforeUnmount(() => (outputShown.value = false));
   height: 3px;
   margin-left: -18px;
   border-radius: 2px;
-  background: #2f343d;
+  background: var(--line-dialog);
 }
 
 .grip:hover::after,
 .grip:focus-visible::after {
-  background: #4a515c;
+  background: var(--line-heavy);
 }
 
 /* Output tabs: the active one is white, the rest faded; nothing more. */
@@ -252,7 +252,7 @@ onBeforeUnmount(() => (outputShown.value = false));
 }
 
 .tab.on {
-  color: #fff;
+  color: var(--text-lit);
 }
 
 .up {
@@ -273,11 +273,11 @@ onBeforeUnmount(() => (outputShown.value = false));
   padding: 12px;
   border-radius: 8px;
   background: var(--bg-log);
-  border: 1px solid #1f2228;
+  border: 1px solid var(--line-inset);
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.7;
-  color: #a9afb8;
+  color: var(--text-log);
   display: flex;
   flex-direction: column;
   overflow: auto;

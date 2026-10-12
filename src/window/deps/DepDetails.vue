@@ -467,7 +467,7 @@ const scanShown = ref<{ ecosystem: string; view: ScanView } | null>(null);
 .dep-failure-line {
   max-width: 100%;
   padding: 7px 10px;
-  border: 1px solid #1f2228;
+  border: 1px solid var(--line-inset);
   border-radius: 8px;
   background: var(--bg-log);
   font-family: var(--font-mono);

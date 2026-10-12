@@ -1,0 +1,26 @@
+{
+  "since": "1.9.0",
+  "notes": [
+    {
+      "kind": "new",
+      "title": {
+        "en": "Light theme",
+        "tr": "Açık tema",
+        "de": "Helles Design",
+        "es": "Tema claro",
+        "ru": "Светлая тема",
+        "ja": "ライトテーマ",
+        "zh-Hans": "浅色主题"
+      },
+      "body": {
+        "en": "Settings › General: follow the system, or choose dark or light.",
+        "tr": "Ayarlar › Genel: sistemle aynı, koyu ya da açık.",
+        "de": "Einstellungen › Allgemein: dem System folgen oder Dunkel oder Hell wählen.",
+        "es": "Ajustes › General: sigue al sistema o elige oscuro o claro.",
+        "ru": "Настройки › Основные: как в системе, тёмная или светлая.",
+        "ja": "設定 › 一般：システムに合わせるか、ダークまたはライトを選べます。",
+        "zh-Hans": "设置 › 通用：跟随系统，或选择深色、浅色。"
+      }
+    }
+  ]
+}

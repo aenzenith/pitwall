@@ -283,6 +283,6 @@ function openFuel(): void {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #c3c8cf;
+  color: var(--text-soft);
 }
 </style>

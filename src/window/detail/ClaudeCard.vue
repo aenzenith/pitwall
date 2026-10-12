@@ -53,7 +53,7 @@ const claudeTitle = computed(() => {
 }
 
 .card.hot .card-sub {
-  color: #c9a88c;
+  color: var(--claude-muted);
 }
 
 .card-text {
@@ -81,7 +81,7 @@ const claudeTitle = computed(() => {
   border: 0;
   border-radius: var(--radius-control);
   background: var(--claude);
-  color: #1a110a;
+  color: var(--on-claude);
   font-size: 12px;
   font-weight: 600;
 }

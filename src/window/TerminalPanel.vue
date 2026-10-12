@@ -382,7 +382,7 @@ defineExpose({ openTerminal, collapse });
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--line);
-  box-shadow: 0 -12px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-rise);
 }
 
 /* The Track page's: over the page's bottom, on a ground of its own, up to the page's bar. */
@@ -427,11 +427,11 @@ defineExpose({ openTerminal, collapse });
   height: 3px;
   margin-left: -18px;
   border-radius: 2px;
-  background: #2f343d;
+  background: var(--line-dialog);
 }
 
 .grip:hover::after {
-  background: #4a515c;
+  background: var(--line-heavy);
 }
 
 /* The handle's own focus: the bar in the focus ring's colour. */
@@ -491,7 +491,7 @@ defineExpose({ openTerminal, collapse });
 }
 
 .tab.on {
-  color: #fff;
+  color: var(--text-lit);
 }
 
 .x {
@@ -513,7 +513,7 @@ defineExpose({ openTerminal, collapse });
 
 .x:hover {
   color: var(--text-strong) !important;
-  background: #262a33;
+  background: var(--bg-icon-hover);
 }
 
 .icon {
@@ -530,7 +530,7 @@ defineExpose({ openTerminal, collapse });
 }
 
 .icon:hover:not(:disabled) {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -554,7 +554,7 @@ defineExpose({ openTerminal, collapse });
 }
 
 .action:hover:not(:disabled) {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -597,7 +597,7 @@ defineExpose({ openTerminal, collapse });
   padding: 8px 4px 8px 10px;
   border-radius: 8px;
   background: var(--bg-log);
-  border: 1px solid #1f2228;
+  border: 1px solid var(--line-inset);
   display: flex;
   overflow: clip;
   transition: opacity 160ms ease;

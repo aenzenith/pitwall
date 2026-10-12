@@ -103,7 +103,7 @@ const stats = computed(() => {
   position: relative;
   height: 14px;
   border-radius: 4px;
-  background: #1c1f25;
+  background: var(--bg-well);
   overflow: hidden;
 }
 
@@ -116,15 +116,15 @@ const stats = computed(() => {
 /* The hours, faintly, under the spans. */
 .hour {
   width: 1px;
-  background: #262a31;
+  background: var(--line-card);
 }
 
 .span.work {
-  background: linear-gradient(180deg, #f6a560, #e3792e);
+  background: var(--work);
 }
 
 .span.wait {
-  background: repeating-linear-gradient(135deg, rgba(240, 136, 62, 0.55) 0 2px, transparent 2px 5px);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--claude) 55%, transparent) 0 2px, transparent 2px 5px);
 }
 
 .now {

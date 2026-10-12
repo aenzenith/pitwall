@@ -86,7 +86,7 @@ function toggleServer(): void {
 .state-dot.running {
   border: 0;
   background: var(--run);
-  box-shadow: 0 0 0 4px rgba(115, 201, 145, 0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--run) 15%, transparent);
 }
 
 .state-dot.crashed {

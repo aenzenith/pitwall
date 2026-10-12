@@ -122,7 +122,7 @@ function commandMenu(c: CommandView, event: MouseEvent): void {
 }
 
 .cmd-row.focused {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .mark {
@@ -179,7 +179,7 @@ function commandMenu(c: CommandView, event: MouseEvent): void {
 .cmd-state {
   font-size: 12px;
   white-space: nowrap;
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .confirm-text {
@@ -189,7 +189,7 @@ function commandMenu(c: CommandView, event: MouseEvent): void {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
-  color: #f3c29b;
+  color: var(--claude-soft);
 }
 
 .small-btn {

@@ -1081,7 +1081,7 @@ const ghostStyle = computed(() =>
 
 .board-add:hover:not(:disabled),
 .board-control:hover {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .board-add svg {
@@ -1174,8 +1174,18 @@ const ghostStyle = computed(() =>
 }
 
 .board-views button.on {
-  background: #2c3039;
+  background: var(--bg-control-on);
   color: var(--text-strong);
+}
+
+/* In the light theme, the segmented control the settings have: a grey trough, the one chosen white. */
+:root[data-theme="light"] .board-views {
+  background: var(--bg-seg);
+}
+
+:root[data-theme="light"] .board-views button.on {
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
 }
 
 .board-add {

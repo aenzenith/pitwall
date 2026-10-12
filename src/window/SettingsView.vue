@@ -7,13 +7,14 @@ import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
+import ThemeSwitch from "../components/ThemeSwitch.vue";
 import { useBackdropClose } from "../lib/dialog";
 import { ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { keys, shortcutModifiers } from "../lib/platform";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
-import type { ExtensionStatus, Settings } from "../lib/types";
+import type { ExtensionStatus, Settings, Theme } from "../lib/types";
 import TrackOptions from "./track/TrackOptions.vue";
 
 type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "track" | "about";
@@ -72,6 +73,12 @@ function onRailKey(event: KeyboardEvent, id: Tab): void {
   if (next !== null) tab.value = railOrder[next];
 }
 
+/** The tab's room: a long tab (General) scrolls in it, and each tab opens at its top. */
+const body = ref<HTMLFormElement | null>(null);
+watch(tab, () => {
+  if (body.value) body.value.scrollTop = 0;
+});
+
 const version = ref("");
 const form = reactive<Settings>({
   language: "system",
@@ -93,6 +100,7 @@ const form = reactive<Settings>({
   autoUpdate: true,
   projects: {},
   order: [],
+  theme: "system",
 });
 const error = ref("");
 const hookBusy = ref(false);
@@ -351,6 +359,14 @@ function setFuelEvery(minutes: number): void {
   form.fuelEvery = minutes;
   void save();
 }
+
+/** The theme switch's pick: saved here, whatever it is made of (its own `change`s are kept from
+ * the form, which would save a second time). */
+function setTheme(theme: Theme): void {
+  if (form.theme === theme) return;
+  form.theme = theme;
+  void save();
+}
 </script>
 
 <template>
@@ -396,7 +412,7 @@ function setFuelEvery(minutes: number): void {
         </button>
       </nav>
 
-      <form class="body" @submit.prevent="save" @change="save">
+      <form ref="body" class="body" @submit.prevent="save" @change="save">
         <fieldset v-show="tab === 'servers'" :aria-label="t('settings.servers')">
           <label class="field">
             <span>{{ t("common.script") }}</span>
@@ -552,8 +568,15 @@ function setFuelEvery(minutes: number): void {
           </div>
         </fieldset>
 
+        <!-- Longer than the dialog: it scrolls in the tab's room, its later parts under their labels. -->
         <fieldset v-show="tab === 'general'" :aria-label="t('settings.general')">
-          <label class="field">
+          <div id="settings-appearance" class="section-label">{{ t("settings.appearance") }}</div>
+          <!-- Its pick is saved by `setTheme`: a `change` of its own never reaches the form. -->
+          <div class="theme" role="group" aria-labelledby="settings-appearance" @change.stop>
+            <ThemeSwitch :model-value="form.theme" @update:model-value="setTheme" />
+          </div>
+
+          <label class="field section">
             <span>{{ t("settings.language") }}</span>
             <select v-model="form.language">
               <option value="system">{{ t("settings.languageSystem", { language: languageName(snapshot?.systemLanguage ?? "en") }) }}</option>
@@ -681,22 +704,18 @@ function setFuelEvery(minutes: number): void {
   max-width: calc(100vw - 48px);
   max-height: calc(100vh - 48px);
   padding: 0;
-  border: 1px solid #2f343d;
+  border: 1px solid var(--line-dialog);
   border-radius: 12px;
-  background: #1b1e24;
+  background: var(--bg-dialog);
   color: var(--text);
   font-size: 13px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-dialog);
 }
 
 .settings[open] {
   display: flex;
   flex-direction: column;
   animation: pop 0.16s ease-out;
-}
-
-.settings::backdrop {
-  background: rgba(8, 9, 11, 0.55);
 }
 
 .head {
@@ -727,7 +746,7 @@ function setFuelEvery(minutes: number): void {
 }
 
 .close:hover {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -757,16 +776,16 @@ function setFuelEvery(minutes: number): void {
   border-radius: var(--radius-control);
   background: transparent;
   font-size: 13px;
-  color: #b4bac3;
+  color: var(--text-nav);
   text-align: left;
 }
 
 .rail button:hover {
-  background: #23272e;
+  background: var(--bg-rail-hover);
 }
 
 .rail button.on {
-  background: #2a2f37;
+  background: var(--bg-rail-on);
   color: var(--text-strong);
 }
 
@@ -795,6 +814,7 @@ function setFuelEvery(minutes: number): void {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes pop {
@@ -804,13 +824,31 @@ function setFuelEvery(minutes: number): void {
   }
 }
 
+/* At its own height: a tab longer than its room scrolls there, it is never squeezed. */
 fieldset {
+  flex-shrink: 0;
+  min-width: 0;
   margin: 0;
   padding: 20px 0 0;
   border: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* General's parts: a hairline above each. */
+.section {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+/* A part's label sits closer to what it names than the rows do to each other. */
+fieldset > .section-label {
+  margin-bottom: -6px;
+}
+
+.theme {
+  display: flex;
 }
 
 .field {
@@ -888,7 +926,7 @@ select {
 }
 
 .play:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
   color: var(--text-strong);
 }
 
@@ -956,7 +994,7 @@ code {
   padding: 2px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: var(--bg-input);
+  background: var(--bg-seg);
 }
 
 .seg button {
@@ -974,7 +1012,8 @@ code {
 }
 
 .seg button[aria-pressed="true"] {
-  background: #2a2f37;
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
   color: var(--text-strong);
 }
 
@@ -985,12 +1024,12 @@ code {
   border-radius: 9px;
   font-size: 11px;
   font-weight: 600;
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-muted);
 }
 
 .badge.on {
-  background: #1d2a22;
+  background: var(--run-bg);
   color: var(--run);
 }
 
@@ -1085,17 +1124,17 @@ code {
 }
 
 .control:hover {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .control.primary {
-  background: #2a3a30;
-  border-color: #3d5446;
-  color: #cdebd8;
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-line);
+  color: var(--btn-primary-text);
 }
 
 .control.primary:hover {
-  background: #33473a;
+  background: var(--btn-primary-hover);
 }
 
 /* A busy button's label stays, unseen, under its spinner. */
@@ -1205,6 +1244,6 @@ code {
 }
 
 .coffee :deep(svg) {
-  color: #ffdd00;
+  color: var(--coffee);
 }
 </style>

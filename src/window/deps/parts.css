@@ -60,7 +60,7 @@
 }
 
 .dep-btn:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .dep-btn:disabled {

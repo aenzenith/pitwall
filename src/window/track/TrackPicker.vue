@@ -293,7 +293,7 @@ onBeforeUnmount(hide);
 /* Quiet, as the settings button beside it. */
 .tpick-button:hover,
 .tpick-button[aria-expanded="true"] {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -322,7 +322,7 @@ onBeforeUnmount(hide);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-panel);
   background: var(--bg-panel);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-popover);
   transform-origin: top right;
 }
 
@@ -365,12 +365,12 @@ onBeforeUnmount(hide);
 }
 
 .tpick-option.on {
-  border-color: #3a404a;
-  background: #1b1e24;
+  border-color: var(--line-bold);
+  background: var(--bg-row-hover);
 }
 
 .tpick-option.picked {
-  border-color: #5b626d;
+  border-color: var(--line-picked);
   background: var(--bg-selected);
 }
 
@@ -390,7 +390,7 @@ onBeforeUnmount(hide);
 }
 
 .road {
-  stroke: #262b33;
+  stroke: var(--line-strong);
   stroke-width: 5;
   stroke-linejoin: round;
   stroke-linecap: round;

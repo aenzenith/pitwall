@@ -125,7 +125,7 @@ export default defineComponent({
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--bg-log);
-  border: 1px solid #1f2228;
+  border: 1px solid var(--line-inset);
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;

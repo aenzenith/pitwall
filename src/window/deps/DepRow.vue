@@ -80,12 +80,12 @@ const summary = computed(() => rowSummary(props.report, props.hidden, props.now)
 }
 
 .dep-row:hover:not(.selected) {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .dep-row.selected {
   background: var(--bg-selected);
-  box-shadow: inset 0 0 0 1px #2c313a;
+  box-shadow: inset 0 0 0 1px var(--line-selected);
 }
 
 /* The keyboard's row: the ring inside, so neighbours and the list's edge never cut it. */
@@ -128,7 +128,7 @@ const summary = computed(() => rowSummary(props.report, props.hidden, props.now)
 }
 
 .dep-summary.plain {
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .dep-summary.dim {

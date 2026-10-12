@@ -263,22 +263,18 @@ function rescan(): void {
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 64px);
   padding: 0;
-  border: 1px solid #2f343d;
+  border: 1px solid var(--line-dialog);
   border-radius: 12px;
-  background: #1b1e24;
+  background: var(--bg-dialog);
   color: var(--text);
   font-size: 13px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-dialog);
   overflow: hidden;
 }
 
 .scan-dialog[open] {
   display: flex;
   animation: sd-pop 0.16s ease-out;
-}
-
-.scan-dialog::backdrop {
-  background: rgba(8, 9, 11, 0.55);
 }
 
 @keyframes sd-pop {
@@ -344,7 +340,7 @@ function rescan(): void {
   display: flex;
   gap: 2px;
   padding: 3px;
-  border: 1px solid #262a31;
+  border: 1px solid var(--line-card);
   border-radius: 9px;
   background: var(--bg-detail);
 }
@@ -370,6 +366,17 @@ function rescan(): void {
 .sd-views button.on {
   background: var(--line-strong);
   color: var(--text-strong);
+}
+
+/* In the light theme, the segmented control the settings have: a grey trough, the one chosen white. */
+:root[data-theme="light"] .sd-views {
+  border-color: var(--line-strong);
+  background: var(--bg-seg);
+}
+
+:root[data-theme="light"] .sd-views button.on {
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
 }
 
 .sd-count {
@@ -544,7 +551,7 @@ function rescan(): void {
 .sd-about-text {
   font-size: 12px;
   line-height: 18px;
-  color: #c7ccd3;
+  color: var(--text-soft);
   overflow-wrap: anywhere;
   cursor: text;
 }
@@ -567,7 +574,7 @@ function rescan(): void {
   background: transparent;
   font-size: 11px;
   color: var(--text-muted);
-  text-decoration: underline dotted #5d636d;
+  text-decoration: underline dotted var(--line-dotted);
   text-underline-offset: 3px;
 }
 
@@ -619,7 +626,7 @@ function rescan(): void {
 }
 
 .sd-control:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .sd-control:disabled {

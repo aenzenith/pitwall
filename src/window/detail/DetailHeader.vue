@@ -90,7 +90,7 @@ const emit = defineEmits<{ toggle: [] }>();
 .git {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: #c7ccd3;
+  color: var(--text-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

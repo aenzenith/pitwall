@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
   background: var(--bg-detail);
   box-shadow:
     0 -1px 0 var(--line),
-    0 -12px 24px rgba(0, 0, 0, 0.22);
+    var(--shadow-rise);
 }
 
 /* Collapsing and expanding slide (COLLAPSE_MS in lib/panel); a drag follows the pointer. */
@@ -200,11 +200,11 @@ onBeforeUnmount(() => {
   height: 3px;
   margin-left: -18px;
   border-radius: 2px;
-  background: #2f343d;
+  background: var(--line-dialog);
 }
 
 .grip:hover::after {
-  background: #4a515c;
+  background: var(--line-heavy);
 }
 
 /* The handle's own focus: the bar in the focus ring's colour. */
@@ -242,7 +242,7 @@ onBeforeUnmount(() => {
 }
 
 .icon:hover {
-  background: #262a33;
+  background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
   padding: 8px 4px 8px 10px;
   border-radius: 8px;
   background: var(--bg-log);
-  border: 1px solid #1f2228;
+  border: 1px solid var(--line-inset);
   display: flex;
   overflow: clip;
   transition: opacity 160ms ease;

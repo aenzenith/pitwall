@@ -91,7 +91,7 @@ function focusPart(event: FocusEvent, part: SplitPart): void {
   gap: 2px;
   height: 8px;
   margin-top: 4px;
-  background: #15171c;
+  background: var(--bg-timeline);
 }
 
 .part {
@@ -102,6 +102,11 @@ function focusPart(event: FocusEvent, part: SplitPart): void {
 
 .part:hover {
   filter: brightness(1.2);
+}
+
+/* On a light ground brighter is fainter: the bar under the pointer goes darker there. */
+:root[data-theme="light"] .part:hover {
+  filter: brightness(0.82);
 }
 
 .split-legend {

@@ -250,7 +250,7 @@ function rehome(event: MouseEvent, path: string): void {
   flex-shrink: 0;
   margin: 0;
   padding: 20px 20px 8px;
-  border-bottom: 1px solid #1e2127;
+  border-bottom: 1px solid var(--line-soft);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -269,7 +269,7 @@ function rehome(event: MouseEvent, path: string): void {
 .blane {
   align-items: start;
   padding: 14px 20px;
-  border-bottom: 1px solid #1e2127;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 /* The lane of the selected card. */
@@ -300,7 +300,7 @@ function rehome(event: MouseEvent, path: string): void {
 }
 
 .blane-name:hover {
-  background: #1f2228;
+  background: var(--bg-nav-hover);
 }
 
 .blane-name-text {
@@ -348,7 +348,7 @@ function rehome(event: MouseEvent, path: string): void {
 }
 
 .blane-rehome:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .blane-rehome:disabled {
@@ -402,7 +402,7 @@ function rehome(event: MouseEvent, path: string): void {
 }
 
 .blane-more:hover {
-  background: #1f2228;
+  background: var(--bg-nav-hover);
   color: var(--text-muted);
 }
 
@@ -433,15 +433,15 @@ function rehome(event: MouseEvent, path: string): void {
   min-width: 0;
   height: 26px;
   padding: 0 9px;
-  border: 1px solid #4a3523;
+  border: 1px solid var(--btn-claude-line);
   border-radius: var(--radius-control);
-  background: #2a1f17;
-  color: #f3c29b;
+  background: var(--btn-claude-bg);
+  color: var(--claude-soft);
   font-size: 12px;
 }
 
 .blane-give:hover:not(:disabled) {
-  background: #35271c;
+  background: var(--btn-claude-hover);
 }
 
 .blane-give svg,
@@ -489,7 +489,7 @@ function rehome(event: MouseEvent, path: string): void {
 }
 
 .blanes-hidden:hover {
-  background: #1f2228;
+  background: var(--bg-nav-hover);
   color: var(--text-muted);
 }
 </style>

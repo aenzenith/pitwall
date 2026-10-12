@@ -50,7 +50,7 @@
   max-width: 50%;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .path {

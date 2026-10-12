@@ -178,12 +178,12 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
 }
 
 .srow:hover {
-  background: #1b1e24;
+  background: var(--bg-row-hover);
 }
 
 .srow.selected {
   background: var(--bg-selected);
-  box-shadow: inset 0 0 0 1px #2c313a;
+  box-shadow: inset 0 0 0 1px var(--line-selected);
 }
 
 /* The keyboard's row: the ring inside, so neighbours and the list's edge never cut it. */
@@ -291,7 +291,7 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
 }
 
 .status.live {
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .status.quiet {

@@ -881,8 +881,10 @@ canvas {
   padding: 0 6px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
+  /* The window's ground, the circuit showing through: on the stage, night in both themes, and so
+     are the lines of a tag's states below. */
   background: rgba(17, 19, 23, 0.88);
-  color: #c7ccd3;
+  color: var(--text-soft);
   font-family: var(--font-mono);
   font-size: 11px;
   white-space: nowrap;
@@ -891,7 +893,7 @@ canvas {
 
 .tag:hover,
 .tag.on {
-  border-color: #5b626d;
+  border-color: var(--line-picked);
   color: var(--text-strong);
 }
 
@@ -1056,19 +1058,19 @@ canvas {
 
 @keyframes track-ping {
   from {
-    box-shadow: 0 0 0 0 rgba(240, 136, 62, 0.6);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--claude) 60%, transparent);
   }
   to {
-    box-shadow: 0 0 0 13px rgba(240, 136, 62, 0);
+    box-shadow: 0 0 0 13px transparent;
   }
 }
 
 @keyframes track-alarm {
   from {
-    box-shadow: 0 0 0 0 rgba(241, 76, 76, 0.55);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--crash) 55%, transparent);
   }
   to {
-    box-shadow: 0 0 0 12px rgba(241, 76, 76, 0);
+    box-shadow: 0 0 0 12px transparent;
   }
 }
 

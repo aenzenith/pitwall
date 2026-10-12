@@ -123,7 +123,7 @@ onBeforeUnmount(() => motionQuery?.removeEventListener("change", onMotion));
   padding: 2px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: var(--bg-input);
+  background: var(--bg-seg);
 }
 
 .seg button {
@@ -141,7 +141,8 @@ onBeforeUnmount(() => motionQuery?.removeEventListener("change", onMotion));
 }
 
 .seg button[aria-pressed="true"] {
-  background: #2a2f37;
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
   color: var(--text-strong);
 }
 
@@ -155,7 +156,7 @@ onBeforeUnmount(() => motionQuery?.removeEventListener("change", onMotion));
   height: 14px;
   margin: 0;
   border-radius: 7px;
-  background: #3a3f48;
+  background: var(--switch-off);
   transition: background 0.15s;
 }
 

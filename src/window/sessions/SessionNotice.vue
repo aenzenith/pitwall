@@ -50,7 +50,7 @@ withDefaults(defineProps<{ tag: string; title: string; icon?: "claude" | "info" 
   justify-content: center;
   border-radius: 8px;
   background: var(--bg-control);
-  color: #b4bac3;
+  color: var(--text-nav);
 }
 
 .compact .badge {
@@ -74,7 +74,7 @@ withDefaults(defineProps<{ tag: string; title: string; icon?: "claude" | "info" 
 .body {
   font-size: 12px;
   line-height: 1.5;
-  color: #c7ccd3;
+  color: var(--text-soft);
 }
 
 .action {

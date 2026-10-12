@@ -262,7 +262,7 @@ const fuel = computed(() => {
 }
 
 .card.hot .card-sub {
-  color: #c9a88c;
+  color: var(--claude-muted);
 }
 
 /* Waiting on you: the project card's button (detail/ClaudeCard), filled in Claude's colour. */
@@ -273,7 +273,7 @@ const fuel = computed(() => {
   border: 0;
   border-radius: var(--radius-control);
   background: var(--claude);
-  color: #1a110a;
+  color: var(--on-claude);
   font-size: 12px;
   font-weight: 600;
 }

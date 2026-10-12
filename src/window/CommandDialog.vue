@@ -77,20 +77,16 @@ function cancel(): void {
   width: 440px;
   max-width: calc(100vw - 32px);
   padding: 0;
-  border: 1px solid #2f343d;
+  border: 1px solid var(--line-dialog);
   border-radius: 12px;
-  background: #1b1e24;
+  background: var(--bg-dialog);
   color: var(--text);
   font-size: 13px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-dialog);
 }
 
 .dialog[open] {
   animation: pop 0.16s ease-out;
-}
-
-.dialog::backdrop {
-  background: rgba(8, 9, 11, 0.55);
 }
 
 .body {
@@ -171,7 +167,7 @@ function cancel(): void {
 .note {
   margin: 0;
   font-size: 12px;
-  color: #f3c29b;
+  color: var(--claude-soft);
 }
 
 .hint {
@@ -202,17 +198,17 @@ function cancel(): void {
 }
 
 .control:hover {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .control.primary {
-  background: #2a3a30;
-  border-color: #3d5446;
-  color: #cdebd8;
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-line);
+  color: var(--btn-primary-text);
 }
 
 .control.primary:hover {
-  background: #33473a;
+  background: var(--btn-primary-hover);
 }
 
 @keyframes pop {

@@ -114,6 +114,7 @@ function toggle(): void {
   padding: 14px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
+  /* The panel's ground, the circuit showing through a little: on the stage, night in both themes. */
   background: rgba(22, 24, 29, 0.94);
 }
 
@@ -169,7 +170,7 @@ function toggle(): void {
 .state.running {
   border: 0;
   background: var(--run);
-  box-shadow: 0 0 0 3px rgba(115, 201, 145, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--run) 15%, transparent);
 }
 
 .state.crashed {
@@ -225,7 +226,7 @@ function toggle(): void {
 }
 
 .control:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .control svg {
@@ -234,15 +235,15 @@ function toggle(): void {
 
 /* Start, stop and the wait between them, coloured as in the project's details. */
 .control.start {
-  background: #1d2a22;
-  border-color: #2d4537;
-  color: #b9e6c9;
+  background: var(--run-bg);
+  border-color: var(--run-line);
+  color: var(--btn-start-text);
 }
 
 .control.stop {
-  background: #2a1b1b;
-  border-color: #4a2b2b;
-  color: #f2b8b8;
+  background: var(--crash-bg);
+  border-color: var(--crash-line);
+  color: var(--btn-stop-text);
 }
 
 .control.busy {
@@ -317,7 +318,7 @@ kbd {
 }
 
 .card-session.waits:hover .session-name {
-  color: #f3c29b;
+  color: var(--claude-soft);
 }
 
 /* A line's text. */
@@ -355,15 +356,15 @@ kbd {
   flex-shrink: 0;
   height: 24px;
   padding: 0 8px;
-  border: 1px solid #4a3523;
+  border: 1px solid var(--btn-claude-line);
   border-radius: 6px;
-  background: #2a1f17;
-  color: #f3c29b;
+  background: var(--btn-claude-bg);
+  color: var(--claude-soft);
   font-size: 12px;
 }
 
 .claude-open:hover {
-  background: #36281d;
+  background: var(--btn-claude-hover);
 }
 
 .ring {

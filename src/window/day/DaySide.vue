@@ -169,7 +169,7 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
   gap: 3px;
   padding: 10px 12px;
   border-radius: var(--radius-card);
-  background: #181b20;
+  background: var(--bg-tile);
   border: 1px solid var(--line);
 }
 
@@ -291,15 +291,15 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
   display: flex;
   border-radius: 3px;
   overflow: hidden;
-  background: #1c1f25;
+  background: var(--bg-well);
 }
 
 .mini-work {
-  background: linear-gradient(180deg, #f6a560, #e3792e);
+  background: var(--work);
 }
 
 .mini-wait {
-  background: repeating-linear-gradient(135deg, rgba(240, 136, 62, 0.55) 0 2px, transparent 2px 4px);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--claude) 55%, transparent) 0 2px, transparent 2px 4px);
 }
 
 .line {
@@ -313,7 +313,7 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
 .line-text {
   flex-grow: 1;
   min-width: 0;
-  color: #c7ccd3;
+  color: var(--text-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

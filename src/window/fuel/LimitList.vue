@@ -75,7 +75,7 @@ const rows = computed<Row[]>(() => {
   grid-template-columns: subgrid;
   align-items: center;
   padding: 7px 2px;
-  border-bottom: 1px solid #1e2127;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .name {

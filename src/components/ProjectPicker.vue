@@ -258,13 +258,13 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-control);
   background: var(--bg-control);
   font-size: 12px;
-  color: #c7ccd3;
+  color: var(--text-soft);
   white-space: nowrap;
 }
 
 .ppick-button:hover,
 .ppick-button[aria-expanded="true"] {
-  background: #2c3039;
+  background: var(--bg-control-on);
 }
 
 .ppick-button svg {
@@ -309,7 +309,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-card);
   background: var(--bg-control);
-  box-shadow: 0 16px 32px -12px rgba(0, 0, 0, 0.75);
+  box-shadow: var(--shadow-menu);
 }
 
 /* The keyboard's place is the lit option, not a ring round the list. */
@@ -325,12 +325,12 @@ onBeforeUnmount(() => {
   padding: 0 10px 0 8px;
   border-radius: 6px;
   font-size: 13px;
-  color: #c7ccd3;
+  color: var(--text-soft);
   white-space: nowrap;
 }
 
 .ppick-option.on {
-  background: #2c3039;
+  background: var(--bg-control-on);
   color: var(--text-strong);
 }
 

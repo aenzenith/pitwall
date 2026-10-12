@@ -71,20 +71,16 @@ async function remove(): Promise<void> {
   width: 360px;
   max-width: calc(100vw - 32px);
   padding: 0;
-  border: 1px solid #2f343d;
+  border: 1px solid var(--line-dialog);
   border-radius: 12px;
-  background: #1b1e24;
+  background: var(--bg-dialog);
   color: var(--text);
   font-size: 13px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-dialog);
 }
 
 .delete-dialog[open] {
   animation: dd-pop 0.16s ease-out;
-}
-
-.delete-dialog::backdrop {
-  background: rgba(8, 9, 11, 0.55);
 }
 
 .dd-body {
@@ -143,7 +139,7 @@ async function remove(): Promise<void> {
 }
 
 .dd-control:hover:not(:disabled) {
-  background: #2c3039;
+  background: var(--bg-control-hover);
 }
 
 .dd-control.danger {
