@@ -81,8 +81,11 @@ const form = reactive<Settings>({
   openUrlOnStart: false,
   notify: true,
   fuelAlert: true,
+  fuelInBar: true,
   fuelInPopover: true,
   fuelEvery: 15,
+  serversInBar: true,
+  claudesInBar: true,
   sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "", commandDone: "" },
   launchAtLogin: false,
   shortcut: true,
@@ -418,6 +421,10 @@ function setFuelEvery(minutes: number): void {
             <input v-model="form.openUrlOnStart" type="checkbox" />
             <span>{{ t("settings.openUrlOnStart") }}</span>
           </label>
+          <label class="check">
+            <input v-model="form.serversInBar" type="checkbox" />
+            <span>{{ t("settings.serversInBar") }}</span>
+          </label>
         </fieldset>
 
         <fieldset v-show="tab === 'claude'" :aria-label="t('settings.claude')">
@@ -429,6 +436,14 @@ function setFuelEvery(minutes: number): void {
           <label class="check">
             <input v-model="form.fuelAlert" type="checkbox" />
             <span>{{ t("settings.fuelAlert") }}</span>
+          </label>
+          <label class="check">
+            <input v-model="form.claudesInBar" type="checkbox" />
+            <span>{{ t("settings.claudesInBar") }}</span>
+          </label>
+          <label class="check">
+            <input v-model="form.fuelInBar" type="checkbox" />
+            <span>{{ t("settings.fuelInBar") }}</span>
           </label>
           <label class="check">
             <input v-model="form.fuelInPopover" type="checkbox" />

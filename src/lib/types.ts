@@ -81,10 +81,16 @@ export type Settings = {
   notify: boolean;
   /** Notify when the session or weekly limit passes 90 %. */
   fuelAlert: boolean;
+  /** The session's fuel left in the menu bar, after the counts. */
+  fuelInBar: boolean;
   /** The limits' dials in the popover, in its foot. */
   fuelInPopover: boolean;
   /** Minutes between asking Anthropic for the limits: 1, 5 or 15. */
   fuelEvery: number;
+  /** The count of running dev servers in the menu bar, in green. */
+  serversInBar: boolean;
+  /** The count of Claude sessions at work in the menu bar, in orange. */
+  claudesInBar: boolean;
   /** Which of Pitwall's sounds each event plays (src-tauri/sounds); "" for none. */
   sounds: { claudeFinished: string; claudeAsking: string; serverCrashed: string; serverReady: string; commandDone: string };
   launchAtLogin: boolean;

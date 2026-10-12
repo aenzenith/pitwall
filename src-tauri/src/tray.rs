@@ -9,7 +9,9 @@ use tauri::{
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
+use crate::claude::SessionPhase;
 use crate::core::Snapshot;
+use crate::fuel::BarFuel;
 use crate::i18n::t;
 use crate::{windows, AppState, MAIN, POPOVER, SWITCHER};
 
@@ -498,16 +500,38 @@ pub fn set_dock_visible<R: Runtime>(app: &AppHandle<R>, visible: bool) {
 /// leaves it alone.
 static ICON: Mutex<Option<(bool, bool, bool)>> = Mutex::new(None);
 
-/// Count next to the icon and the coloured dot. Waiting projects win over the running count;
-/// a crash shows a red dot until the popover is opened. Windows shows no text beside a tray icon,
-/// so there the tooltip carries the counts.
+/// The text beside the icon, each part there only while Settings shows it and there is something
+/// to count: the running dev servers, the Claude sessions at work, and Claude's fuel with its
+/// share as written (`74%`).
+#[derive(Clone, PartialEq, Eq)]
+struct Title {
+    servers: Option<String>,
+    claudes: Option<String>,
+    fuel: Option<(BarFuel, String)>,
+}
+
+/// The one in the bar now, so a refresh that changes none of it leaves it alone.
+static TITLE: Mutex<Option<Title>> = Mutex::new(None);
+
+/// The counts next to the icon and its coloured dot: the running servers in green, the Claude
+/// sessions at work in orange. An orange dot says Claude waits on you; a crash shows a red one
+/// until the popover is opened. With Claude's fuel shown, the session's share left follows the
+/// counts. Windows shows no text beside a tray icon, so there the tooltip carries all of it.
 pub fn refresh<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
     };
 
-    let count = if snapshot.waiting > 0 { snapshot.waiting } else { snapshot.running };
-    let _ = tray.set_title(if count > 0 { Some(count.to_string()) } else { None::<String> });
+    let settings = &snapshot.settings;
+    let working = snapshot.projects.iter().flat_map(|project| &project.claude_sessions).filter(|session| matches!(session.phase, SessionPhase::Working)).count();
+    let count = |shown: bool, count: usize| (shown && count > 0).then(|| count.to_string());
+    let fuel = app.try_state::<AppState>().and_then(|state| state.fuel.bar(settings));
+    let fuel = fuel.map(|fuel| (fuel, t!("core.tray.percent", value = fuel.left)));
+
+    let title = Title { servers: count(settings.servers_in_bar, snapshot.running), claudes: count(settings.claudes_in_bar, working), fuel };
+    if TITLE.lock().map_or(true, |mut shown| shown.replace(title.clone()).as_ref() != Some(&title)) {
+        set_title(&tray, title.clone());
+    }
 
     let icon = (snapshot.waiting > 0, snapshot.crash_unseen, bar_is_dark(app));
     let changed = ICON.lock().map_or(true, |mut shown| shown.replace(icon) != Some(icon));
@@ -515,11 +539,43 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
         set_icon(&tray, icon);
     }
 
-    let tooltip = t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting);
+    let mut tooltip = match &title.fuel {
+        Some((_, left)) => t!("core.tray.tooltipFuel", running = snapshot.running, waiting = snapshot.waiting, left = left),
+        None => t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting),
+    };
+    if working > 0 {
+        tooltip = format!("{tooltip} · {}", t!("core.tray.working", count = working));
+    }
+    // After the title: setting the tooltip also fits the icon's click area to the item's new width.
     let _ = tray.set_tooltip(Some(tooltip));
 
     #[cfg(not(target_os = "macos"))]
     menu::sync(app, &tray, snapshot);
+}
+
+/// Puts the text beside the icon. macOS colours the counts and draws the fuel's dial into the
+/// title; elsewhere the parts follow one another as plain text.
+fn set_title<R: Runtime>(tray: &TrayIcon<R>, title: Title) {
+    if title.servers.is_none() && title.claudes.is_none() && title.fuel.is_none() {
+        let _ = tray.set_title(None::<String>);
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    let _ = tray.with_inner_tray_icon(move |inner| {
+        let (Some(item), Some(mtm)) = (inner.ns_status_item(), objc2::MainThreadMarker::new()) else {
+            return;
+        };
+        if let Some(button) = item.button(mtm) {
+            button.setAttributedTitle(&bar::title(&title));
+        }
+    });
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let parts: Vec<String> = [title.servers, title.claudes, title.fuel.map(|(_, percent)| percent)].into_iter().flatten().collect();
+        let _ = tray.set_title(Some(parts.join(" · ")));
+    }
 }
 
 fn set_icon<R: Runtime>(tray: &TrayIcon<R>, (waiting, crashed, dark): (bool, bool, bool)) {
@@ -581,6 +637,168 @@ fn bar_is_dark<R: Runtime>(_app: &AppHandle<R>) -> bool {
 fn bar_is_dark<R: Runtime>(app: &AppHandle<R>) -> bool {
     let gnome = std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|desktop| desktop.split(':').any(|name| matches!(name, "GNOME" | "Unity" | "ubuntu")));
     gnome || app.webview_windows().values().next().and_then(|w| w.theme().ok()).is_none_or(|theme| theme == tauri::Theme::Dark)
+}
+
+/// The menu bar item's text as one attributed title (a plain title holds neither colour nor
+/// picture): the running servers' count in green, the working Claude sessions' in orange, then a
+/// small dial and the session's share left. The dial is the Fuel page's, at the bar's size: a 240°
+/// arc from empty at the lower left to full at the lower right, lit as far as the share left, and
+/// a needle.
+#[cfg(target_os = "macos")]
+mod bar {
+    use std::ptr::NonNull;
+
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, Bool};
+    use objc2::{class, msg_send};
+    use objc2_app_kit::{NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage};
+    use objc2_foundation::{NSArray, NSAttributedString, NSMutableAttributedString, NSPoint, NSRange, NSRect, NSSize, NSString};
+
+    use super::Title;
+    use crate::fuel::BarFuel;
+
+    /// The dial's box in points, and how far it sits under the text's baseline to stand level
+    /// with the digits.
+    const SIDE: f64 = 16.0;
+    const DROP: f64 = -3.5;
+    /// The arc: its centre in the box (y up), radius and stroke; empty at 210°, full 240° on.
+    const CENTRE: (f64, f64) = (8.0, 6.9);
+    const RADIUS: f64 = 5.6;
+    const STROKE: f64 = 1.7;
+    const EMPTY: f64 = 210.0;
+    const SWEEP: f64 = 240.0;
+    /// The needle's length and its hub's radius.
+    const NEEDLE: f64 = 3.6;
+    const HUB: f64 = 1.0;
+    /// `NSLineCapStyleRound`.
+    const ROUND: usize = 1;
+    /// An older reading: the dial and its share at this strength.
+    const DIMMED: f64 = 0.45;
+    /// Pitwall's state colours (tokens.css: --run, --claude, --crash) as a dark bar takes them,
+    /// and each a step darker for a light one.
+    const RUN: [[f64; 3]; 2] = [[115.0, 201.0, 145.0], [31.0, 138.0, 76.0]];
+    const CLAUDE: [[f64; 3]; 2] = [[240.0, 136.0, 62.0], [199.0, 90.0, 18.0]];
+    const LOW: [[f64; 3]; 2] = [[241.0, 76.0, 76.0], [198.0, 47.0, 47.0]];
+
+    pub fn title(title: &Title) -> Retained<NSAttributedString> {
+        let text = NSMutableAttributedString::new();
+
+        if let Some(servers) = &title.servers {
+            append(&text, servers, Some(&tint(RUN)));
+        }
+        if let Some(claudes) = &title.claudes {
+            // A space and a hair space: about as near the servers' count as that is to the icon.
+            if text.length() > 0 {
+                append(&text, " \u{200A}", None);
+            }
+            append(&text, claudes, Some(&tint(CLAUDE)));
+        }
+        if let Some((fuel, percent)) = &title.fuel {
+            if text.length() > 0 {
+                append(&text, "  ", None);
+            }
+            text.appendAttributedString(&dial(*fuel));
+            // An older reading's share in the system's own dimmer ink, which follows the bar.
+            let dimmed = fuel.stale.then(NSColor::secondaryLabelColor);
+            append(&text, &format!(" {percent}"), dimmed.as_deref());
+        }
+
+        let font = NSFont::menuBarFontOfSize(0.0);
+        // SAFETY: a font for the font attribute, over the whole string.
+        unsafe { text.addAttribute_value_range(NSFontAttributeName, &font, NSRange::new(0, text.length())) };
+        Retained::into_super(text)
+    }
+
+    /// One of Pitwall's colours for the bar: the first of the pair on a dark bar, the second on a
+    /// light one. Which it is, is worked out each time it is drawn, so it follows the bar.
+    fn tint([dark, light]: [[f64; 3]; 2]) -> Retained<NSColor> {
+        let colour = |[red, green, blue]: [f64; 3]| NSColor::colorWithSRGBRed_green_blue_alpha(red / 255.0, green / 255.0, blue / 255.0, 1.0);
+        let (dark, light) = (colour(dark), colour(light));
+        let pick = block2::RcBlock::new(move |appearance: NonNull<NSAppearance>| -> NonNull<NSColor> {
+            // SAFETY: AppKit hands the block a live appearance; the names are AppKit's constants.
+            let is_dark = unsafe {
+                let names = NSArray::from_slice(&[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]);
+                appearance.as_ref().bestMatchFromAppearancesWithNames(&names).is_some_and(|name| *name == *NSAppearanceNameDarkAqua)
+            };
+            NonNull::from(if is_dark { &*dark } else { &*light })
+        });
+        // SAFETY: `colorWithName:dynamicProvider:` with no name and a block of the signature it
+        // declares; the block answers with one of the two colours it keeps, and AppKit keeps the
+        // block for as long as the colour it makes lives.
+        unsafe { msg_send![class!(NSColor), colorWithName: std::ptr::null::<NSString>(), dynamicProvider: &*pick] }
+    }
+
+    /// Adds `piece` to the title, in `tint` or (none) in the bar's own ink.
+    fn append(title: &NSMutableAttributedString, piece: &str, tint: Option<&NSColor>) {
+        let start = title.length();
+        title.appendAttributedString(&NSAttributedString::from_nsstring(&NSString::from_str(piece)));
+        if let Some(tint) = tint {
+            // SAFETY: a colour for the colour attribute, over the piece just added.
+            unsafe { title.addAttribute_value_range(NSForegroundColorAttributeName, tint, NSRange::new(start, title.length() - start)) };
+        }
+    }
+
+    /// The dial as a piece of text: an attachment whose picture is drawn each time it shows, so
+    /// it takes the bar's ink, light or dark.
+    fn dial(fuel: BarFuel) -> Retained<NSAttributedString> {
+        let draw = block2::RcBlock::new(move |_: NSRect| {
+            draw(fuel);
+            Bool::YES
+        });
+        let image = NSImage::imageWithSize_flipped_drawingHandler(NSSize::new(SIDE, SIDE), false, &draw);
+
+        // SAFETY: AppKit's own classes, each message with the types it declares.
+        unsafe {
+            let attachment: Retained<AnyObject> = msg_send![class!(NSTextAttachment), new];
+            let _: () = msg_send![&*attachment, setImage: &*image];
+            let _: () = msg_send![&*attachment, setBounds: NSRect::new(NSPoint::new(0.0, DROP), NSSize::new(SIDE, SIDE))];
+            msg_send![class!(NSAttributedString), attributedStringWithAttachment: &*attachment]
+        }
+    }
+
+    fn draw(fuel: BarFuel) {
+        // The bar's ink, dimmed for an older reading; the arc in red instead while little is left.
+        let strength = if fuel.stale { DIMMED } else { 1.0 };
+        let ink = NSColor::labelColor().colorWithAlphaComponent(strength);
+        let arc_colour = if fuel.low && !fuel.stale { tint(LOW) } else { NSColor::labelColor() };
+        let lit = arc_colour.colorWithAlphaComponent(strength);
+        let centre = NSPoint::new(CENTRE.0, CENTRE.1);
+        let at = EMPTY - f64::from(fuel.left) / 100.0 * SWEEP;
+
+        // SAFETY: NSBezierPath's own messages, each with the types it declares; drawn inside the
+        // picture's drawing handler, where AppKit has a context set.
+        unsafe {
+            let arc = |to: f64| -> Retained<AnyObject> {
+                let path: Retained<AnyObject> = msg_send![class!(NSBezierPath), bezierPath];
+                let _: () = msg_send![&*path, appendBezierPathWithArcWithCenter: centre, radius: RADIUS, startAngle: EMPTY, endAngle: to, clockwise: true];
+                let _: () = msg_send![&*path, setLineWidth: STROKE];
+                let _: () = msg_send![&*path, setLineCapStyle: ROUND];
+                path
+            };
+
+            // The whole arc faint, then the share left over it.
+            arc_colour.colorWithAlphaComponent(strength * 0.3).setStroke();
+            let _: () = msg_send![&*arc(EMPTY - SWEEP), stroke];
+            if fuel.left > 0 {
+                lit.setStroke();
+                let _: () = msg_send![&*arc(at), stroke];
+            }
+
+            // The needle, from the centre to where the share left ends, and its hub.
+            let (sin, cos) = at.to_radians().sin_cos();
+            let needle: Retained<AnyObject> = msg_send![class!(NSBezierPath), bezierPath];
+            let _: () = msg_send![&*needle, moveToPoint: centre];
+            let _: () = msg_send![&*needle, lineToPoint: NSPoint::new(centre.x + NEEDLE * cos, centre.y + NEEDLE * sin)];
+            let _: () = msg_send![&*needle, setLineWidth: 1.15f64];
+            let _: () = msg_send![&*needle, setLineCapStyle: ROUND];
+            ink.setStroke();
+            let _: () = msg_send![&*needle, stroke];
+
+            let hub: Retained<AnyObject> = msg_send![class!(NSBezierPath), bezierPathWithOvalInRect: NSRect::new(NSPoint::new(centre.x - HUB, centre.y - HUB), NSSize::new(HUB * 2.0, HUB * 2.0))];
+            ink.setFill();
+            let _: () = msg_send![&*hub, fill];
+        }
+    }
 }
 
 /// The tray's menu on Windows and Linux: Pitwall's window, the quick switcher, the projects that

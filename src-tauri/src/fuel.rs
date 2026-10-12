@@ -1,6 +1,7 @@
 //! The Fuel page's data: Claude's plan limits (`usage.rs`) and today's tokens with their API price
 //! (`spend.rs`). Both are read off the main thread, sent to the main window and the popover as
-//! `fuel` when they change, and a limit passing 90 % brings one notification per window.
+//! `fuel` when they change, and a limit passing 90 % brings one notification per window. The
+//! session's share left also goes beside the icon in the menu bar (`bar`).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,6 +13,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::i18n::t;
+use crate::registry::now_ms;
+use crate::settings::Settings;
 use crate::spend::{SessionSpend, Spend, SpendToday};
 use crate::usage::{Status, UsageState, UsageWatch};
 use crate::{AppState, MAIN, POPOVER};
@@ -25,6 +28,8 @@ const ALERT_AT: f64 = 90.0;
 const ALERTED: [&str; 2] = ["five_hour", "seven_day"];
 /// The notification's identifier: a click on it opens the Fuel page.
 pub const NOTIFICATION_ID: &str = "pitwall:fuel";
+/// At or under this share left, a limit shows red: the page's `LOW_LEFT` (src/lib/fuel.ts).
+const LOW_LEFT: f64 = 10.0;
 
 /// What the page shows.
 #[derive(Clone, Serialize)]
@@ -32,6 +37,17 @@ pub const NOTIFICATION_ID: &str = "pitwall:fuel";
 pub struct FuelView {
     pub limits: UsageState,
     pub today: Option<SpendToday>,
+}
+
+/// The session's fuel as the menu bar shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BarFuel {
+    /// Percent left, 0–100.
+    pub left: u8,
+    /// Little enough left to show red.
+    pub low: bool,
+    /// The limits couldn't be read this time: an older reading, shown dimmed.
+    pub stale: bool,
 }
 
 pub struct Fuel {
@@ -77,6 +93,21 @@ impl Fuel {
         FuelView { limits: self.usage.state(), today: lock(&self.today).clone() }
     }
 
+    /// The session's fuel for the menu bar: none while Settings hides it, before the first
+    /// reading, and on a plan without a session limit.
+    pub fn bar(&self, settings: &Settings) -> Option<BarFuel> {
+        if !settings.fuel_in_bar {
+            return None;
+        }
+        let limits = self.usage.state();
+        let session = limits.usage.as_ref()?.windows.iter().find(|window| window.id == "five_hour")?;
+        // A window whose reset has passed has refilled, as the page shows it (`current`).
+        let refilled = session.resets_at.is_some_and(|at| at <= now_ms() as i64);
+        let left = if refilled { 100.0 } else { (100.0 - session.used).clamp(0.0, 100.0) };
+        let stale = !matches!(limits.status, Status::Ready | Status::Loading);
+        Some(BarFuel { left: left.round() as u8, low: left <= LOW_LEFT, stale })
+    }
+
     /// Keeps both fresh for as long as the app runs.
     pub fn start(app: &AppHandle) {
         let app = app.clone();
@@ -84,6 +115,8 @@ impl Fuel {
             if let Some(state) = app.try_state::<AppState>() {
                 state.fuel.usage.refresh(false, state.core.settings().fuel_every_ms());
                 state.fuel.read_spend(&app);
+                // A session that refilled meanwhile shows full in the menu bar too.
+                crate::tray::refresh(&app, &state.core.snapshot());
             }
             thread::sleep(EVERY);
         });
@@ -124,6 +157,9 @@ impl Fuel {
 
     fn limits_changed(&self, app: &AppHandle) {
         self.send(app);
+        if let Some(state) = app.try_state::<AppState>() {
+            crate::tray::refresh(app, &state.core.snapshot());
+        }
         self.alert(app);
     }
 
