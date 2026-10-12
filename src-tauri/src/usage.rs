@@ -24,9 +24,9 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const KEYCHAIN_TIMEOUT: Duration = Duration::from_secs(30);
 /// A token this close to its expiry counts as expired: it could lapse mid-request.
 const EXPIRY_MARGIN_MS: i64 = 60_000;
-/// After a request, a refresh asked for by hand waits this long, a background one `AUTO_FLOOR_MS`.
+/// After a request, a refresh asked for by hand waits this long; a background one as long as
+/// Settings says (`Settings::fuel_every_ms`).
 const FORCED_FLOOR_MS: i64 = 60_000;
-const AUTO_FLOOR_MS: i64 = 15 * 60_000;
 /// How long a 429 without a usable `Retry-After` keeps us away.
 const DEFAULT_BACKOFF_MS: i64 = 5 * 60_000;
 const MAX_BACKOFF_MS: i64 = 24 * 60 * 60_000;
@@ -140,12 +140,12 @@ impl UsageWatch {
 
     /// Reads the limits again on a background thread, unless a read is running, a 429 asked us to
     /// wait, or the last request was under a minute ago (`force`, the refresh button) or under
-    /// 15 minutes ago (the background refresh). The endpoint punishes polling with long waits.
-    pub fn refresh(&self, force: bool) {
+    /// `every_ms` ago (the background refresh). The endpoint punishes polling with long waits.
+    pub fn refresh(&self, force: bool, every_ms: i64) {
         let now = now_ms();
         {
             let mut inner = self.shared.lock();
-            if inner.busy || !may_start(now, force, inner.last, inner.state.retry_at) {
+            if inner.busy || !may_start(now, force, every_ms, inner.last, inner.state.retry_at) {
                 return;
             }
             inner.busy = true;
@@ -203,9 +203,9 @@ impl Shared {
 }
 
 /// Whether a refresh may start: never inside a 429's wait; after a request, not for a minute
-/// when forced and 15 minutes otherwise; after a check that stopped at the sign-in (signed out,
+/// when forced and `every_ms` otherwise; after a check that stopped at the sign-in (signed out,
 /// expired), at once when forced and after a minute otherwise.
-fn may_start(now: i64, force: bool, last: Option<Attempt>, retry_at: Option<i64>) -> bool {
+fn may_start(now: i64, force: bool, every_ms: i64, last: Option<Attempt>, retry_at: Option<i64>) -> bool {
     if retry_at.is_some_and(|at| now < at) {
         return false;
     }
@@ -214,7 +214,7 @@ fn may_start(now: i64, force: bool, last: Option<Attempt>, retry_at: Option<i64>
     };
     let floor = match (last.reached_api, force) {
         (true, true) => FORCED_FLOOR_MS,
-        (true, false) => AUTO_FLOOR_MS,
+        (true, false) => every_ms,
         (false, true) => 0,
         (false, false) => FORCED_FLOOR_MS,
     };

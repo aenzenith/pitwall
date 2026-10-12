@@ -81,6 +81,7 @@ const form = reactive<Settings>({
   openUrlOnStart: false,
   notify: true,
   fuelAlert: true,
+  fuelEvery: 15,
   sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "", commandDone: "" },
   launchAtLogin: false,
   shortcut: true,
@@ -91,6 +92,9 @@ const form = reactive<Settings>({
 });
 const error = ref("");
 const hookBusy = ref(false);
+
+/** How often the core may ask Anthropic for the limits, in minutes: the paces it takes. */
+const FUEL_EVERY = [1, 5, 15];
 
 /* ---------- shortcut recorder ---------- */
 
@@ -336,6 +340,13 @@ async function save(): Promise<void> {
   // A failed save stored nothing: the form shows what is stored again.
   if (snapshot.value && !saving) takeSettings(snapshot.value.settings, failed);
 }
+
+/** A click on a segment is no `change` for the form to save on: it saves here. */
+function setFuelEvery(minutes: number): void {
+  if (form.fuelEvery === minutes) return;
+  form.fuelEvery = minutes;
+  void save();
+}
 </script>
 
 <template>
@@ -418,6 +429,17 @@ async function save(): Promise<void> {
             <input v-model="form.fuelAlert" type="checkbox" />
             <span>{{ t("settings.fuelAlert") }}</span>
           </label>
+          <div class="hook">
+            <div class="hook-text">
+              <span id="fuel-every">{{ t("settings.fuelEvery") }}</span>
+              <small>{{ t("settings.fuelEveryHint") }}</small>
+            </div>
+            <span class="seg" role="group" aria-labelledby="fuel-every">
+              <button v-for="minutes in FUEL_EVERY" :key="minutes" type="button" :aria-pressed="form.fuelEvery === minutes" @click="setFuelEvery(minutes)">
+                {{ t("settings.fuelEveryMinutes", { count: minutes }) }}
+              </button>
+            </span>
+          </div>
           <div class="hook">
             <div class="hook-text">
               <span class="hook-title">
@@ -905,6 +927,35 @@ code {
 
 .hook-text {
   min-width: 0;
+}
+
+/* One of a few, the picked one lit: as the Track tab's (track/TrackOptions). */
+.seg {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.seg button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.seg button:hover:not([aria-pressed="true"]) {
+  color: var(--text);
+}
+
+.seg button[aria-pressed="true"] {
+  background: #2a2f37;
+  color: var(--text-strong);
 }
 
 .badge {

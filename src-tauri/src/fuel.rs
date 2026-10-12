@@ -17,7 +17,7 @@ use crate::usage::{Status, UsageState, UsageWatch};
 use crate::{AppState, MAIN};
 
 /// How often today's logs are read again and the limits looked at; the limits hold themselves
-/// back to one request every 15 minutes.
+/// back to one request every few minutes, as Settings says (`Settings::fuel_every_ms`).
 const EVERY: Duration = Duration::from_secs(30);
 /// The share of a limit that brings the notification.
 const ALERT_AT: f64 = 90.0;
@@ -82,16 +82,17 @@ impl Fuel {
         let app = app.clone();
         thread::spawn(move || loop {
             if let Some(state) = app.try_state::<AppState>() {
-                state.fuel.usage.refresh(false);
+                state.fuel.usage.refresh(false, state.core.settings().fuel_every_ms());
                 state.fuel.read_spend(&app);
             }
             thread::sleep(EVERY);
         });
     }
 
-    /// From the page: on opening it and from its refresh button (`force`).
-    pub fn refresh(&self, app: &AppHandle, force: bool) {
-        self.usage.refresh(force);
+    /// From the page: on opening it and from its refresh button (`force`). `every_ms` is
+    /// Settings' rest between two requests nobody asked for.
+    pub fn refresh(&self, app: &AppHandle, force: bool, every_ms: i64) {
+        self.usage.refresh(force, every_ms);
         let app = app.clone();
         thread::spawn(move || {
             if let Some(state) = app.try_state::<AppState>() {

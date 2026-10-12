@@ -438,11 +438,11 @@ pub fn fuel_state(state: State<'_, AppState>) -> crate::fuel::FuelView {
     state.fuel.view()
 }
 
-/// The Fuel page opened, or its refresh button: read again (`force` skips the 15-minute wait, not
+/// The Fuel page opened, or its refresh button: read again (`force` skips Settings' wait, not
 /// the minute between two requests).
 #[tauri::command]
 pub fn refresh_fuel(app: AppHandle, state: State<'_, AppState>, force: bool) {
-    state.fuel.refresh(&app, force);
+    state.fuel.refresh(&app, force, state.core.settings().fuel_every_ms());
 }
 
 /* ---------- dependencies ---------- */

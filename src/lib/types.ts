@@ -81,6 +81,8 @@ export type Settings = {
   notify: boolean;
   /** Notify when the session or weekly limit passes 90 %. */
   fuelAlert: boolean;
+  /** Minutes between asking Anthropic for the limits: 1, 5 or 15. */
+  fuelEvery: number;
   /** Which of Pitwall's sounds each event plays (src-tauri/sounds); "" for none. */
   sounds: { claudeFinished: string; claudeAsking: string; serverCrashed: string; serverReady: string; commandDone: string };
   launchAtLogin: boolean;

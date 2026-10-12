@@ -124,6 +124,8 @@ pub struct Settings {
     pub projects_dir: Option<String>,
     /// A notification when Claude's session or weekly limit passes 90 %.
     pub fuel_alert: bool,
+    /// Minutes between two requests for Claude's limits: 1, 5 or 15 (`fuel_every_ms`).
+    pub fuel_every: u32,
     /// Asks for new versions of Pitwall by itself and downloads them (`update.rs`). Off, only
     /// "Check now" in Settings asks.
     pub auto_update: bool,
@@ -155,6 +157,7 @@ impl Default for Settings {
             order: Vec::new(),
             projects_dir: None,
             fuel_alert: true,
+            fuel_every: 15,
             auto_update: true,
             board_scope: None,
             board_view: None,
@@ -215,6 +218,16 @@ impl Settings {
 
     pub fn script_for(&self, path: &str) -> String {
         self.project(path).script.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| self.script.clone())
+    }
+
+    /// How long Claude's limits rest between two background requests, in ms. A value that isn't
+    /// one of the three Settings offers counts as the longest: the endpoint punishes polling.
+    pub fn fuel_every_ms(&self) -> i64 {
+        match self.fuel_every {
+            1 => 60_000,
+            5 => 5 * 60_000,
+            _ => 15 * 60_000,
+        }
     }
 
     /// The macOS application name of the chosen editor.
