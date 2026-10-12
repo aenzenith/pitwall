@@ -346,17 +346,8 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
 
     let theme = (settings.theme != before.theme).then(|| settings.theme.clone());
 
-    // Project overrides, the list order, the shortcut keys, the projects folder, the board shown
-    // last, how it is drawn and the Track page's settings have their own commands.
-    let mut settings = settings;
-    settings.projects = before.projects;
-    settings.order = before.order;
-    settings.shortcut_keys = before.shortcut_keys;
-    settings.projects_dir = before.projects_dir;
-    settings.board_scope = before.board_scope;
-    settings.board_view = before.board_view;
-    settings.track = before.track;
-    state.core.set_settings(settings);
+    // What has a command of its own stays as the core holds it, whatever the form says.
+    state.core.set_settings_form(settings);
 
     if let Some(theme) = theme {
         crate::apply_theme(&app, &theme);
@@ -367,16 +358,13 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
 /// New quick-switcher keys. If they can't be registered the old ones come back.
 #[tauri::command]
 pub fn set_shortcut(app: AppHandle, state: State<'_, AppState>, keys: String) -> Result<(), String> {
-    let mut settings = state.core.settings();
-
     if let Err(error) = apply_shortcut(&app, true, &keys) {
+        let settings = state.core.settings();
         let _ = apply_shortcut(&app, settings.shortcut, &settings.shortcut_keys);
         return Err(error);
     }
 
-    settings.shortcut = true;
-    settings.shortcut_keys = keys;
-    state.core.set_settings(settings);
+    state.core.set_shortcut_keys(keys);
     Ok(())
 }
 
@@ -504,6 +492,59 @@ pub async fn deps_scan(state: State<'_, AppState>, path: String, ecosystem: Stri
 pub async fn deps_scan_details(state: State<'_, AppState>, path: String, ecosystem: String) -> Result<Option<crate::deps::ScanDetails>, String> {
     let core = std::sync::Arc::clone(&state.core);
     tauri::async_runtime::spawn_blocking(move || core.deps_scan_details(&path, &ecosystem)).await.map_err(|error| error.to_string())
+}
+
+/* ---------- teams ---------- */
+
+/// A new team, last in the list, with these projects (each leaves the team it was in).
+#[tauri::command]
+pub fn team_create(state: State<'_, AppState>, name: String, projects: Vec<String>) -> Result<crate::settings::Team, String> {
+    state.core.team_create(&name, projects)
+}
+
+#[tauri::command]
+pub fn team_rename(state: State<'_, AppState>, id: String, name: String) -> Result<(), String> {
+    state.core.team_rename(&id, &name)
+}
+
+/// The team goes; its projects stay listed, in no team.
+#[tauri::command]
+pub fn team_delete(state: State<'_, AppState>, id: String) {
+    state.core.team_delete(&id);
+}
+
+/// The team's projects, in order: a reorder, one added or one dropped.
+#[tauri::command]
+pub fn team_projects(state: State<'_, AppState>, id: String, projects: Vec<String>) {
+    state.core.team_projects(&id, projects);
+}
+
+/// The teams' own order.
+#[tauri::command]
+pub fn team_order(state: State<'_, AppState>, ids: Vec<String>) {
+    state.core.team_order(ids);
+}
+
+#[tauri::command]
+pub fn team_collapse(state: State<'_, AppState>, id: String, collapsed: bool) {
+    state.core.team_collapse(&id, collapsed);
+}
+
+/// Whether the team's servers start when Pitwall does.
+#[tauri::command]
+pub fn team_launch(state: State<'_, AppState>, id: String, on: bool) {
+    state.core.team_launch(&id, on);
+}
+
+/// Starts the team's projects that don't run, one after the other.
+#[tauri::command]
+pub fn team_start(state: State<'_, AppState>, id: String) {
+    state.core.team_start(&id);
+}
+
+#[tauri::command]
+pub fn team_stop(state: State<'_, AppState>, id: String) {
+    state.core.team_stop(&id);
 }
 
 /// Esc in the popover: close it and go back to the app from before.

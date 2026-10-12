@@ -3,6 +3,9 @@
  * project, carrying `data-path`): ↑/↓, Home and End move between rows, ←/→ between a row and its
  * buttons, ↵ and Space act on the row. Buttons inside rows keep `tabindex="-1"`: the arrows reach
  * them, Tab doesn't. Bind it as the list's `keydown`.
+ *
+ * A list drawn in groups has their heads among its rows (`data-group`): ↑/↓ go on to a head too,
+ * which takes the focus as a row does, and the head's own keys are the list's to give.
  */
 export function rowKeys(
   event: KeyboardEvent,
@@ -27,13 +30,22 @@ export function rowKeys(
   };
 
   const rows = Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-path]"));
-  const at = rows.indexOf(row);
+
+  /** The line above or below: a row, or a group's head. */
+  const step = (by: 1 | -1): void => {
+    const lines = Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-path], :scope > [data-group]"));
+    const to = lines[lines.indexOf(row) + by];
+    if (to?.dataset.group === undefined) return go(to ?? row);
+    event.preventDefault();
+    to.focus();
+    to.scrollIntoView({ block: "nearest" });
+  };
 
   switch (event.key) {
     case "ArrowDown":
-      return go(rows[at + 1] ?? row);
+      return step(1);
     case "ArrowUp":
-      return go(rows[at - 1] ?? row);
+      return step(-1);
     case "Home":
       return go(rows[0]);
     case "End":

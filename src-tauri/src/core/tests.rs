@@ -124,6 +124,33 @@ fn a_drag_keeps_the_place_of_projects_that_are_not_listed_right_now() {
     assert_eq!(merge_order(&v(&["a", "b"]), v(&["b", "a", "n"])), v(&["b", "a", "n"]));
 }
 
+/// The Settings page sends its whole form, as it got it some time ago. What has a command of its
+/// own (a team, a project's commands, the list's order…) may have changed since: were the form's
+/// copy written, that would be gone from the file without a word. Only the preferences the form
+/// is for are taken from it.
+#[test]
+fn a_settings_form_leaves_what_has_a_command_of_its_own() {
+    let fx = fixture("node server.js", &[]);
+    let core = &fx.core;
+
+    let own = ProjectSettings { port: Some(4000), commands: vec![command("queue", "node worker.js", true, false)], ..Default::default() };
+    core.set_project_settings(&fx.project, own);
+    core.reorder(vec![fx.project.clone()]);
+    core.set_shortcut_keys("Alt+Space".into());
+    core.set_board_scope("all".into());
+    core.set_board_view("list".into());
+    core.set_track(TrackSettings { circuit: "oval".into(), ..Default::default() });
+    core.team_create("Race", vec![fx.project.clone()]).unwrap();
+    let held = core.settings();
+
+    // A form that knows none of it.
+    core.set_settings_form(Settings { script: "serve".into(), ..Settings::default() });
+
+    let expected = Settings { script: "serve".into(), ..held };
+    assert_eq!(core.settings(), expected);
+    assert_eq!(Settings::load(&fx._tmp.path().join("settings.json")), expected, "and the file");
+}
+
 #[test]
 fn a_server_starts_and_stopping_frees_the_port_of_the_whole_tree() {
     let (fx, port) = server_fixture();

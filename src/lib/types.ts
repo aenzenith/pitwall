@@ -41,6 +41,18 @@ export type CommandView = CustomCommand & {
 
 export type Status = "running" | "stopped" | "crashed" | "busy";
 
+/** A team: projects listed together, started and stopped together. A project is in one at most. */
+export type Team = {
+  id: string;
+  name: string;
+  /** Its projects' paths, in the order they are listed and started. */
+  projects: string[];
+  /** Folded in the list: its head alone. */
+  collapsed: boolean;
+  /** Its servers start when Pitwall does. */
+  startAtLaunch: boolean;
+};
+
 /** How the app is drawn: as the system is, dark, or light. */
 export type Theme = "system" | "dark" | "light";
 
@@ -115,6 +127,8 @@ export type Settings = {
   track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
   /** How the app is drawn (lib/theme). */
   theme: Theme;
+  /** The list's teams, in the order they are drawn; changed through the `team*` commands only. */
+  teams?: Team[];
 };
 
 /** An open project terminal. */

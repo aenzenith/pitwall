@@ -17,7 +17,7 @@ const SCROLL_SPEED = 14;
 type Layout = { paths: string[]; tops: number[]; heights: number[]; from: number; shift: number; padTop: number; padBottom: number };
 
 /**
- * Drag-to-reorder for a project list, animated: the dragged row follows the pointer anywhere in
+ * Drag-to-reorder for a list of rows, animated: the dragged row follows the pointer anywhere in
  * the list (the empty space under the last row too), the others slide aside to show where it
  * will land, and on release it slides into that place before the new order is saved. A long list
  * scrolls while the row is held near its top or bottom edge. Rows carry `data-path`; controls marked `data-no-drag` (and inputs) keep
@@ -25,8 +25,12 @@ type Layout = { paths: string[]; tops: number[]; heights: number[]; from: number
  * Tauri's file-drop handling can swallow.
  *
  * Bind `listClass()` on the list, `rowClass(path)` and `rowStyle(path)` on each row.
+ *
+ * The rows are the listed projects unless `onDrop` says what a drop does: it is told the row
+ * moved (its `data-path`), the row it landed beside and on which side, and keeps the order
+ * itself (the sidebar's teams, whose `data-path` is a team's id).
  */
-export function useReorder(list: Ref<HTMLElement | null>) {
+export function useReorder(list: Ref<HTMLElement | null>, onDrop?: (moved: string, beside: string, after: boolean) => void) {
   const dragging = ref<string | null>(null);
   /** Vertical offset per row while a drag is on. */
   const offsets = ref<Record<string, number>>({});
@@ -48,6 +52,8 @@ export function useReorder(list: Ref<HTMLElement | null>) {
     press = { path, y: event.clientY, scroll: list.value?.scrollTop ?? 0 };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up, { once: true });
+    window.addEventListener("pointercancel", abort);
+    window.addEventListener("blur", abort);
   }
 
   function measure(path: string): Layout | null {
@@ -78,6 +84,8 @@ export function useReorder(list: Ref<HTMLElement | null>) {
 
   function move(event: PointerEvent): void {
     if (!press) return;
+    // Released where the page couldn't hear it (a native menu took the mouse-up): no drag.
+    if (!(event.buttons & 1)) return abort();
     pointerY = event.clientY;
 
     if (!dragging.value) {
@@ -149,10 +157,28 @@ export function useReorder(list: Ref<HTMLElement | null>) {
     offsets.value = next;
   }
 
-  function up(): void {
+  /** The pointer is let go of: nothing follows it any more. */
+  function release(): void {
     window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", abort);
+    window.removeEventListener("blur", abort);
     cancelAnimationFrame(scrolling);
     document.body.classList.remove("grabbing");
+  }
+
+  /** The press is called off (its release never came, the pointer was cancelled, the window lost
+   * focus): the rows are back where they were and nothing is saved. */
+  function abort(): void {
+    release();
+    press = null;
+    layout = null;
+    offsets.value = {};
+    dragging.value = null;
+  }
+
+  function up(): void {
+    release();
 
     const moved = dragging.value;
     const drop = layout;
@@ -179,7 +205,7 @@ export function useReorder(list: Ref<HTMLElement | null>) {
   async function finish(moved: string, drop: Layout, to: number): Promise<void> {
     // The real order takes over without a frame of movement.
     frozen.value = true;
-    if (to !== drop.from) commit(moved, drop.paths[to], to > drop.from);
+    if (to !== drop.from) (onDrop ?? commit)(moved, drop.paths[to], to > drop.from);
     offsets.value = {};
     dragging.value = null;
     settling.value = false;

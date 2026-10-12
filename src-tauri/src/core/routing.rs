@@ -8,7 +8,8 @@ use crate::registry::RemoteCommand;
 
 /// A start counts as done once the server printed its address, or after this long.
 const SETTLE_LIMIT: Duration = Duration::from_secs(15);
-/// The spinner never outlives this, whatever happens.
+/// The spinner never outlives this, whatever happens (for a project that waits for its turn in
+/// a team's start, counted from that turn).
 const PENDING_LIMIT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +43,16 @@ pub(super) struct Pending {
     pub(super) action: Action,
     at: Instant,
     at_ms: u64,
+    /// Its turn in a team's start hasn't come: that start's number (`teams.rs`). No time runs
+    /// for it till then.
+    pub(super) queued: Option<u64>,
+}
+
+impl Pending {
+    /// A start: asked for now, or (`queued`) waiting for its turn in that start of its team.
+    pub(super) fn start(queued: Option<u64>) -> Self {
+        Self { action: Action::Start, at: Instant::now(), at_ms: now_ms(), queued }
+    }
 }
 
 impl Core {
@@ -56,12 +67,17 @@ impl Core {
         thread::spawn(move || core.act_now(&path, action));
     }
 
-    fn mark_pending(&self, path: &str, action: Action) {
-        self.lock().pending.insert(path.to_string(), Pending { action, at: Instant::now(), at_ms: now_ms() });
+    pub(super) fn mark_pending(&self, path: &str, action: Action) {
+        self.lock().pending.insert(path.to_string(), Pending { action, at: Instant::now(), at_ms: now_ms(), queued: None });
         self.notify();
     }
 
     pub(super) fn act_now(self: &Arc<Self>, path: &str, action: Action) {
+        self.route(path, action, true);
+    }
+
+    /// `open_url`: a server started here opens its address, when Settings says so.
+    pub(super) fn route(self: &Arc<Self>, path: &str, action: Action, open_url: bool) {
         let (running_here, stoppable, runner, root_owner) = {
             let inner = self.lock();
             let runner = inner
@@ -80,7 +96,7 @@ impl Core {
             Action::Start if running_here || runner.is_some() => {}
             Action::Start => match root_owner {
                 Some(owner) => self.registry.send(&owner, "start", path),
-                None => self.start(path, true),
+                None => self.start(path, open_url),
             },
             Action::Stop if stoppable => self.stop(path),
             Action::Restart if stoppable => self.restart(path),
@@ -88,7 +104,7 @@ impl Core {
                 if let Some(owner) = runner {
                     self.registry.send(&owner, action.as_str(), path);
                 } else if action == Action::Restart {
-                    self.act_now(path, Action::Start);
+                    self.route(path, Action::Start, open_url);
                 }
             }
         }
@@ -113,14 +129,23 @@ impl Core {
         });
     }
 
+    /// Every server goes, those still on their way up too, and a team's start under way goes
+    /// no further.
     pub fn stop_all(self: &Arc<Self>) {
-        let mut paths: Vec<String> = self.snapshot().projects.into_iter().filter(|p| p.status == "running").map(|p| p.path).collect();
-        for path in self.lock().supervisor.pending_servers() {
-            if !paths.contains(&path) {
-                paths.push(path);
+        let listed = self.listed_paths();
+        let paths: Vec<String> = {
+            let mut inner = self.lock();
+            super::teams::call_off_all(&mut inner);
+            let mut paths: Vec<String> = listed.into_iter().filter(|path| to_stop(&inner, path)).collect();
+            for path in inner.supervisor.pending_servers() {
+                if !paths.contains(&path) {
+                    paths.push(path);
+                }
             }
-        }
+            paths
+        };
 
+        self.notify();
         for path in paths {
             self.act(&path, Action::Stop);
         }
@@ -143,6 +168,24 @@ impl Core {
     }
 }
 
+/// Whether a stop of everything, or of a team, has this project to stop: its server runs here
+/// (settled or not) or a participant runs it, a start of it is under way or a crash restart
+/// waits. Not one that is being stopped already.
+pub(super) fn to_stop(inner: &Inner, path: &str) -> bool {
+    if inner.busy.contains(path) || inner.pending.get(path).is_some_and(|pending| pending.action == Action::Stop) {
+        return false;
+    }
+
+    let elsewhere = inner.peers.iter().any(|peer| peer.projects.iter().any(|p| same_path(&p.folder_path, path) && p.running));
+    inner.runs.contains_key(path) || inner.supervisor.pending(path) || elsewhere
+}
+
+/// Whether the start asked for `path` counts as done: its spinner goes, and a team's start
+/// moves on to the next project.
+pub(super) fn start_done(inner: &Inner, path: &str) -> bool {
+    inner.pending.get(path).is_none_or(|pending| pending_done(inner, path, pending))
+}
+
 /// Drops spinners whose action is visibly done (or that ran out of time).
 pub(super) fn prune_pending(inner: &mut Inner) {
     let done: Vec<String> = inner
@@ -158,6 +201,9 @@ pub(super) fn prune_pending(inner: &mut Inner) {
 }
 
 fn pending_done(inner: &Inner, path: &str, pending: &Pending) -> bool {
+    if pending.queued.is_some() {
+        return false;
+    }
     if pending.at.elapsed() > PENDING_LIMIT {
         return true;
     }

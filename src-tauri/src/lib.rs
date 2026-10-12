@@ -286,6 +286,10 @@ pub fn run() {
             core.record_app("start");
             // After a restart for an update: the servers, tabs and Claude sessions it closed.
             let restored = core.restore();
+            // Not after that restart: what ran came back, and what was stopped stays stopped.
+            if restored.is_none() {
+                core.start_launch_teams();
+            }
 
             // The login item points at whichever binary registered it; re-register from the
             // installed app so it never launches a stale or dev build.
@@ -446,6 +450,15 @@ pub fn run() {
             commands::update_plan,
             commands::update_install,
             commands::open_link,
+            commands::team_create,
+            commands::team_rename,
+            commands::team_delete,
+            commands::team_projects,
+            commands::team_order,
+            commands::team_collapse,
+            commands::team_launch,
+            commands::team_start,
+            commands::team_stop,
             commands::quit
         ])
         .build(tauri::generate_context!())

@@ -49,6 +49,21 @@ pub struct ProjectSettings {
     pub links: Vec<ProjectLink>,
 }
 
+/// A team: projects listed together, started and stopped together.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Team {
+    pub id: String,
+    pub name: String,
+    /// Its projects' paths, in the order they are listed and started. A project is in one team
+    /// at most.
+    pub projects: Vec<String>,
+    /// Folded in the list: its head alone.
+    pub collapsed: bool,
+    /// Its servers start when Pitwall does.
+    pub start_at_launch: bool,
+}
+
 /// Which of Pitwall's sounds (`sounds/`) each event plays; empty for none.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -148,6 +163,9 @@ pub struct Settings {
     pub track: Option<TrackSettings>,
     /// How the app is drawn: `system` (as the system is), `dark` or `light`.
     pub theme: String,
+    /// The list's teams, in the order they are drawn (`core/teams.rs`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub teams: Vec<Team>,
 }
 
 impl Default for Settings {
@@ -177,6 +195,7 @@ impl Default for Settings {
             board_view: None,
             track: None,
             theme: "system".into(),
+            teams: Vec::new(),
         }
     }
 }

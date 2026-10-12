@@ -7,6 +7,7 @@ import type {
   BoardColumn,
   Card,
   DaySummary,
+  Team,
   DepReport,
   DepScanDetails,
   ExtensionStatus,
@@ -332,6 +333,26 @@ export const api = {
   boardLink: (id: string, session: string) => invoke("board_link", { id, session }),
   /** Every card of the folder `from` goes to the project `to`, each in its column. */
   boardRehome: (from: string, to: string) => invoke("board_rehome", { from, to }),
+
+  /* Teams (core/teams.rs). Every change comes back in the next snapshot's `settings.teams`. */
+  /** A new team, last in the list, with these projects (each leaves the team it was in). */
+  teamCreate: (name: string, projects: string[] = []) => invoke<Team>("team_create", { name, projects }),
+  teamRename: (id: string, name: string) => invoke("team_rename", { id, name }),
+  /** The team goes; its projects stay listed, in no team. */
+  teamDelete: (id: string) => invoke("team_delete", { id }),
+  /** The team's projects, in order: reorders them, adds one (it leaves the team it was in) or
+   * drops one (it is in no team then). */
+  teamProjects: (id: string, projects: string[]) => invoke("team_projects", { id, projects }),
+  /** The teams' own order. */
+  teamOrder: (ids: string[]) => invoke("team_order", { ids }),
+  teamCollapse: (id: string, collapsed: boolean) => invoke("team_collapse", { id, collapsed }),
+  /** Whether its servers start when Pitwall does. */
+  teamLaunch: (id: string, on: boolean) => invoke("team_launch", { id, on }),
+  /** Starts its projects that don't run, one after the other in the team's order: the next
+   * once the one before answers on its address. */
+  teamStart: (id: string) => invoke("team_start", { id }),
+  teamStop: (id: string) => invoke("team_stop", { id }),
+
   quit: () => invoke("quit"),
 };
 

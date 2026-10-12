@@ -4,6 +4,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Teams",
+        "tr": "Takımlar",
+        "de": "Teams",
+        "es": "Equipos",
+        "ru": "Группы",
+        "ja": "チーム",
+        "zh-Hans": "团队"
+      },
+      "body": {
+        "en": "Put projects into teams. Drag teams, and the projects in them, into the order you want; start or stop a whole team at once.",
+        "tr": "Projeleri takımlara topla. Takımları ve içlerindeki projeleri sürükleyip sırala; bir takımı tek seferde başlat ya da durdur.",
+        "de": "Projekte in Teams zusammenfassen. Teams und ihre Projekte per Ziehen ordnen; ein ganzes Team auf einmal starten oder stoppen.",
+        "es": "Reúne proyectos en equipos. Arrastra los equipos y sus proyectos para ordenarlos; inicia o detén un equipo entero de una vez.",
+        "ru": "Объединяйте проекты в группы. Расставляйте группы и проекты в них перетаскиванием; запускайте или останавливайте всю группу сразу.",
+        "ja": "プロジェクトをチームにまとめられます。チームとその中のプロジェクトはドラッグで並べ替えでき、チーム全体を一度に起動・停止できます。",
+        "zh-Hans": "把项目归入团队。拖动即可调整团队及其中项目的顺序；可一次启动或停止整个团队。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Light theme",
         "tr": "Açık tema",
         "de": "Helles Design",

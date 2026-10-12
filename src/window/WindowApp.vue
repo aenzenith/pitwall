@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import ClaudeDot from "../components/ClaudeDot.vue";
 import Icon from "../components/Icon.vue";
 import Marquee from "../components/Marquee.vue";
 import Spinner from "../components/Spinner.vue";
@@ -14,23 +15,30 @@ import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
 import { filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
 import { onBoard } from "../lib/board";
-import { cardRequest, outputRequest, terminalRequest, trackTerminals } from "../lib/panel";
-import { dragRegion, terminalChord } from "../lib/platform";
+import { headKey, hintKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
+import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
+import { cardRequest, outputRequest, terminalRequest, trackTerminals } from "../lib/panel";
+import { dragRegion, keys, terminalChord } from "../lib/platform";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
-import type { Card, Project } from "../lib/types";
+import { applyDrop, claudeNotes, createTeam, deleteTeam, foldTeam, leaveTeam, looseProjects, membersOf, moveToTeam, nudgeTeam, orderTeams, renameTeam, startTeam, stopTeam, teamAsk, teamOf, teams, teamState, type ClaudeNote } from "../lib/teams";
+import type { Card, Project, Team } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
 import DepsView from "./DepsView.vue";
 import FuelView from "./FuelView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
 import SessionsView from "./SessionsView.vue";
+import TeamDetail from "./TeamDetail.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
 import TrackView from "./TrackView.vue";
 import UpdateDialog from "./UpdateDialog.vue";
+import TeamDeleteDialog from "./team/TeamDeleteDialog.vue";
+import TeamHead from "./team/TeamHead.vue";
+import TeamNameDialog from "./team/TeamNameDialog.vue";
 
 const filter = ref<Filter>("all");
 /** The project list, the track they run on, the day's timeline, Claude's sessions, the board of
@@ -127,27 +135,114 @@ function openSettings(tab?: "claude" | "track"): void {
 }
 const query = ref("");
 const selectedPath = ref<string | null>(null);
+/** The team whose own view the list shows (its sidebar entry), in place of a filter's. */
+const teamFilter = ref<string | null>(null);
+/** The team selected in the list: its details show in place of a project's. */
+const selectedTeamId = ref<string | null>(null);
+/** The projects in no team, folded under their head: for as long as the window lasts. */
+const looseFolded = ref(false);
 const tbody = ref<HTMLElement | null>(null);
-const reorder = useReorder(tbody);
+/** Drag to reorder: a row in its group or into another, a team's head among the teams. A row
+ * dropped under a folded head goes to that group's end. */
+const drag = useGroupReorder(tbody, (change) => applyDrop(change, (group) => sections.value.some((section) => section.head && (section.team?.id ?? "") === group && section.folded)));
+
+function selectProject(path: string): void {
+  selectedPath.value = path;
+  selectedTeamId.value = null;
+}
 
 function select(path: string): void {
-  if (reorder.isClick()) selectedPath.value = path;
+  if (drag.isClick()) selectProject(path);
+}
+
+/** A click on a team's head selects the team: its details show. (A double click folds or
+ * unfolds the group, as its arrow does: `fold`.) */
+function pressHead(section: Section): void {
+  if (drag.isClick() && section.team) selectedTeamId.value = section.team.id;
 }
 
 const projects = computed(() => snapshot.value?.projects ?? []);
 const anyBusy = computed(() => projects.value.some((p) => p.status === "busy"));
 const current = computed(() => filters.find((f) => f.id === filter.value) ?? filters[0]);
-const rows = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  const shown = projects.value.filter((p) => current.value.test(p));
-  // Searching: the quick switcher's fuzzy match and order (lib/fuzzy); else the list's own order.
-  return q ? searchProjects(shown, q).map((match) => match.project) : shown;
+const shownTeam = computed(() => teams.value.find((team) => team.id === teamFilter.value) ?? null);
+/** The toolbar's heading and the list's name: the team shown, else the filter. */
+const heading = computed(() => shownTeam.value?.name ?? t(current.value.label));
+
+/** The sidebar's teams, each with how many of its projects run. */
+const teamNav = computed(() => teams.value.map((team) => ({ team, ...teamState(team) })));
+
+/** The sidebar's team entries, dragged into order as the list's rows are (lib/reorder): the
+ * teams' own order, the same one their heads are dragged into in the list. */
+const teamList = ref<HTMLElement | null>(null);
+const teamDrag = useReorder(teamList, (moved, beside, after) => {
+  const ids = teams.value.map((team) => team.id).filter((id) => id !== moved);
+  const at = ids.indexOf(beside);
+  if (at < 0) return;
+  ids.splice(after ? at + 1 : at, 0, moved);
+  orderTeams(ids);
 });
+
+/** ⌥↑ and ⌥↓ on a sidebar entry move its team one place, the keyboard staying on it. */
+function onTeamNavKey(event: KeyboardEvent, id: string): void {
+  if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+  event.preventDefault();
+  nudgeTeam(id, event.key === "ArrowUp" ? -1 : 1);
+  void nextTick(() => Array.from(teamList.value?.querySelectorAll<HTMLElement>("[data-path]") ?? []).find((entry) => entry.dataset.path === id)?.focus());
+}
+
+/** The list is drawn in groups, each under its head: a team's own view, and every project while
+ * there are teams. The other filters and a search stay flat, as with no team at all. */
+const grouped = computed(() => query.value.trim() === "" && (shownTeam.value !== null || (filter.value === "all" && teams.value.length > 0)));
+
+/** A stretch of the list: a group under its head (`team` null: the projects in no team), or the
+ * whole flat list (`head` false). A folded group shows its head alone. */
+type Section = { key: string; head: boolean; team: Team | null; rows: Project[]; folded: boolean; total: number; running: number; busy: boolean; claude: ClaudeNote[] };
+
+const sections = computed<Section[]>(() => {
+  if (!grouped.value) {
+    const q = query.value.trim().toLowerCase();
+    const pool = shownTeam.value ? membersOf(shownTeam.value) : projects.value.filter((p) => current.value.test(p));
+    // Searching: the quick switcher's fuzzy match and order (lib/fuzzy); else the list's own order.
+    const found = q ? searchProjects(pool, q).map((match) => match.project) : pool;
+    return [{ key: "flat", head: false, team: null, rows: found, folded: false, total: found.length, running: 0, busy: false, claude: [] }];
+  }
+
+  const ofTeam = (team: Team, folded: boolean): Section => {
+    const state = teamState(team);
+    return { key: `team:${team.id}`, head: true, team, rows: membersOf(team), folded, total: state.total, running: state.running, busy: state.busy, claude: state.claude };
+  };
+  // Its own view shows a team's rows whether it is folded in the list or not.
+  if (shownTeam.value) return [ofTeam(shownTeam.value, false)];
+
+  const list = teams.value.map((team) => ofTeam(team, team.collapsed));
+  const loose = looseProjects.value;
+  if (loose.length) {
+    list.push({ key: "loose", head: true, team: null, rows: loose, folded: looseFolded.value, total: loose.length, running: loose.filter((p) => p.status === "running").length, busy: false, claude: claudeNotes(loose) });
+  }
+  return list;
+});
+
+/** The rows drawn, top to bottom: a folded group's aren't. */
+const rows = computed(() => sections.value.flatMap((section) => (section.folded ? [] : section.rows)));
+/** Every project the list holds, a folded group's too. */
+const listed = computed(() => sections.value.flatMap((section) => section.rows));
+/** Something to draw: a flat list with a row, the groups while a project is listed, a team's own view always. */
+const listShown = computed(() => (grouped.value ? shownTeam.value !== null || projects.value.length > 0 : rows.value.length > 0));
 const selected = computed(() => projects.value.find((p) => p.path === selectedPath.value) ?? null);
+/** The selected team, while its head is drawn. */
+const selectedTeam = computed(() => sections.value.find((section) => section.head && section.team !== null && section.team.id === selectedTeamId.value)?.team ?? null);
+/** The project whose details and terminals show: none while a team is selected. */
+const shown = computed(() => (selectedTeam.value ? null : selected.value));
+
+/** In a flat list drawn while there are teams, a row is dragged among its own team's rows only
+ * (lib/groupReorder: `data-zone`); with the heads drawn, or with no team, it goes anywhere. */
+function zone(project: Project): string | undefined {
+  return grouped.value || !teams.value.length ? undefined : (teamOf(project.path)?.id ?? "");
+}
 
 /** The list shows a project with a terminal open: its tabs tell Claude's state in them
  * (TerminalPanel), which the sessions hold. */
-const listTabs = computed(() => view.value === "projects" && (selected.value?.terminals.length ?? 0) > 0);
+const listTabs = computed(() => view.value === "projects" && (shown.value?.terminals.length ?? 0) > 0);
 watch(
   listTabs,
   (tabs) => {
@@ -156,11 +251,12 @@ watch(
   { immediate: true },
 );
 
-// Keep a selection while there is something to show.
+// Keep a selection while there is something to show. A project folded away under its head stays
+// selected: only one the list holds no more gives way.
 watch(
-  rows,
+  listed,
   (list) => {
-    if (!list.some((p) => p.path === selectedPath.value)) selectedPath.value = list[0]?.path ?? null;
+    if (!list.some((p) => p.path === selectedPath.value)) selectedPath.value = rows.value[0]?.path ?? list[0]?.path ?? null;
   },
   { immediate: true },
 );
@@ -170,9 +266,47 @@ function count(id: Filter): number {
   return f ? projects.value.filter(f.test).length : 0;
 }
 
+// A team that is gone takes its own view with it: the list is back on its filter.
+watch(teams, (list) => {
+  if (teamFilter.value && !list.some((team) => team.id === teamFilter.value)) teamFilter.value = null;
+});
+
 function pick(id: Filter): void {
   filter.value = id;
+  teamFilter.value = null;
   view.value = "projects";
+}
+
+/** A team's sidebar entry: the list shows that team alone, selected until a row is clicked. */
+function pickTeam(id: string): void {
+  teamFilter.value = id;
+  query.value = "";
+  view.value = "projects";
+  selectedTeamId.value = id;
+}
+
+/** A head's arrow. Folding a team away with the selected project in it selects the team. */
+function fold(section: Section): void {
+  if (!section.team) {
+    looseFolded.value = !looseFolded.value;
+    return;
+  }
+  if (!section.folded && !selectedTeam.value && section.rows.some((p) => p.path === selectedPath.value)) selectedTeamId.value = section.team.id;
+  foldTeam(section.team.id, !section.folded);
+}
+
+/** The toolbar's Start all and Stop all are the shown team's in its own view, else everyone's. */
+const shownState = computed(() => (shownTeam.value ? teamState(shownTeam.value) : null));
+const acting = computed(() => shownState.value?.busy ?? anyBusy.value);
+
+function startAll(): void {
+  if (shownTeam.value) startTeam(shownTeam.value.id);
+  else void api.startAll();
+}
+
+function stopAll(): void {
+  if (shownTeam.value) stopTeam(shownTeam.value.id);
+  else void api.stopAll();
 }
 
 function toggle(project: Project): void {
@@ -185,10 +319,76 @@ function toggleFrom(event: MouseEvent, project: Project): void {
   if (event.detail === 0) ((event.currentTarget as HTMLElement).closest("[data-path]") as HTMLElement | null)?.focus();
 }
 
-/** The table is one Tab stop: arrows move the selection, ↵ opens the editor, Space starts or stops. */
+/** The line the keyboard is on, while it is in the list. */
+const keyLine = ref<string | null>(null);
+/** The list's one Tab stop: the line the keyboard is on; coming in, the selected team's head or
+ * the selected row, and the first line while neither is drawn. */
+const tabStop = computed(() => {
+  const drawn = sections.value.flatMap((section) => [...(section.head ? [headKey(section.team?.id ?? "")] : []), ...(section.folded ? [] : section.rows.map((p) => rowKey(p.path)))]);
+  const wanted = [keyLine.value, selectedTeam.value && headKey(selectedTeam.value.id), selectedPath.value && rowKey(selectedPath.value)];
+  return wanted.find((key) => key && drawn.includes(key)) ?? drawn[0] ?? null;
+});
+
+function onListFocus(event: FocusEvent): void {
+  const line = (event.target as HTMLElement).closest<HTMLElement>("[data-path], [data-group]");
+  keyLine.value = line ? (line.dataset.path !== undefined ? rowKey(line.dataset.path) : headKey(line.dataset.group ?? "")) : null;
+}
+
+function onListBlur(event: FocusEvent): void {
+  if (!tbody.value?.contains(event.relatedTarget as Node | null)) keyLine.value = null;
+}
+
+/** The list's rows and heads, top to bottom. */
+function lines(): HTMLElement[] {
+  return Array.from(tbody.value?.querySelectorAll<HTMLElement>(":scope > [data-path], :scope > [data-group]") ?? []);
+}
+
+/**
+ * On a group's head: ←/→ reach its buttons, ↑/↓ go to the line above or below (a row is selected,
+ * as the rows' own arrows do), and ⌥↑/⌥↓ move the team among the teams. True when the key was
+ * the head's.
+ */
+function onHeadKey(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement;
+  const head = target.closest<HTMLElement>("[data-group]");
+  if (!head || event.metaKey || event.ctrlKey) return false;
+  const id = head.dataset.group ?? "";
+
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    if (event.altKey) return false;
+    event.preventDefault();
+    // The head, then its enabled buttons left to right, as a row's.
+    const stops = [head, ...Array.from(head.querySelectorAll<HTMLElement>("button:not(:disabled)"))];
+    stops[Math.min(stops.length - 1, Math.max(0, stops.indexOf(target) + (event.key === "ArrowRight" ? 1 : -1)))]?.focus();
+    return true;
+  }
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return false;
+
+  event.preventDefault();
+  const by = event.key === "ArrowDown" ? 1 : -1;
+  if (event.altKey) {
+    if (!id || shownTeam.value) return true;
+    nudgeTeam(id, by);
+    // The head moved in the page: the keyboard stays on it.
+    void nextTick(() => lines().find((line) => line.dataset.group === id)?.focus());
+    return true;
+  }
+
+  const all = lines();
+  const next = all[all.indexOf(head) + by];
+  if (!next) return true;
+  if (next.dataset.path !== undefined) selectProject(next.dataset.path);
+  next.focus();
+  next.scrollIntoView({ block: "nearest" });
+  return true;
+}
+
+/** The list is one Tab stop: arrows go along its rows and heads (a row is selected), ↵ opens the
+ * editor, Space starts or stops. */
 function onTableKey(event: KeyboardEvent): void {
+  if (onHeadKey(event)) return;
   rowKeys(event, {
-    move: (path) => (selectedPath.value = path),
+    move: selectProject,
     enter: (path) => void api.openEditor(path),
     space: (path) => {
       const project = rows.value.find((p) => p.path === path);
@@ -197,9 +397,60 @@ function onTableKey(event: KeyboardEvent): void {
   });
 }
 
-/** ↓ in the search box goes on to the selected row. */
+/** ↓ in the search box goes on to the list's Tab stop. */
 function focusSelected(): void {
-  tbody.value?.querySelector<HTMLElement>('[data-path][tabindex="0"]')?.focus();
+  tbody.value?.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
+}
+
+/* ---------- teams: menus and the small dialogs ---------- */
+
+const menu = useNativeMenu();
+
+/** Right-click on a row: the project goes to another team, to a new one, or out of its own. */
+function rowMenu(event: MouseEvent, project: Project): void {
+  selectProject(project.path);
+  const own = teamOf(project.path);
+  const entries: MenuEntry[] = teams.value.filter((team) => team.id !== own?.id).map((team) => ({ text: t("team.moveTo", { team: team.name }), action: () => moveToTeam(project.path, team.id) }));
+  entries.push({ text: t("team.newMenu"), action: () => (teamAsk.value = { kind: "create", projects: [project.path], show: false }) });
+  if (own) entries.push("separator", { text: t("team.leave"), action: () => void leaveTeam(project.path) });
+  void menu.popup(event, entries);
+}
+
+/** Right-click on a team, on its head in the list or its entry in the sidebar. */
+function teamMenu(at: MenuPoint, team: Team): void {
+  const state = teamState(team);
+  void menu.popup(at, [
+    state.running
+      ? { text: t("team.stop"), enabled: !state.busy, action: () => stopTeam(team.id) }
+      : { text: t("team.start"), enabled: !state.busy && state.total > 0, action: () => startTeam(team.id) },
+    "separator",
+    { text: t("team.renameMenu"), action: () => (teamAsk.value = { kind: "rename", team }) },
+    { text: t("team.delete"), action: () => (teamAsk.value = { kind: "delete", team }) },
+  ]);
+}
+
+/** What a new team can take in: the listed projects in no team, in the list's order, with the
+ * ones it was asked for (a row's "New team…") first and ticked, whatever team those are in. */
+const teamChoices = computed(() => {
+  const asked = teamAsk.value?.kind === "create" ? teamAsk.value.projects : [];
+  const loose = looseProjects.value.filter((project) => !asked.includes(project.path));
+  return [...projects.value.filter((project) => asked.includes(project.path)), ...loose].map((project) => ({ path: project.path, name: project.name }));
+});
+
+/** A name was given: a team is renamed, or made with the projects ticked. A team made from the
+ * sidebar is shown on its own; one made from a row's menu is selected where the list stands. */
+async function saveTeamName(name: string, projects: string[]): Promise<void> {
+  const ask = teamAsk.value;
+  if (ask?.kind === "rename") renameTeam(ask.team.id, name);
+  if (ask?.kind !== "create") return;
+  const team = await createTeam(name, projects);
+  if (!team) return;
+  if (ask.show) pickTeam(team.id);
+  else selectedTeamId.value = team.id;
+}
+
+function removeAskedTeam(): void {
+  if (teamAsk.value?.kind === "delete") deleteTeam(teamAsk.value.team.id);
 }
 
 /** In full screen the traffic lights are gone, and so is the room kept for them. */
@@ -242,9 +493,14 @@ function revealProject(path: string): void {
   view.value = "projects";
   if (!rows.value.some((p) => p.path === path)) {
     filter.value = "all";
+    teamFilter.value = null;
     query.value = "";
+    // Folded away under its head: that group opens.
+    const team = teamOf(path);
+    if (team?.collapsed) foldTeam(team.id, false);
+    else if (!team) looseFolded.value = false;
   }
-  selectedPath.value = path;
+  selectProject(path);
 }
 
 /** From the switcher (⌘↵ on a command): the project, with that command's output showing. */
@@ -291,6 +547,8 @@ async function revealTerminal(path: string, id: number): Promise<void> {
 /** The Sessions page's "Open a Claude terminal": one, in the project selected in the list. */
 async function openClaudeTerminal(): Promise<void> {
   view.value = "projects";
+  // The project's terminals show under the list: a team's details give way to its own.
+  selectedTeamId.value = null;
   await nextTick();
   void terminalPanel.value?.openTerminal(true);
 }
@@ -358,39 +616,74 @@ function server(project: Project): string {
           </button>
         </span>
       </div>
-      <nav :aria-label="t('window.filters')" class="nav">
-        <button
-          v-for="f in filters"
-          :key="f.id"
-          type="button"
-          :class="{ on: view === 'projects' && filter === f.id }"
-          :aria-current="view === 'projects' && filter === f.id ? 'page' : undefined"
-          @click="pick(f.id)"
-        >
-          <Icon :name="f.icon" /> {{ t(f.label) }}
-          <span :class="['count', { hot: f.id === 'waiting' && count(f.id) > 0 }]">{{ count(f.id) }}</span>
-        </button>
-      </nav>
-      <div class="nav today">
-        <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
-        <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="view = 'sessions'">
-          <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
-        </button>
-        <button type="button" :class="{ on: view === 'board' }" :aria-current="view === 'board' ? 'page' : undefined" @click="view = 'board'">
-          <Icon name="board" /> <span class="nav-label">{{ t("board.nav") }}</span>
-        </button>
-        <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="view = 'track'"><Icon name="flag" /> {{ t("track.nav") }}</button>
-        <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="view = 'fuel'">
-          <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
-          <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
-        </button>
-        <button type="button" :class="{ on: view === 'deps' }" :aria-current="view === 'deps' ? 'page' : undefined" @click="view = 'deps'">
-          <Icon name="tools" /> <span class="nav-label">{{ t("deps.nav") }}</span>
-          <span v-if="depsBadge" class="deps-badge" :aria-label="t('deps.group.attention', { count: depsBadge })">{{ depsBadge }}</span>
-        </button>
+      <!-- The filters, the teams and the pages: in a window too short for them all, they scroll
+           between the brand and the foot. -->
+      <div class="side-scroll">
+        <nav :aria-label="t('window.filters')" class="nav">
+          <button
+            v-for="f in filters"
+            :key="f.id"
+            type="button"
+            :class="{ on: view === 'projects' && !shownTeam && filter === f.id }"
+            :aria-current="view === 'projects' && !shownTeam && filter === f.id ? 'page' : undefined"
+            @click="pick(f.id)"
+          >
+            <Icon :name="f.icon" /> {{ t(f.label) }}
+            <span :class="['count', { hot: f.id === 'waiting' && count(f.id) > 0 }]">{{ count(f.id) }}</span>
+          </button>
+        </nav>
+        <!-- The teams: an entry each, the list's view of that team alone. Its label and "+" are
+             always here, so the first team can be made. -->
+        <nav :aria-label="t('team.section')" class="nav team-nav">
+          <div class="team-nav-head">
+            <span class="section-label">{{ t("team.section") }}</span>
+            <button type="button" class="team-add" :aria-label="t('team.new')" :title="t('team.new')" @click="teamAsk = { kind: 'create', projects: [], show: true }">
+              <Icon name="plus" :size="13" />
+            </button>
+          </div>
+          <!-- Dragged into order, or moved with ⌥↑ and ⌥↓; a press that doesn't travel is a click. -->
+          <div ref="teamList" :class="['team-list', teamDrag.listClass()]">
+            <button
+              v-for="entry in teamNav"
+              :key="entry.team.id"
+              type="button"
+              :data-path="entry.team.id"
+              :class="[{ on: view === 'projects' && shownTeam?.id === entry.team.id }, teamDrag.rowClass(entry.team.id)]"
+              :style="teamDrag.rowStyle(entry.team.id)"
+              :aria-current="view === 'projects' && shownTeam?.id === entry.team.id ? 'page' : undefined"
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              @pointerdown="teamDrag.down($event, entry.team.id)"
+              @click="teamDrag.isClick() && pickTeam(entry.team.id)"
+              @keydown="onTeamNavKey($event, entry.team.id)"
+              @contextmenu="teamMenu($event, entry.team)"
+            >
+              <Icon name="users" /> <span class="nav-label">{{ entry.team.name }}</span>
+              <!-- What Claude is at in the team, what waits on you first: its rows may be folded away. -->
+              <ClaudeDot v-if="entry.claude.length" :live="{ phase: entry.claude[0].phase, text: entry.claude.map((note) => note.text).join(' · ') }" />
+              <span :class="['team-count', { live: entry.running > 0 }]" :aria-label="t('team.runningOf', { running: entry.running, total: entry.total })">{{ entry.running }}/{{ entry.total }}</span>
+            </button>
+          </div>
+        </nav>
+        <div class="nav today">
+          <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
+          <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="view = 'sessions'">
+            <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
+          </button>
+          <button type="button" :class="{ on: view === 'board' }" :aria-current="view === 'board' ? 'page' : undefined" @click="view = 'board'">
+            <Icon name="board" /> <span class="nav-label">{{ t("board.nav") }}</span>
+          </button>
+          <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="view = 'track'"><Icon name="flag" /> {{ t("track.nav") }}</button>
+          <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="view = 'fuel'">
+            <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
+            <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
+          </button>
+          <button type="button" :class="{ on: view === 'deps' }" :aria-current="view === 'deps' ? 'page' : undefined" @click="view = 'deps'">
+            <Icon name="tools" /> <span class="nav-label">{{ t("deps.nav") }}</span>
+            <span v-if="depsBadge" class="deps-badge" :aria-label="t('deps.group.attention', { count: depsBadge })">{{ depsBadge }}</span>
+          </button>
+        </div>
       </div>
-      <div class="grow"></div>
-      <div class="nav">
+      <div class="nav foot">
         <button type="button" @click="api.pickFolder()"><Icon name="plus" /> {{ t("window.addProject") }}</button>
         <button type="button" :class="{ on: settingsOpen }" @click="openSettings()"><Icon name="settings" /> {{ t("common.settings") }}</button>
       </div>
@@ -413,17 +706,21 @@ function server(project: Project): string {
       <main class="main">
         <!-- Its heading and free space drag the window; the search box and buttons stay clickable. -->
         <div class="toolbar" :data-tauri-drag-region="dragRegion">
-          <div class="heading">{{ t(current.label) }}</div>
+          <div class="heading">{{ heading }}</div>
           <label class="sr" for="search">{{ t("common.searchProjects") }}</label>
           <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" @keydown.down.prevent="focusSelected" />
-          <Spinner v-if="anyBusy" class="busy-spin" />
-          <button type="button" class="control" :disabled="!projects.length || anyBusy" @click="api.startAll()">{{ t("common.startAll") }}</button>
-          <button type="button" class="control" :disabled="!snapshot?.running || anyBusy" @click="api.stopAll()">{{ t("common.stopAll") }}</button>
+          <Spinner v-if="acting" class="busy-spin" />
+          <button type="button" class="control" :disabled="!(shownState ? shownState.total : projects.length) || acting" @click="startAll">{{ t("common.startAll") }}</button>
+          <button type="button" class="control" :disabled="!(shownState ? shownState.running : snapshot?.running) || acting" @click="stopAll">{{ t("common.stopAll") }}</button>
         </div>
 
-        <span id="rows-keys" class="sr-only">{{ t("common.rowKeys") }}</span>
-        <!-- One Tab stop: the selected row takes the focus; ↑/↓ move it, ←/→ reach its buttons. -->
-        <div v-if="rows.length" class="table" role="grid" :aria-label="t(current.label)" aria-describedby="rows-keys">
+        <span id="rows-keys" class="sr-only">
+          {{ t("common.rowKeys") }}
+          <template v-if="grouped">{{ t("team.headKeys", { up: keys("Alt+ArrowUp"), down: keys("Alt+ArrowDown") }) }}</template>
+        </span>
+        <!-- The list is one Tab stop: the selected row (or team's head) takes the focus; ↑/↓ move
+             it along rows and heads, ←/→ reach a line's buttons. -->
+        <div v-if="listShown" class="table" role="grid" :aria-label="heading" aria-describedby="rows-keys">
           <div class="thead" role="row">
             <span role="columnheader">{{ t("window.col.project") }}</span>
             <span role="columnheader">{{ t("window.col.branch") }}</span>
@@ -431,58 +728,95 @@ function server(project: Project): string {
             <span role="columnheader">{{ t("window.col.claude") }}</span>
             <span role="columnheader" :aria-label="t('window.col.actions')"></span>
           </div>
-          <div ref="tbody" :class="['tbody', reorder.listClass()]" role="rowgroup" @keydown="onTableKey">
-            <div
-              v-for="project in rows"
-              :key="project.path"
-              role="row"
-              :aria-selected="project.path === selectedPath"
-              :tabindex="project.path === selectedPath ? 0 : -1"
-              :data-path="project.path"
-              :class="['trow', { selected: project.path === selectedPath }, reorder.rowClass(project.path)]"
-              :style="reorder.rowStyle(project.path)"
-              :title="t('window.rowTitle')"
-              @pointerdown="reorder.down($event, project.path)"
-              @click="select(project.path)"
-              @dblclick="api.openEditor(project.path)"
-            >
-              <span class="cell-project" role="gridcell">
-                <StatusIcon :project="project" ring="var(--bg-app)" />
-                <span class="names">
-                  <span class="name">
-                    <span class="name-text">{{ project.name }}</span>
-                    <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
+          <!-- Heads, rows and the line of an empty team are all the list's own children, one under
+               the other: the keyboard (lib/rows) and the drag (lib/groupReorder) count on it. -->
+          <div ref="tbody" :class="['tbody', { grouped }, drag.listClass()]" role="rowgroup" @keydown="onTableKey" @focusin="onListFocus" @focusout="onListBlur">
+            <template v-for="section in sections" :key="section.key">
+              <TeamHead
+                v-if="section.head"
+                :team="section.team"
+                :total="section.total"
+                :running="section.running"
+                :claude="section.claude"
+                :busy="section.busy"
+                :folded="section.folded"
+                :selected="section.team !== null && section.team.id === selectedTeam?.id"
+                :foldable="!shownTeam"
+                :tab-stop="tabStop === headKey(section.team?.id ?? '')"
+                :class="drag.lineClass(headKey(section.team?.id ?? ''))"
+                :style="drag.lineStyle(headKey(section.team?.id ?? ''))"
+                @pointerdown="section.team && drag.down($event, headKey(section.team.id))"
+                @contextmenu="section.team && teamMenu($event, section.team)"
+                @select="pressHead(section)"
+                @fold="fold(section)"
+              />
+              <template v-if="!section.folded">
+                <div
+                  v-for="project in section.rows"
+                  :key="project.path"
+                  role="row"
+                  :aria-selected="project.path === shown?.path"
+                  :tabindex="tabStop === rowKey(project.path) ? 0 : -1"
+                  :data-path="project.path"
+                  :data-zone="zone(project)"
+                  :class="['trow', { selected: project.path === shown?.path }, drag.lineClass(rowKey(project.path))]"
+                  :style="drag.lineStyle(rowKey(project.path))"
+                  :title="t('window.rowTitle')"
+                  @pointerdown="drag.down($event, rowKey(project.path))"
+                  @click="select(project.path)"
+                  @dblclick="api.openEditor(project.path)"
+                  @contextmenu="rowMenu($event, project)"
+                >
+                  <span class="cell-project" role="gridcell">
+                    <StatusIcon :project="project" ring="var(--bg-app)" />
+                    <span class="names">
+                      <span class="name">
+                        <span class="name-text">{{ project.name }}</span>
+                        <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
+                      </span>
+                      <span class="path">{{ project.path }}</span>
+                    </span>
                   </span>
-                  <span class="path">{{ project.path }}</span>
-                </span>
-              </span>
-              <span :class="['cell-git', { dirty: project.git?.changes }]" role="gridcell">{{ gitLine(project.git) || "—" }}</span>
-              <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]" role="gridcell"><Marquee :text="server(project)" /></span>
-              <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]" role="gridcell"><Marquee :text="claudeState(project, now) || '—'" /></span>
-              <span class="cell-actions" role="gridcell" data-no-drag @click.stop @dblclick.stop>
-                <button
-                  type="button"
-                  class="icon"
-                  tabindex="-1"
-                  :aria-label="t(project.favourite ? 'window.unfavouriteName' : 'window.favouriteName', { name: project.name })"
-                  :title="t(project.favourite ? 'window.favourite' : 'window.addFavourite')"
-                  @click="api.setFavourite(project.path, !project.favourite)"
+                  <span :class="['cell-git', { dirty: project.git?.changes }]" role="gridcell">{{ gitLine(project.git) || "—" }}</span>
+                  <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]" role="gridcell"><Marquee :text="server(project)" /></span>
+                  <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]" role="gridcell"><Marquee :text="claudeState(project, now) || '—'" /></span>
+                  <span class="cell-actions" role="gridcell" data-no-drag @click.stop @dblclick.stop>
+                    <button
+                      type="button"
+                      class="icon"
+                      tabindex="-1"
+                      :aria-label="t(project.favourite ? 'window.unfavouriteName' : 'window.favouriteName', { name: project.name })"
+                      :title="t(project.favourite ? 'window.favourite' : 'window.addFavourite')"
+                      @click="api.setFavourite(project.path, !project.favourite)"
+                    >
+                      <Icon :name="project.favourite ? 'star-filled' : 'star'" :size="14" />
+                    </button>
+                    <button
+                      type="button"
+                      class="icon"
+                      tabindex="-1"
+                      :disabled="project.status === 'busy'"
+                      :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
+                      @click="toggleFrom($event, project)"
+                    >
+                      <Spinner v-if="project.status === 'busy'" />
+                      <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
+                    </button>
+                  </span>
+                </div>
+                <!-- A team with no project yet: one line under its head says how one gets in; in the
+                     team's own view, where there is no row to drag, only that it has none. -->
+                <div
+                  v-if="section.team && !section.rows.length"
+                  role="row"
+                  :data-hint="section.team.id"
+                  :class="['ghint', drag.lineClass(hintKey(section.team.id))]"
+                  :style="drag.lineStyle(hintKey(section.team.id))"
                 >
-                  <Icon :name="project.favourite ? 'star-filled' : 'star'" :size="14" />
-                </button>
-                <button
-                  type="button"
-                  class="icon"
-                  tabindex="-1"
-                  :disabled="project.status === 'busy'"
-                  :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
-                  @click="toggleFrom($event, project)"
-                >
-                  <Spinner v-if="project.status === 'busy'" />
-                  <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
-                </button>
-              </span>
-            </div>
+                  <span role="gridcell" aria-colspan="5">{{ t(shownTeam ? "team.noMembers" : "team.empty") }}</span>
+                </div>
+              </template>
+            </template>
           </div>
         </div>
 
@@ -498,10 +832,12 @@ function server(project: Project): string {
         </section>
 
         <!-- The selected project's terminals, level with the output panel beside it. -->
-        <TerminalPanel v-if="selected" ref="terminalPanel" :project="selected" />
+        <TerminalPanel v-if="shown" ref="terminalPanel" :project="shown" />
       </main>
 
-      <ProjectDetail v-if="selected" :project="selected" />
+      <!-- A selected team's details take the pane; else the selected project's. -->
+      <TeamDetail v-if="selectedTeam" :team="selectedTeam" />
+      <ProjectDetail v-else-if="selected" :project="selected" />
       <!-- Nothing to show: the panel stays blank but keeps its place, so the layout never jumps.
            The middle panel already shows the glyph and what to do. -->
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
@@ -510,6 +846,11 @@ function server(project: Project): string {
     <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" />
     <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
     <UpdateDialog v-if="updateOpen && update" :update="update" @close="updateOpen = false" />
+    <!-- Naming a team (a new one, or a rename) and deleting one, asked for from the sidebar, the
+         list or the team's details (lib/teams: teamAsk). -->
+    <TeamNameDialog v-if="teamAsk?.kind === 'create'" :name="null" :choices="teamChoices" :picked="teamAsk.projects" @save="saveTeamName" @close="teamAsk = null" />
+    <TeamNameDialog v-else-if="teamAsk?.kind === 'rename'" :name="teamAsk.team.name" @save="saveTeamName" @close="teamAsk = null" />
+    <TeamDeleteDialog v-else-if="teamAsk?.kind === 'delete'" :team="teamAsk.team" @remove="removeAskedTeam" @close="teamAsk = null" />
   </div>
 </template>
 
@@ -634,6 +975,98 @@ function server(project: Project): string {
   margin-top: 12px;
 }
 
+/* The teams, between the filters and the pages. */
+.team-nav {
+  margin-top: 12px;
+}
+
+.team-nav-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 4px 0 10px;
+}
+
+.team-nav-head .section-label {
+  flex-grow: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The entries themselves, apart from the label's row: the box a dragged one stays in. */
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Drag to reorder, as the list's rows (lib/reorder): the entry lifts and follows the pointer,
+   the others slide aside, and on release it slides into place. */
+.team-list.reordering button {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.team-list.reordering button:hover:not(.on, .dragging) {
+  background: transparent;
+}
+
+.team-list button.dragging {
+  position: relative;
+  z-index: 2;
+  background: var(--bg-lit);
+  color: var(--text-strong);
+  box-shadow: 0 10px 18px -12px var(--shade-drag);
+  transition: none;
+}
+
+.team-list.reordering button.dragging.settling {
+  transition: transform 160ms ease-out;
+}
+
+.team-list.frozen button {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-list.reordering button,
+  .team-list.reordering button.dragging.settling {
+    transition: none;
+  }
+}
+
+/* Smaller than a sidebar entry: it sits on the label's line. */
+.nav .team-add {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  justify-content: center;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--text-subtle);
+}
+
+.nav .team-add:hover {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+/* How many of the team's projects run, of how many: green once one does. */
+.team-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.team-count.live {
+  color: var(--run);
+}
+
 /* A long name gives way; the badge beside it never does. */
 .nav-label {
   min-width: 0;
@@ -670,8 +1103,51 @@ function server(project: Project): string {
   color: var(--warn);
 }
 
-.grow {
-  flex-grow: 1;
+/* All the room between the brand and the foot. Too short for what it holds (a small window,
+   many teams), it scrolls: its bar takes the sidebar's own padding, and what it holds keeps its
+   width (the sidebar's 232px less its padding and line), so nothing shifts when the bar comes.
+   The room around is for the keyboard's ring, which the scrolling would cut. */
+.side-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: -3px -10px 0 -3px;
+  padding: 3px 0 3px 3px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.side-scroll > .nav {
+  width: 211px;
+}
+
+.foot {
+  flex-shrink: 0;
+  padding-top: 6px;
+}
+
+/* The shortest window (560px): the sidebar's parts close up, each entry as tall as ever, so that
+   with no team all of them show without scrolling. */
+@media (max-height: 600px) {
+  .sidebar {
+    padding-bottom: 8px;
+  }
+
+  .brand {
+    padding-bottom: 8px;
+  }
+
+  .team-nav,
+  .today {
+    margin-top: 6px;
+  }
+
+  .team-nav-head {
+    height: 22px;
+  }
+
+  .foot {
+    padding-top: 2px;
+  }
 }
 
 .main {
@@ -777,7 +1253,7 @@ input[type="search"]::placeholder {
 
 /* Fills the panel down to the terminals, so a row can be dragged anywhere in it (dropped in the
    empty space it slides up to the last place) and its shadow is never cut. The same room on
-   every side; a dragged row keeps it from the edges too (lib/reorder). */
+   every side; a dragged row keeps it from the edges too (lib/groupReorder). */
 .tbody {
   flex: 1 1 auto;
   min-height: 0;
@@ -785,10 +1261,26 @@ input[type="search"]::placeholder {
   padding: 10px;
 }
 
+/* In groups, each head brings its own room above it (team/TeamHead): the first sits as far from
+   the table's head line as a first row does. */
+.tbody.grouped {
+  padding-top: 4px;
+}
+
 .trow {
   padding: 7px 10px;
   border-radius: 8px;
   cursor: pointer;
+}
+
+/* The line of a team with no project yet, under its head, level with the team's name. */
+.ghint {
+  padding: 4px 10px 8px 31px;
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The keyboard's row: the ring inside, so neighbours and the list's edge never cut it. */
@@ -806,8 +1298,9 @@ input[type="search"]::placeholder {
 }
 
 /* Drag to reorder: the dragged row lifts and follows the pointer, the others slide aside to
-   show where it lands, and on release it slides into place (lib/reorder). */
-.tbody.reordering .trow {
+   show where it lands, and on release it slides into place (lib/groupReorder). A team's head
+   does the same among the heads, and carries its rows along. */
+.tbody.reordering :is(.trow, .ghead, .ghint) {
   transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -825,21 +1318,28 @@ input[type="search"]::placeholder {
     inset 0 0 0 1px var(--line-selected);
 }
 
-.tbody.reordering .trow.dragging {
+/* What a head carries, and the head itself: over the lines they pass, which don't show through. */
+.tbody.reordering .carried:not(.trow.dragging) {
+  position: relative;
+  z-index: 2;
+  background: var(--bg-app);
+}
+
+.tbody.reordering .carried {
   transition: none;
 }
 
-.tbody.reordering .trow.dragging.settling {
+.tbody.reordering .carried.settling {
   transition: transform 160ms ease-out;
 }
 
-.tbody.frozen .trow {
+.tbody.frozen :is(.trow, .ghead, .ghint) {
   transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tbody.reordering .trow,
-  .tbody.reordering .trow.dragging.settling {
+  .tbody.reordering :is(.trow, .ghead, .ghint),
+  .tbody.reordering .carried.settling {
     transition: none;
   }
 }

@@ -7,6 +7,7 @@ import Icon from "../components/Icon.vue";
 import { t } from "../lib/i18n";
 import { keys, TERMINAL_MOD } from "../lib/platform";
 import {
+  chosenTerminal,
   COLLAPSED_HEIGHT,
   COLLAPSE_MS,
   outputCollapsed,
@@ -45,8 +46,6 @@ const collapsed = props.track ? trackTerminalCollapsed : terminalCollapsed;
 
 const panel = ref<HTMLElement | null>(null);
 const viewport = ref<HTMLElement | null>(null);
-/** The tab shown, per project, so coming back to a project shows the same one. */
-const chosen = ref<Record<string, number>>({});
 const opening = ref(false);
 /** The tab being renamed: double-click opens the rename dialog for it. */
 const renaming = ref<{ id: number; name: string } | null>(null);
@@ -66,7 +65,7 @@ const live = computed(() => {
   return states;
 });
 const active = computed(() => {
-  const id = chosen.value[props.project.path];
+  const id = chosenTerminal.value[props.project.path];
   return terminals.value.find((t) => t.id === id) ?? terminals.value[terminals.value.length - 1] ?? null;
 });
 
@@ -119,14 +118,14 @@ async function openTerminal(claude = false): Promise<void> {
     const size = viewport.value ? measure(viewport.value) : null;
     const view = await api.openTerminal(props.project.path, claude, size);
     if (props.track) trackTerminals.add(view.id);
-    chosen.value = { ...chosen.value, [props.project.path]: view.id };
+    chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: view.id };
   } finally {
     opening.value = false;
   }
 }
 
 function show(id: number): void {
-  chosen.value = { ...chosen.value, [props.project.path]: id };
+  chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: id };
 }
 
 /** A tab asked for by a click, Return or Space: shown, and a collapsed panel comes up with it. */

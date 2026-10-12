@@ -243,14 +243,22 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         })
         .collect();
 
-    // A fixed order: the one the user dragged into place, then everything else by name. State
+    // A fixed order: the teams' projects first (the teams in their order, each one's projects in
+    // its own), then the order the user dragged into place, then everything else by name. State
     // changes (Claude, servers) never move a row.
+    let teams = super::teams::places(&inner.settings.teams);
     let position = |p: &ProjectView| inner.settings.order.iter().position(|path| path == &p.path);
-    projects.sort_by(|a, b| match (position(a), position(b)) {
+    let loose = |a: &ProjectView, b: &ProjectView| match (position(a), position(b)) {
         (Some(x), Some(y)) => x.cmp(&y),
         (Some(_), None) => std::cmp::Ordering::Less,
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    };
+    projects.sort_by(|a, b| match (teams.get(a.path.as_str()), teams.get(b.path.as_str())) {
+        (Some(x), Some(y)) => x.cmp(y),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => loose(a, b),
     });
 
     Snapshot {

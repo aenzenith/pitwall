@@ -61,6 +61,12 @@ export const trackTerminalHeight = ref(TRACK_TERMINAL_DEFAULT);
 export const trackTerminalCollapsed = ref(true);
 
 /**
+ * The terminal tab shown, per project, so coming back to a project shows the same one: its panel
+ * goes away meanwhile (a team selected, another page shown).
+ */
+export const chosenTerminal = ref<Record<string, number>>({});
+
+/**
  * The terminals opened from the Track page's panel, by id (ids are never used twice). A Claude
  * session brought up shows where its work was started: one of these, on the Track page.
  */

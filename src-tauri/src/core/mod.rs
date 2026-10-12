@@ -45,6 +45,7 @@ mod servers;
 mod sessions;
 mod snapshot;
 mod supervise;
+mod teams;
 mod terminal;
 mod watch;
 pub use activity::DaySummary;
@@ -157,6 +158,9 @@ struct Inner {
     last_state: String,
     /// Each project's server status as last published, to hear it crash or come up.
     statuses: HashMap<String, &'static str>,
+    /// Each team's start under way, by its number: a stop takes it out, and the start goes no
+    /// further (`teams.rs`).
+    team_runs: HashMap<String, u64>,
 }
 
 pub struct Core {
@@ -187,6 +191,9 @@ pub struct Core {
     board_follow: Mutex<()>,
     /// The Dependencies page's checks.
     deps: dependencies::Dependencies,
+    /// Held while the settings are taken and written, so the file never ends up older than
+    /// what the core holds (`save_settings`).
+    settings_lock: Mutex<()>,
     sink: Sink,
 }
 
@@ -234,6 +241,7 @@ impl Core {
             board: Mutex::new(board),
             board_follow: Mutex::new(()),
             deps: dependencies::Dependencies::default(),
+            settings_lock: Mutex::new(()),
             sink,
         })
     }

@@ -8,10 +8,11 @@ import Marquee from "../components/Marquee.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { claudeLine, gitLine, meta, shortcutLabel } from "../lib/format";
+import { rowKey, useGroupReorder } from "../lib/groupReorder";
 import { t } from "../lib/i18n";
-import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
 import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
+import { applyDrop, teamOf, teams } from "../lib/teams";
 import type { Project } from "../lib/types";
 import FuelStrip from "./FuelStrip.vue";
 
@@ -22,7 +23,8 @@ const SCREEN_GAP = 16;
 const panel = ref<HTMLElement | null>(null);
 const strip = ref<InstanceType<typeof FuelStrip> | null>(null);
 const list = ref<HTMLElement | null>(null);
-const reorder = useReorder(list);
+/** Drag to reorder, as the window's list drawn without its heads: no group is folded here. */
+const reorder = useGroupReorder(list, (change) => applyDrop(change, () => false));
 const projects = computed(() => snapshot.value?.projects ?? []);
 const waiting = computed(() => projects.value.filter((p) => p.claude));
 const summary = computed(() => {
@@ -38,6 +40,12 @@ const summary = computed(() => {
 function openRow(project: Project): void {
   if (!reorder.isClick()) return;
   void (project.claude ? api.openClaude(project.path) : api.openEditor(project.path));
+}
+
+/** While there are teams a row is dragged among its own team's rows only, or among those of the
+ * projects in no team (lib/groupReorder: `data-zone`); with no team it goes anywhere. */
+function zone(project: Project): string | undefined {
+  return teams.value.length ? (teamOf(project.path)?.id ?? "") : undefined;
 }
 
 function toggle(project: Project): void {
@@ -164,10 +172,11 @@ onBeforeUnmount(() => {
           role="row"
           :tabindex="project.path === tabStop ? 0 : -1"
           :data-path="project.path"
-          :class="['row', reorder.rowClass(project.path)]"
-          :style="reorder.rowStyle(project.path)"
+          :data-zone="zone(project)"
+          :class="['row', reorder.lineClass(rowKey(project.path))]"
+          :style="reorder.lineStyle(rowKey(project.path))"
           :title="t('popover.rowTitle', { name: project.name })"
-          @pointerdown="reorder.down($event, project.path)"
+          @pointerdown="reorder.down($event, rowKey(project.path))"
           @focus="focusedPath = project.path"
           @click="openRow(project)"
         >
@@ -415,7 +424,7 @@ onBeforeUnmount(() => {
 }
 
 /* Drag to reorder: the dragged row lifts and follows the pointer, the others slide aside to
-   show where it lands, and on release it slides into place (lib/reorder). */
+   show where it lands, and on release it slides into place (lib/groupReorder). */
 .list.reordering .row {
   transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
