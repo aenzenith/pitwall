@@ -81,6 +81,8 @@ export type Settings = {
   notify: boolean;
   /** Notify when the session or weekly limit passes 90 %. */
   fuelAlert: boolean;
+  /** The limits' dials in the popover, in its foot. */
+  fuelInPopover: boolean;
   /** Minutes between asking Anthropic for the limits: 1, 5 or 15. */
   fuelEvery: number;
   /** Which of Pitwall's sounds each event plays (src-tauri/sounds); "" for none. */
@@ -212,7 +214,7 @@ export type SpendToday = {
   unpricedModels: string[];
 };
 
-/** The Fuel page's data, pushed to the main window as `fuel`. */
+/** The Fuel page's data, pushed to the main window and the popover as `fuel`. */
 export type Fuel = { limits: UsageState; today: SpendToday | null };
 
 /* ---------- Dependencies: lock files against what is installed (deps_state, event `deps`) ---------- */

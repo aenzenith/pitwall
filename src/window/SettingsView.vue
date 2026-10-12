@@ -81,6 +81,7 @@ const form = reactive<Settings>({
   openUrlOnStart: false,
   notify: true,
   fuelAlert: true,
+  fuelInPopover: true,
   fuelEvery: 15,
   sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "", commandDone: "" },
   launchAtLogin: false,
@@ -428,6 +429,10 @@ function setFuelEvery(minutes: number): void {
           <label class="check">
             <input v-model="form.fuelAlert" type="checkbox" />
             <span>{{ t("settings.fuelAlert") }}</span>
+          </label>
+          <label class="check">
+            <input v-model="form.fuelInPopover" type="checkbox" />
+            <span>{{ t("settings.fuelInPopover") }}</span>
           </label>
           <div class="hook">
             <div class="hook-text">

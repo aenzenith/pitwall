@@ -124,6 +124,8 @@ pub struct Settings {
     pub projects_dir: Option<String>,
     /// A notification when Claude's session or weekly limit passes 90 %.
     pub fuel_alert: bool,
+    /// The dials in the popover, in its foot.
+    pub fuel_in_popover: bool,
     /// Minutes between two requests for Claude's limits: 1, 5 or 15 (`fuel_every_ms`).
     pub fuel_every: u32,
     /// Asks for new versions of Pitwall by itself and downloads them (`update.rs`). Off, only
@@ -157,6 +159,7 @@ impl Default for Settings {
             order: Vec::new(),
             projects_dir: None,
             fuel_alert: true,
+            fuel_in_popover: true,
             fuel_every: 15,
             auto_update: true,
             board_scope: None,

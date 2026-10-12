@@ -1,8 +1,8 @@
 // The Fuel page's arithmetic: how much of a limit is left, and when the session runs dry at the
-// pace so far. Pure: the page and the sidebar badge both read it.
+// pace so far. Pure: the page, the sidebar badge and the popover's strip all read it.
 
 import type { Key } from "./i18n";
-import type { Fuel, UsageState, UsageWindow } from "./types";
+import type { Fuel, UsageError, UsageExtra, UsageState, UsageWindow } from "./types";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -102,6 +102,60 @@ export function windowName(window: UsageWindow, translate: (key: Key) => string)
   return bare.charAt(0).toUpperCase() + bare.slice(1);
 }
 
+/** `t` of lib/i18n, handed in so this stays pure. */
+type Translate = (key: Key, params?: Record<string, string | number>) => string;
+
+/** One dial of the cluster: `name` as the page's dial says it; `caption` under the pod: when it
+ * refills, or what is left; `window`: the limit itself, null for Extra usage. */
+export type ClusterDial = { key: "week" | "session" | "side" | "extra"; size: "big" | "side"; left: number; name: string; caption: string; window: UsageWindow | null };
+
+/** The limits as they stand, and which of them get a dial. */
+export type Cluster = {
+  windows: UsageWindow[];
+  session: UsageWindow | null;
+  week: UsageWindow | null;
+  /** Beside the week: the most used model's week. */
+  side: UsageWindow | null;
+  extra: UsageExtra | null;
+  /** Extra usage takes the side dial: no model's week, and it is on with a cap. */
+  extraOnGauge: boolean;
+  /** Left to right: the week, the session (big), the side one. */
+  dials: ClusterDial[];
+};
+
+/** `refills 16:40`, with the weekday for a week's (`refills Mon 09:00`), or `not started`. */
+function refills(window: UsageWindow, weekday: boolean, translate: Translate, lang: string): string {
+  if (window.resetsAt === null) return translate("fuel.notStarted");
+  const when = weekday ? dayClockText(window.resetsAt, lang) : clockText(window.resetsAt, lang);
+  return translate("fuel.refills", { when });
+}
+
+/**
+ * The instrument cluster of a reading, as it stands at `now`: the Fuel page's dials, and the
+ * popover's strip of the same three. A limit whose reset has passed since the reading has refilled.
+ */
+export function cluster(usage: UsageState["usage"], now: number, translate: Translate, lang: string): Cluster {
+  const windows = (usage?.windows ?? []).map((window) => current(window, now));
+  const session = windows.find((window) => window.id === "five_hour") ?? null;
+  const week = windows.find((window) => window.id === "seven_day") ?? null;
+  const side = sideWindow(windows);
+  const extra = usage?.extra ?? null;
+  const extraOnGauge = !side && !!extra?.enabled && (extra.monthlyLimit ?? 0) > 0;
+
+  const dials: ClusterDial[] = [];
+  if (week) dials.push({ key: "week", size: "side", left: left(week.used), name: translate("fuel.name.weekShort"), caption: refills(week, true, translate, lang), window: week });
+  if (session) dials.push({ key: "session", size: "big", left: left(session.used), name: translate("fuel.session"), caption: refills(session, false, translate, lang), window: session });
+  if (side) {
+    dials.push({ key: "side", size: "side", left: left(side.used), name: windowName(side, translate), caption: refills(side, true, translate, lang), window: side });
+  } else if (extraOnGauge && extra) {
+    const cap = extra.monthlyLimit ?? 0;
+    const used = extra.used ?? (extra.usedCredits / cap) * 100;
+    const money = moneyText(Math.max(0, cap - extra.usedCredits), extra.currency, lang);
+    dials.push({ key: "extra", size: "side", left: left(used), name: translate("fuel.extra"), caption: translate("fuel.left", { value: money }), window: null });
+  }
+  return { windows, session, week, side, extra, extraOnGauge, dials };
+}
+
 /** Where `at` falls in the window, 0–100. */
 export function position(at: number, start: number, end: number): number {
   return end > start ? Math.min(100, Math.max(0, ((at - start) / (end - start)) * 100)) : 0;
@@ -110,6 +164,24 @@ export function position(at: number, start: number, end: number): number {
 /** The core couldn't read them this time: what it still has is an older reading, shown dimmed. */
 export function isStale(limits: UsageState): boolean {
   return limits.status !== "ready" && limits.status !== "loading";
+}
+
+/** What went wrong reading the limits: a title, and a hint to go under it. */
+const ERRORS: Record<UsageError | "unknown", [Key, Key]> = {
+  network: ["fuel.error.network", "fuel.error.networkHint"],
+  timeout: ["fuel.error.timeout", "fuel.error.timeoutHint"],
+  forbidden: ["fuel.error.forbidden", "fuel.error.forbiddenHint"],
+  server: ["fuel.error.server", "fuel.error.serverHint"],
+  http: ["fuel.error.http", "fuel.error.httpHint"],
+  badResponse: ["fuel.error.badResponse", "fuel.error.badResponseHint"],
+  credentials: ["fuel.error.credentials", "fuel.error.credentialsHint"],
+  keychain: ["fuel.error.keychain", "fuel.error.keychainHint"],
+  unknown: ["fuel.error.unknown", "fuel.error.unknownHint"],
+};
+
+/** An error's title and hint; one a newer core names that isn't listed here reads as unknown. */
+export function errorKeys(error: UsageError | null): [Key, Key] {
+  return ERRORS[error ?? "unknown"] ?? ERRORS.unknown;
 }
 
 /** The session window as it stands now, if the plan has one and it has been read. */

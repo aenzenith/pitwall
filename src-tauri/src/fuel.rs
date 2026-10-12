@@ -1,6 +1,6 @@
 //! The Fuel page's data: Claude's plan limits (`usage.rs`) and today's tokens with their API price
-//! (`spend.rs`). Both are read off the main thread, sent to the main window as `fuel` when they
-//! change, and a limit passing 90 % brings one notification per window.
+//! (`spend.rs`). Both are read off the main thread, sent to the main window and the popover as
+//! `fuel` when they change, and a limit passing 90 % brings one notification per window.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::i18n::t;
 use crate::spend::{SessionSpend, Spend, SpendToday};
 use crate::usage::{Status, UsageState, UsageWatch};
-use crate::{AppState, MAIN};
+use crate::{AppState, MAIN, POPOVER};
 
 /// How often today's logs are read again and the limits looked at; the limits hold themselves
 /// back to one request every few minutes, as Settings says (`Settings::fuel_every_ms`).
@@ -127,8 +127,11 @@ impl Fuel {
         self.alert(app);
     }
 
+    /// To the Fuel page and the popover's dials.
     fn send(&self, app: &AppHandle) {
-        let _ = app.emit_to(MAIN, "fuel", self.view());
+        let view = self.view();
+        let _ = app.emit_to(POPOVER, "fuel", view.clone());
+        let _ = app.emit_to(MAIN, "fuel", view);
     }
 
     /// One notification when the session or the week passes 90 %, unless Settings turned it off.

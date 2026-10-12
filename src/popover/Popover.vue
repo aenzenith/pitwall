@@ -11,17 +11,20 @@ import { claudeLine, gitLine, meta, shortcutLabel } from "../lib/format";
 import { t } from "../lib/i18n";
 import { useReorder } from "../lib/reorder";
 import { rowKeys } from "../lib/rows";
-import { api, now, snapshot } from "../lib/store";
+import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
 import type { Project } from "../lib/types";
+import FuelStrip from "./FuelStrip.vue";
 
 const MAX_HEIGHT = 620;
+/** Kept between the popover's foot and the screen's, when the fuel strip makes it taller. */
+const SCREEN_GAP = 16;
 
 const panel = ref<HTMLElement | null>(null);
+const strip = ref<InstanceType<typeof FuelStrip> | null>(null);
 const list = ref<HTMLElement | null>(null);
 const reorder = useReorder(list);
 const projects = computed(() => snapshot.value?.projects ?? []);
 const waiting = computed(() => projects.value.filter((p) => p.claude));
-const anyBusy = computed(() => projects.value.some((p) => p.status === "busy"));
 const summary = computed(() => {
   const s = snapshot.value;
   if (!s || s.projects.length === 0) return t("popover.noProjects");
@@ -68,7 +71,9 @@ function onListKey(event: KeyboardEvent): void {
 }
 
 // The window is as tall as the content, up to MAX_HEIGHT; past that only the project list
-// scrolls. A window taller than the panel would leave a transparent area that swallows clicks.
+// scrolls. The fuel strip adds its own height to that limit, as far as the screen goes, so the
+// list keeps the room it has without it. A window taller than the panel would leave a transparent
+// area that swallows clicks.
 async function fitWindow(): Promise<void> {
   await nextTick();
   const el = panel.value;
@@ -76,21 +81,33 @@ async function fitWindow(): Promise<void> {
   // Every part at its own height, the list at its full content height, plus the border.
   const parts = Array.from(el.children) as HTMLElement[];
   const natural = Math.ceil(parts.reduce((sum, part) => sum + (part === list.value ? part.scrollHeight : part.offsetHeight), 2));
-  if (natural > 0) await getCurrentWindow().setSize(new LogicalSize(372, Math.min(natural, MAX_HEIGHT)));
+  // No strip: its place holds a comment, which has no height.
+  const fuelHeight = (strip.value?.$el as HTMLElement | undefined)?.offsetHeight ?? 0;
+  const limit = Math.max(MAX_HEIGHT, Math.min(MAX_HEIGHT + fuelHeight, window.screen.availHeight - SCREEN_GAP));
+  if (natural > 0) await getCurrentWindow().setSize(new LogicalSize(372, Math.min(natural, limit)));
 }
 
 watch(() => snapshot.value, () => void fitWindow());
+// The fuel strip comes, goes and takes a line more with what the core last read of the limits.
+watch(fuel, () => void fitWindow());
 
 function onKey(event: KeyboardEvent): void {
   if (event.key === "Escape") void api.hidePopover();
 }
 
-onMounted(() => {
+let unlistenFuel: (() => void) | null = null;
+
+onMounted(async () => {
   window.addEventListener("keydown", onKey);
   void fitWindow();
+  // The limits, for the strip in the foot: sent to this window too.
+  unlistenFuel = await connectFuel();
 });
 
-onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKey);
+  unlistenFuel?.();
+});
 </script>
 
 <template>
@@ -195,15 +212,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
       <button type="button" class="primary" @click="api.pickFolder()">{{ t("common.addProject") }}</button>
     </section>
 
-    <footer class="foot">
-      <button type="button" class="foot-btn" :disabled="!projects.length || anyBusy" @click="api.startAll()">{{ t("common.startAll") }}</button>
-      <button type="button" class="foot-btn" :disabled="!snapshot?.running || anyBusy" @click="api.stopAll()">{{ t("common.stopAll") }}</button>
-      <Spinner v-if="anyBusy" class="foot-spin" :size="12" />
-      <div class="grow"></div>
-      <button type="button" class="foot-btn" @click="api.openWindow()">
-        {{ t("common.openWindow") }}
-      </button>
-    </footer>
+    <!-- The foot, when there is fuel to show: Claude's limits. -->
+    <FuelStrip ref="strip" />
   </div>
 </template>
 
@@ -227,8 +237,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 .head,
 .claude,
 .label,
-.empty,
-.foot {
+.empty {
   flex-shrink: 0;
 }
 
@@ -494,53 +503,5 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
 .primary:hover {
   background: var(--bg-hover);
-}
-
-.foot {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px;
-  border-top: 1px solid var(--line);
-  background: var(--bg-footer);
-  flex-shrink: 0;
-}
-
-.grow {
-  flex-grow: 1;
-}
-
-.foot-spin {
-  margin-left: 4px;
-  color: var(--text-muted);
-}
-
-.foot-btn {
-  height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  font-size: 12px;
-  color: #c3c8cf;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.foot-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-strong);
-}
-
-.foot-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-kbd {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-subtle);
 }
 </style>

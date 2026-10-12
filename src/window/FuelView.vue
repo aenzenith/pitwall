@@ -7,11 +7,11 @@ import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
 import { duration } from "../lib/day";
 import { ago } from "../lib/format";
-import { clockText, current, dayClockText, isStale, left, moneyText, sideWindow, windowName } from "../lib/fuel";
-import { language, t, type Key } from "../lib/i18n";
+import { clockText, cluster, errorKeys, isStale } from "../lib/fuel";
+import { language, t } from "../lib/i18n";
 import { dragRegion } from "../lib/platform";
 import { api, fuel, now, visible } from "../lib/store";
-import type { UsageError, UsageWindow } from "../lib/types";
+import type { UsageWindow } from "../lib/types";
 import FuelBackdrop from "./fuel/FuelBackdrop.vue";
 import FuelFooter from "./fuel/FuelFooter.vue";
 import FuelGauge from "./fuel/FuelGauge.vue";
@@ -30,72 +30,31 @@ const today = computed(() => fuel.value?.today ?? null);
 /** A reading the core couldn't renew: shown dimmed, under a notice that says why. */
 const stale = computed(() => !!usage.value && !!limits.value && isStale(limits.value));
 
-/** The limits as they stand now: one whose reset has passed since the reading has refilled. */
-const windows = computed(() => (usage.value?.windows ?? []).map((window) => current(window, now.value)));
-const session = computed(() => windows.value.find((window) => window.id === "five_hour") ?? null);
-const week = computed(() => windows.value.find((window) => window.id === "seven_day") ?? null);
-/** Beside the week: the most used model's week, else Extra Usage when it is on with a cap. */
-const side = computed(() => sideWindow(windows.value));
-const extra = computed(() => usage.value?.extra ?? null);
-const extraOnGauge = computed(() => !side.value && !!extra.value?.enabled && (extra.value.monthlyLimit ?? 0) > 0);
+/** The limits as they stand now (one whose reset has passed since the reading has refilled) and
+ * which of them get a dial: beside the week the most used model's week, else Extra Usage when it
+ * is on with a cap. Worked out in lib/fuel, where the popover's strip reads the same three. */
+const gauges = computed(() => cluster(usage.value, now.value, t, language.value));
+const windows = computed(() => gauges.value.windows);
+const session = computed(() => gauges.value.session);
+const extra = computed(() => gauges.value.extra);
+const extraOnGauge = computed(() => gauges.value.extraOnGauge);
 /** The limits without a dial, listed under the cluster on request; one never used isn't worth a line. */
-const rest = computed(() => windows.value.filter((window) => window.used > 0 && ![session.value, week.value, side.value].includes(window)));
-
-/** `name` goes in the pod, under the figure; `caption` under the pod: when it refills, or what is
- * left; `until`: how long until it refills, after the caption (the session's dial only). */
-type Dial = { key: string; size: "big" | "side"; left: number; name: string; caption: string; until: string | null };
-
-function refills(window: UsageWindow, weekday: boolean): string {
-  if (window.resetsAt === null) return t("fuel.notStarted");
-  const when = weekday ? dayClockText(window.resetsAt, language.value) : clockText(window.resetsAt, language.value);
-  return t("fuel.refills", { when });
-}
+const rest = computed(() => windows.value.filter((window) => window.used > 0 && ![session.value, gauges.value.week, gauges.value.side].includes(window)));
 
 /** How long until it refills, in hours and minutes. */
 function until(window: UsageWindow): string | null {
   return window.resetsAt !== null && window.resetsAt > now.value ? duration(window.resetsAt - now.value) : null;
 }
 
-/** The cluster's dials, left to right: the week, the session (big), the side one. */
-const dials = computed<Dial[]>(() => {
-  const list: Dial[] = [];
-  if (week.value) {
-    const name = t("fuel.name.weekShort");
-    list.push({ key: "week", size: "side", left: left(week.value.used), name, caption: refills(week.value, true), until: null });
-  }
-  if (session.value) {
-    const name = t("fuel.session");
-    list.push({ key: "session", size: "big", left: left(session.value.used), name, caption: refills(session.value, false), until: until(session.value) });
-  }
-  if (side.value) {
-    const name = windowName(side.value, t);
-    list.push({ key: "side", size: "side", left: left(side.value.used), name, caption: refills(side.value, true), until: null });
-  } else if (extraOnGauge.value && extra.value) {
-    const cap = extra.value.monthlyLimit ?? 0;
-    const used = extra.value.used ?? (extra.value.usedCredits / cap) * 100;
-    const money = moneyText(Math.max(0, cap - extra.value.usedCredits), extra.value.currency, language.value);
-    const name = t("fuel.extra");
-    list.push({ key: "extra", size: "side", left: left(used), name, caption: t("fuel.left", { value: money }), until: null });
-  }
-  return list;
-});
+/** The cluster's dials, left to right: the week, the session (big), the side one. `name` goes in
+ * the pod, under the figure; `caption` under the pod; `until`: how long until it refills, after
+ * the caption (the session's dial only). */
+const dials = computed(() => gauges.value.dials.map((dial) => ({ ...dial, until: dial.key === "session" && dial.window ? until(dial.window) : null })));
 
 /** Nothing to show yet: the core hasn't answered, or its first reading is on its way. */
 const firstLoad = computed(() => !usage.value && (!fuel.value || status.value === "loading"));
 
 const readAgo = computed(() => (limits.value?.fetchedAt ? ago(limits.value.fetchedAt, now.value) : ""));
-
-const ERRORS: Record<UsageError | "unknown", [Key, Key]> = {
-  network: ["fuel.error.network", "fuel.error.networkHint"],
-  timeout: ["fuel.error.timeout", "fuel.error.timeoutHint"],
-  forbidden: ["fuel.error.forbidden", "fuel.error.forbiddenHint"],
-  server: ["fuel.error.server", "fuel.error.serverHint"],
-  http: ["fuel.error.http", "fuel.error.httpHint"],
-  badResponse: ["fuel.error.badResponse", "fuel.error.badResponseHint"],
-  credentials: ["fuel.error.credentials", "fuel.error.credentialsHint"],
-  keychain: ["fuel.error.keychain", "fuel.error.keychainHint"],
-  unknown: ["fuel.error.unknown", "fuel.error.unknownHint"],
-};
 
 /** What the notice above the values says, if anything. */
 const notice = computed<{ kind: "signedOut" | "expired" | "rateLimited" | "error" | "noLimits"; tag: string; title: string; body: string } | null>(() => {
@@ -114,7 +73,7 @@ const notice = computed<{ kind: "signedOut" | "expired" | "rateLimited" | "error
         body: state.retryAt ? t("fuel.state.rateLimited.body", { time: clockText(state.retryAt, language.value) }) : t("fuel.state.rateLimited.later"),
       };
     case "error": {
-      const [title, body] = ERRORS[state.error ?? "unknown"] ?? ERRORS.unknown;
+      const [title, body] = errorKeys(state.error);
       return { kind: "error", tag: t("fuel.state.error.tag"), title: t(title), body: t(body) };
     }
     case "ready":

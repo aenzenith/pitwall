@@ -79,12 +79,14 @@ export async function connect(): Promise<void> {
   runClock(visible.value);
 }
 
-/** Claude's plan limits and today's tokens: the Fuel page's, and its sidebar badge's. */
+/** Claude's plan limits and today's tokens: the Fuel page's, its sidebar badge's, and the
+ * popover's strip's. */
 export const fuel = ref<Fuel | null>(null);
 
 /**
- * The main window's: hears `fuel` (sent to this window only) and asks for the current state. A
- * core that doesn't answer leaves it null, which shows as loading.
+ * The main window's and the popover's: hears `fuel` (sent to those two only) and asks for the
+ * current state. A core that doesn't answer leaves it null, which shows as loading (in the
+ * popover: no strip).
  */
 export async function connectFuel(): Promise<UnlistenFn> {
   let heard = 0;
