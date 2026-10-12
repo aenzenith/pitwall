@@ -78,10 +78,30 @@ jobs:
             echo "::notice::CI ended as $conclusion: the release PR stays open."
           fi
 
+      # What the app shows once after an update (src/whats-new.json) is written by hand for each
+      # release, and nothing here writes it. Its `since` names the release the notes come after:
+      # while that isn't the version the tree is at (the one before the release being cut), the
+      # notes are an earlier release's and the app would show none. The PR stays open until they
+      # are written.
+      - name: Check the release's notes
+        id: notes
+        if: ${{ steps.ci.outputs.conclusion == 'success' }}
+        run: |
+          set -euo pipefail
+          file() { gh api "repos/$GH_REPO/contents/$1?ref=$GITHUB_SHA" --jq .content | base64 -d; }
+          version="$(file package.json | jq -r .version)"
+          since="$(file src/whats-new.json | jq -r .since)"
+          count="$(file src/whats-new.json | jq '.notes | length')"
+          if [ "$since" != "$version" ] || [ "$count" -eq 0 ]; then
+            echo "::error::src/whats-new.json holds $count note(s) written after $since, not this release's: empty it, set \"since\" to \"$version\" and write what this release brings. The release PR stays open."
+            exit 1
+          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
       # A push that came in meanwhile has a run of its own, and the PR is being written for it.
       - name: Merge the release PR
         id: merge
-        if: ${{ steps.ci.outputs.conclusion == 'success' }}
+        if: ${{ steps.ci.outputs.conclusion == 'success' && steps.notes.outputs.ok == 'true' }}
         env:
           PR: ${{ steps.pr.outputs.number }}
         run: |
