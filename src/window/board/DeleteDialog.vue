@@ -3,7 +3,7 @@ import { onMounted, ref } from "vue";
 
 import Spinner from "../../components/Spinner.vue";
 import { useBackdropClose } from "../../lib/dialog";
-import { useReturnFocus } from "../../lib/dialogFocus";
+import { openUnfocused, useReturnFocus } from "../../lib/dialogFocus";
 import { t } from "../../lib/i18n";
 import { api } from "../../lib/store";
 import type { Card } from "../../lib/types";
@@ -24,9 +24,8 @@ const deleting = ref(false);
 const error = ref("");
 
 onMounted(() => {
-  dialog.value?.showModal();
   // Keeping it is the safe answer, and the one Return gives.
-  cancelButton.value?.focus();
+  openUnfocused(dialog.value, () => cancelButton.value);
 });
 
 async function remove(): Promise<void> {

@@ -5,7 +5,7 @@ import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
 import { useBackdropClose } from "../lib/dialog";
-import { useReturnFocus } from "../lib/dialogFocus";
+import { openUnfocused, useReturnFocus } from "../lib/dialogFocus";
 import { updateError } from "../lib/format";
 import { t } from "../lib/i18n";
 import { api } from "../lib/store";
@@ -42,9 +42,8 @@ const error = ref("");
 const note = computed(() => (onQuit && !manual && !error.value ? t("update.dialog.onQuit") : ""));
 
 onMounted(() => {
-  dialog.value?.showModal();
   // Later is the safe answer, and the one Return gives.
-  laterButton.value?.focus();
+  openUnfocused(dialog.value, () => laterButton.value);
   // A core that doesn't answer leaves Restart waiting: nothing restarts on a promise not checked.
   if (!manual) void api.updatePlan().then((answer) => (plan.value = answer), () => undefined);
 });

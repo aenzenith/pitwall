@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 
 import type { DepLine } from "../../lib/deps";
 import { useBackdropClose } from "../../lib/dialog";
-import { useReturnFocus } from "../../lib/dialogFocus";
+import { openUnfocused, useReturnFocus } from "../../lib/dialogFocus";
 import { t } from "../../lib/i18n";
 import type { Project } from "../../lib/types";
 
@@ -24,9 +24,8 @@ const cancelButton = ref<HTMLButtonElement | null>(null);
 const subtitle = computed(() => [props.project.name, t("deps.migrations", { count: props.line.pending.length })]);
 
 onMounted(() => {
-  dialog.value?.showModal();
   // Leaving the database as it is is the safe answer, and the one Return gives.
-  cancelButton.value?.focus();
+  openUnfocused(dialog.value, () => cancelButton.value);
 });
 
 function run(): void {
