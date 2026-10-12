@@ -15,6 +15,8 @@ import { keys, shortcutModifiers } from "../lib/platform";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings, Theme } from "../lib/types";
+import BackupSection from "./backup/BackupSection.vue";
+import MissingProjects from "./backup/MissingProjects.vue";
 import TrackOptions from "./track/TrackOptions.vue";
 
 type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "track" | "about";
@@ -117,6 +119,10 @@ const RESUME: Array<{ id: Settings["resume"]; label: Key }> = [
   { id: "always", label: "settings.resume.always" },
   { id: "never", label: "settings.resume.never" },
 ];
+
+/** The moved folders' list (backup/MissingProjects): an import may bring in projects whose folder
+ * isn't on this machine. */
+const missing = ref<InstanceType<typeof MissingProjects> | null>(null);
 
 /* ---------- shortcut recorder ---------- */
 
@@ -661,6 +667,17 @@ function setTheme(theme: Theme): void {
               </button>
             </span>
           </div>
+
+          <!-- The backup's own: its dialogs' boxes are no settings for the form to save (`@change.stop`). -->
+          <div class="section section-label">{{ t("backup.section") }}</div>
+          <div @change.stop>
+            <BackupSection @imported="missing?.load()" />
+          </div>
+
+          <!-- Drawn only while a project's folder is gone. -->
+          <MissingProjects ref="missing" :active="tab === 'general'">
+            <div class="section section-label">{{ t("missing.section") }}</div>
+          </MissingProjects>
         </fieldset>
 
         <section v-show="tab === 'about'" class="about" :aria-label="t('settings.about')">

@@ -29,6 +29,7 @@ use crate::resolve::PackageManager;
 use crate::settings::{ProjectSettings, Settings, TrackSettings};
 
 mod activity;
+mod backup;
 mod board;
 mod claude_state;
 mod dependencies;
@@ -51,6 +52,7 @@ mod teams;
 mod terminal;
 mod watch;
 pub use activity::DaySummary;
+pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};
 pub use discover::{Candidate, Discovery};
 pub use resume::ResumeOffer;

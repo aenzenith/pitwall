@@ -908,6 +908,53 @@
     "other": "終了時に {count} 件開いていました"
   },
   "resume.more": "{names} ほか {count} 件",
+  "backup.section": "バックアップ",
+  "backup.text": "1 つのファイルにまとめ、別のコンピュータで読み込めます。",
+  "backup.export": "書き出す…",
+  "backup.import": "読み込む…",
+  "backup.exportTitle": "バックアップを書き出す",
+  "backup.exportDo": "書き出す",
+  "backup.importTitle": "バックアップを読み込む",
+  "backup.importDo": "読み込む",
+  "backup.part.projects": "プロジェクト: 一覧、並び順、チーム、コマンド、リンク",
+  "backup.part.board": "ボードのカードと画像",
+  "backup.part.activity": "日ごとの記録 (90 日分)",
+  "backup.name.activity": "日ごとの記録",
+  "backup.saved": "保存しました: {file}",
+  "backup.madeAt": "{when} に作成 · Pitwall {version}",
+  "backup.missingPart": "このファイルにはありません",
+  "backup.count.projects": {
+    "other": "プロジェクト {count} 件"
+  },
+  "backup.count.commands": {
+    "other": "コマンド {count} 件"
+  },
+  "backup.count.links": {
+    "other": "リンク {count} 件"
+  },
+  "backup.count.teams": {
+    "other": "チーム {count} 件"
+  },
+  "backup.count.cards": {
+    "other": "カード {count} 枚"
+  },
+  "backup.count.images": {
+    "other": "画像 {count} 枚"
+  },
+  "backup.count.days": {
+    "other": "{count} 日分"
+  },
+  "backup.importNote": "ファイルにもあるカードとプロジェクト設定は置き換わり、ほかはそのまま残ります。ここにあるものは先にバックアップされます。",
+  "backup.restored": "復元しました: {what}",
+  "backup.restoredWithSettings": "復元しました: {what}、設定",
+  "backup.restoredSettings": "設定を復元しました",
+  "backup.restoredNothing": "復元されたものはありません",
+  "missing.section": "移動されたフォルダ",
+  "missing.notFound": "{path} が見つかりません",
+  "missing.kept": "保持中: {what}",
+  "missing.rehome": "新しい場所を選択…",
+  "missing.forget": "破棄",
+  "missing.forgetAsk": "コマンドとリンクは削除されます。",
   "track.nav": "コース",
   "track.title": "コース",
   "track.crashed": "クラッシュ {count}",
@@ -1002,6 +1049,10 @@
   "core.tray.percent": "{value}%",
   "core.tray.tooltipFuel": "Pitwall — 実行中 {running} · 入力待ち {waiting} · セッション残り {left}",
   "core.dialog.projectsFolder": "プロジェクトフォルダを選択",
+  "core.dialog.backupSave": "Pitwall のバックアップを保存",
+  "core.dialog.backupFilter": "Pitwall のバックアップ",
+  "core.dialog.backupOpen": "Pitwall のバックアップを選択",
+  "core.dialog.rehome": "プロジェクトの現在の場所",
   "core.error.launchAtLoginDev": "ログイン時の起動はインストール済みのアプリでのみ機能し、開発ビルドでは機能しません。",
   "core.error.hookDev": "フックはインストール済みのアプリでのみ機能し、開発ビルドでは機能しません。",
   "core.error.notFolder": "フォルダではありません：{path}",
@@ -1029,6 +1080,17 @@
   "core.error.depsCommandFailed": "{command} が失敗しました（終了コード {code}）。",
   "core.error.depsCommandStopped": "{command} は停止されました。",
   "core.error.teamName": "チームには名前が必要です。",
+  "core.error.backupNoFile": "バックアップファイルをもう一度選択してください。",
+  "core.error.backupRead": "{file} を読み込めませんでした：{error}",
+  "core.error.backupReadTooLarge": "{file} は {limit} MB を超えています。",
+  "core.error.backupNotBackup": "{file} は Pitwall のバックアップではありません。",
+  "core.error.backupNewer": "{file} は新しいバージョンの Pitwall（{app}）で作成されています。読み込むには Pitwall を更新してください。",
+  "core.error.backupDamaged": "{file} は破損しています（{error}）。何も変更されていません。",
+  "core.error.backupKeep": "ここにあるものを先にバックアップできなかったため（{error}）、何も読み込まれませんでした。",
+  "core.error.keepFirst": "ここにあるものを先にバックアップできなかったため（{error}）、何も変更されませんでした。",
+  "core.error.backupWrite": "{file} を書き込めませんでした：{error}",
+  "core.error.backupWriteTooLarge": "このバックアップは {limit} MB を超えます。ボードを除外するか、先にカードの大きな画像を削除してください。",
+  "core.error.rehomeSame": "{path} は現在のフォルダと同じです。プロジェクトが今あるフォルダを選択してください。",
   "core.issue.couldNotStart": "起動できませんでした：{error}",
   "core.issue.exitCode": "終了コード {code}",
   "core.issue.exitSignal": "シグナル {signal}",

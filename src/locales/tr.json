@@ -924,6 +924,60 @@
     "other": "Çıkışta {count} proje açıktı"
   },
   "resume.more": "{names} ve {count} proje daha",
+  "backup.section": "Yedek",
+  "backup.text": "Tek dosya; başka bir bilgisayarda içe aktarılır.",
+  "backup.export": "Dışa aktar…",
+  "backup.import": "İçe aktar…",
+  "backup.exportTitle": "Yedeği dışa aktar",
+  "backup.exportDo": "Dışa aktar",
+  "backup.importTitle": "Yedeği içe aktar",
+  "backup.importDo": "İçe aktar",
+  "backup.part.projects": "Projeler: liste, sıra, takımlar, komutlar ve bağlantılar",
+  "backup.part.board": "Pano kartları ve görselleri",
+  "backup.part.activity": "Gün kayıtları (90 gün)",
+  "backup.name.activity": "Gün kayıtları",
+  "backup.saved": "Kaydedildi: {file}",
+  "backup.madeAt": "{when} alındı · Pitwall {version}",
+  "backup.missingPart": "Bu dosyada yok",
+  "backup.count.projects": {
+    "one": "{count} proje",
+    "other": "{count} proje"
+  },
+  "backup.count.commands": {
+    "one": "{count} komut",
+    "other": "{count} komut"
+  },
+  "backup.count.links": {
+    "one": "{count} bağlantı",
+    "other": "{count} bağlantı"
+  },
+  "backup.count.teams": {
+    "one": "{count} takım",
+    "other": "{count} takım"
+  },
+  "backup.count.cards": {
+    "one": "{count} kart",
+    "other": "{count} kart"
+  },
+  "backup.count.images": {
+    "one": "{count} görsel",
+    "other": "{count} görsel"
+  },
+  "backup.count.days": {
+    "one": "{count} gün",
+    "other": "{count} gün"
+  },
+  "backup.importNote": "Dosyada da olan kartlar ve proje ayarları dosyadakiyle değişir, gerisi kalır. Buradakiler önce yedeklenir.",
+  "backup.restored": "{what} geri geldi",
+  "backup.restoredWithSettings": "{what} ve ayarlar geri geldi",
+  "backup.restoredSettings": "Ayarlar geri geldi",
+  "backup.restoredNothing": "Hiçbir şey geri gelmedi",
+  "missing.section": "Taşınan klasörler",
+  "missing.notFound": "{path} bulunamadı",
+  "missing.kept": "{what} duruyor",
+  "missing.rehome": "Yeni yerini seç…",
+  "missing.forget": "Unut",
+  "missing.forgetAsk": "Komutları ve bağlantıları silinir.",
   "track.nav": "Pist",
   "track.title": "Pist",
   "track.crashed": "{count} çöktü",
@@ -1026,6 +1080,10 @@
   "core.tray.percent": "%{value}",
   "core.tray.tooltipFuel": "Pitwall — {running} çalışıyor · {waiting} seni bekliyor · oturumda {left} kaldı",
   "core.dialog.projectsFolder": "Projeler klasörünü seç",
+  "core.dialog.backupSave": "Pitwall yedeğini kaydet",
+  "core.dialog.backupFilter": "Pitwall yedeği",
+  "core.dialog.backupOpen": "Pitwall yedeği seç",
+  "core.dialog.rehome": "Proje şimdi nerede?",
   "core.error.launchAtLoginDev": "Girişte başlatma kurulu uygulamada çalışır, dev derlemesinde değil.",
   "core.error.hookDev": "Hook kurulu uygulamada çalışır, dev derlemesinde değil.",
   "core.error.notFolder": "Klasör değil: {path}",
@@ -1053,6 +1111,17 @@
   "core.error.depsCommandFailed": "{command} başarısız oldu (çıkış kodu {code}).",
   "core.error.depsCommandStopped": "{command} durduruldu.",
   "core.error.teamName": "Takımın bir adı olmalı.",
+  "core.error.backupNoFile": "Yedek dosyasını yeniden seç.",
+  "core.error.backupRead": "{file} okunamadı: {error}",
+  "core.error.backupReadTooLarge": "{file} {limit} MB'ı aşıyor.",
+  "core.error.backupNotBackup": "{file} bir Pitwall yedeği değil.",
+  "core.error.backupNewer": "{file} daha yeni bir Pitwall ({app}) ile yazılmış. Okumak için Pitwall'ı güncelle.",
+  "core.error.backupDamaged": "{file} bozuk ({error}). Hiçbir şey değiştirilmedi.",
+  "core.error.backupKeep": "Buradakiler önce yedeklenemedi ({error}); hiçbir şey içe aktarılmadı.",
+  "core.error.keepFirst": "Buradakiler önce yedeklenemedi ({error}); hiçbir şey değiştirilmedi.",
+  "core.error.backupWrite": "{file} yazılamadı: {error}",
+  "core.error.backupWriteTooLarge": "Bu yedek {limit} MB'ı aşıyor. Panoyu dışarıda bırak ya da önce kartlardaki büyük görselleri kaldır.",
+  "core.error.rehomeSame": "{path} zaten projenin klasörü. Projenin şimdi bulunduğu klasörü seç.",
   "core.issue.couldNotStart": "başlatılamadı: {error}",
   "core.issue.exitCode": "kod {code}",
   "core.issue.exitSignal": "sinyal {signal}",

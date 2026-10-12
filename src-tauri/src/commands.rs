@@ -592,6 +592,118 @@ pub fn resume_dismiss(state: State<'_, AppState>) {
     state.core.resume_dismiss();
 }
 
+/* ---------- backup, and projects whose folder moved ---------- */
+
+/// Asks where to save and writes a backup of the chosen parts there. The file's path, or None
+/// when the dialog was cancelled. The dialog waits for the user, so it runs off the main thread.
+#[tauri::command]
+pub async fn backup_export(app: AppHandle, parts: crate::core::BackupParts) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut dialog = app
+            .dialog()
+            .file()
+            .set_title(t!("core.dialog.backupSave"))
+            .set_file_name(format!("Pitwall {}.pitwall-backup", crate::clock::day_name(crate::registry::now_ms())))
+            .add_filter(t!("core.dialog.backupFilter"), &["pitwall-backup"]);
+        if let Some(downloads) = dirs::download_dir().filter(|dir| dir.is_dir()) {
+            dialog = dialog.set_directory(downloads);
+        }
+
+        let Some(file) = dialog.blocking_save_file().and_then(|file| file.into_path().ok()) else {
+            return Ok(None);
+        };
+        state.core.backup_write(&file, parts)?;
+        Ok(Some(file.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Asks for a backup file and says what it holds; None when the dialog was cancelled. The file
+/// is the one `backup_import` reads: the page never names a path.
+#[tauri::command]
+pub async fn backup_pick(app: AppHandle) -> Result<Option<crate::core::BackupInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let picked = app.dialog().file().set_title(t!("core.dialog.backupOpen")).add_filter(t!("core.dialog.backupFilter"), &["pitwall-backup", "json"]).blocking_pick_file();
+        let Some(file) = picked.and_then(|file| file.into_path().ok()) else {
+            return Ok(None);
+        };
+
+        let info = state.core.backup_read(&file)?;
+        *state.backup.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(file);
+        Ok(Some(info))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Puts the chosen parts of the file picked last back (`core/backup.rs`). Imported settings take
+/// hold at once: the shortcut is registered again and the theme drawn.
+#[tauri::command]
+pub async fn backup_import(app: AppHandle, parts: crate::core::BackupParts) -> Result<crate::core::ImportReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let picked = || state.backup.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let file = picked().clone().ok_or_else(|| t!("core.error.backupNoFile"))?;
+        // A file that failed stays the one picked, for another try.
+        let report = state.core.backup_import(&file, parts)?;
+        picked().take();
+
+        if report.settings {
+            let settings = state.core.settings();
+            // Keys another machine could register may be taken here: the switcher then has none
+            // until new ones are recorded in Settings.
+            let _ = apply_shortcut(&app, settings.shortcut, &settings.shortcut_keys);
+            crate::apply_theme(&app, &settings.theme);
+            // The projects folder may be another one now.
+            state.core.projects_dir_changed();
+        } else if report.projects > 0 {
+            // The projects it listed are no longer offered under the list.
+            state.core.refresh_suggestions();
+        }
+        Ok(report)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Projects whose folder is gone, with what is still kept for them.
+#[tauri::command]
+pub async fn missing_projects(state: State<'_, AppState>) -> Result<Vec<crate::core::MissingProject>, String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.missing_projects()).await.map_err(|error| error.to_string())
+}
+
+/// Asks for the folder a project is in now and hands it everything kept for `from`. The new
+/// path, or None when the dialog was cancelled.
+#[tauri::command]
+pub async fn rehome_project(app: AppHandle, from: String) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut dialog = app.dialog().file().set_title(t!("core.dialog.rehome"));
+        if let Some(dir) = state.core.settings().projects_dir.filter(|dir| std::path::Path::new(dir).is_dir()) {
+            dialog = dialog.set_directory(dir);
+        }
+
+        let Some(to) = dialog.blocking_pick_folder().and_then(|folder| folder.into_path().ok()) else {
+            return Ok(None);
+        };
+        let to = to.to_string_lossy().into_owned();
+        state.core.rehome_project(&from, &to)?;
+        Ok(Some(to))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Drops what is kept for a project whose folder is gone (its cards stay on the board).
+#[tauri::command]
+pub fn forget_project(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    state.core.forget_project(&path)
+}
+
 /// Esc in the popover: close it and go back to the app from before.
 #[tauri::command]
 pub fn hide_popover(app: AppHandle) {

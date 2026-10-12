@@ -937,6 +937,60 @@
     "other": "{count} projects were open at quit"
   },
   "resume.more": "{names} and {count} more",
+  "backup.section": "Backup",
+  "backup.text": "One file; import it on another computer.",
+  "backup.export": "Export…",
+  "backup.import": "Import…",
+  "backup.exportTitle": "Export a backup",
+  "backup.exportDo": "Export",
+  "backup.importTitle": "Import a backup",
+  "backup.importDo": "Import",
+  "backup.part.projects": "Projects: list, order, teams, commands and links",
+  "backup.part.board": "Board cards and their images",
+  "backup.part.activity": "Day records (90 days)",
+  "backup.name.activity": "Day records",
+  "backup.saved": "Saved: {file}",
+  "backup.madeAt": "Made {when} · Pitwall {version}",
+  "backup.missingPart": "Not in this file",
+  "backup.count.projects": {
+    "one": "{count} project",
+    "other": "{count} projects"
+  },
+  "backup.count.commands": {
+    "one": "{count} command",
+    "other": "{count} commands"
+  },
+  "backup.count.links": {
+    "one": "{count} link",
+    "other": "{count} links"
+  },
+  "backup.count.teams": {
+    "one": "{count} team",
+    "other": "{count} teams"
+  },
+  "backup.count.cards": {
+    "one": "{count} card",
+    "other": "{count} cards"
+  },
+  "backup.count.images": {
+    "one": "{count} image",
+    "other": "{count} images"
+  },
+  "backup.count.days": {
+    "one": "{count} day",
+    "other": "{count} days"
+  },
+  "backup.importNote": "Cards and project settings that are also in the file are replaced; the rest stays. What is here now is backed up first.",
+  "backup.restored": "{what} restored",
+  "backup.restoredWithSettings": "{what} and the settings restored",
+  "backup.restoredSettings": "The settings were restored",
+  "backup.restoredNothing": "Nothing was restored",
+  "missing.section": "Moved folders",
+  "missing.notFound": "{path} wasn't found",
+  "missing.kept": "{what} kept",
+  "missing.rehome": "Choose new location…",
+  "missing.forget": "Forget",
+  "missing.forgetAsk": "Its commands and links are deleted.",
   "track.nav": "Track",
   "track.title": "Track",
   "track.crashed": "{count} crashed",
@@ -1039,6 +1093,10 @@
   "core.tray.percent": "{value}%",
   "core.tray.tooltipFuel": "Pitwall — {running} running · {waiting} waiting on you · session {left} left",
   "core.dialog.projectsFolder": "Choose your projects folder",
+  "core.dialog.backupSave": "Save Pitwall backup",
+  "core.dialog.backupFilter": "Pitwall backup",
+  "core.dialog.backupOpen": "Choose a Pitwall backup",
+  "core.dialog.rehome": "Where is the project now?",
   "core.error.launchAtLoginDev": "Launch at login works from the installed app, not from a dev build.",
   "core.error.hookDev": "The hook works from the installed app, not from a dev build.",
   "core.error.notFolder": "Not a folder: {path}",
@@ -1066,6 +1124,17 @@
   "core.error.depsCommandFailed": "{command} failed (exit code {code}).",
   "core.error.depsCommandStopped": "{command} was stopped.",
   "core.error.teamName": "A team needs a name.",
+  "core.error.backupNoFile": "Pick the backup file again.",
+  "core.error.backupRead": "Could not read {file}: {error}",
+  "core.error.backupReadTooLarge": "{file} is larger than {limit} MB.",
+  "core.error.backupNotBackup": "{file} is not a Pitwall backup.",
+  "core.error.backupNewer": "{file} was written by a newer Pitwall ({app}). Update Pitwall to read it.",
+  "core.error.backupDamaged": "{file} is damaged ({error}). Nothing was changed.",
+  "core.error.backupKeep": "What is here couldn't be backed up first ({error}), so nothing was imported.",
+  "core.error.keepFirst": "What is here couldn't be backed up first ({error}), so nothing was changed.",
+  "core.error.backupWrite": "Could not write {file}: {error}",
+  "core.error.backupWriteTooLarge": "This backup would be larger than {limit} MB. Leave the board out, or remove large images from its cards first.",
+  "core.error.rehomeSame": "{path} is the folder it already has. Pick the folder the project is in now.",
   "core.issue.couldNotStart": "could not start: {error}",
   "core.issue.exitCode": "code {code}",
   "core.issue.exitSignal": "signal {signal}",

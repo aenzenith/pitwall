@@ -189,6 +189,35 @@ export type ResumeProject = { path: string; name: string; server: boolean; comma
 /** What was open when Pitwall last quit (`quitAt`, ms). */
 export type ResumeOffer = { quitAt: number; projects: ResumeProject[] };
 
+/* ---------- Backup and moved folders (backup_*, missing_projects, rehome_project) ---------- */
+
+/** What a backup takes, or an import puts back. */
+export type BackupParts = { settings: boolean; projects: boolean; board: boolean; activity: boolean };
+
+/** A backup file just picked: what it holds. `app`: the version that wrote it. A part that is
+ * missing from the file is 0 or false. */
+export type BackupInfo = {
+  file: string;
+  createdAt: number;
+  app: string;
+  settings: boolean;
+  /** Listed projects, and how many of them carry settings, commands or links. */
+  projects: number;
+  commands: number;
+  links: number;
+  teams: number;
+  cards: number;
+  images: number;
+  /** Days of the timeline. */
+  days: number;
+};
+
+/** What an import put back. */
+export type ImportReport = { projects: number; cards: number; days: number; settings: boolean };
+
+/** A project whose folder is gone, and what Pitwall still keeps for it. */
+export type MissingProject = { path: string; name: string; commands: number; links: number; cards: number; listed: boolean };
+
 /** A stretch of the day; Claude's name their session. */
 export type DaySpan = { start: number; end: number; session?: string };
 

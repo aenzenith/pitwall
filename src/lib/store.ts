@@ -4,10 +4,14 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, ref, watch } from "vue";
 
 import type {
+  BackupInfo,
+  BackupParts,
   BoardColumn,
   Card,
   DaySummary,
   Discovery,
+  ImportReport,
+  MissingProject,
   Team,
   DepReport,
   DepScanDetails,
@@ -368,6 +372,23 @@ export const api = {
   resumeRestore: (always = false) => invoke("resume_restore", { always }),
   /** Starts empty; the offer is gone. */
   resumeDismiss: () => invoke("resume_dismiss"),
+
+  /* Backup and moved folders (core/backup.rs). Files are picked and written by the core. */
+  /** Asks where to save and writes the backup there. Resolves with the file, or null when the
+   * dialog was cancelled. */
+  backupExport: (parts: BackupParts) => invoke<string | null>("backup_export", { parts }),
+  /** Asks for a backup file and reads what it holds; null when the dialog was cancelled. The
+   * core remembers the file for `backupImport`. */
+  backupPick: () => invoke<BackupInfo | null>("backup_pick"),
+  /** Puts the picked file's parts back (what is here is kept beside it first). */
+  backupImport: (parts: BackupParts) => invoke<ImportReport>("backup_import", { parts }),
+  /** Projects whose folder is gone, with what is still kept for them. */
+  missingProjects: () => invoke<MissingProject[]>("missing_projects"),
+  /** Asks for the folder's new place and moves everything kept for `from` there. Resolves
+   * with the new path, or null when the dialog was cancelled. */
+  rehomeProject: (from: string) => invoke<string | null>("rehome_project", { from }),
+  /** Drops what is kept for a project whose folder is gone (its cards stay on the board). */
+  forgetProject: (path: string) => invoke("forget_project", { path }),
 
   quit: () => invoke("quit"),
 };

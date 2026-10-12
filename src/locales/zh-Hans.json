@@ -908,6 +908,53 @@
     "other": "退出时有 {count} 个项目打开着"
   },
   "resume.more": "{names} 及其他 {count} 个",
+  "backup.section": "备份",
+  "backup.text": "一个文件；可在另一台电脑上导入。",
+  "backup.export": "导出…",
+  "backup.import": "导入…",
+  "backup.exportTitle": "导出备份",
+  "backup.exportDo": "导出",
+  "backup.importTitle": "导入备份",
+  "backup.importDo": "导入",
+  "backup.part.projects": "项目：列表、顺序、团队、命令和链接",
+  "backup.part.board": "看板卡片及其图片",
+  "backup.part.activity": "每日记录（90 天）",
+  "backup.name.activity": "每日记录",
+  "backup.saved": "已保存：{file}",
+  "backup.madeAt": "创建于 {when} · Pitwall {version}",
+  "backup.missingPart": "此文件中没有",
+  "backup.count.projects": {
+    "other": "{count} 个项目"
+  },
+  "backup.count.commands": {
+    "other": "{count} 条命令"
+  },
+  "backup.count.links": {
+    "other": "{count} 个链接"
+  },
+  "backup.count.teams": {
+    "other": "{count} 个团队"
+  },
+  "backup.count.cards": {
+    "other": "{count} 张卡片"
+  },
+  "backup.count.images": {
+    "other": "{count} 张图片"
+  },
+  "backup.count.days": {
+    "other": "{count} 天"
+  },
+  "backup.importNote": "文件中也有的卡片和项目设置会被替换，其余保留。这里现有的内容会先备份。",
+  "backup.restored": "已恢复：{what}",
+  "backup.restoredWithSettings": "已恢复：{what}、设置",
+  "backup.restoredSettings": "已恢复设置",
+  "backup.restoredNothing": "没有恢复任何内容",
+  "missing.section": "已移动的文件夹",
+  "missing.notFound": "找不到 {path}",
+  "missing.kept": "仍保留：{what}",
+  "missing.rehome": "选择新位置…",
+  "missing.forget": "忘记",
+  "missing.forgetAsk": "它的命令和链接将被删除。",
   "track.nav": "赛道",
   "track.title": "赛道",
   "track.crashed": "{count} 个已崩溃",
@@ -1002,6 +1049,10 @@
   "core.tray.percent": "{value}%",
   "core.tray.tooltipFuel": "Pitwall：{running} 个运行中 · {waiting} 个在等你 · 会话剩余 {left}",
   "core.dialog.projectsFolder": "选择你的项目文件夹",
+  "core.dialog.backupSave": "保存 Pitwall 备份",
+  "core.dialog.backupFilter": "Pitwall 备份",
+  "core.dialog.backupOpen": "选择 Pitwall 备份",
+  "core.dialog.rehome": "项目现在在哪里？",
   "core.error.launchAtLoginDev": "“登录时启动”仅适用于已安装的应用，在开发版本中不可用。",
   "core.error.hookDev": "Hook 仅适用于已安装的应用，在开发版本中不可用。",
   "core.error.notFolder": "不是文件夹：{path}",
@@ -1029,6 +1080,17 @@
   "core.error.depsCommandFailed": "{command} 失败（退出代码 {code}）。",
   "core.error.depsCommandStopped": "{command} 已停止。",
   "core.error.teamName": "团队需要一个名称。",
+  "core.error.backupNoFile": "请重新选择备份文件。",
+  "core.error.backupRead": "无法读取 {file}：{error}",
+  "core.error.backupReadTooLarge": "{file} 超过 {limit} MB。",
+  "core.error.backupNotBackup": "{file} 不是 Pitwall 备份。",
+  "core.error.backupNewer": "{file} 由较新的 Pitwall（{app}）写入。请更新 Pitwall 后再读取。",
+  "core.error.backupDamaged": "{file} 已损坏（{error}）。未做任何更改。",
+  "core.error.backupKeep": "无法先备份这里现有的内容（{error}），因此未导入任何内容。",
+  "core.error.keepFirst": "无法先备份这里现有的内容（{error}），因此未更改任何内容。",
+  "core.error.backupWrite": "无法写入 {file}：{error}",
+  "core.error.backupWriteTooLarge": "此备份将超过 {limit} MB。请不要包含看板，或先移除卡片中的大图片。",
+  "core.error.rehomeSame": "{path} 已是该项目的文件夹。请选择项目现在所在的文件夹。",
   "core.issue.couldNotStart": "无法启动：{error}",
   "core.issue.exitCode": "退出码 {code}",
   "core.issue.exitSignal": "信号 {signal}",

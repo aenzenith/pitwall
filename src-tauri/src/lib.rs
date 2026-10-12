@@ -51,6 +51,8 @@ pub struct AppState {
     pub fuel: fuel::Fuel,
     pub sessions: sessions::Sessions,
     pub update: update::Update,
+    /// The backup file picked last (`commands::backup_pick`): the one an import reads.
+    pub backup: std::sync::Mutex<Option<PathBuf>>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -277,7 +279,7 @@ pub fn run() {
 
             let fuel = fuel::Fuel::new(app.handle(), home.join(".claude").join("projects"));
             let update = update::Update::new(app.handle());
-            app.manage(AppState { core: Arc::clone(&core), fuel, sessions: sessions::Sessions::default(), update });
+            app.manage(AppState { core: Arc::clone(&core), fuel, sessions: sessions::Sessions::default(), update, backup: std::sync::Mutex::new(None) });
             fuel::Fuel::start(app.handle());
             sessions::Sessions::start(app.handle());
             update::Update::start(app.handle());
@@ -467,6 +469,12 @@ pub fn run() {
             commands::set_onboarded,
             commands::resume_restore,
             commands::resume_dismiss,
+            commands::backup_export,
+            commands::backup_pick,
+            commands::backup_import,
+            commands::missing_projects,
+            commands::rehome_project,
+            commands::forget_project,
             commands::quit
         ])
         .build(tauri::generate_context!())

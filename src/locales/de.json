@@ -937,6 +937,60 @@
     "other": "{count} Projekte waren offen"
   },
   "resume.more": "{names} und {count} weitere",
+  "backup.section": "Sicherung",
+  "backup.text": "Eine Datei; auf einem anderen Computer lässt sie sich importieren.",
+  "backup.export": "Exportieren …",
+  "backup.import": "Importieren …",
+  "backup.exportTitle": "Sicherung exportieren",
+  "backup.exportDo": "Exportieren",
+  "backup.importTitle": "Sicherung importieren",
+  "backup.importDo": "Importieren",
+  "backup.part.projects": "Projekte: Liste, Reihenfolge, Teams, Befehle und Links",
+  "backup.part.board": "Board-Karten und ihre Bilder",
+  "backup.part.activity": "Tagesaufzeichnungen (90 Tage)",
+  "backup.name.activity": "Tagesaufzeichnungen",
+  "backup.saved": "Gespeichert: {file}",
+  "backup.madeAt": "Erstellt {when} · Pitwall {version}",
+  "backup.missingPart": "Nicht in dieser Datei",
+  "backup.count.projects": {
+    "one": "{count} Projekt",
+    "other": "{count} Projekte"
+  },
+  "backup.count.commands": {
+    "one": "{count} Befehl",
+    "other": "{count} Befehle"
+  },
+  "backup.count.links": {
+    "one": "{count} Link",
+    "other": "{count} Links"
+  },
+  "backup.count.teams": {
+    "one": "{count} Team",
+    "other": "{count} Teams"
+  },
+  "backup.count.cards": {
+    "one": "{count} Karte",
+    "other": "{count} Karten"
+  },
+  "backup.count.images": {
+    "one": "{count} Bild",
+    "other": "{count} Bilder"
+  },
+  "backup.count.days": {
+    "one": "{count} Tag",
+    "other": "{count} Tage"
+  },
+  "backup.importNote": "Karten und Projekteinstellungen, die auch in der Datei stehen, werden ersetzt; der Rest bleibt. Was jetzt hier ist, wird zuerst gesichert.",
+  "backup.restored": "Wiederhergestellt: {what}",
+  "backup.restoredWithSettings": "Wiederhergestellt: {what} und die Einstellungen",
+  "backup.restoredSettings": "Die Einstellungen wurden wiederhergestellt",
+  "backup.restoredNothing": "Nichts wurde wiederhergestellt",
+  "missing.section": "Verschobene Ordner",
+  "missing.notFound": "{path} wurde nicht gefunden",
+  "missing.kept": "Noch aufbewahrt: {what}",
+  "missing.rehome": "Neuen Ort auswählen …",
+  "missing.forget": "Vergessen",
+  "missing.forgetAsk": "Seine Befehle und Links werden gelöscht.",
   "track.nav": "Strecke",
   "track.title": "Strecke",
   "track.crashed": "Abgestürzt: {count}",
@@ -1039,6 +1093,10 @@
   "core.tray.percent": "{value} %",
   "core.tray.tooltipFuel": "Pitwall – Aktiv: {running} · Wartet auf dich: {waiting} · Sitzung: {left} übrig",
   "core.dialog.projectsFolder": "Projektordner auswählen",
+  "core.dialog.backupSave": "Pitwall-Sicherung speichern",
+  "core.dialog.backupFilter": "Pitwall-Sicherung",
+  "core.dialog.backupOpen": "Pitwall-Sicherung auswählen",
+  "core.dialog.rehome": "Wo liegt das Projekt jetzt?",
   "core.error.launchAtLoginDev": "„Beim Anmelden öffnen“ funktioniert nur in der installierten App, nicht in einem Dev-Build.",
   "core.error.hookDev": "Der Hook funktioniert nur in der installierten App, nicht in einem Dev-Build.",
   "core.error.notFolder": "Kein Ordner: {path}",
@@ -1066,6 +1124,17 @@
   "core.error.depsCommandFailed": "{command} ist fehlgeschlagen (Exit-Code {code}).",
   "core.error.depsCommandStopped": "{command} wurde gestoppt.",
   "core.error.teamName": "Ein Team braucht einen Namen.",
+  "core.error.backupNoFile": "Wähle die Sicherungsdatei erneut aus.",
+  "core.error.backupRead": "{file} konnte nicht gelesen werden: {error}",
+  "core.error.backupReadTooLarge": "{file} ist größer als {limit} MB.",
+  "core.error.backupNotBackup": "{file} ist keine Pitwall-Sicherung.",
+  "core.error.backupNewer": "{file} stammt von einem neueren Pitwall ({app}). Aktualisiere Pitwall, um es zu lesen.",
+  "core.error.backupDamaged": "{file} ist beschädigt ({error}). Nichts wurde geändert.",
+  "core.error.backupKeep": "Was hier ist, konnte vorher nicht gesichert werden ({error}); nichts wurde importiert.",
+  "core.error.keepFirst": "Was hier ist, konnte vorher nicht gesichert werden ({error}); nichts wurde geändert.",
+  "core.error.backupWrite": "{file} konnte nicht geschrieben werden: {error}",
+  "core.error.backupWriteTooLarge": "Diese Sicherung wäre größer als {limit} MB. Lass das Board weg oder entferne zuerst große Bilder von den Karten.",
+  "core.error.rehomeSame": "{path} ist bereits sein Ordner. Wähle den Ordner, in dem das Projekt jetzt liegt.",
   "core.issue.couldNotStart": "konnte nicht starten: {error}",
   "core.issue.exitCode": "Code {code}",
   "core.issue.exitSignal": "Signal {signal}",

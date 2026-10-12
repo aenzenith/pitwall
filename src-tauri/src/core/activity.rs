@@ -177,7 +177,7 @@ pub struct DaySummary {
 }
 
 impl Core {
-    fn activity_dir(&self) -> Option<PathBuf> {
+    pub(super) fn activity_dir(&self) -> Option<PathBuf> {
         self.cfg.settings_file.parent().map(|dir| dir.join("activity"))
     }
 

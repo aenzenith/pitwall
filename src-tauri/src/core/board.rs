@@ -57,7 +57,7 @@ const ADOPT_MS: u64 = 2 * 60 * 1000;
 /// Each card's images are in a folder of its own under this one, beside the board's file.
 const IMAGES_DIR: &str = "board-images";
 /// A card holds this many images at most, each this large at most.
-const IMAGES_MAX: usize = 12;
+pub(super) const IMAGES_MAX: usize = 12;
 const IMAGE_BYTES_MAX: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,7 +167,7 @@ fn decode_image(data: &str) -> Result<(ImageKind, Vec<u8>), String> {
 }
 
 /// What of `images` a card with `note` takes: those the note names, each number once, decoded.
-fn taken(note: &str, images: &[NewImage]) -> Result<Vec<(CardImage, Vec<u8>)>, String> {
+pub(super) fn taken(note: &str, images: &[NewImage]) -> Result<Vec<(CardImage, Vec<u8>)>, String> {
     let mut taken: Vec<(CardImage, Vec<u8>)> = Vec::new();
     for image in images.iter().filter(|image| image.n > 0 && names(note, image.n)) {
         if taken.iter().any(|(held, _)| held.n == image.n) {
@@ -224,7 +224,7 @@ pub(super) struct Board {
     file: PathBuf,
     /// The folder of the cards' image folders.
     images: PathBuf,
-    cards: Vec<Card>,
+    pub(super) cards: Vec<Card>,
     /// False when an unusable file could not be set aside: nothing is written over it.
     writable: bool,
     /// Sessions opened again and not seen running yet, and until when they are waited for.
@@ -254,13 +254,13 @@ impl Board {
 
     /// Card `id`'s image folder. None for an id the board never gives (anything but letters,
     /// digits and dashes): a board file written by hand names no folder elsewhere.
-    fn image_dir(&self, id: &str) -> Option<PathBuf> {
+    pub(super) fn image_dir(&self, id: &str) -> Option<PathBuf> {
         let own = !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-');
         own.then(|| self.images.join(id))
     }
 
     /// Writes a card's new images into its folder.
-    fn write_images(&self, id: &str, images: &[(CardImage, Vec<u8>)]) -> Result<(), String> {
+    pub(super) fn write_images(&self, id: &str, images: &[(CardImage, Vec<u8>)]) -> Result<(), String> {
         if images.is_empty() {
             return Ok(());
         }
@@ -274,7 +274,7 @@ impl Board {
 
     /// Deletes the files of `images`, a card's, and its folder once nothing is left in it. Only
     /// files the card names go, never a folder with what is in it.
-    fn remove_images(&self, id: &str, images: &[CardImage]) {
+    pub(super) fn remove_images(&self, id: &str, images: &[CardImage]) {
         let Some(dir) = self.image_dir(id).filter(|_| !images.is_empty()) else {
             return;
         };
@@ -512,13 +512,13 @@ pub(super) fn tab_name(title: &str) -> String {
 }
 
 impl Core {
-    fn board(&self) -> MutexGuard<'_, Board> {
+    pub(super) fn board(&self) -> MutexGuard<'_, Board> {
         self.board.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Saves the board and sends it to the window, the lock let go first. A board that couldn't
     /// be written says so in the snapshot (`board_unsaved`).
-    fn board_changed(&self, board: MutexGuard<'_, Board>) {
+    pub(super) fn board_changed(&self, board: MutexGuard<'_, Board>) {
         let saved = board.save();
         let cards = board.cards.clone();
         drop(board);
@@ -627,7 +627,7 @@ impl Core {
     }
 
     /// The image files of `card` that are there, by number, and the folder they are in.
-    fn card_images(&self, card: &Card) -> Option<(PathBuf, Vec<(u32, PathBuf)>)> {
+    pub(super) fn card_images(&self, card: &Card) -> Option<(PathBuf, Vec<(u32, PathBuf)>)> {
         let dir = self.board().image_dir(&card.id)?;
         let files: Vec<(u32, PathBuf)> = card.images.iter().map(|image| (image.n, dir.join(image.file_name()))).filter(|(_, file)| file.is_file()).collect();
         (!files.is_empty()).then_some((dir, files))

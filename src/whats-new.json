@@ -84,6 +84,27 @@
         "ja": "起動時に、終了時に開いていた開発サーバーとターミナルのタブを元に戻すか尋ねます。",
         "zh-Hans": "启动时，Pitwall 会询问是否恢复退出时打开的开发服务器和终端标签页。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Backup, and moved folders",
+        "tr": "Yedek ve taşınan klasörler",
+        "de": "Sicherung und verschobene Ordner",
+        "es": "Copia de seguridad y carpetas movidas",
+        "ru": "Резервная копия и перемещённые папки",
+        "ja": "バックアップと移動されたフォルダ",
+        "zh-Hans": "备份与已移动的文件夹"
+      },
+      "body": {
+        "en": "Export settings, projects and the board to one file and import it on another computer. A project whose folder moved keeps its commands and links once you choose its new location.",
+        "tr": "Ayarları, projeleri ve panoyu tek dosyaya dışa aktar, başka bir bilgisayarda içe aktar. Klasörü taşınan projenin yeni yerini seçince komutları ve bağlantıları yerinde kalır.",
+        "de": "Einstellungen, Projekte und das Board in eine Datei exportieren und auf einem anderen Computer importieren. Ein Projekt, dessen Ordner verschoben wurde, behält Befehle und Links, sobald du den neuen Ort auswählst.",
+        "es": "Exporta ajustes, proyectos y el tablero a un solo archivo e impórtalo en otra computadora. Un proyecto cuya carpeta se movió conserva sus comandos y enlaces en cuanto eliges su nueva ubicación.",
+        "ru": "Экспортируйте настройки, проекты и доску в один файл и импортируйте его на другом компьютере. Проект, папку которого переместили, сохранит команды и ссылки, когда вы выберете новое место.",
+        "ja": "設定、プロジェクト、ボードを 1 つのファイルに書き出し、別のコンピュータで読み込めます。フォルダを移動したプロジェクトも、新しい場所を選択すればコマンドとリンクを引き継ぎます。",
+        "zh-Hans": "将设置、项目和看板导出为一个文件，并在另一台电脑上导入。文件夹被移动的项目，在你选择新位置后会保留其命令和链接。"
+      }
     }
   ]
 }
