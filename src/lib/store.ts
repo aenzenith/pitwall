@@ -7,6 +7,7 @@ import type {
   BoardColumn,
   Card,
   DaySummary,
+  Discovery,
   Team,
   DepReport,
   DepScanDetails,
@@ -352,6 +353,15 @@ export const api = {
    * once the one before answers on its address. */
   teamStart: (id: string) => invoke("team_start", { id }),
   teamStop: (id: string) => invoke("team_stop", { id }),
+
+  /* The first run and the projects folder (core/discover.rs). */
+  /** The projects folder's subfolders that have the dev script. */
+  discoverProjects: () => invoke<Discovery>("discover_projects"),
+  addProjects: (paths: string[]) => invoke("add_projects", { paths }),
+  /** A project offered under the list isn't offered again. */
+  dismissSuggestion: (path: string) => invoke("dismiss_suggestion", { path }),
+  /** The first run's steps are over (finished or put off). */
+  setOnboarded: () => invoke("set_onboarded"),
 
   quit: () => invoke("quit"),
 };

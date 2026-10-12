@@ -20,9 +20,9 @@ import TrackOptions from "./track/TrackOptions.vue";
 type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "track" | "about";
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
- * page's settings button Track's). */
+ * page's settings button Track's). `openSetup`: the first run's steps are asked for again. */
 const props = defineProps<{ startTab?: Tab }>();
-const emit = defineEmits<{ close: []; openUpdate: [] }>();
+const emit = defineEmits<{ close: []; openUpdate: []; openSetup: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
 const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" | "flag" }> = [
@@ -101,6 +101,8 @@ const form = reactive<Settings>({
   projects: {},
   order: [],
   theme: "system",
+  onboarded: false,
+  suggestProjects: false,
 });
 const error = ref("");
 const hookBusy = ref(false);
@@ -619,6 +621,12 @@ function setTheme(theme: Theme): void {
             </div>
             <small>{{ t("settings.projectsFolderHint") }}</small>
           </div>
+          <!-- Nothing to watch without a projects folder. -->
+          <label class="check">
+            <input v-model="form.suggestProjects" type="checkbox" :disabled="!snapshot?.settings.projectsDir" />
+            <span>{{ t("settings.suggestProjects") }}</span>
+          </label>
+          <button type="button" class="control quiet" @click="emit('openSetup')">{{ t("settings.openSetup") }}</button>
           <div class="field">
             <label class="check">
               <input v-model="form.autoUpdate" type="checkbox" />
@@ -890,6 +898,11 @@ select {
   accent-color: var(--run);
 }
 
+/* A box that can't be ticked as things stand. */
+.check:has(input:disabled) {
+  color: var(--text-faint);
+}
+
 .hint {
   font-size: 12px;
   color: var(--text-subtle);
@@ -1135,6 +1148,22 @@ code {
 
 .control.primary:hover {
   background: var(--btn-primary-hover);
+}
+
+/* A way to somewhere else, not a setting: smaller, and no ground of its own until the pointer is
+   on it. */
+.control.quiet {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 10px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.control.quiet:hover {
+  background: var(--bg-icon-hover);
+  color: var(--text);
 }
 
 /* A busy button's label stays, unseen, under its spinner. */

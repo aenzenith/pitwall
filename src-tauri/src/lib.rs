@@ -459,6 +459,10 @@ pub fn run() {
             commands::team_launch,
             commands::team_start,
             commands::team_stop,
+            commands::discover_projects,
+            commands::add_projects,
+            commands::dismiss_suggestion,
+            commands::set_onboarded,
             commands::quit
         ])
         .build(tauri::generate_context!())

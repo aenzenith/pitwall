@@ -166,6 +166,14 @@ pub struct Settings {
     /// The list's teams, in the order they are drawn (`core/teams.rs`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub teams: Vec<Team>,
+    /// The first run's steps were finished or put off: they don't come up by themselves again.
+    pub onboarded: bool,
+    /// A project that appears in the projects folder is offered under the list
+    /// (`core/discover.rs`).
+    pub suggest_projects: bool,
+    /// The projects folder's subfolders known so far, by name: none of them is offered.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub seen_folders: Vec<String>,
 }
 
 impl Default for Settings {
@@ -196,6 +204,9 @@ impl Default for Settings {
             track: None,
             theme: "system".into(),
             teams: Vec::new(),
+            onboarded: false,
+            suggest_projects: false,
+            seen_folders: Vec::new(),
         }
     }
 }

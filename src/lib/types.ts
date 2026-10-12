@@ -129,6 +129,12 @@ export type Settings = {
   theme: Theme;
   /** The list's teams, in the order they are drawn; changed through the `team*` commands only. */
   teams?: Team[];
+  /** The first run's steps were finished or put off. */
+  onboarded: boolean;
+  /** A project that appears in the projects folder is offered under the list. */
+  suggestProjects: boolean;
+  /** The projects folder's subfolders known so far; the core's own. */
+  seenFolders?: string[];
 };
 
 /** An open project terminal. */
@@ -154,7 +160,20 @@ export type Snapshot = {
   language: Language;
   /** The system's language, for the "System" choice in Settings. */
   systemLanguage: Language;
+  /** Projects that appeared in the projects folder, offered under the list. */
+  suggestions: Candidate[];
 };
+
+/* ---------- First run and the projects folder (discover_projects, add_projects) ---------- */
+
+/** A folder of the projects folder that could be a project: it has the dev script. `kind`: what
+ * it is built with, a proper name ("Laravel + Vite", "Next", "Vite"…); `changedAt`: when it was
+ * last worked on (ms), null when that can't be told; `listed`: already in Pitwall. */
+export type Candidate = { path: string; name: string; kind: string; changedAt: number | null; listed: boolean };
+
+/** The projects folder looked through. `dir` null: none is set; `folders`: how many subfolders
+ * it has in all. */
+export type Discovery = { dir: string | null; folders: number; candidates: Candidate[] };
 
 /** A stretch of the day; Claude's name their session. */
 export type DaySpan = { start: number; end: number; session?: string };

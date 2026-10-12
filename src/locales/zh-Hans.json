@@ -326,6 +326,8 @@
   "settings.extOpenPage": "打开扩展页面",
   "settings.extDownload": "下载 .vsix",
   "settings.appearance": "外观",
+  "settings.suggestProjects": "此文件夹中出现新项目时提示添加",
+  "settings.openSetup": "打开初始设置步骤",
   "about.version": "版本 {version}",
   "about.blurb": "你各个项目的开发服务器和 Claude 会话，在菜单栏中一键即达。基于 MIT 许可证免费开源。",
   "about.madeBy": "由 Aenzenith 制作",
@@ -345,6 +347,71 @@
   "about.update.installing": "正在安装 {version}…",
   "about.update.available": "{version} 已发布；此安装无法自行更新。",
   "about.update.retry": "重试",
+  "setup.title": "设置 Pitwall",
+  "setup.later": "稍后",
+  "setup.steps": "设置步骤",
+  "setup.stepDone": "已完成",
+  "setup.finish": "完成",
+  "setup.retry": "重试",
+  "setup.step.projects": "添加项目",
+  "setup.step.projectsHint": "在项目文件夹中找出带有 dev 脚本的项目。",
+  "setup.step.hook": "即时看到 Claude 的状态",
+  "setup.step.hookHint": "为 Claude Code 添加一个 Hook；授权请求也会显示。",
+  "setup.step.extension": "与 VS Code 配合",
+  "setup.step.extensionHint": "装了扩展，在编辑器里启动的服务器也会显示在这里。",
+  "setup.step.startup": "快捷键与启动",
+  "setup.step.startupHint": "{keys} 快速切换器 · 登录时启动",
+  "setup.projects.intro": "选择存放项目的文件夹。",
+  "setup.projects.choose": "选择文件夹…",
+  "setup.projects.change": "其他文件夹…",
+  "setup.projects.folders": {
+    "other": "{count} 个文件夹"
+  },
+  "setup.projects.withScript": {
+    "other": "其中 {count} 个有 dev 脚本"
+  },
+  "setup.projects.kind": "类型",
+  "setup.projects.changed": "最近修改",
+  "setup.projects.found": "找到的项目",
+  "setup.projects.listed": "已在列表中",
+  "setup.projects.stale": "很久没有改动",
+  "setup.projects.scanning": "正在查看文件夹…",
+  "setup.projects.empty": "此文件夹中没有带 dev 脚本的项目。",
+  "setup.projects.failed": "无法查看该文件夹。",
+  "setup.projects.suggest": "此文件夹中出现新项目时提示添加",
+  "setup.projects.add": {
+    "other": "添加选中的 {count} 个项目"
+  },
+  "setup.changed.today": "今天",
+  "setup.changed.yesterday": "昨天",
+  "setup.changed.days": {
+    "other": "{count} 天"
+  },
+  "setup.changed.months": {
+    "other": "{count} 个月"
+  },
+  "setup.changed.years": {
+    "other": "{count} 年"
+  },
+  "setup.hook.title": "Claude Code Hook",
+  "setup.hook.installed": "已安装",
+  "setup.hook.missing": "未安装",
+  "setup.hook.outdated": "有可用更新",
+  "setup.hook.adds": "它会写入 {settings}；文件中的其他内容不变。",
+  "setup.hook.reports": "Hook 只传递 Claude 的状态和请求授权的工具名称，绝不传递消息或命令。",
+  "setup.ext.checking": "正在检查…",
+  "setup.ext.failed": "无法检查扩展。",
+  "setup.ext.recheck": "重新检查",
+  "setup.startup.shortcutHint": "按键可在 设置 › 通用 中更改。",
+  "suggest.label": "新项目",
+  "suggest.new": "新项目：{name}",
+  "suggest.add": "添加",
+  "suggest.dismiss": "忽略",
+  "suggest.addName": "添加 {name}",
+  "suggest.dismissName": "忽略 {name}",
+  "suggest.more": {
+    "other": "还有 {count} 个"
+  },
   "day.nav": "今天",
   "day.title": "这一天去哪了?",
   "day.today": "今天",

@@ -326,6 +326,8 @@
   "settings.extOpenPage": "拡張機能のページを開く",
   "settings.extDownload": ".vsix をダウンロード",
   "settings.appearance": "外観",
+  "settings.suggestProjects": "このフォルダに新しいプロジェクトが現れたら提案する",
+  "settings.openSetup": "セットアップ手順を開く",
   "about.version": "バージョン {version}",
   "about.blurb": "プロジェクトの開発サーバーとClaudeのセッションに、メニューバーからワンクリックでアクセスできます。MITライセンスの無料オープンソースソフトウェアです。",
   "about.madeBy": "Aenzenithが開発",
@@ -345,6 +347,71 @@
   "about.update.installing": "{version} をインストール中…",
   "about.update.available": "{version} が出ました。このインストールは自動でアップデートできません。",
   "about.update.retry": "再試行",
+  "setup.title": "Pitwall をセットアップ",
+  "setup.later": "あとで",
+  "setup.steps": "セットアップの手順",
+  "setup.stepDone": "完了",
+  "setup.finish": "完了",
+  "setup.retry": "再試行",
+  "setup.step.projects": "プロジェクトを追加",
+  "setup.step.projectsHint": "プロジェクトフォルダから、dev スクリプトのあるものを探します。",
+  "setup.step.hook": "Claude の状態をすぐに表示",
+  "setup.step.hookHint": "Claude Code にフックを追加します。許可の要求も表示されます。",
+  "setup.step.extension": "VS Code と一緒に",
+  "setup.step.extensionHint": "拡張機能があれば、エディタで起動したサーバーがここに表示されます。",
+  "setup.step.startup": "ショートカットと起動",
+  "setup.step.startupHint": "{keys} クイックスイッチャー · ログイン時に起動",
+  "setup.projects.intro": "プロジェクトを置いているフォルダを選んでください。",
+  "setup.projects.choose": "フォルダを選択…",
+  "setup.projects.change": "別のフォルダ…",
+  "setup.projects.folders": {
+    "other": "{count}個のフォルダ"
+  },
+  "setup.projects.withScript": {
+    "other": "{count}個に dev スクリプトあり"
+  },
+  "setup.projects.kind": "種類",
+  "setup.projects.changed": "最終変更",
+  "setup.projects.found": "見つかったプロジェクト",
+  "setup.projects.listed": "追加済み",
+  "setup.projects.stale": "長い間変更なし",
+  "setup.projects.scanning": "フォルダを確認中…",
+  "setup.projects.empty": "このフォルダには dev スクリプトのあるプロジェクトがありません。",
+  "setup.projects.failed": "フォルダを確認できませんでした。",
+  "setup.projects.suggest": "このフォルダに新しいプロジェクトが現れたら提案する",
+  "setup.projects.add": {
+    "other": "選択した{count}件のプロジェクトを追加"
+  },
+  "setup.changed.today": "今日",
+  "setup.changed.yesterday": "昨日",
+  "setup.changed.days": {
+    "other": "{count}日"
+  },
+  "setup.changed.months": {
+    "other": "{count}か月"
+  },
+  "setup.changed.years": {
+    "other": "{count}年"
+  },
+  "setup.hook.title": "Claude Code のフック",
+  "setup.hook.installed": "インストール済み",
+  "setup.hook.missing": "未インストール",
+  "setup.hook.outdated": "更新があります",
+  "setup.hook.adds": "{settings} に追加されます。ファイルのほかの内容は変わりません。",
+  "setup.hook.reports": "フックが伝えるのは、Claude の状態と許可を求めているツールの名前だけです。メッセージやコマンドは伝えません。",
+  "setup.ext.checking": "確認中…",
+  "setup.ext.failed": "拡張機能を確認できませんでした。",
+  "setup.ext.recheck": "再確認",
+  "setup.startup.shortcutHint": "キーは 設定 › 一般 で変更できます。",
+  "suggest.label": "新しいプロジェクト",
+  "suggest.new": "新しいプロジェクト: {name}",
+  "suggest.add": "追加",
+  "suggest.dismiss": "無視",
+  "suggest.addName": "{name}を追加",
+  "suggest.dismissName": "{name}を無視",
+  "suggest.more": {
+    "other": "ほか{count}件"
+  },
   "day.nav": "今日",
   "day.title": "一日の振り返り",
   "day.today": "今日",

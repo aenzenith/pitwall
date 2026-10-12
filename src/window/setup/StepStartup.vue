@@ -1,0 +1,127 @@
+<script setup lang="ts">
+import { computed } from "vue";
+
+import Spinner from "../../components/Spinner.vue";
+import { t } from "../../lib/i18n";
+import { shortcutCaps, useSwitch } from "../../lib/setup";
+import { snapshot } from "../../lib/store";
+
+/**
+ * The last step: the quick switcher's shortcut and starting at login, each a switch, and the
+ * button that ends the first run. The keys are only shown here (Settings records new ones).
+ * `finishing`: the view is on its way out; `finish`: the button was pressed.
+ */
+defineProps<{ finishing: boolean }>();
+const emit = defineEmits<{ finish: [] }>();
+
+const caps = computed(() => shortcutCaps(snapshot.value?.settings.shortcutKeys ?? ""));
+
+const { on: shortcutOn, error: shortcutError, set: setShortcut } = useSwitch("shortcut");
+// A development run can't start at login: the core says why, and the switch goes back.
+const { on: loginOn, error: loginError, set: setLogin } = useSwitch("launchAtLogin");
+</script>
+
+<template>
+  <section class="pane">
+    <div class="head">
+      <span class="head-text">
+        <span class="title">{{ t("setup.step.startup") }}</span>
+      </span>
+    </div>
+
+    <div class="block options">
+      <div class="option">
+        <label class="opt">
+          <input type="checkbox" role="switch" :checked="shortcutOn" @change="setShortcut(($event.target as HTMLInputElement).checked)" />
+          <span class="opt-text">
+            <span>{{ t("settings.shortcutToggle") }}</span>
+            <span class="hint">{{ t("setup.startup.shortcutHint") }}</span>
+          </span>
+        </label>
+        <span v-if="caps.length" :class="['caps', { off: !shortcutOn }]">
+          <kbd v-for="(cap, index) in caps" :key="index">{{ cap }}</kbd>
+        </span>
+      </div>
+      <p v-if="shortcutError" class="error" role="alert">{{ shortcutError }}</p>
+
+      <div class="option">
+        <label class="opt">
+          <input type="checkbox" role="switch" :checked="loginOn" @change="setLogin(($event.target as HTMLInputElement).checked)" />
+          <span class="opt-text">
+            <span>{{ t("settings.launchAtLogin") }}</span>
+          </span>
+        </label>
+      </div>
+      <p v-if="loginError" class="error" role="alert">{{ loginError }}</p>
+    </div>
+
+    <div class="foot">
+      <button type="button" class="control primary" :disabled="finishing" :aria-busy="finishing" @click="emit('finish')">
+        <span :class="{ hidden: finishing }">{{ t("setup.finish") }}</span>
+        <Spinner v-if="finishing" class="over" :size="12" />
+      </button>
+    </div>
+  </section>
+</template>
+
+<style scoped src="./setup.css"></style>
+
+<style scoped>
+/* Two rows under hairlines, as Settings' Track tab has its own. */
+.options {
+  gap: 0;
+  padding: 0;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+}
+
+.option ~ .option {
+  border-top: 1px solid var(--line);
+}
+
+.option .opt {
+  flex: 1 1 auto;
+}
+
+.options .error {
+  margin: -6px 0 12px 38px;
+}
+
+/* The shortcut as key caps; dimmed while it is off. */
+.caps {
+  flex-shrink: 0;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.caps.off {
+  opacity: 0.45;
+}
+
+kbd {
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg-key);
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* macOS writes its keys as glyphs, which read small at the letters' size and aren't in the
+   mono face anyway. */
+:root[data-platform="mac"] kbd {
+  font-family: var(--font);
+  font-size: 14px;
+}
+</style>

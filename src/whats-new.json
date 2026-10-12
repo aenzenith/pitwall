@@ -42,6 +42,27 @@
         "ja": "設定 › 一般：システムに合わせるか、ダークまたはライトを選べます。",
         "zh-Hans": "设置 › 通用：跟随系统，或选择深色、浅色。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Setup and new projects",
+        "tr": "Kurulum ve yeni projeler",
+        "de": "Einrichtung und neue Projekte",
+        "es": "Configuración y proyectos nuevos",
+        "ru": "Настройка и новые проекты",
+        "ja": "セットアップと新しいプロジェクト",
+        "zh-Hans": "初始设置与新项目"
+      },
+      "body": {
+        "en": "Settings › General › Open the setup steps: the projects in your projects folder, Claude's hook, the VS Code extension and the shortcut. Pitwall can also suggest new projects that appear in that folder; turn it on in the same place.",
+        "tr": "Ayarlar › Genel › Kurulum adımlarını aç: projeler klasöründeki projeler, Claude hook'u, VS Code eklentisi ve kısayol. Pitwall bu klasörde beliren yeni projeleri de önerebilir; aynı yerden aç.",
+        "de": "Einstellungen › Allgemein › Einrichtungsschritte öffnen: die Projekte im Projektordner, Claudes Hook, die VS Code-Erweiterung und der Tastaturkurzbefehl. Pitwall kann außerdem neue Projekte vorschlagen, die in diesem Ordner auftauchen; an derselben Stelle einschalten.",
+        "es": "Ajustes › General › Abrir los pasos de configuración: los proyectos de tu carpeta de proyectos, el hook de Claude, la extensión de VS Code y el atajo. Pitwall también puede sugerir los proyectos nuevos que aparezcan en esa carpeta; actívalo en el mismo lugar.",
+        "ru": "Настройки › Основные › Открыть шаги настройки: проекты из папки проектов, хук Claude, расширение VS Code и сочетание клавиш. Pitwall также может предлагать новые проекты, появившиеся в этой папке; включается там же.",
+        "ja": "設定 › 一般 › セットアップ手順を開く：プロジェクトフォルダのプロジェクト、Claude のフック、VS Code 拡張機能、ショートカット。このフォルダに現れた新しいプロジェクトを Pitwall が提案することもできます。同じ場所でオンにします。",
+        "zh-Hans": "设置 › 通用 › 打开初始设置步骤：项目文件夹中的项目、Claude 的 Hook、VS Code 扩展和快捷键。Pitwall 还可以在该文件夹中出现新项目时提示添加；在同一位置开启。"
+      }
     }
   ]
 }

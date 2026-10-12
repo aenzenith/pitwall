@@ -32,6 +32,7 @@ mod activity;
 mod board;
 mod claude_state;
 mod dependencies;
+mod discover;
 mod history;
 mod jobs;
 mod open;
@@ -50,6 +51,7 @@ mod terminal;
 mod watch;
 pub use activity::DaySummary;
 pub use board::{Card, Give, NewImage};
+pub use discover::{Candidate, Discovery};
 pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
 pub use projects::Folder;
@@ -158,6 +160,8 @@ struct Inner {
     last_state: String,
     /// Each project's server status as last published, to hear it crash or come up.
     statuses: HashMap<String, &'static str>,
+    /// Projects that appeared in the projects folder, offered under the list (`discover.rs`).
+    suggestions: Vec<Candidate>,
     /// Each team's start under way, by its number: a stop takes it out, and the start goes no
     /// further (`teams.rs`).
     team_runs: HashMap<String, u64>,
@@ -194,6 +198,8 @@ pub struct Core {
     /// Held while the settings are taken and written, so the file never ends up older than
     /// what the core holds (`save_settings`).
     settings_lock: Mutex<()>,
+    /// The projects folder is being looked through (`discover.rs`).
+    discover_busy: AtomicBool,
     sink: Sink,
 }
 
@@ -242,6 +248,7 @@ impl Core {
             board_follow: Mutex::new(()),
             deps: dependencies::Dependencies::default(),
             settings_lock: Mutex::new(()),
+            discover_busy: AtomicBool::new(false),
             sink,
         })
     }
@@ -295,6 +302,7 @@ impl Core {
 
         if tick.is_multiple_of(POLL_EVERY) {
             self.poll_files();
+            self.look_for_projects();
         }
 
         if tick.is_multiple_of(HEARTBEAT_EVERY) {

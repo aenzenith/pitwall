@@ -69,18 +69,14 @@ pub fn pick_projects_dir(app: AppHandle, state: State<'_, AppState>) {
 
     app.dialog().file().set_title(t!("core.dialog.projectsFolder")).pick_folder(move |folder| {
         if let Some(path) = folder.and_then(|f| f.into_path().ok()) {
-            let mut settings = core.settings();
-            settings.projects_dir = Some(path.to_string_lossy().into_owned());
-            core.set_settings(settings);
+            core.set_projects_dir(Some(path.to_string_lossy().into_owned()));
         }
     });
 }
 
 #[tauri::command]
 pub fn clear_projects_dir(state: State<'_, AppState>) {
-    let mut settings = state.core.settings();
-    settings.projects_dir = None;
-    state.core.set_settings(settings);
+    state.core.set_projects_dir(None);
 }
 
 #[tauri::command]
@@ -345,12 +341,18 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
     }
 
     let theme = (settings.theme != before.theme).then(|| settings.theme.clone());
+    let suggest = settings.suggest_projects != before.suggest_projects;
 
     // What has a command of its own stays as the core holds it, whatever the form says.
     state.core.set_settings_form(settings);
 
     if let Some(theme) = theme {
         crate::apply_theme(&app, &theme);
+    }
+    if suggest {
+        // It reads the projects folder: off the caller's thread.
+        let core = state.core.clone();
+        std::thread::spawn(move || core.refresh_suggestions());
     }
     Ok(())
 }
@@ -545,6 +547,34 @@ pub fn team_start(state: State<'_, AppState>, id: String) {
 #[tauri::command]
 pub fn team_stop(state: State<'_, AppState>, id: String) {
     state.core.team_stop(&id);
+}
+
+/* ---------- the first run and the projects folder ---------- */
+
+/// The projects folder's subfolders that have the dev script. It reads every one's
+/// `package.json`, so it runs off the main thread.
+#[tauri::command]
+pub async fn discover_projects(state: State<'_, AppState>) -> Result<crate::core::Discovery, String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.discover_projects()).await.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn add_projects(state: State<'_, AppState>, paths: Vec<String>) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&state.core);
+    tauri::async_runtime::spawn_blocking(move || core.add_projects(&paths)).await.map_err(|error| error.to_string())
+}
+
+/// A project offered under the list isn't offered again.
+#[tauri::command]
+pub fn dismiss_suggestion(state: State<'_, AppState>, path: String) {
+    state.core.dismiss_suggestion(&path);
+}
+
+/// The first run's steps are over: finished or put off.
+#[tauri::command]
+pub fn set_onboarded(state: State<'_, AppState>) {
+    state.core.set_onboarded();
 }
 
 /// Esc in the popover: close it and go back to the app from before.

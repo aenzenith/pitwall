@@ -1,0 +1,316 @@
+/* One step of the first run (SetupView), shared by its four panes: a head (what the step is about
+   and where it stands), a block between two hairlines, and a foot whose right end is the step's
+   one button. */
+.pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 24px;
+}
+
+/* Two lines high even where it has one, and everything from its top edge: the name and the
+   hairline under the head stand at the same height in every step. */
+.head {
+  flex-shrink: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.head .control {
+  margin-top: 4px;
+}
+
+.head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Where the step stands, in one quiet line: a mark, then the words. */
+.sub {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.sub-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The state's mark: a ring while there is nothing, a check once it is there (green: done), a
+   small dot when it needs you. */
+.mark {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-subtle);
+}
+
+.mark.ok {
+  color: var(--run);
+}
+
+.mark i {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--idle-ring);
+  border-radius: 50%;
+}
+
+.mark.warn i {
+  border: 0;
+  background: var(--warn);
+}
+
+/* Between two hairlines: what the step is about. It scrolls on its own if a small window can't
+   hold it; the page never does. */
+.block {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.block p {
+  margin: 0;
+}
+
+.text {
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+}
+
+.facts {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+code,
+kbd {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+code {
+  color: var(--text);
+}
+
+/* The foot: what there is to say at the left, the step's button at the right. In a narrow
+   window the button drops under the text, still at the right; its label never wraps. */
+.foot {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.foot-text {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.foot .control,
+.foot .quiet {
+  flex-shrink: 0;
+}
+
+.foot .primary {
+  margin-left: auto;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--crash-text);
+}
+
+/* The window's own button (WindowApp: control). */
+.control {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.control:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+}
+
+.control:disabled {
+  opacity: 0.4;
+}
+
+/* The step's one button, as the dialogs' (SettingsView: control primary). */
+.control.primary {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-line);
+  color: var(--btn-primary-text);
+}
+
+.control.primary:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+}
+
+/* A busy button keeps its width: the label stays, unseen, under the spinner. */
+.control[aria-busy="true"] {
+  opacity: 1;
+}
+
+.control .hidden {
+  visibility: hidden;
+}
+
+.control .over {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+/* A text button: no box until pointed at. */
+.quiet {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.quiet:hover:not(:disabled) {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+.quiet .hidden {
+  visibility: hidden;
+}
+
+.quiet .over {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+/* A switch and what it turns on, one click target; under the name a quieter line. */
+.opt {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.opt-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-subtle);
+}
+
+/* A small switch, as the Track tab's (track/TrackOptions): no state colour, it isn't a state. */
+.opt input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 26px;
+  height: 14px;
+  margin: 0;
+  border-radius: 7px;
+  background: var(--switch-off);
+  transition: background 0.15s;
+}
+
+.opt input::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-app);
+  transition: transform 0.15s;
+}
+
+.opt input:checked {
+  background: var(--text-muted);
+}
+
+.opt input:checked::before {
+  transform: translateX(12px);
+}
+
+.opt input:focus-visible {
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opt input,
+  .opt input::before {
+    transition: none;
+  }
+}

@@ -78,6 +78,8 @@ pub struct Snapshot {
     pub language: &'static str,
     /// The system's language, for the "System" choice in Settings.
     pub system_language: &'static str,
+    /// Projects that appeared in the projects folder (`discover.rs`).
+    pub suggestions: Vec<Candidate>,
 }
 
 impl Core {
@@ -269,9 +271,11 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         claude_hook: inner.claude_hook,
         claude_hook_outdated: inner.claude_hook_outdated,
         board_unsaved: inner.board_unsaved,
-        settings: inner.settings.clone(),
+        // Without the folders known: up to thousands of names only the core reads.
+        settings: Settings { seen_folders: Vec::new(), ..inner.settings.clone() },
         language: i18n::resolve(&inner.settings.language),
         system_language: i18n::system(),
+        suggestions: inner.suggestions.clone(),
         projects,
     }
 }

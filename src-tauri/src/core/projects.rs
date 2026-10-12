@@ -32,14 +32,17 @@ impl Core {
 
     /// The Settings page's form takes hold. Project overrides, the list order, the shortcut
     /// keys, the projects folder, the board shown last, how it is drawn, the Track page's
-    /// settings and the teams have their own commands: those stay as they are here, whatever
-    /// the form holds of them, which may be older. Taken and put back under one lock, so
-    /// nothing changes in between.
+    /// settings, the teams and what the core notes for itself (the first run, the folders
+    /// known) have their own commands: those stay as they are here, whatever the form holds
+    /// of them, which may be older. Taken and put back under one lock, so nothing changes in
+    /// between.
     pub fn set_settings_form(&self, form: Settings) {
         let language = form.language.clone();
         {
             let mut inner = self.lock();
             let kept = std::mem::take(&mut inner.settings);
+            // Turned on: its first look only notes what is there (`discover.rs`).
+            let seen_folders = if form.suggest_projects && !kept.suggest_projects { Vec::new() } else { kept.seen_folders };
             inner.settings = Settings {
                 projects: kept.projects,
                 order: kept.order,
@@ -49,6 +52,8 @@ impl Core {
                 board_view: kept.board_view,
                 track: kept.track,
                 teams: kept.teams,
+                onboarded: kept.onboarded,
+                seen_folders,
                 ..form
             };
         }
@@ -58,6 +63,8 @@ impl Core {
         self.notify();
     }
 
+    /// The settings as a whole, as a test sets a core up; the app changes them part by part.
+    #[cfg(test)]
     pub fn set_settings(&self, settings: Settings) {
         i18n::set(i18n::resolve(&settings.language));
         self.lock().settings = settings;

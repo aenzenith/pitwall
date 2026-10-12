@@ -137,10 +137,13 @@ fn a_settings_form_leaves_what_has_a_command_of_its_own() {
     core.set_project_settings(&fx.project, own);
     core.reorder(vec![fx.project.clone()]);
     core.set_shortcut_keys("Alt+Space".into());
+    core.set_projects_dir(Some(fx.project.clone()));
     core.set_board_scope("all".into());
     core.set_board_view("list".into());
     core.set_track(TrackSettings { circuit: "oval".into(), ..Default::default() });
     core.team_create("Race", vec![fx.project.clone()]).unwrap();
+    core.set_onboarded();
+    core.dismiss_suggestion(&fx.project);
     let held = core.settings();
 
     // A form that knows none of it.

@@ -30,7 +30,9 @@ import DayView from "./DayView.vue";
 import DepsView from "./DepsView.vue";
 import FuelView from "./FuelView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
+import ProjectSuggestions from "./ProjectSuggestions.vue";
 import SessionsView from "./SessionsView.vue";
+import SetupView from "./SetupView.vue";
 import TeamDetail from "./TeamDetail.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
@@ -133,6 +135,29 @@ function openSettings(tab?: "claude" | "track"): void {
   settingsTab.value = tab;
   settingsOpen.value = true;
 }
+
+/** The first run's steps (SetupView), in place of the list and its details: once by themselves,
+ * when the app starts with no project and they were never finished or put off, and again when
+ * Settings asks for them. */
+const setupOpen = ref(false);
+let setupOffered = false;
+watch(
+  snapshot,
+  (state) => {
+    if (!state || setupOffered) return;
+    setupOffered = true;
+    if (!state.projects.length && state.settings.onboarded === false) setupOpen.value = true;
+  },
+  { immediate: true },
+);
+
+/** From Settings: the steps again, on the list's page. */
+function openSetup(): void {
+  settingsOpen.value = false;
+  view.value = "projects";
+  setupOpen.value = true;
+}
+
 const query = ref("");
 const selectedPath = ref<string | null>(null);
 /** The team whose own view the list shows (its sidebar entry), in place of a filter's. */
@@ -275,6 +300,8 @@ function pick(id: Filter): void {
   filter.value = id;
   teamFilter.value = null;
   view.value = "projects";
+  // The list itself, not the setup steps in its place.
+  setupOpen.value = false;
 }
 
 /** A team's sidebar entry: the list shows that team alone, selected until a row is clicked. */
@@ -282,6 +309,7 @@ function pickTeam(id: string): void {
   teamFilter.value = id;
   query.value = "";
   view.value = "projects";
+  setupOpen.value = false;
   selectedTeamId.value = id;
 }
 
@@ -701,6 +729,8 @@ function server(project: Project): string {
     />
     <BoardView v-else-if="view === 'board'" :project-path="selected?.path ?? null" @open-settings="openSettings('claude')" />
     <DepsView v-else-if="view === 'deps'" @open-project="revealProject" @open-output="revealOutput" />
+    <!-- The first run's steps, in place of the list and its details. -->
+    <SetupView v-else-if="setupOpen" @done="setupOpen = false" />
 
     <template v-else>
       <main class="main">
@@ -831,6 +861,9 @@ function server(project: Project): string {
           </template>
         </section>
 
+        <!-- Projects that appeared in the projects folder, offered under the list. -->
+        <ProjectSuggestions />
+
         <!-- The selected project's terminals, level with the output panel beside it. -->
         <TerminalPanel v-if="shown" ref="terminalPanel" :project="shown" />
       </main>
@@ -843,7 +876,7 @@ function server(project: Project): string {
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
     </template>
 
-    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" />
+    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" />
     <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
     <UpdateDialog v-if="updateOpen && update" :update="update" @close="updateOpen = false" />
     <!-- Naming a team (a new one, or a rename) and deleting one, asked for from the sidebar, the
