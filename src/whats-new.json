@@ -109,6 +109,27 @@
     {
       "kind": "fix",
       "title": {
+        "en": "Focus in dialogs",
+        "tr": "Dialoglarda odak",
+        "de": "Fokus in Dialogen",
+        "es": "Foco en los diálogos",
+        "ru": "Фокус в диалогах",
+        "ja": "ダイアログのフォーカス",
+        "zh-Hans": "对话框的焦点"
+      },
+      "body": {
+        "en": "A dialog that asks before something happens no longer opens with a button focused. Return still gives the same answer.",
+        "tr": "Onay isteyen dialoglar artık bir buton odaklanmış olarak açılmıyor. Return yine aynı yanıtı verir.",
+        "de": "Ein Dialog, der vor einer Aktion nachfragt, öffnet sich nicht mehr mit einer fokussierten Taste. Die Eingabetaste gibt weiterhin dieselbe Antwort.",
+        "es": "Un diálogo que pregunta antes de hacer algo ya no se abre con un botón enfocado. Retorno sigue dando la misma respuesta.",
+        "ru": "Диалог с вопросом больше не открывается с выделенной кнопкой. Return по-прежнему даёт тот же ответ.",
+        "ja": "確認を求めるダイアログが、ボタンにフォーカスした状態で開かなくなりました。Return キーはこれまでどおり同じ答えを返します。",
+        "zh-Hans": "询问确认的对话框打开时不再有按钮处于聚焦状态。按 Return 仍给出同样的回答。"
+      }
+    },
+    {
+      "kind": "fix",
+      "title": {
         "en": "Menu bar window with several screens",
         "tr": "Birden çok ekranda menü çubuğu penceresi",
         "de": "Menüleistenfenster bei mehreren Bildschirmen",
