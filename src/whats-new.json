@@ -107,6 +107,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "Quiet mode",
+        "tr": "Sessiz mod",
+        "de": "Ruhemodus",
+        "es": "Modo silencio",
+        "ru": "Режим тишины",
+        "ja": "おやすみモード",
+        "zh-Hans": "勿扰模式"
+      },
+      "body": {
+        "en": "The bell in the menu bar window holds notifications for an hour, until tomorrow morning or until you turn it off, and lists what you missed meanwhile. In Settings › Notifications, choose which events notify you, set quiet hours and mute single projects. Each event's sound is picked on that page too.",
+        "tr": "Menü çubuğu penceresindeki zil bildirimleri bir saat, yarın sabaha kadar ya da sen kapatana dek tutar; o sırada kaçırdıkların listelenir. Ayarlar › Bildirimler'de hangi olayların bildirim göndereceğini seç, sessiz saatleri ayarla, tek tek projeleri sustur. Olayların sesleri de artık bu sayfada seçiliyor.",
+        "de": "Die Glocke im Menüleistenfenster hält Benachrichtigungen eine Stunde, bis morgen früh oder bis du sie beendest zurück und listet auf, was du inzwischen verpasst hast. Unter Einstellungen › Benachrichtigungen wählst du die Ereignisse, legst Ruhezeiten fest und schaltest einzelne Projekte stumm. Auch der Ton jedes Ereignisses wird jetzt dort gewählt.",
+        "es": "La campana de la ventana de la barra de menús retiene las notificaciones durante una hora, hasta mañana por la mañana o hasta que la desactives, y lista lo que te perdiste. En Ajustes › Notificaciones eliges qué eventos te avisan, fijas las horas de silencio y silencias proyectos sueltos. El sonido de cada evento también se elige ahí.",
+        "ru": "Колокольчик в окне строки меню придерживает уведомления на час, до завтрашнего утра или пока вы его не выключите, и показывает, что вы пропустили. В разделе «Настройки › Уведомления» выберите, о каких событиях сообщать, задайте тихие часы и отключите уведомления отдельных проектов. Звук каждого события теперь выбирается там же.",
+        "ja": "メニューバーのウインドウのベルで、通知を 1 時間、明日の朝まで、またはオフにするまで止められます。その間に見逃したことは一覧で確認できます。「設定 › 通知」では、通知するイベント、おやすみ時間、プロジェクトごとのミュートを選べます。各イベントのサウンドもそこで選べます。",
+        "zh-Hans": "菜单栏窗口里的铃铛可以让通知暂停 1 小时、到明天早上，或直到你关闭，并列出这期间错过的事。在“设置 › 通知”中选择哪些事件提醒你、设置勿扰时段，并静音单个项目。各事件的提示音也在那里选择。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Focus in dialogs",

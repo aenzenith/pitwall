@@ -385,40 +385,6 @@ function onMemberKey(event: KeyboardEvent, at: number): void {
   text-overflow: ellipsis;
 }
 
-/* A small switch, like the Track page's: no state colour, it isn't a state. */
-.switch-row input {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  flex-shrink: 0;
-  width: 26px;
-  height: 14px;
-  margin: 0;
-  border-radius: 7px;
-  background: var(--switch-off);
-  transition: background 0.15s;
-}
-
-.switch-row input::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--bg-app);
-  transition: transform 0.15s;
-}
-
-.switch-row input:checked {
-  background: var(--text-muted);
-}
-
-.switch-row input:checked::before {
-  transform: translateX(12px);
-}
-
 /* Deleting is quiet until asked for: its text alone says what it is, its edge on the block's. */
 .text-button.danger {
   align-self: flex-start;

@@ -1,23 +1,32 @@
 <script setup lang="ts">
 import { LogicalSize } from "@tauri-apps/api/dpi";
+import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
 import Marquee from "../components/Marquee.vue";
+import MutedMark from "../components/MutedMark.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { claudeLine, gitLine, meta, shortcutLabel } from "../lib/format";
 import { rowKey, useGroupReorder } from "../lib/groupReorder";
 import { t } from "../lib/i18n";
+import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
+import { missed, notifications, quiet, quietLine, waits } from "../lib/quiet";
 import { rowKeys } from "../lib/rows";
 import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
 import { applyDrop, teamOf, teams } from "../lib/teams";
 import type { Project } from "../lib/types";
 import FuelStrip from "./FuelStrip.vue";
+import MissedList from "./MissedList.vue";
+import QuietBanner from "./QuietBanner.vue";
 import ResumeBanner from "./ResumeBanner.vue";
 
 const MAX_HEIGHT = 620;
+/** Three rows of the project list with the room under them: what it keeps before anything else
+ * gives way. */
+const LIST_KEEPS = 146;
 /** Kept between the popover's foot and the screen's, when the fuel strip makes it taller. */
 const SCREEN_GAP = 16;
 
@@ -27,7 +36,9 @@ const list = ref<HTMLElement | null>(null);
 /** Drag to reorder, as the window's list drawn without its heads: no group is folded here. */
 const reorder = useGroupReorder(list, (change) => applyDrop(change, () => false));
 const projects = computed(() => snapshot.value?.projects ?? []);
-const waiting = computed(() => projects.value.filter((p) => p.claude));
+/** A turn held while it was quiet is listed under what was missed, not here a second time. */
+const held = computed(() => new Set(missed.value.filter((entry) => waits(entry.kind)).map((entry) => entry.path)));
+const waiting = computed(() => projects.value.filter((p) => p.claude && !held.value.has(p.path)));
 const summary = computed(() => {
   const s = snapshot.value;
   if (!s || s.projects.length === 0) return t("popover.noProjects");
@@ -51,6 +62,41 @@ function zone(project: Project): string | undefined {
 
 function toggle(project: Project): void {
   void api.act(project.path, project.status === "running" ? "stop" : "start");
+}
+
+const menu = useNativeMenu();
+/** The bell: where the keyboard goes when what it was on is gone (the quiet banner's "Turn off",
+ * the last of what was missed). */
+const bell = ref<HTMLElement | null>(null);
+
+/** The bell's menu, under the button: quiet for a while (or over, while it is), what quiet lets
+ * through, and the way to the quiet hours. */
+function bellMenu(event: MouseEvent): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const { questionsThrough, soundsToo, quietHours } = notifications.value;
+  const entries: MenuEntry[] = quiet.value ? [{ text: t("quiet.end"), action: () => void api.quietEnd() }, "separator"] : [];
+  entries.push(
+    { text: t("quiet.hour"), action: () => void api.quietStart("hour") },
+    { text: t("quiet.morning"), action: () => void api.quietStart("morning") },
+    { text: t("quiet.open"), action: () => void api.quietStart("open") },
+    "separator",
+    { text: t("quiet.questions"), checked: questionsThrough, action: () => void api.quietOption("questions", !questionsThrough) },
+    { text: t("quiet.sounds"), checked: soundsToo, action: () => void api.quietOption("sounds", !soundsToo) },
+    "separator",
+    { text: quietHours.on ? t("quiet.hoursSet", { from: quietHours.from, to: quietHours.to }) : t("quiet.hours"), action: openQuietHours },
+  );
+  void menu.popup({ clientX: box.left, clientY: box.bottom + 4 }, entries);
+}
+
+/** Pitwall's window, on Settings › Notifications: the way the switcher's `/` opens a page. */
+function openQuietHours(): void {
+  void emitTo("main", "reveal-page", { page: "settings", tab: "notifications" });
+  void api.openWindow();
+}
+
+/** Right-click on a row: nothing more is told about the project, or it is again. */
+function rowMenu(event: MouseEvent, project: Project): void {
+  void menu.popup(event, [{ text: t(project.muted ? "notifications.unmute" : "notifications.mute"), action: () => void api.muteProject(project.path, !project.muted) }]);
 }
 
 /** Pressed from the keyboard, the button turns busy (disabled) and would drop the focus: the row keeps it. */
@@ -79,21 +125,35 @@ function onListKey(event: KeyboardEvent): void {
   });
 }
 
-// The window is as tall as the content, up to MAX_HEIGHT; past that only the project list
-// scrolls. The fuel strip adds its own height to that limit, as far as the screen goes, so the
-// list keeps the room it has without it. A window taller than the panel would leave a transparent
-// area that swallows clicks.
+// The window is as tall as the content, up to MAX_HEIGHT; past that the parts that scroll inside
+// themselves give way: the project list as far as three rows, then what was missed, the list
+// again, the Claude card last (see `.claude`). The fuel strip adds its own height to that limit,
+// as far as the screen goes, so the list keeps the room it has without it. A window taller than
+// the panel would leave a transparent area that swallows clicks.
 async function fitWindow(): Promise<void> {
   await nextTick();
   const el = panel.value;
   if (!el) return;
-  // Every part at its own height, the list at its full content height, plus the border.
-  const parts = Array.from(el.children) as HTMLElement[];
-  const natural = Math.ceil(parts.reduce((sum, part) => sum + (part === list.value ? part.scrollHeight : part.offsetHeight), 2));
+  // Every part at its own height with its margins, plus the border...
+  const outer = (Array.from(el.children) as HTMLElement[]).reduce((sum, part) => {
+    const style = getComputedStyle(part);
+    return sum + part.offsetHeight + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+  }, 2);
+  // ...and what the parts that scroll hold out of sight, each as far as its own limit.
+  const unseen = Array.from(el.querySelectorAll<HTMLElement>("[data-scrolls]")).reduce((sum, box) => {
+    const limit = parseFloat(getComputedStyle(box).maxHeight) || Infinity;
+    return sum + Math.min(box.scrollHeight, limit) - box.clientHeight;
+  }, 0);
+  const natural = Math.ceil(outer + unseen);
   // No strip: its place holds a comment, which has no height.
   const fuelHeight = (strip.value?.$el as HTMLElement | undefined)?.offsetHeight ?? 0;
   const limit = Math.max(MAX_HEIGHT, Math.min(MAX_HEIGHT + fuelHeight, window.screen.availHeight - SCREEN_GAP));
-  if (natural > 0) await getCurrentWindow().setSize(new LogicalSize(372, Math.min(natural, limit)));
+  const height = Math.min(natural, limit);
+  // What is over once the project list is down to its three rows is what was missed's to give
+  // (MissedList's `--gives`).
+  const rows = list.value?.scrollHeight ?? 0;
+  el.style.setProperty("--gives", `${Math.max(0, natural - height - (rows - Math.min(rows, LIST_KEEPS)))}px`);
+  if (natural > 0) await getCurrentWindow().setSize(new LogicalSize(372, height));
 }
 
 watch(() => snapshot.value, () => void fitWindow());
@@ -137,6 +197,17 @@ onBeforeUnmount(() => {
       >
         <Icon name="search" :size="16" />
       </button>
+      <button
+        ref="bell"
+        type="button"
+        :class="['icon', { on: quiet }]"
+        aria-haspopup="menu"
+        :aria-label="quiet ? quietLine(quiet, now) : t('quiet.bell')"
+        :title="quiet ? quietLine(quiet, now) : t('quiet.bell')"
+        @click="bellMenu"
+      >
+        <Icon :name="quiet ? 'bell-off' : 'bell'" :size="16" />
+      </button>
       <button type="button" class="icon" :aria-label="t('common.openWindow')" :title="t('common.openWindow')" @click="api.openWindow()">
         <Icon name="window" :size="16" />
       </button>
@@ -145,11 +216,15 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
+    <!-- While it is quiet: until when, and the way out. It comes and goes with the snapshot, which
+         fits the window again. -->
+    <QuietBanner v-if="quiet" @leave="bell?.focus()" />
+
     <!-- What was open at the last quit, while that is still to be answered: it comes and goes with
          the snapshot, which fits the window again. -->
     <ResumeBanner v-if="snapshot?.resume" />
 
-    <section v-if="waiting.length" class="claude" :aria-label="t('popover.claudeWaiting')">
+    <section v-if="waiting.length" class="claude" data-scrolls :aria-label="t('popover.claudeWaiting')">
       <div class="claude-label"><span class="claude-dot" aria-hidden="true"></span>{{ t("popover.claudeWaiting") }}</div>
       <button v-for="project in waiting" :key="project.path" type="button" class="claude-row" @click="api.openClaude(project.path)">
         <span class="claude-text">
@@ -160,12 +235,16 @@ onBeforeUnmount(() => {
       </button>
     </section>
 
+    <!-- What wasn't told while it was quiet. -->
+    <MissedList v-if="missed.length" @leave="bell?.focus()" />
+
     <template v-if="projects.length">
       <div class="section-label label">{{ t("common.projects") }}</div>
       <!-- One Tab stop: ↑/↓ move between rows, ←/→ reach a row's buttons. -->
       <ul
         ref="list"
         :class="['list', reorder.listClass()]"
+        data-scrolls
         role="grid"
         :aria-label="t('common.projects')"
         aria-describedby="rows-keys"
@@ -184,10 +263,11 @@ onBeforeUnmount(() => {
           @pointerdown="reorder.down($event, rowKey(project.path))"
           @focus="focusedPath = project.path"
           @click="openRow(project)"
+          @contextmenu="rowMenu($event, project)"
         >
           <span class="cell-status" role="gridcell"><StatusIcon :project="project" /></span>
           <div class="text" role="gridcell">
-            <div class="name">{{ project.name }}</div>
+            <div class="name">{{ project.name }}<MutedMark v-if="project.muted" class="name-mark" /></div>
             <div :class="['meta', { bad: project.status === 'crashed' }]">
               <Marquee :text="[meta(project, now), gitLine(project.git)].filter(Boolean).join(' · ')" />
             </div>
@@ -250,7 +330,6 @@ onBeforeUnmount(() => {
 }
 
 .head,
-.claude,
 .label,
 .empty {
   flex-shrink: 0;
@@ -304,12 +383,26 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
+/* The bell while it is quiet: lit, as a button that is on. */
+.icon.on {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+/* Out of room, the popover's parts give way in turn, each scrolling inside itself: the projects
+   as far as three rows (`fitWindow`), what was missed down to two lines (MissedList), the
+   projects down to one row, this card last and no further than its first row. The foot is never
+   cut. */
 .claude {
   margin: 0 8px 8px;
   padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 0 1 auto;
+  min-height: 91px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--claude-bg);
   border: 1px solid var(--claude-line);
   border-radius: var(--radius-card);
@@ -391,8 +484,9 @@ onBeforeUnmount(() => {
   padding: 0 8px 8px;
   display: flex;
   flex-direction: column;
-  flex: 0 1 auto;
-  min-height: 0;
+  flex: 0 1e6 auto;
+  /* One row, and the room under it. */
+  min-height: 54px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -477,6 +571,12 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-name);
+}
+
+/* A muted project's mark, on the name's line. */
+.name-mark {
+  margin-left: 6px;
+  vertical-align: -1px;
 }
 
 .meta {

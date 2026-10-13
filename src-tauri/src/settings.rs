@@ -110,6 +110,75 @@ impl Default for TrackSettings {
     }
 }
 
+/// The quiet hours: every day from `from` to `to`, local time as `HH:MM`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuietHours {
+    pub on: bool,
+    pub from: String,
+    pub to: String,
+    /// Switched off by hand while they were under way: they don't count before this moment (ms).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub off_until: Option<u64>,
+}
+
+impl Default for QuietHours {
+    fn default() -> Self {
+        Self { on: false, from: "22:00".into(), to: "08:00".into(), off_until: None }
+    }
+}
+
+/// A quiet period the user started. Without `until` (ms) it lasts until it is switched off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuietPeriod {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub until: Option<u64>,
+}
+
+/// What Pitwall tells the user about, and when it holds its tongue (`core/signals.rs`). Claude
+/// waiting has its own switch (`Settings::notify`), and so has the fuel alert
+/// (`Settings::fuel_alert`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Notifications {
+    /// A notification when a dev server crashed.
+    pub server_crashed: bool,
+    /// … when a command ended, well or not.
+    pub command: bool,
+    /// … when Claude has been in one turn for 20 minutes.
+    pub long_turn: bool,
+    /// … when the Garage page finds something to install, or a migration that waits.
+    pub deps: bool,
+    /// Projects nothing is told about, by path.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub muted: Vec<String>,
+    pub quiet_hours: QuietHours,
+    /// While quiet, Claude's questions and permission prompts still come through.
+    pub questions_through: bool,
+    /// While quiet, the sounds are held too.
+    pub sounds_too: bool,
+    /// The quiet period under way, or the last one: it survives a restart.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quiet: Option<QuietPeriod>,
+}
+
+impl Default for Notifications {
+    fn default() -> Self {
+        Self {
+            server_crashed: true,
+            command: false,
+            long_turn: true,
+            deps: false,
+            muted: Vec::new(),
+            quiet_hours: QuietHours::default(),
+            questions_through: true,
+            sounds_too: true,
+            quiet: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -181,6 +250,9 @@ pub struct Settings {
     /// The projects folder's subfolders known so far, by name: none of them is offered.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub seen_folders: Vec<String>,
+    /// What is told, the quiet hours and the muted projects (`core/signals.rs`).
+    #[serde(default)]
+    pub notifications: Notifications,
 }
 
 impl Default for Settings {
@@ -216,6 +288,7 @@ impl Default for Settings {
             onboarded: false,
             suggest_projects: false,
             seen_folders: Vec::new(),
+            notifications: Notifications::default(),
         }
     }
 }

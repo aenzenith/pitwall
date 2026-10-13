@@ -3,6 +3,7 @@
 //! marked "keep running" come back after a crash under the same three-strikes rule.
 
 use super::*;
+use super::signals::Signal;
 use crate::resolve::{is_forbidden_command, strip_ansi};
 use crate::settings::CustomCommand;
 
@@ -117,9 +118,10 @@ impl Core {
         if let Some(command) = self.custom_command(path, id).filter(|_| !disposed) {
             self.record_command(path, &command.name, state);
 
-            let sound = self.settings().sounds.command_done;
-            if state != "stopped" && !sound.is_empty() {
-                self.emit(CoreEvent::Sound(sound));
+            // Told of, and heard, as Settings says (`signals.rs`).
+            if state != "stopped" {
+                let kind = if state == "ok" { SignalKind::CommandDone } else { SignalKind::CommandFailed };
+                self.signal(Signal { kind, path: path.to_string(), name: self.project_name(path), detail: Some(command.name) });
             }
         }
         self.record_pids();

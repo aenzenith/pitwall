@@ -16,10 +16,11 @@ import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
+import NotificationsPage from "./settings/NotificationsPage.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
 import TrackOptions from "./track/TrackOptions.vue";
 
-type Tab = "general" | "servers" | "editor" | "claude" | "sounds" | "track" | "about";
+type Tab = "general" | "servers" | "editor" | "claude" | "track" | "notifications" | "about";
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
  * page's settings button Track's). `openSetup`: the first run's steps are asked for again;
@@ -28,13 +29,13 @@ const props = defineProps<{ startTab?: Tab }>();
 const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNew: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
-const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "speaker" | "flag" }> = [
+const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "flag" | "bell" }> = [
   { id: "general", label: "settings.general", icon: "settings" },
   { id: "servers", label: "settings.servers", icon: "server" },
   { id: "editor", label: "settings.editor", icon: "editor" },
   { id: "claude", label: "settings.claude", icon: "claude" },
-  { id: "sounds", label: "settings.sounds", icon: "speaker" },
   { id: "track", label: "track.nav", icon: "flag" },
+  { id: "notifications", label: "settings.notifications", icon: "bell" },
 ];
 
 /** Pitwall's sounds (src-tauri/sounds). */
@@ -67,6 +68,13 @@ function soundName(id: string): string {
 const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
 const tab = ref<Tab>(props.startTab ?? "general");
+// Asked for another tab while it is open (the popover's "Quiet hours…"): that one comes up.
+watch(
+  () => props.startTab,
+  (asked) => {
+    if (asked) tab.value = asked;
+  },
+);
 /** The rail top to bottom: the sections, then About. */
 const railOrder: Tab[] = [...tabs.map((section) => section.id), "about"];
 
@@ -483,15 +491,6 @@ function setTheme(theme: Theme): void {
 
         <fieldset v-show="tab === 'claude'" :aria-label="t('settings.claude')">
           <label class="check">
-            <input v-model="form.notify" type="checkbox" />
-            <span>{{ t("settings.notify") }}</span>
-          </label>
-          <!-- The Fuel page's chip turns the same one on and off. -->
-          <label class="check">
-            <input v-model="form.fuelAlert" type="checkbox" />
-            <span>{{ t("settings.fuelAlert") }}</span>
-          </label>
-          <label class="check">
             <input v-model="form.claudesInBar" type="checkbox" />
             <span>{{ t("settings.claudesInBar") }}</span>
           </label>
@@ -531,47 +530,56 @@ function setTheme(theme: Theme): void {
               <small v-if="hookOutdated">{{ t("settings.hookOutdated") }}</small>
             </div>
             <!-- An older hook: installing again upgrades it. -->
-            <button v-if="hookOutdated" type="button" class="control hook-button" :disabled="hookBusy" @click="setHook(true)">
-              {{ t("settings.updateHook") }}
+            <button v-if="hookOutdated" type="button" class="control hook-button" :disabled="hookBusy" :aria-busy="hookBusy" @click="setHook(true)">
+              <span :class="{ hidden: hookBusy }">{{ t("settings.updateHook") }}</span>
+              <Spinner v-if="hookBusy" class="over" :size="12" />
             </button>
-            <button v-else type="button" class="control hook-button" :disabled="hookBusy" @click="setHook(!snapshot?.claudeHook)">
-              {{ t(snapshot?.claudeHook ? "settings.removeHook" : "settings.addHook") }}
+            <button v-else type="button" class="control hook-button" :disabled="hookBusy" :aria-busy="hookBusy" @click="setHook(!snapshot?.claudeHook)">
+              <span :class="{ hidden: hookBusy }">{{ t(snapshot?.claudeHook ? "settings.removeHook" : "settings.addHook") }}</span>
+              <Spinner v-if="hookBusy" class="over" :size="12" />
             </button>
           </div>
           <p v-if="hookError" class="error">{{ hookError }}</p>
-        </fieldset>
-
-        <!-- Picking a sound plays it; the button plays it again. -->
-        <fieldset v-show="tab === 'sounds'" :aria-label="t('settings.sounds')">
-          <div v-for="event in soundEvents" :key="event.id" class="sound-row">
-            <label :for="`sound-${event.id}`">{{ t(event.label) }}</label>
-            <select
-              :id="`sound-${event.id}`"
-              v-model="form.sounds[event.id]"
-              :disabled="event.claude && !form.notify"
-              @change="api.playSound(form.sounds[event.id])"
-            >
-              <option value="">{{ t("sound.none") }}</option>
-              <option v-for="sound in soundOptions" :key="sound.id" :value="sound.id">{{ t(sound.label) }}</option>
-            </select>
-            <button
-              type="button"
-              class="play"
-              :disabled="!form.sounds[event.id] || (event.claude && !form.notify)"
-              :aria-label="t('settings.playSound', { name: soundName(form.sounds[event.id]) })"
-              :title="t('settings.playSound', { name: soundName(form.sounds[event.id]) })"
-              @click="api.playSound(form.sounds[event.id])"
-            >
-              <Icon name="play" :size="12" />
-            </button>
-          </div>
-          <small v-if="!form.notify" class="hint">{{ t("settings.soundsClaudeOff") }}</small>
         </fieldset>
 
         <!-- The Track page's own: each change goes to the core by its own command, never with the
              form (`@change.stop`). -->
         <fieldset v-show="tab === 'track'" :aria-label="t('track.nav')" @change.stop>
           <TrackOptions />
+        </fieldset>
+
+        <!-- Notifications' own: each change goes to the core by its own command (`@change.stop`).
+             The sounds among them are the form's: picking one plays it and saves, the button
+             plays it again. -->
+        <fieldset v-show="tab === 'notifications'" :aria-label="t('settings.notifications')" @change.stop>
+          <NotificationsPage>
+            <template #sounds>
+              <div class="rows" role="group" aria-labelledby="notif-sounds" @change="save">
+                <div v-for="event in soundEvents" :key="event.id" class="row sound-row">
+                  <label :for="`sound-${event.id}`" class="name">{{ t(event.label) }}</label>
+                  <select
+                    :id="`sound-${event.id}`"
+                    v-model="form.sounds[event.id]"
+                    :disabled="event.claude && !form.notify"
+                    @change="api.playSound(form.sounds[event.id])"
+                  >
+                    <option value="">{{ t("sound.none") }}</option>
+                    <option v-for="sound in soundOptions" :key="sound.id" :value="sound.id">{{ t(sound.label) }}</option>
+                  </select>
+                  <button
+                    type="button"
+                    class="play"
+                    :disabled="!form.sounds[event.id] || (event.claude && !form.notify)"
+                    :aria-label="t('settings.playSound', { name: soundName(form.sounds[event.id]) })"
+                    :title="t('settings.playSound', { name: soundName(form.sounds[event.id]) })"
+                    @click="api.playSound(form.sounds[event.id])"
+                  >
+                    <Icon name="play" :size="12" />
+                  </button>
+                </div>
+              </div>
+            </template>
+          </NotificationsPage>
         </fieldset>
 
         <fieldset v-show="tab === 'editor'" :aria-label="t('settings.editor')">
@@ -766,6 +774,7 @@ function setTheme(theme: Theme): void {
   </dialog>
 </template>
 
+<style scoped src="./settings/settings.css"></style>
 <style scoped>
 /* A dialog over the window, like the command dialog. */
 /* Fixed height, so switching tabs never resizes it. */
@@ -907,12 +916,6 @@ fieldset {
   gap: 16px;
 }
 
-/* General's parts: a hairline above each. */
-.section {
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
 /* A part's label sits closer to what it names than the rows do to each other. */
 fieldset > .section-label {
   margin-bottom: -6px;
@@ -972,17 +975,10 @@ select {
   line-height: 1.5;
 }
 
-/* Event, its sound, and a button to hear it. */
-.sound-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 210px 30px;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-}
-
-.sound-row label {
-  min-width: 0;
+/* Event, its sound, and a button to hear it: a line of Notifications' list. */
+.sound-row select {
+  flex: none;
+  width: 210px;
 }
 
 .sound-row select:disabled {
@@ -1016,26 +1012,6 @@ code {
   font-size: 12px;
 }
 
-.hook {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.hook-text {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex-grow: 1;
-  font-size: 13px;
-}
-
-.hook-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .why {
   margin: 0;
   padding-left: 16px;
@@ -1047,70 +1023,10 @@ code {
   color: var(--text-muted);
 }
 
-.hook small {
-  font-size: 12px;
-  color: var(--text-subtle);
-  line-height: 1.55;
-}
-
 /* The label never wraps; the text column gives way instead. */
 .hook-button {
   flex-shrink: 0;
   white-space: nowrap;
-}
-
-.hook-text {
-  min-width: 0;
-}
-
-/* One of a few, the picked one lit: as the Track tab's (track/TrackOptions). */
-.seg {
-  flex-shrink: 0;
-  display: inline-flex;
-  padding: 2px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--bg-seg);
-}
-
-.seg button {
-  height: 24px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.seg button:hover:not([aria-pressed="true"]) {
-  color: var(--text);
-}
-
-.seg button[aria-pressed="true"] {
-  background: var(--bg-seg-on);
-  box-shadow: var(--shadow-seg-on);
-  color: var(--text-strong);
-}
-
-.badge {
-  flex-shrink: 0;
-  white-space: nowrap;
-  padding: 1px 7px;
-  border-radius: 9px;
-  font-size: 11px;
-  font-weight: 600;
-  background: var(--bg-icon-hover);
-  color: var(--text-muted);
-}
-
-.badge.on {
-  background: var(--run-bg);
-  color: var(--run);
-}
-
-.control:disabled {
-  opacity: 0.5;
 }
 
 .folder {
@@ -1184,25 +1100,6 @@ code {
   letter-spacing: 0;
 }
 
-.error {
-  margin: 0;
-  color: var(--crash-text);
-  font-size: 13px;
-}
-
-.control {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--bg-control);
-  font-size: 13px;
-}
-
-.control:hover {
-  background: var(--bg-control-hover);
-}
-
 .control.primary {
   background: var(--btn-primary-bg);
   border-color: var(--btn-primary-line);
@@ -1227,17 +1124,6 @@ code {
 .control.quiet:hover {
   background: var(--bg-icon-hover);
   color: var(--text);
-}
-
-/* A busy button's label stays, unseen, under its spinner. */
-.control .hidden {
-  visibility: hidden;
-}
-
-.control .over {
-  position: absolute;
-  inset: 0;
-  margin: auto;
 }
 
 .about {

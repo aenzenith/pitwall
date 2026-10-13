@@ -1,0 +1,170 @@
+/* What Settings' tabs share: the dialog's own (SettingsView) and the tabs and parts that are
+   components of their own (settings/NotificationsPage, PhoneSection and RadioSection,
+   track/TrackOptions, backup/BackupSection). Each takes this as a scoped style
+   (`<style scoped src>`) before its own, as with backup/dialog.css. The small switch is every
+   surface's (styles/tokens.css). */
+
+/* A part of a tab under the one above it: a hairline. */
+.section {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+/* A part that is a component of its own: its label sits closer to what it names than the parts
+   do to each other. */
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* What a thing is and, under it, what to know of it; at the row's end the one thing to do. */
+.hook {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.hook-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-grow: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.hook-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hook small {
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.55;
+}
+
+/* A list of settings, a line each: what it is, and its control at the line's end (a switch) or
+   at its start (a check box). The list's first and last lines sit on its edges. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: -6px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.rows > .row:first-child {
+  border-top: 0;
+}
+
+/* A long one wraps beside its control. */
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+/* A box to tick, in the green every box in Settings has. */
+.row input[type="checkbox"]:not([role="switch"]) {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--run);
+}
+
+/* One of a few, the picked one lit. */
+.seg {
+  flex-shrink: 0;
+  display: inline-flex;
+  max-width: 100%;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-seg);
+}
+
+.seg button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.seg button:hover:not([aria-pressed="true"]):not(:disabled) {
+  color: var(--text);
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
+  color: var(--text-strong);
+}
+
+/* How a thing stands, beside its name: lit while it is on. */
+.badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-icon-hover);
+  color: var(--text-muted);
+}
+
+.badge.on {
+  background: var(--run-bg);
+  color: var(--run);
+}
+
+.control {
+  position: relative;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-size: 13px;
+}
+
+.control:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+}
+
+.control:disabled {
+  opacity: 0.5;
+}
+
+/* A busy button's label stays, unseen, under its spinner: the button never changes width. */
+.control .hidden {
+  visibility: hidden;
+}
+
+.control .over {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+/* What went wrong, on a line of its own. */
+.error {
+  margin: 0;
+  color: var(--crash-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}

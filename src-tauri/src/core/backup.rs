@@ -142,6 +142,9 @@ impl General {
             launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
             projects: _, order: _, teams: _,
+            // Kept out: with its switches it holds this Mac's own (the quiet period under way,
+            // the muted projects' paths).
+            notifications: _,
         } = settings.clone();
 
         Self {
@@ -453,6 +456,16 @@ fn move_project(settings: &mut Settings, from: &str, to: &str) {
     // The Board page's last board: its cards are `to`'s now.
     if settings.board_scope.as_deref().is_some_and(|scope| same_path(scope, from)) {
         settings.board_scope = Some(to.to_string());
+    }
+
+    // Muted where it was, muted where it is.
+    let muted = &mut settings.notifications.muted;
+    if let Some(at) = muted.iter().position(|path| same_path(path, from)) {
+        if muted.iter().any(|path| same_path(path, to)) {
+            muted.remove(at);
+        } else {
+            muted[at] = to.to_string();
+        }
     }
 }
 
@@ -884,9 +897,9 @@ impl Core {
     }
 
     /// What is kept for a project whose folder is gone is dropped: its settings, its place in
-    /// the order, its team and its place among the listed projects. Its cards stay. A folder
-    /// that is there is no such project: nothing of it is dropped. What is here is copied aside
-    /// first (`keep_before`); that failing, nothing is dropped.
+    /// the order, its team, its mute and its place among the listed projects. Its cards stay.
+    /// A folder that is there is no such project: nothing of it is dropped. What is here is
+    /// copied aside first (`keep_before`); that failing, nothing is dropped.
     pub fn forget_project(&self, path: &str) -> Result<(), String> {
         if Path::new(path).is_dir() {
             return Ok(());
@@ -900,6 +913,7 @@ impl Core {
             for team in &mut inner.settings.teams {
                 team.projects.retain(|known| !same_path(known, path));
             }
+            inner.settings.notifications.muted.retain(|known| !same_path(known, path));
         }
         self.save_settings();
 
@@ -1198,8 +1212,8 @@ mod tests {
     }
 
     /// What is kept for a project is typed in by hand: its commands, its links, its team, its
-    /// place in the list, its cards. A move to the project's new folder that left any of it
-    /// behind, or wrote over what the new folder already had, would lose it without a word.
+    /// place in the list, its cards, its mute. A move to the project's new folder that left any
+    /// of it behind, or wrote over what the new folder already had, would lose it without a word.
     #[test]
     fn a_moved_project_takes_everything_along() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1230,6 +1244,7 @@ mod tests {
             links: vec![link("staging")],
         };
         core.set_project_settings(&old, kept.clone());
+        core.mute_project(&old, true);
         for title in ["One", "Two"] {
             core.board_add(&old, title, "", &[]).unwrap();
         }
@@ -1246,6 +1261,7 @@ mod tests {
         assert_eq!(settings.projects.iter().collect::<Vec<_>>(), [(&mid, &kept)]);
         assert_eq!(settings.order, [other.clone(), mid.clone()]);
         assert_eq!(settings.teams[0].projects, [mid.clone(), other.clone()]);
+        assert_eq!(settings.notifications.muted, [mid.as_str()], "muted where it was, muted where it is");
         assert_eq!(listed(&core), sorted(vec![mid.clone(), other.clone()]));
         assert_eq!((titles(&old).len(), titles(&mid), titles(&other)), (0, vec!["One".to_string(), "Two".into()], vec!["Theirs".to_string()]));
 
@@ -1261,6 +1277,7 @@ mod tests {
         assert_eq!(merged.commands.iter().map(|command| command.id.as_str()).collect::<HashSet<_>>().len(), 3, "{:?}", merged.commands);
         assert_eq!(merged.links, [link("docs"), link("staging")]);
         assert_eq!(settings.teams[0].projects, [new.clone(), other.clone()]);
+        assert_eq!(settings.notifications.muted, [new.as_str()]);
         assert_eq!(listed(&core), sorted(vec![new.clone(), other.clone()]));
         assert_eq!((titles(&mid).len(), titles(&new).len(), core.board_state().len()), (0, 2, 3));
     }

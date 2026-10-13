@@ -6,6 +6,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import ClaudeDot from "../components/ClaudeDot.vue";
 import Icon from "../components/Icon.vue";
 import Marquee from "../components/Marquee.vue";
+import MutedMark from "../components/MutedMark.vue";
 import Spinner from "../components/Spinner.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
@@ -130,10 +131,10 @@ watch(visible, (on) => {
 });
 const settingsOpen = ref(false);
 /** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's, the Track
- * page's settings button on Track's. */
-const settingsTab = ref<"claude" | "track" | undefined>(undefined);
+ * page's settings button on Track's, the popover's "Quiet hours…" on Notifications'. */
+const settingsTab = ref<"claude" | "track" | "notifications" | undefined>(undefined);
 
-function openSettings(tab?: "claude" | "track"): void {
+function openSettings(tab?: "claude" | "track" | "notifications"): void {
   settingsTab.value = tab;
   settingsOpen.value = true;
 }
@@ -462,6 +463,7 @@ function rowMenu(event: MouseEvent, project: Project): void {
   const entries: MenuEntry[] = teams.value.filter((team) => team.id !== own?.id).map((team) => ({ text: t("team.moveTo", { team: team.name }), action: () => moveToTeam(project.path, team.id) }));
   entries.push({ text: t("team.newMenu"), action: () => (teamAsk.value = { kind: "create", projects: [project.path], show: false }) });
   if (own) entries.push("separator", { text: t("team.leave"), action: () => void leaveTeam(project.path) });
+  entries.push("separator", { text: t(project.muted ? "notifications.unmute" : "notifications.mute"), action: () => void api.muteProject(project.path, !project.muted) });
   void menu.popup(event, entries);
 }
 
@@ -527,8 +529,8 @@ let unlistenPage: UnlistenFn | null = null;
 
 /** From the switcher (`/`): that page of the window. Settings opens over the page shown and "Add
  * project" asks for the folder; any other page closes Settings, which would cover it. */
-function revealPage(page: Page): void {
-  if (page === "settings") openSettings();
+function revealPage(page: Page, tab?: "notifications"): void {
+  if (page === "settings") openSettings(tab);
   else if (page === "add") void api.pickFolder();
   else {
     settingsOpen.value = false;
@@ -537,8 +539,10 @@ function revealPage(page: Page): void {
   }
 }
 
-/** From the switcher (⌘↵ on a link): select the project, even if a filter or search hid it. */
+/** From the switcher (⌘↵ on a link) or a notification: select the project, even if a filter or
+ * search hid it. Settings, which would cover it, closes. */
 function revealProject(path: string): void {
+  settingsOpen.value = false;
   view.value = "projects";
   if (!rows.value.some((p) => p.path === path)) {
     filter.value = "all";
@@ -611,7 +615,7 @@ onMounted(async () => {
   // Bringing up a Claude session that runs in one of Pitwall's terminals: that terminal.
   unlistenTerminal = await listen<{ path: string; id: number }>("reveal-terminal", (event) => void revealTerminal(event.payload.path, event.payload.id));
   // `/` in the switcher: one of the sidebar's pages.
-  unlistenPage = await listen<{ page: Page }>("reveal-page", (event) => revealPage(event.payload.page));
+  unlistenPage = await listen<{ page: Page; tab?: "notifications" }>("reveal-page", (event) => revealPage(event.payload.page, event.payload.tab));
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
   void api.windowReady();
   const win = getCurrentWindow();
@@ -823,6 +827,7 @@ function server(project: Project): string {
                     <span class="names">
                       <span class="name">
                         <span class="name-text">{{ project.name }}</span>
+                        <MutedMark v-if="project.muted" />
                         <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
                       </span>
                       <span class="path">{{ project.path }}</span>

@@ -85,6 +85,7 @@ function onImported(report: ImportReport): void {
   </div>
 </template>
 
+<style scoped src="../settings/settings.css"></style>
 <style scoped>
 .backup {
   display: flex;
@@ -101,36 +102,6 @@ function onImported(report: ImportReport): void {
 .buttons {
   display: flex;
   gap: 8px;
-}
-
-/* As Settings' own buttons. */
-.control {
-  position: relative;
-  flex-shrink: 0;
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--bg-control);
-  font-size: 13px;
-}
-
-.control:hover:not(:disabled) {
-  background: var(--bg-control-hover);
-}
-
-.control:disabled {
-  opacity: 0.5;
-}
-
-.hidden {
-  visibility: hidden;
-}
-
-.over {
-  position: absolute;
-  inset: 0;
-  margin: auto;
 }
 
 .result {

@@ -270,47 +270,7 @@ code {
   color: var(--text-subtle);
 }
 
-/* A small switch, as the Track tab's (track/TrackOptions): no state colour, it isn't a state. */
-.opt input {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  flex-shrink: 0;
-  width: 26px;
-  height: 14px;
-  margin: 0;
-  border-radius: 7px;
-  background: var(--switch-off);
-  transition: background 0.15s;
-}
-
-.opt input::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--bg-app);
-  transition: transform 0.15s;
-}
-
-.opt input:checked {
-  background: var(--text-muted);
-}
-
-.opt input:checked::before {
-  transform: translateX(12px);
-}
-
+/* The switch itself is every surface's (styles/tokens.css); here its ring stands a little off it. */
 .opt input:focus-visible {
   outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .opt input,
-  .opt input::before {
-    transition: none;
-  }
 }

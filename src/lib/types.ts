@@ -84,6 +84,8 @@ export type Project = {
   commands: CommandView[];
   /** Open terminals in this project. */
   terminals: TerminalView[];
+  /** Nothing is told about it: no notification, no sound (Settings › Notifications). */
+  muted: boolean;
 };
 
 export type Settings = {
@@ -139,6 +141,9 @@ export type Settings = {
   suggestProjects: boolean;
   /** The projects folder's subfolders known so far; the core's own. */
   seenFolders?: string[];
+  /** What is told, the quiet hours and the muted projects; changed through their own commands
+   * only (lib/quiet). */
+  notifications?: NotificationSettings;
 };
 
 /** An open project terminal. */
@@ -171,6 +176,10 @@ export type Snapshot = {
   whatsNew: boolean;
   /** Projects that appeared in the projects folder, offered under the list. */
   suggestions: Candidate[];
+  /** It is quiet now (a period the user started, or the quiet hours); null otherwise. */
+  quiet: Quiet | null;
+  /** What the user wasn't told meanwhile, newest first. */
+  missed: Missed[];
 };
 
 /* ---------- First run and the projects folder (discover_projects, add_projects) ---------- */
@@ -532,4 +541,43 @@ export type RestartPlan = {
   /** Tabs opened again, and in how many projects. */
   terminals: number;
   terminalProjects: number;
+};
+
+/* ---------- Notifications: quiet, what was missed, muted projects (core/signals.rs) ---------- */
+
+/** What happened, as the core names it. */
+export type SignalKind =
+  | "claude-asking"
+  | "claude-permission"
+  | "claude-finished"
+  | "claude-long-turn"
+  | "server-crashed"
+  | "command-done"
+  | "command-failed"
+  | "deps-waiting"
+  | "fuel-high"
+  | "card-review";
+
+/** Something the user wasn't told while it was quiet. `path` and `name` are empty for what is
+ * about no project (the fuel alert); `detail`: a permission's tool, a command's name, the fuel
+ * alert's line. */
+export type Missed = { kind: SignalKind; path: string; name: string; detail: string | null; at: number };
+
+/** Quiet now: until when (ms; null: until it is switched off), and whether the quiet hours made it so. */
+export type Quiet = { until: number | null; hours: boolean };
+
+/** Settings › Notifications. Claude's own switch is `Settings.notify`. */
+export type NotificationSettings = {
+  serverCrashed: boolean;
+  command: boolean;
+  longTurn: boolean;
+  deps: boolean;
+  /** The muted projects' paths. */
+  muted?: string[];
+  /** Every day from `from` to `to` (`HH:MM`), when `on`. */
+  quietHours: { on: boolean; from: string; to: string };
+  /** While quiet, Claude's questions and permission prompts still come through. */
+  questionsThrough: boolean;
+  /** While quiet, the sounds are held too. */
+  soundsToo: boolean;
 };

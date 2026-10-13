@@ -126,8 +126,8 @@ fn a_drag_keeps_the_place_of_projects_that_are_not_listed_right_now() {
 
 /// The Settings page sends its whole form, as it got it some time ago. What has a command of its
 /// own (a team, a project's commands, the list's order…) may have changed since: were the form's
-/// copy written, that would be gone from the file without a word. Only the preferences the form
-/// is for are taken from it.
+/// copy written, that would be gone from the file without a word (a project muted meanwhile
+/// heard of again, a quiet period over). Only the preferences the form is for are taken from it.
 #[test]
 fn a_settings_form_leaves_what_has_a_command_of_its_own() {
     let fx = fixture("node server.js", &[]);
@@ -144,7 +144,16 @@ fn a_settings_form_leaves_what_has_a_command_of_its_own() {
     core.team_create("Race", vec![fx.project.clone()]).unwrap();
     core.set_onboarded();
     core.dismiss_suggestion(&fx.project);
+    // Settings › Notifications' own (`signals.rs`).
+    core.mute_project(&fx.project, true);
+    core.set_notification("claude", false).unwrap();
+    core.set_notification("command", true).unwrap();
+    core.set_notification("fuel", false).unwrap();
+    core.set_quiet_option("questions", false).unwrap();
+    core.set_quiet_hours(true, "23:00", "07:00").unwrap();
+    core.quiet_start(QuietFor::Open);
     let held = core.settings();
+    assert_eq!((held.notify, held.fuel_alert, held.notifications.muted.len(), held.notifications.quiet.is_some()), (false, false, 1, true));
 
     // A form that knows none of it.
     core.set_settings_form(Settings { script: "serve".into(), ..Settings::default() });

@@ -32,9 +32,10 @@ impl Core {
 
     /// The Settings page's form takes hold. Project overrides, the list order, the shortcut
     /// keys, the projects folder, the board shown last, how it is drawn, the Track page's
-    /// settings, the teams and what the core notes for itself (the version seen, the first run,
-    /// the folders known) have their own commands: those stay as they are here, whatever the
-    /// form holds of them, which may be older. Taken and put back under one lock, so nothing
+    /// settings, the teams, what is told and when (the notifications, quiet, the muted
+    /// projects) and what the core notes for itself (the version seen, the first run, the
+    /// folders known) have their own commands: those stay as they are here, whatever the form
+    /// holds of them, which may be older. Taken and put back under one lock, so nothing
     /// changes in between.
     pub fn set_settings_form(&self, form: Settings) {
         let language = form.language.clone();
@@ -55,6 +56,10 @@ impl Core {
                 seen_version: kept.seen_version,
                 onboarded: kept.onboarded,
                 seen_folders,
+                // Settings › Notifications' own, each by its command (`signals.rs`).
+                notify: kept.notify,
+                notifications: kept.notifications,
+                fuel_alert: kept.fuel_alert,
                 ..form
             };
         }

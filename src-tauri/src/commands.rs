@@ -806,3 +806,60 @@ pub fn open_link(app: AppHandle, link: String) -> Result<(), String> {
 pub fn quit(app: AppHandle) {
     app.exit(0);
 }
+
+/* ---------- notifications: quiet, what was missed, muted projects ---------- */
+
+/// Quiet from now on: `hour` (for an hour), `morning` (until tomorrow morning) or `open` (until
+/// it is switched off).
+#[tauri::command]
+pub fn quiet_start(state: State<'_, AppState>, span: String) -> Result<(), String> {
+    let span = crate::core::QuietFor::parse(&span).ok_or_else(|| format!("unknown span: {span}"))?;
+    state.core.quiet_start(span);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn quiet_end(state: State<'_, AppState>) {
+    state.core.quiet_end();
+}
+
+/// One of quiet's options: `questions` (questions and permissions still come through) or
+/// `sounds` (the sounds are held too).
+#[tauri::command]
+pub fn quiet_option(state: State<'_, AppState>, option: String, on: bool) -> Result<(), String> {
+    state.core.set_quiet_option(&option, on)
+}
+
+/// The quiet hours: on or off, and from when to when (`HH:MM`).
+#[tauri::command]
+pub fn quiet_hours(state: State<'_, AppState>, on: bool, from: String, to: String) -> Result<(), String> {
+    state.core.set_quiet_hours(on, &from, &to)
+}
+
+/// Whether an event brings a notification: `claude`, `serverCrashed`, `command`, `longTurn`,
+/// `deps` or `fuel`.
+#[tauri::command]
+pub fn notify_event(state: State<'_, AppState>, event: String, on: bool) -> Result<(), String> {
+    state.core.set_notification(&event, on)
+}
+
+#[tauri::command]
+pub fn mute_project(state: State<'_, AppState>, path: String, muted: bool) {
+    state.core.mute_project(&path, muted);
+}
+
+/// A line of the popover's list of what was missed: what a click on its notification would
+/// bring up, and the line goes.
+#[tauri::command]
+pub fn missed_open(app: AppHandle, state: State<'_, AppState>, path: String, kind: crate::core::SignalKind) {
+    // Claude's come up where they run; the rest in Pitwall's window, which hides the popover.
+    if kind.is_claudes() {
+        step_aside(&app);
+    }
+    state.core.missed_open(&path, kind);
+}
+
+#[tauri::command]
+pub fn missed_clear(state: State<'_, AppState>) {
+    state.core.missed_clear();
+}

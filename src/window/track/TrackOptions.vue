@@ -71,6 +71,7 @@ onBeforeUnmount(() => motionQuery?.removeEventListener("change", onMotion));
   </div>
 </template>
 
+<style scoped src="../settings/settings.css"></style>
 <style scoped>
 .topt {
   display: flex;
@@ -115,68 +116,9 @@ onBeforeUnmount(() => motionQuery?.removeEventListener("change", onMotion));
   color: var(--text-subtle);
 }
 
-/* One of a few: the picked one lit. A long language wraps to a second row rather than cutting a name. */
+/* The segments are Settings' own (settings/settings.css); here a long language wraps to a second
+   row rather than cutting a name. */
 .seg {
-  display: inline-flex;
   flex-wrap: wrap;
-  max-width: 100%;
-  padding: 2px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--bg-seg);
-}
-
-.seg button {
-  height: 24px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.seg button:hover:not([aria-pressed="true"]) {
-  color: var(--text);
-}
-
-.seg button[aria-pressed="true"] {
-  background: var(--bg-seg-on);
-  box-shadow: var(--shadow-seg-on);
-  color: var(--text-strong);
-}
-
-/* A small switch, like the Sessions page's: no state colour, it isn't a state. */
-.topt-row input {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  flex-shrink: 0;
-  width: 26px;
-  height: 14px;
-  margin: 0;
-  border-radius: 7px;
-  background: var(--switch-off);
-  transition: background 0.15s;
-}
-
-.topt-row input::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--bg-app);
-  transition: transform 0.15s;
-}
-
-.topt-row input:checked {
-  background: var(--text-muted);
-}
-
-.topt-row input:checked::before {
-  transform: translateX(12px);
 }
 </style>

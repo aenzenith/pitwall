@@ -5,7 +5,7 @@ import { percentText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { api, snapshot } from "../../lib/store";
 
-/** Settings' "notify at 90 %", on the page: shows it and turns it on or off. */
+/** Settings › Notifications' fuel alert, on the page: shows it and turns it on or off. */
 
 /** What was just picked, shown until the snapshot says the same. */
 const pending = ref<boolean | null>(null);
@@ -17,12 +17,10 @@ watch(stored, (value) => {
 });
 
 async function toggle(): Promise<void> {
-  const settings = snapshot.value?.settings;
-  if (!settings) return;
   const next = !on.value;
   pending.value = next;
   try {
-    await api.setSettings({ ...settings, fuelAlert: next });
+    await api.notifyEvent("fuel", next);
   } catch {
     pending.value = null;
   }

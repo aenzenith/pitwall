@@ -57,8 +57,9 @@ pub struct Fuel {
     today: Mutex<Option<SpendToday>>,
     /// The same per session, for the Sessions page.
     sessions: Mutex<HashMap<String, SessionSpend>>,
-    /// The reset of each limit already notified about: one notification per window.
-    alerted: Mutex<HashMap<String, Option<i64>>>,
+    /// The reset of each limit the door has had, and whether the user was told of it: one
+    /// notification per window.
+    alerted: Mutex<HashMap<String, (Option<i64>, bool)>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -170,14 +171,12 @@ impl Fuel {
         let _ = app.emit_to(MAIN, "fuel", view);
     }
 
-    /// One notification when the session or the week passes 90 %, unless Settings turned it off.
+    /// Once when the session or the week passes 90 %: handed to the core (`core/signals.rs`),
+    /// which shows the notification unless Settings turned it off, or it is quiet.
     fn alert(&self, app: &AppHandle) {
         let Some(state) = app.try_state::<AppState>() else {
             return;
         };
-        if !state.core.settings().fuel_alert {
-            return;
-        }
 
         let limits = self.usage.state();
         if limits.status != Status::Ready {
@@ -191,12 +190,11 @@ impl Fuel {
             if window.used < ALERT_AT {
                 continue;
             }
-            {
-                let mut alerted = lock(&self.alerted);
-                if alerted.get(&window.id) == Some(&window.resets_at) {
-                    continue;
-                }
-                alerted.insert(window.id.clone(), window.resets_at);
+            // Held until the door has answered: one notification per window, whoever asks.
+            let mut alerted = lock(&self.alerted);
+            let before = alerted.get(&window.id).filter(|(reset, _)| *reset == window.resets_at).map(|(_, told)| *told);
+            if before == Some(true) {
+                continue;
             }
 
             let used = window.used.round().min(100.0) as u32;
@@ -205,7 +203,10 @@ impl Fuel {
                 Some(at) => t!("fuel.alert.refills", time = crate::clock::clock(at)),
                 None => String::new(),
             };
-            crate::notify(app, NOTIFICATION_ID.to_string(), title, body);
+            // With the alert off the door has it all the same, once, for the phone: its
+            // notification is owed until the alert is switched on.
+            let told = state.core.fuel_high(NOTIFICATION_ID, title, body, before.is_some());
+            alerted.insert(window.id.clone(), (window.resets_at, told));
         }
     }
 }

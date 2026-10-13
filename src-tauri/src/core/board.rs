@@ -234,6 +234,8 @@ pub(super) struct Board {
     pids: HashMap<String, u32>,
     /// Cards linked to a session that was at work on something else: that turn isn't theirs.
     linked_busy: HashSet<String>,
+    /// The cards were followed once since launch (`follow_board`).
+    followed: bool,
 }
 
 impl Board {
@@ -242,7 +244,7 @@ impl Board {
     pub(super) fn load(file: PathBuf, now: u64) -> Self {
         let (cards, writable, changed, dropped) = read_cards(&file, now);
         let images = file.with_file_name(IMAGES_DIR);
-        let board = Self { file, images, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new() };
+        let board = Self { file, images, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new(), followed: false };
         if changed && board.save() {
             // Gone from the board's file for good: their images go with them.
             for card in &dropped {
@@ -855,9 +857,12 @@ impl Core {
         let _pass = self.board_follow.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
         // (terminal, given at) of the cards still waiting for their session, the sessions held,
-        // and the process each was last seen running in.
-        let (unlinked, linked, processes) = {
-            let board = self.board();
+        // and the process each was last seen running in. The first pass after launch only takes
+        // note, as the first scan of Claude's turns does: a session that ended while the app was
+        // closed sends its card to `review` without a word.
+        let (unlinked, linked, processes, first) = {
+            let mut board = self.board();
+            let first = !std::mem::replace(&mut board.followed, true);
             let unlinked: Vec<(u64, u64)> = board
                 .cards
                 .iter()
@@ -865,7 +870,7 @@ impl Core {
                 .filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at))))
                 .collect();
             let linked: Vec<String> = board.cards.iter().filter(|card| matches!(card.column, Column::Claude | Column::Review)).filter_map(|card| card.session.clone()).collect();
-            (unlinked, linked, board.pids.clone())
+            (unlinked, linked, board.pids.clone(), first)
         };
         if unlinked.is_empty() && linked.is_empty() {
             return;
@@ -1010,9 +1015,11 @@ impl Core {
         linked_busy.retain(|id| cards.iter().any(|card| card.id == *id && card.column == Column::Claude));
 
         // Its turn was over, or its session had ended: at rest, as far as `review` goes.
+        let mut reviewed: Vec<String> = Vec::new();
         for id in &over {
             if let Some(card) = board.place(id, Column::Review, usize::MAX, now) {
                 card.rested = true;
+                reviewed.push(card.path.clone());
             }
             changed = true;
         }
@@ -1026,6 +1033,11 @@ impl Core {
 
         if changed {
             self.board_changed(board);
+        }
+        // Told of once the board's lock is let go: a card is there to be looked at (`signals.rs`).
+        for path in reviewed.into_iter().filter(|_| !first) {
+            let name = self.project_name(&path);
+            self.signal(super::signals::Signal { kind: SignalKind::CardReview, path, name, detail: None });
         }
     }
 }

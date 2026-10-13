@@ -40,12 +40,14 @@ mod open;
 mod output;
 mod peers;
 mod projects;
+mod relay;
 mod restore;
 mod resume;
 mod reveal;
 mod routing;
 mod servers;
 mod sessions;
+mod signals;
 mod snapshot;
 mod supervise;
 mod teams;
@@ -63,6 +65,7 @@ pub use restore::{RestartPlan, Restored};
 pub use routing::Action;
 pub use sessions::SessionsView;
 pub use snapshot::Snapshot;
+pub use signals::{plain_banner, Missed, QuietFor, QuietView, SignalKind};
 use jobs::{job_key, Job, JobResult};
 use output::Outbox;
 use peers::Tail;
@@ -103,6 +106,11 @@ pub enum CoreEvent {
     Board(Vec<Card>),
     /// The Dependencies page's reports changed; every listed project's.
     Deps(Vec<crate::deps::DepReport>),
+    /// Show this project in the main window, with its command `job`'s output when there is one:
+    /// a click on a server's or a command's notification (`signals.rs`).
+    RevealProject { path: String, job: Option<String> },
+    /// Show this page of the main window (`deps`, `fuel`, `board`).
+    RevealPage(&'static str),
 }
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
@@ -173,6 +181,14 @@ struct Inner {
     /// Each team's start under way, by its number: a stop takes it out, and the start goes no
     /// further (`teams.rs`).
     team_runs: HashMap<String, u64>,
+    /// What the user wasn't told while it was quiet, newest first (`signals.rs`).
+    missed: Vec<Missed>,
+    /// Crashes told within the last minute: the same one again is only heard.
+    told: signals::Told,
+    /// The long turns told of: each session's turn, by when it began.
+    long_turns: HashMap<String, u64>,
+    /// What the Garage's checks said last, to tell of what newly waits.
+    deps_known: signals::DepsKnown,
 }
 
 pub struct Core {

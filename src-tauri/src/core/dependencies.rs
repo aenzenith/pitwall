@@ -212,6 +212,8 @@ impl Core {
 
         let reports = self.deps_reports(&paths);
         self.deps_lock().sent = serde_json::to_string(&reports).unwrap_or_default();
+        // As `deps_send` does: these reports never pass through it.
+        self.deps_waiting(&reports);
         reports
     }
 
@@ -741,6 +743,8 @@ impl Core {
             }
             state.sent = json;
         }
+        // Something newly to install, or a migration that newly waits, is told of (`signals.rs`).
+        self.deps_waiting(&reports);
         self.emit(CoreEvent::Deps(reports));
     }
 

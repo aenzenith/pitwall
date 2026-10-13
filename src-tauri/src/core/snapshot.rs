@@ -4,6 +4,7 @@
 use super::*;
 use super::routing::prune_pending;
 use super::servers::run_command;
+use super::signals::Signal;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +56,8 @@ pub struct ProjectView {
     pub commands: Vec<CommandView>,
     /// The project's open terminals.
     pub terminals: Vec<TerminalView>,
+    /// Nothing is told about it (`signals.rs`).
+    pub muted: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -84,6 +87,10 @@ pub struct Snapshot {
     pub whats_new: bool,
     /// Projects that appeared in the projects folder (`discover.rs`).
     pub suggestions: Vec<Candidate>,
+    /// It is quiet now, and until when (`signals.rs`).
+    pub quiet: Option<QuietView>,
+    /// What the user wasn't told meanwhile, newest first.
+    pub missed: Vec<Missed>,
 }
 
 impl Core {
@@ -94,23 +101,28 @@ impl Core {
 
     /// Emits `State` only when the snapshot actually changed.
     pub fn notify(&self) {
-        let (changed, sounds) = {
+        let (changed, turned) = {
             let mut inner = self.lock();
             prune_pending(&mut inner);
             let snapshot = build_snapshot(&inner);
-            let sounds = server_sounds(&mut inner, &snapshot.projects);
+            let turned = server_turns(&mut inner, &snapshot.projects);
             let json = serde_json::to_string(&snapshot).unwrap_or_default();
 
             if json == inner.last_state {
-                (false, sounds)
+                (false, turned)
             } else {
                 inner.last_state = json;
-                (true, sounds)
+                (true, turned)
             }
         };
 
-        for sound in sounds {
-            self.emit(CoreEvent::Sound(sound));
+        // Crashes are told, servers that came up are heard (`signals.rs`), the lock let go first:
+        // however many turned at once, each sound once.
+        let (crashed, up): (Vec<_>, Vec<_>) = turned.into_iter().partition(|(_, _, crashed)| *crashed);
+        self.signals(crashed.into_iter().map(|(path, name, _)| Signal { kind: SignalKind::ServerCrashed, path, name, detail: None }).collect());
+        if !up.is_empty() {
+            let up: Vec<&str> = up.iter().map(|(path, ..)| path.as_str()).collect();
+            self.sound(&up, |sounds| &sounds.server_ready);
         }
         if changed {
             self.emit(CoreEvent::State);
@@ -123,24 +135,22 @@ impl Core {
     }
 }
 
-/// Servers, ours or a peer's, that just crashed or came up: their sounds, once each. A project
-/// first seen makes none.
-fn server_sounds(inner: &mut Inner, projects: &[ProjectView]) -> Vec<String> {
-    let mut sounds: Vec<String> = Vec::new();
+/// Servers, ours or a peer's, that just crashed (`true`) or came up, by path and name. A project
+/// first seen is neither.
+fn server_turns(inner: &mut Inner, projects: &[ProjectView]) -> Vec<(String, String, bool)> {
+    let mut turned = Vec::new();
 
     for project in projects {
         let before = inner.statuses.insert(project.path.clone(), project.status);
-        let sound = match (before, project.status) {
-            (Some(was), "crashed") if was != "crashed" => &inner.settings.sounds.server_crashed,
-            (Some(was), "running") if was != "running" => &inner.settings.sounds.server_ready,
+        let crashed = match (before, project.status) {
+            (Some(was), "crashed") if was != "crashed" => true,
+            (Some(was), "running") if was != "running" => false,
             _ => continue,
         };
-        if !sound.is_empty() && !sounds.contains(sound) {
-            sounds.push(sound.clone());
-        }
+        turned.push((project.path.clone(), project.name.clone(), crashed));
     }
 
-    sounds
+    turned
 }
 
 /// The spelling a project is listed under (see `build_snapshot`), for a path another
@@ -245,6 +255,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
                 settings: inner.settings.project(path),
                 commands: jobs::command_views(inner, path),
                 terminals: inner.terminal_list.iter().filter(|t| &t.path == path).cloned().collect(),
+                muted: super::signals::muted(inner, path),
             }
         })
         .collect();
@@ -282,6 +293,8 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         resume: super::resume::offer(inner),
         whats_new: inner.whats_new,
         suggestions: inner.suggestions.clone(),
+        quiet: super::signals::quiet_at(&inner.settings.notifications, now_ms()),
+        missed: super::signals::listed(&inner.missed, &projects),
         projects,
     }
 }

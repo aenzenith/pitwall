@@ -3,6 +3,7 @@
 //! the Claude Code hook itself.
 
 use super::*;
+use super::signals::{long_turns, name_of, turn_seen, turns_seen, Signal};
 use super::snapshot::build_snapshot;
 use crate::claude::TurnKind;
 
@@ -18,6 +19,7 @@ impl Core {
         {
             let mut inner = self.lock();
             inner.waiting.remove(path);
+            turn_seen(&mut inner, path);
             if let Some(sessions) = inner.claude_sessions.get_mut(path) {
                 sessions.retain(|session| session.phase != SessionPhase::Waiting);
             }
@@ -56,7 +58,10 @@ impl Core {
             let scan = watch.evaluate();
             let (announce, projects) = {
                 let mut inner = self.lock();
-                let announce = due_notifications(&mut inner, &scan.waiting);
+                let first = !inner.claude_scanned;
+                let mut announce = due_notifications(&mut inner, &scan.waiting, &scan.sessions);
+                announce.extend(long_turns(&mut inner, &scan.sessions, first));
+                turns_seen(&mut inner, &scan.waiting);
                 inner.waiting = scan.waiting;
                 inner.working = scan.working;
                 inner.claude_sessions = live_sessions(&scan.sessions);
@@ -68,23 +73,8 @@ impl Core {
             announce
         };
 
-        let sounds = self.settings().sounds;
-        let mut sound = None;
-        for (path, name, kind) in announce {
-            let body = match kind {
-                TurnKind::Finished => t!("core.notify.finished"),
-                TurnKind::Asking => t!("core.notify.asking"),
-                TurnKind::Permission => t!("core.notify.permission"),
-            };
-            self.emit(CoreEvent::Notify { path, title: name, body });
-            // One sound for the lot; a question outranks a finished turn.
-            if kind != TurnKind::Finished || sound.is_none() {
-                sound = Some(if kind == TurnKind::Finished { &sounds.claude_finished } else { &sounds.claude_asking });
-            }
-        }
-        if let Some(sound) = sound.filter(|s| !s.is_empty()) {
-            self.emit(CoreEvent::Sound(sound.clone()));
-        }
+        // Banner, sound, quiet and the phone are the door's to decide (`signals.rs`).
+        self.signals(announce);
 
         self.notify();
         // Cards given to Claude follow their sessions from the state just read.
@@ -128,9 +118,10 @@ fn live_sessions(sessions: &[crate::claude::SessionState]) -> HashMap<String, Ve
     found
 }
 
-/// Waiting turns to announce now. The first scan after launch only takes note, so turns that
-/// were already waiting don't arrive as a burst.
-fn due_notifications(inner: &mut Inner, waiting: &HashMap<String, Turn>) -> Vec<(String, String, TurnKind)> {
+/// Waiting turns to announce now, a permission's with the tool the hook named (`sessions`: the
+/// scan's). The first scan after launch only takes note, so turns that were already waiting
+/// don't arrive as a burst.
+fn due_notifications(inner: &mut Inner, waiting: &HashMap<String, Turn>, sessions: &[SessionState]) -> Vec<Signal> {
     let first = !inner.claude_scanned;
     inner.claude_scanned = true;
     inner.candidates.retain(|path, _| waiting.contains_key(path));
@@ -156,15 +147,16 @@ fn due_notifications(inner: &mut Inner, waiting: &HashMap<String, Turn>) -> Vec<
                 inner.candidates.remove(path);
                 inner.notified.insert(path.clone(), turn.at);
 
-                if inner.settings.notify {
-                    let name = inner
-                        .favourites
-                        .iter()
-                        .find(|f| &f.path == path)
-                        .map(|f| f.name.clone())
-                        .unwrap_or_else(|| folder_name(path));
-                    due.push((path.clone(), name, turn.kind));
-                }
+                let name = name_of(inner, path);
+                let (kind, detail) = match turn.kind {
+                    TurnKind::Finished => (SignalKind::ClaudeFinished, None),
+                    TurnKind::Asking => (SignalKind::ClaudeAsking, None),
+                    TurnKind::Permission => {
+                        let asker = sessions.iter().find(|session| &session.path == path && session.turn == Some(*turn));
+                        (SignalKind::ClaudePermission, asker.and_then(|session| session.tool.clone()))
+                    }
+                };
+                due.push(Signal { kind, path: path.clone(), name, detail });
             }
             Some((at, _)) if *at == turn.at => {}
             _ => {

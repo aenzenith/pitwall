@@ -25,6 +25,7 @@ import type {
   RestartPlan,
   SessionsView,
   Settings,
+  SignalKind,
   Snapshot,
   TerminalView,
   UpdateView,
@@ -397,6 +398,21 @@ export const api = {
   forgetProject: (path: string) => invoke("forget_project", { path }),
 
   quit: () => invoke("quit"),
+
+  /* Notifications (core/signals.rs): `snapshot.quiet`, `snapshot.missed`, a project's `muted`. */
+  /** Quiet from now on: for an hour, until tomorrow morning, or until it is switched off. */
+  quietStart: (span: "hour" | "morning" | "open") => invoke("quiet_start", { span }),
+  quietEnd: () => invoke("quiet_end"),
+  /** `questions`: questions and permissions still come through; `sounds`: the sounds are held too. */
+  quietOption: (option: "questions" | "sounds", on: boolean) => invoke("quiet_option", { option, on }),
+  /** The quiet hours: on or off, from when to when (`HH:MM`). */
+  quietHours: (on: boolean, from: string, to: string) => invoke("quiet_hours", { on, from, to }),
+  /** Whether an event brings a notification. */
+  notifyEvent: (event: "claude" | "serverCrashed" | "command" | "longTurn" | "deps" | "fuel", on: boolean) => invoke("notify_event", { event, on }),
+  muteProject: (path: string, muted: boolean) => invoke("mute_project", { path, muted }),
+  /** Opens what a missed notification was about; its line goes. */
+  missedOpen: (path: string, kind: SignalKind) => invoke("missed_open", { path, kind }),
+  missedClear: () => invoke("missed_clear"),
 };
 
 /** The Track page's settings as just picked, on the page or in Settings: shown at once, the core

@@ -133,13 +133,28 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         CoreEvent::Deps(reports) => {
             let _ = app.emit_to(MAIN, "deps", reports);
         }
+        // From a notification or the popover's list of what was missed: held for the main
+        // window's page until it listens, as a terminal's is.
+        CoreEvent::RevealProject { path, job } => {
+            tray::show_main(app);
+            let _ = match job {
+                Some(job) => app.emit("reveal-output", serde_json::json!({ "path": path, "job": job })),
+                None => app.emit("reveal-project", serde_json::json!({ "path": path })),
+            };
+        }
+        CoreEvent::RevealPage(page) => {
+            tray::show_main(app);
+            let _ = app.emit("reveal-page", serde_json::json!({ "page": page }));
+        }
     }
 }
 
 /// A system notification; clicking it brings the project's waiting Claude session up where it
-/// runs (without one, the project's editor window) and counts the turn as seen.
+/// runs (without one, the project's editor window) and counts the turn as seen. One about a
+/// server, a command or the Garage opens Pitwall's window instead (`Core::open_banner`), and
+/// carries no mark of Claude's.
 pub(crate) fn notify(app: &AppHandle, path: String, title: String, body: String) {
-    let image = claude_mark(app);
+    let image = if core::plain_banner(&path) { None } else { claude_mark(app) };
     notify::post(path, title, body, image.as_deref().map(std::path::Path::new));
 }
 
@@ -260,7 +275,7 @@ pub fn run() {
                 } else if path == update::NOTIFICATION_ID {
                     tray::show_main(&clicks);
                 } else if let Some(state) = clicks.try_state::<AppState>() {
-                    state.core.open_claude(&path);
+                    state.core.open_banner(&path);
                 }
             });
 
@@ -478,7 +493,15 @@ pub fn run() {
             commands::missing_projects,
             commands::rehome_project,
             commands::forget_project,
-            commands::quit
+            commands::quit,
+            commands::quiet_start,
+            commands::quiet_end,
+            commands::quiet_option,
+            commands::quiet_hours,
+            commands::notify_event,
+            commands::mute_project,
+            commands::missed_open,
+            commands::missed_clear
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
