@@ -23,7 +23,7 @@ tauri = { version = "2", features = ["image-png", "macos-private-api", "tray-ico
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-tauri-plugin-positioner = { version = "2.4.0", features = ["tray-icon"] }
+tauri-plugin-positioner = "2.4.0"
 libc = "0.2.189"
 regex = "1.13.1"
 notify = "8.2.0"
@@ -63,7 +63,7 @@ objc2 = "0.6.4"
 block2 = "0.6.2"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSArray", "NSError", "NSData", "NSAttributedString", "NSGeometry", "NSRange"] }
 objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "bitflags", "UNUserNotificationCenter", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationAttachment", "UNNotificationTrigger"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication", "NSApplication", "NSResponder", "NSWindow", "NSPanel", "NSEvent", "NSSound", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSImage", "NSFont", "NSColor", "NSAppearance", "NSAttributedString", "objc2-core-foundation", "block2", "libc"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication", "NSApplication", "NSResponder", "NSWindow", "NSPanel", "NSScreen", "NSEvent", "NSSound", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSImage", "NSFont", "NSColor", "NSAppearance", "NSAttributedString", "objc2-core-foundation", "block2", "libc"] }
 
 # Pitwall's sounds elsewhere: WAV only. On Linux cpal links ALSA (`libasound2-dev` to build).
 [target.'cfg(not(target_os = "macos"))'.dependencies]

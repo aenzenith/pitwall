@@ -62,9 +62,6 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .icon_as_template(true)
         .tooltip("Pitwall")
         .on_tray_icon_event(|tray, event| {
-            // The positioner needs every tray event to know where the icon is.
-            tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
-
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                 toggle_popover(tray.app_handle());
             }
@@ -117,12 +114,41 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// Under the icon in the menu bar; before the icon was ever clicked, the top-right corner.
+/// Under the icon in the menu bar; without an item to ask, the top-right corner.
 #[cfg(target_os = "macos")]
-fn place_popover<R: Runtime>(_app: &AppHandle<R>, popover: &WebviewWindow<R>) {
-    if popover.move_window(Position::TrayBottomCenter).is_err() {
+fn place_popover<R: Runtime>(app: &AppHandle<R>, popover: &WebviewWindow<R>) {
+    if !place_under_icon(app, popover) {
         let _ = popover.move_window(Position::TopRight);
     }
+}
+
+/// Centred under the menu bar item, inside the item's screen. In AppKit's points throughout,
+/// never in pixels: the item's pixels are its own screen's, and a position in pixels is read by
+/// the scale of the screen the popover was last on. Between a Retina screen and a plain one the
+/// two differ, and the popover came up on another screen, wherever the halved or doubled numbers
+/// fell.
+#[cfg(target_os = "macos")]
+fn place_under_icon<R: Runtime>(app: &AppHandle<R>, popover: &WebviewWindow<R>) -> bool {
+    let (Some(tray), Ok(ns_window)) = (app.tray_by_id(TRAY_ID), popover.ns_window()) else {
+        return false;
+    };
+    let ns_window = ns_window as usize;
+
+    let placed = tray.with_inner_tray_icon(move |inner| {
+        // The item's window is on the screen whose menu bar was clicked.
+        let item = inner.ns_status_item()?.button(objc2::MainThreadMarker::new()?)?.window()?;
+        // That screen without its menu bar and Dock.
+        let (icon, area) = (item.frame(), item.screen()?.visibleFrame());
+        // SAFETY: as in `focus_alone`: this window's NSWindow, on the main thread.
+        let popover = unsafe { &*(ns_window as *const objc2_app_kit::NSWindow) };
+        let width = popover.frame().size.width;
+
+        let left = (icon.origin.x + (icon.size.width - width) / 2.0).min(area.origin.x + area.size.width - width).max(area.origin.x);
+        let top = icon.origin.y.min(area.origin.y + area.size.height);
+        popover.setFrameTopLeftPoint(objc2_foundation::NSPoint::new(left.round(), top));
+        Some(())
+    });
+    placed.ok().flatten().is_some()
 }
 
 /// By the icon, inside the work area: above it on a taskbar at the bottom (the usual place),
