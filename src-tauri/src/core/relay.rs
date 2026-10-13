@@ -388,24 +388,10 @@ fn fresh_topic() -> String {
     topic
 }
 
-/// Ten bytes nobody can guess: from the system's generator, and where that is no file, from
-/// the keys std draws from it for its hashers.
+/// Ten bytes of the system's randomness, drawn as the radio's secrets are.
 fn random() -> [u8; 10] {
-    use std::hash::BuildHasher;
-
     let mut bytes = [0u8; 10];
-
-    #[cfg(unix)]
-    {
-        if fs::File::open("/dev/urandom").and_then(|mut source| source.read_exact(&mut bytes)).is_ok() {
-            return bytes;
-        }
-    }
-
-    for (at, part) in bytes.chunks_mut(8).enumerate() {
-        let drawn = std::collections::hash_map::RandomState::new().hash_one((at, std::process::id(), now_ms())).to_le_bytes();
-        part.copy_from_slice(&drawn[..part.len()]);
-    }
+    super::radio::random(&mut bytes);
     bytes
 }
 

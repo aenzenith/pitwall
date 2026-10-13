@@ -145,6 +145,8 @@ impl General {
             // Kept out: with its switches it holds this Mac's own (the quiet period under way,
             // the muted projects' paths).
             notifications: _,
+            // This Mac's own too: Claude Code's configuration here is what names this app.
+            radio: _,
         } = settings.clone();
 
         Self {

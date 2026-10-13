@@ -1,4 +1,4 @@
-/* One step of the first run (SetupView), shared by its four panes: a head (what the step is about
+/* One step of the first run (SetupView), shared by its panes: a head (what the step is about
    and where it stands), a block between two hairlines, and a foot whose right end is the step's
    one button. */
 .pane {

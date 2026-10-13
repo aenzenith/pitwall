@@ -22,6 +22,9 @@ import type {
   LinkSuggestion,
   NewImage,
   ProjectSettings,
+  RadioCall,
+  RadioState,
+  RadioTool,
   RestartPlan,
   SessionsView,
   Settings,
@@ -424,6 +427,17 @@ export const api = {
   /** Opens what a missed notification was about; its line goes. */
   missedOpen: (path: string, kind: SignalKind) => invoke("missed_open", { path, kind }),
   missedClear: () => invoke("missed_clear"),
+
+  /* The team radio (core/radio): Claude Code asks Pitwall. */
+  /** The tools there are, in the core's order: answered at once. */
+  radioTools: () => invoke<RadioTool[]>("radio_tools"),
+  /** The radio as Claude Code has it; the core asks its CLI, so it takes a moment. */
+  radioState: () => invoke<RadioState>("radio_state"),
+  /** Turns it on (Pitwall is added to Claude Code's MCP servers) or off (it is taken out). */
+  radioSet: (on: boolean) => invoke<RadioState>("radio_set", { on }),
+  radioTool: (name: string, on: boolean) => invoke("radio_tool", { name, on }),
+  /** Today's calls of a session, the newest first. */
+  radioCalls: (session: string) => invoke<RadioCall[]>("radio_calls", { session }),
 
   /* The output pane (core/reference.rs). */
   /** Opens the file an output line names (`file`, as printed) in the editor, at its line. The

@@ -55,13 +55,13 @@
         "zh-Hans": "初始设置与新项目"
       },
       "body": {
-        "en": "Settings › General › Open the setup steps: the projects in your projects folder, Claude's hook, the VS Code extension and the shortcut. Pitwall can also suggest new projects that appear in that folder; turn it on in the same place.",
-        "tr": "Ayarlar › Genel › Kurulum adımlarını aç: projeler klasöründeki projeler, Claude hook'u, VS Code eklentisi ve kısayol. Pitwall bu klasörde beliren yeni projeleri de önerebilir; aynı yerden aç.",
-        "de": "Einstellungen › Allgemein › Einrichtungsschritte öffnen: die Projekte im Projektordner, Claudes Hook, die VS Code-Erweiterung und der Tastaturkurzbefehl. Pitwall kann außerdem neue Projekte vorschlagen, die in diesem Ordner auftauchen; an derselben Stelle einschalten.",
-        "es": "Ajustes › General › Abrir los pasos de configuración: los proyectos de tu carpeta de proyectos, el hook de Claude, la extensión de VS Code y el atajo. Pitwall también puede sugerir los proyectos nuevos que aparezcan en esa carpeta; actívalo en el mismo lugar.",
-        "ru": "Настройки › Основные › Открыть шаги настройки: проекты из папки проектов, хук Claude, расширение VS Code и сочетание клавиш. Pitwall также может предлагать новые проекты, появившиеся в этой папке; включается там же.",
-        "ja": "設定 › 一般 › セットアップ手順を開く：プロジェクトフォルダのプロジェクト、Claude のフック、VS Code 拡張機能、ショートカット。このフォルダに現れた新しいプロジェクトを Pitwall が提案することもできます。同じ場所でオンにします。",
-        "zh-Hans": "设置 › 通用 › 打开初始设置步骤：项目文件夹中的项目、Claude 的 Hook、VS Code 扩展和快捷键。Pitwall 还可以在该文件夹中出现新项目时提示添加；在同一位置开启。"
+        "en": "Settings › General › Open the setup steps: the projects in your projects folder, Claude's hook, the team radio, the VS Code extension and the shortcut. Pitwall can also suggest new projects that appear in that folder; turn it on in the same place.",
+        "tr": "Ayarlar › Genel › Kurulum adımlarını aç: projeler klasöründeki projeler, Claude hook'u, takım radyosu, VS Code eklentisi ve kısayol. Pitwall bu klasörde beliren yeni projeleri de önerebilir; aynı yerden aç.",
+        "de": "Einstellungen › Allgemein › Einrichtungsschritte öffnen: die Projekte im Projektordner, Claudes Hook, der Teamfunk, die VS Code-Erweiterung und der Tastaturkurzbefehl. Pitwall kann außerdem neue Projekte vorschlagen, die in diesem Ordner auftauchen; an derselben Stelle einschalten.",
+        "es": "Ajustes › General › Abrir los pasos de configuración: los proyectos de tu carpeta de proyectos, el hook de Claude, la radio del equipo, la extensión de VS Code y el atajo. Pitwall también puede sugerir los proyectos nuevos que aparezcan en esa carpeta; actívalo en el mismo lugar.",
+        "ru": "Настройки › Основные › Открыть шаги настройки: проекты из папки проектов, хук Claude, командное радио, расширение VS Code и сочетание клавиш. Pitwall также может предлагать новые проекты, появившиеся в этой папке; включается там же.",
+        "ja": "設定 › 一般 › セットアップ手順を開く：プロジェクトフォルダのプロジェクト、Claude のフック、チーム無線、VS Code 拡張機能、ショートカット。このフォルダに現れた新しいプロジェクトを Pitwall が提案することもできます。同じ場所でオンにします。",
+        "zh-Hans": "设置 › 通用 › 打开初始设置步骤：项目文件夹中的项目、Claude 的 Hook、车队无线电、VS Code 扩展和快捷键。Pitwall 还可以在该文件夹中出现新项目时提示添加；在同一位置开启。"
       }
     },
     {
@@ -104,6 +104,27 @@
         "ru": "Экспортируйте настройки, проекты и доску в один файл и импортируйте его на другом компьютере. Проект, папку которого переместили, сохранит команды и ссылки, когда вы выберете новое место.",
         "ja": "設定、プロジェクト、ボードを 1 つのファイルに書き出し、別のコンピュータで読み込めます。フォルダを移動したプロジェクトも、新しい場所を選択すればコマンドとリンクを引き継ぎます。",
         "zh-Hans": "将设置、项目和看板导出为一个文件，并在另一台电脑上导入。文件夹被移动的项目，在你选择新位置后会保留其命令和链接。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Team radio",
+        "tr": "Takım radyosu",
+        "de": "Teamfunk",
+        "es": "Radio del equipo",
+        "ru": "Командное радио",
+        "ja": "チーム無線",
+        "zh-Hans": "车队无线电"
+      },
+      "body": {
+        "en": "Claude Code can ask Pitwall about a project's dev server (its state, address and output), restart it, and add cards to the board. Turn it on in Settings › Claude and pick what Claude may do.",
+        "tr": "Claude Code, projenin dev sunucusunun durumunu, adresini ve çıktısını Pitwall'a sorabilir, sunucuyu yeniden başlatabilir, panoya kart ekleyebilir. Ayarlar › Claude'dan aç ve Claude'un neler yapabileceğini seç.",
+        "de": "Claude Code kann Pitwall nach dem Dev-Server eines Projekts fragen (Status, Adresse, Ausgabe), ihn neu starten und Karten aufs Board legen. In Einstellungen › Claude einschalten und wählen, was Claude tun darf.",
+        "es": "Claude Code puede preguntarle a Pitwall por el servidor de desarrollo de un proyecto (estado, dirección y salida), reiniciarlo y agregar tarjetas al tablero. Actívala en Ajustes › Claude y elige qué puede hacer Claude.",
+        "ru": "Claude Code может спрашивать у Pitwall о dev-сервере проекта (состояние, адрес, вывод), перезапускать его и добавлять карточки на доску. Включите в «Настройки › Claude» и выберите, что разрешено Claude.",
+        "ja": "Claude Code が Pitwall にプロジェクトの開発サーバーの状態・アドレス・出力を尋ね、再起動し、ボードにカードを追加できます。設定 › Claude でオンにして、Claude にできることを選べます。",
+        "zh-Hans": "Claude Code 可以向 Pitwall 询问项目开发服务器的状态、地址和输出，重启它，并在看板上添加卡片。在“设置 › Claude”中开启，并选择 Claude 能做什么。"
       }
     },
     {

@@ -17,6 +17,7 @@ import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
+import RadioSection from "./settings/RadioSection.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
 import TrackOptions from "./track/TrackOptions.vue";
 
@@ -540,6 +541,7 @@ function setTheme(theme: Theme): void {
             </button>
           </div>
           <p v-if="hookError" class="error">{{ hookError }}</p>
+          <RadioSection />
         </fieldset>
 
         <!-- The Track page's own: each change goes to the core by its own command, never with the

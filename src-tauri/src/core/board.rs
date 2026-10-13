@@ -319,7 +319,7 @@ impl Board {
     /// Takes the card out and puts it at `index` among its project's cards in `column` (past the
     /// last one: at the end), as the board shows them. A new column sets `moved_at`, and the
     /// card is no longer `rested`: that is told anew where it got to.
-    fn place(&mut self, id: &str, column: Column, index: usize, now: u64) -> Option<&mut Card> {
+    pub(super) fn place(&mut self, id: &str, column: Column, index: usize, now: u64) -> Option<&mut Card> {
         let at = self.cards.iter().position(|card| card.id == id)?;
         let mut card = self.cards.remove(at);
         if card.column != column {

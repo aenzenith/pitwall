@@ -5,30 +5,36 @@ import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
 import { shortcutLabel } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
-import { dragRegion } from "../lib/platform";
+import { dragRegion, isWindows } from "../lib/platform";
 import { api, snapshot } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus } from "../lib/types";
 import StepExtension from "./setup/StepExtension.vue";
 import StepHook from "./setup/StepHook.vue";
 import StepProjects from "./setup/StepProjects.vue";
+import StepRadio from "./setup/StepRadio.vue";
 import StepStartup from "./setup/StepStartup.vue";
 
 /**
- * The first run: four steps beside the sidebar, where the project list and the details are
+ * The first run: five steps beside the sidebar, where the project list and the details are
  * otherwise. A checklist, not a wizard: any step opens at any time, and one whose condition
  * holds shows a check. `done`: the steps are over, finished or put off.
  */
 const emit = defineEmits<{ done: [] }>();
 
-type Step = "projects" | "hook" | "extension" | "startup";
+type Step = "projects" | "hook" | "radio" | "extension" | "startup";
 
-const steps: Array<{ id: Step; title: Key; hint: Key }> = [
+/** The team radio is not on Windows yet: nothing of it is shown there. */
+const hasRadio = !isWindows;
+
+const every: Array<{ id: Step; title: Key; hint: Key }> = [
   { id: "projects", title: "setup.step.projects", hint: "setup.step.projectsHint" },
   { id: "hook", title: "setup.step.hook", hint: "setup.step.hookHint" },
+  { id: "radio", title: "setup.step.radio", hint: "setup.step.radioHint" },
   { id: "extension", title: "setup.step.extension", hint: "setup.step.extensionHint" },
   { id: "startup", title: "setup.step.startup", hint: "setup.step.startupHint" },
 ];
+const steps = every.filter((item) => item.id !== "radio" || hasRadio);
 const order = steps.map((item) => item.id);
 
 /* ---------- Pitwall for VS Code ---------- */
@@ -72,6 +78,7 @@ onBeforeUnmount(() => window.removeEventListener("focus", checkExtension));
 const done = computed<Record<Step, boolean>>(() => ({
   projects: !!snapshot.value?.projects.length,
   hook: !!snapshot.value?.claudeHook && !snapshot.value.claudeHookOutdated,
+  radio: !!snapshot.value?.settings.radio?.on,
   extension: !!extension.value?.version,
   startup: false,
 }));
@@ -174,6 +181,7 @@ async function leave(by: "later" | "finish"): Promise<void> {
       <div ref="stage" class="stage">
         <StepProjects v-show="step === 'projects'" id="setup-pane-projects" role="tabpanel" aria-labelledby="setup-tab-projects" @added="advance('projects')" />
         <StepHook v-show="step === 'hook'" id="setup-pane-hook" role="tabpanel" aria-labelledby="setup-tab-hook" />
+        <StepRadio v-if="hasRadio" v-show="step === 'radio'" id="setup-pane-radio" role="tabpanel" aria-labelledby="setup-tab-radio" />
         <StepExtension
           v-show="step === 'extension'"
           id="setup-pane-extension"

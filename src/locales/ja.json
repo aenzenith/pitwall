@@ -362,6 +362,8 @@
   "setup.step.projectsHint": "プロジェクトフォルダから、dev スクリプトのあるものを探します。",
   "setup.step.hook": "Claude の状態をすぐに表示",
   "setup.step.hookHint": "Claude Code にフックを追加します。許可の要求も表示されます。",
+  "setup.step.radio": "Claude が Pitwall に尋ねる",
+  "setup.step.radioHint": "チーム無線：Claude Code は開発サーバーを自分で起動せず、Pitwall に尋ねます。",
   "setup.step.extension": "VS Code と一緒に",
   "setup.step.extensionHint": "拡張機能があれば、エディタで起動したサーバーがここに表示されます。",
   "setup.step.startup": "ショートカットと起動",
@@ -404,6 +406,8 @@
   "setup.hook.outdated": "更新があります",
   "setup.hook.adds": "{settings} に追加されます。ファイルのほかの内容は変わりません。",
   "setup.hook.reports": "フックが伝えるのは、Claude の状態と許可を求めているツールの名前だけです。メッセージやコマンドは伝えません。",
+  "setup.radio.adds": "Pitwall は Claude Code 自身のコマンド（{command}）で Claude Code の MCP サーバーに追加されます。無線をオフにすると削除されます。",
+  "setup.radio.acts": "呼び出しは、セッションが作業しているプロジェクトにだけ作用します。Claude にできることは「設定 › Claude」で選べます。",
   "setup.ext.checking": "確認中…",
   "setup.ext.failed": "拡張機能を確認できませんでした。",
   "setup.ext.recheck": "再確認",
@@ -1116,6 +1120,36 @@
   "notifications.mute": "通知をミュート",
   "notifications.unmute": "ミュートを解除",
   "notifications.mutedMark": "通知をミュート中",
+  "radio.title": "チーム無線",
+  "radio.kind": "Claude の MCP サーバー",
+  "radio.hint": "Claude Code は開発サーバーを自分で起動せず、Pitwall に尋ねます。",
+  "radio.on": "オン",
+  "radio.off": "オフ",
+  "radio.onSessions": {
+    "other": "オン · {count} セッション接続中"
+  },
+  "radio.turnOn": "無線をオンにする",
+  "radio.turnOff": "無線をオフにする",
+  "radio.missing": "Claude Code が見つかりません。",
+  "radio.tools": "Claude にできること",
+  "radio.scope": "作業中のプロジェクトのみ",
+  "radio.reads": "読み取り",
+  "radio.acts": "操作",
+  "radio.tool.server_status": "サーバーの状態、アドレス、ポート、エラー行",
+  "radio.tool.server_output": "サーバー出力の最後の数行",
+  "radio.tool.server_restart": "サーバーを起動、停止、再起動",
+  "radio.tool.run_command": "プロジェクトの保存済みコマンドを実行（「実行前に確認」付きは除く）",
+  "radio.tool.board_add": "ボードの「次に」にカードを追加",
+  "radio.tool.board_note": "自分のカードにメモを残し、「レビュー待ち」へ移動",
+  "radio.calls": "無線",
+  "radio.callsToday": {
+    "other": "今日 {count} 回"
+  },
+  "radio.result.lines": {
+    "other": "{count} 行"
+  },
+  "radio.result.card": "「{title}」 · {column}",
+  "radio.result.refused": "拒否",
   "output.search": "出力を検索",
   "output.searchPrevious": "前の一致",
   "output.searchNext": "次の一致",
@@ -1219,5 +1253,8 @@
   "core.signal.serverCrashed": "開発サーバーがクラッシュしました。",
   "core.signal.commandDone": "{name} が終了しました。",
   "core.signal.commandFailed": "{name} が失敗しました。",
-  "core.signal.deps": "ガレージにインストール待ちのパッケージか未実行のマイグレーションがあります。"
+  "core.signal.deps": "ガレージにインストール待ちのパッケージか未実行のマイグレーションがあります。",
+  "core.radio.noEndpoint": "無線の回線を開けませんでした: {error}",
+  "core.radio.cliFailed": "Claude Code の応答: {error}",
+  "core.radio.cliSilent": "Claude Code から応答がありません。"
 }

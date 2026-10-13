@@ -364,6 +364,8 @@
   "setup.step.projectsHint": "Projeler klasöründe dev script'i olanlar bulunur.",
   "setup.step.hook": "Claude'un durumunu anında gör",
   "setup.step.hookHint": "Claude Code'a bir hook eklenir; izin istemleri de görünür.",
+  "setup.step.radio": "Claude Pitwall'a sorsun",
+  "setup.step.radioHint": "Takım radyosu: Claude Code sunucuyu kendisi başlatmak yerine Pitwall'a sorar.",
   "setup.step.extension": "VS Code'la birlikte",
   "setup.step.extensionHint": "Eklenti kuruluysa editörde başlayan sunucular burada görünür.",
   "setup.step.startup": "Kısayol ve açılış",
@@ -412,6 +414,8 @@
   "setup.hook.outdated": "Güncelleme var",
   "setup.hook.adds": "{settings} dosyasına eklenir; dosyadaki başka hiçbir şey değişmez.",
   "setup.hook.reports": "Hook yalnız Claude'un durumunu ve izin isteyen aracın adını bildirir; mesaj ya da komut iletmez.",
+  "setup.radio.adds": "Pitwall, Claude Code'un MCP sunucularına Claude Code'un kendi komutuyla eklenir ({command}); radyo kapatılınca çıkarılır.",
+  "setup.radio.acts": "Bir çağrı yalnız oturumun çalıştığı projede iş görür. Claude'un neler yapabileceği Ayarlar › Claude'dan seçilir.",
   "setup.ext.checking": "Denetleniyor…",
   "setup.ext.failed": "Eklenti denetlenemedi.",
   "setup.ext.recheck": "Yeniden denetle",
@@ -1147,6 +1151,39 @@
   "notifications.mute": "Bildirimleri sustur",
   "notifications.unmute": "Bildirimleri aç",
   "notifications.mutedMark": "Bildirimler susturuldu",
+  "radio.title": "Takım radyosu",
+  "radio.kind": "Claude MCP sunucusu",
+  "radio.hint": "Claude Code sunucuyu kendisi başlatmak yerine Pitwall'a sorar.",
+  "radio.on": "Açık",
+  "radio.off": "Kapalı",
+  "radio.onSessions": {
+    "one": "Açık · {count} oturum bağlı",
+    "other": "Açık · {count} oturum bağlı"
+  },
+  "radio.turnOn": "Radyoyu aç",
+  "radio.turnOff": "Radyoyu kapat",
+  "radio.missing": "Claude Code bulunamadı.",
+  "radio.tools": "Claude ne yapabilir",
+  "radio.scope": "Yalnız çalıştığı projede",
+  "radio.reads": "okur",
+  "radio.acts": "yapar",
+  "radio.tool.server_status": "Sunucunun durumu, adresi, portu, hata satırı",
+  "radio.tool.server_output": "Sunucu çıktısının son satırları",
+  "radio.tool.server_restart": "Sunucuyu başlatır, durdurur, yeniden başlatır",
+  "radio.tool.run_command": "Projenin kayıtlı komutlarını çalıştırır; \"Çalıştırmadan önce sor\" işaretliler hariç",
+  "radio.tool.board_add": "Panoda Sıradaki'ne kart ekler",
+  "radio.tool.board_note": "Kendi kartına not düşer, İncelenecek'e taşır",
+  "radio.calls": "Radyo",
+  "radio.callsToday": {
+    "one": "bugün {count} çağrı",
+    "other": "bugün {count} çağrı"
+  },
+  "radio.result.lines": {
+    "one": "{count} satır",
+    "other": "{count} satır"
+  },
+  "radio.result.card": "“{title}” · {column}",
+  "radio.result.refused": "Reddedildi",
   "output.search": "Çıktıda ara",
   "output.searchPrevious": "Önceki eşleşme",
   "output.searchNext": "Sonraki eşleşme",
@@ -1251,5 +1288,8 @@
   "core.signal.serverCrashed": "Dev sunucusu çöktü.",
   "core.signal.commandDone": "{name} bitti.",
   "core.signal.commandFailed": "{name} başarısız oldu.",
-  "core.signal.deps": "Garaj'da kurulacak paket ya da bekleyen migration var."
+  "core.signal.deps": "Garaj'da kurulacak paket ya da bekleyen migration var.",
+  "core.radio.noEndpoint": "Radyo hattı açılamadı: {error}",
+  "core.radio.cliFailed": "Claude Code'un yanıtı: {error}",
+  "core.radio.cliSilent": "Claude Code yanıt vermedi."
 }

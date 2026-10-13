@@ -110,7 +110,7 @@ fn replay(scrollback: &str, cut: bool, at: u64) -> String {
 
 /// The record's file, readable by the user alone: it holds what the terminals showed. Written
 /// beside it first and moved over it whole, so a quit in between leaves the one before (the
-/// phone's channel is kept this way too).
+/// phone's channel and the radio's endpoint are kept this way too).
 pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
     use std::io::Write;
 

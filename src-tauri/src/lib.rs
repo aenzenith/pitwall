@@ -28,6 +28,7 @@ mod usage;
 mod whatsnew;
 mod windows;
 mod presence;
+mod mcp;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -43,6 +44,7 @@ use crate::core::{Core, CoreConfig, CoreEvent};
 use crate::i18n::t;
 
 pub use crate::hooks::hook_mode;
+pub use crate::mcp::mcp_mode;
 
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";
@@ -303,6 +305,8 @@ pub fn run() {
 
             core.reap_orphans();
             core.record_app("start");
+            // The team radio's endpoint, when it is on.
+            core.radio_start();
             // After a restart for an update: the servers, tabs and Claude sessions it closed.
             let restored = core.restore();
             // After a quit: what was open, put back or offered as Settings says.
@@ -507,6 +511,11 @@ pub fn run() {
             commands::mute_project,
             commands::missed_open,
             commands::missed_clear,
+            commands::radio_tools,
+            commands::radio_state,
+            commands::radio_set,
+            commands::radio_tool,
+            commands::radio_calls,
             commands::open_reference
         ])
         .build(tauri::generate_context!())

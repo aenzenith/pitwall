@@ -100,6 +100,11 @@ impl Core {
         self.keep_line(path, job, line);
     }
 
+    /// Writes a marker into the project's server output.
+    pub(super) fn push_marker(&self, path: &str, kind: &str, detail: Option<&str>) {
+        self.keep_line(path, None, marker(kind, now_ms(), detail.unwrap_or_default()));
+    }
+
     /// Keeps a line and sends it on. A marker that says what the last line already says
     /// (Claude read the output once more) takes that one's place, so repeats never push the
     /// output itself out.
@@ -139,16 +144,21 @@ impl Core {
     /// no run before this one.
     pub(super) fn mark_run(&self, path: &str, job: Option<&str>) {
         let key = job.map_or_else(|| path.to_string(), |id| job_key(path, id));
-        let ended = {
+        let (ended, by_claude) = {
             let mut inner = self.lock();
             let ended = inner.ended.remove(&key);
+            // A server's run Claude asked for over the radio is told by Claude's own marker.
+            let by_claude = if job.is_none() { inner.asked_by_claude.remove(path) } else { None };
             let empty = inner.output.get(&key).is_none_or(|lines| lines.is_empty());
-            ended.filter(|_| !empty)
+            (ended.filter(|_| !empty), by_claude)
         };
 
         if let Some((at, detail)) = ended {
             self.keep_line(path, job, marker("ended", at, &detail));
             self.keep_line(path, job, marker("started", now_ms(), ""));
+        }
+        if let Some(kind) = by_claude {
+            self.keep_line(path, job, marker(kind, now_ms(), ""));
         }
     }
 
@@ -208,9 +218,11 @@ mod tests {
 
         core.push_line("/p", format!("{MARKER}claude-restart\t1\t"));
         core.push_output("/p", Some("queue"), format!("{MARKER}{MARKER}ended\t1\tcrashed:1"));
+        core.push_marker("/p", "claude-read", None);
 
         let server = core.output("/p");
         assert_eq!(server[0], "claude-restart\t1\t");
+        assert_eq!(marker_kind(&server[1]), Some("claude-read"), "the core's own is one");
         assert_eq!(core.command_output("/p", "queue"), ["ended\t1\tcrashed:1"]);
     }
 }

@@ -83,8 +83,10 @@ impl Core {
         self.route(path, Action::Start, false);
     }
 
-    /// `open_url`: a server started here opens its address, when Settings says so.
-    pub(super) fn route(self: &Arc<Self>, path: &str, action: Action, open_url: bool) {
+    /// `open_url`: a server started here opens its address, when Settings says so. Whether
+    /// anything came of it: not of a start of what runs already or that was refused (no such
+    /// script), nor of a stop of what doesn't run.
+    pub(super) fn route(self: &Arc<Self>, path: &str, action: Action, open_url: bool) -> bool {
         let (running_here, stoppable, runner, root_owner) = {
             let inner = self.lock();
             let runner = inner
@@ -100,21 +102,25 @@ impl Core {
         };
 
         match action {
-            Action::Start if running_here || runner.is_some() => {}
+            Action::Start if running_here || runner.is_some() => return false,
             Action::Start => match root_owner {
                 Some(owner) => self.registry.send(&owner, "start", path),
-                None => self.start(path, open_url),
+                None => {
+                    self.start(path, open_url);
+                    return self.lock().runs.contains_key(path);
+                }
             },
             Action::Stop if stoppable => self.stop(path),
             Action::Restart if stoppable => self.restart(path),
             Action::Stop | Action::Restart => {
                 if let Some(owner) = runner {
                     self.registry.send(&owner, action.as_str(), path);
-                } else if action == Action::Restart {
-                    self.route(path, Action::Start, open_url);
+                } else {
+                    return action == Action::Restart && self.route(path, Action::Start, open_url);
                 }
             }
         }
+        true
     }
 
     pub fn start_all(self: &Arc<Self>) {

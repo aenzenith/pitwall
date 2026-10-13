@@ -367,6 +367,8 @@
   "setup.step.projectsHint": "Se buscan los que tienen script de dev en tu carpeta de proyectos.",
   "setup.step.hook": "El estado de Claude, al instante",
   "setup.step.hookHint": "Se agrega un hook a Claude Code; también se ven las solicitudes de permiso.",
+  "setup.step.radio": "Que Claude pregunte a Pitwall",
+  "setup.step.radioHint": "Radio del equipo: Claude Code pregunta por el servidor de desarrollo en vez de iniciar uno.",
   "setup.step.extension": "Junto con VS Code",
   "setup.step.extensionHint": "Con la extensión, los servidores que inicias en el editor aparecen aquí.",
   "setup.step.startup": "Atajo e inicio",
@@ -421,6 +423,8 @@
   "setup.hook.outdated": "Actualización disponible",
   "setup.hook.adds": "Se agrega a {settings}; nada más cambia en el archivo.",
   "setup.hook.reports": "El hook solo comunica el estado de Claude y el nombre de la herramienta que pide permiso, nunca un mensaje ni un comando.",
+  "setup.radio.adds": "Pitwall se añade a los servidores MCP de Claude Code con el propio comando de Claude Code ({command}); al desactivar la radio se quita de nuevo.",
+  "setup.radio.acts": "Una llamada solo actúa en el proyecto en el que trabaja la sesión. Lo que Claude puede hacer se elige en Ajustes › Claude.",
   "setup.ext.checking": "Comprobando…",
   "setup.ext.failed": "No se pudo comprobar la extensión.",
   "setup.ext.recheck": "Comprobar de nuevo",
@@ -1190,6 +1194,39 @@
   "notifications.mute": "Silenciar notificaciones",
   "notifications.unmute": "Activar notificaciones",
   "notifications.mutedMark": "Notificaciones silenciadas",
+  "radio.title": "Radio del equipo",
+  "radio.kind": "Servidor MCP de Claude",
+  "radio.hint": "Claude Code le pregunta a Pitwall por el servidor de desarrollo en vez de iniciar uno.",
+  "radio.on": "Activa",
+  "radio.off": "Inactiva",
+  "radio.onSessions": {
+    "one": "Activa · {count} sesión conectada",
+    "other": "Activa · {count} sesiones conectadas"
+  },
+  "radio.turnOn": "Activar la radio",
+  "radio.turnOff": "Desactivar la radio",
+  "radio.missing": "No se encontró Claude Code.",
+  "radio.tools": "Qué puede hacer Claude",
+  "radio.scope": "Solo en el proyecto en el que trabaja",
+  "radio.reads": "lee",
+  "radio.acts": "actúa",
+  "radio.tool.server_status": "Estado, dirección, puerto y línea de error del servidor",
+  "radio.tool.server_output": "Las últimas líneas de la salida del servidor",
+  "radio.tool.server_restart": "Inicia, detiene y reinicia el servidor",
+  "radio.tool.run_command": "Ejecuta los comandos guardados del proyecto, salvo los marcados «Preguntar antes de ejecutar»",
+  "radio.tool.board_add": "Agrega una tarjeta en «Siguiente» del tablero",
+  "radio.tool.board_note": "Deja una nota en su propia tarjeta y la pasa a «Por revisar»",
+  "radio.calls": "Radio",
+  "radio.callsToday": {
+    "one": "{count} llamada hoy",
+    "other": "{count} llamadas hoy"
+  },
+  "radio.result.lines": {
+    "one": "{count} línea",
+    "other": "{count} líneas"
+  },
+  "radio.result.card": "«{title}» · {column}",
+  "radio.result.refused": "Rechazada",
   "output.search": "Buscar en la salida",
   "output.searchPrevious": "Coincidencia anterior",
   "output.searchNext": "Coincidencia siguiente",
@@ -1294,5 +1331,8 @@
   "core.signal.serverCrashed": "El servidor de desarrollo se cayó.",
   "core.signal.commandDone": "{name} terminó.",
   "core.signal.commandFailed": "{name} falló.",
-  "core.signal.deps": "En el Garaje hay paquetes por instalar o una migración pendiente."
+  "core.signal.deps": "En el Garaje hay paquetes por instalar o una migración pendiente.",
+  "core.radio.noEndpoint": "La radio no pudo abrir su línea: {error}",
+  "core.radio.cliFailed": "Claude Code respondió: {error}",
+  "core.radio.cliSilent": "Claude Code no respondió."
 }

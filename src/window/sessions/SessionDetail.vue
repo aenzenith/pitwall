@@ -16,6 +16,7 @@ import { snapshot } from "../../lib/store";
 import type { SessionRow, TerminalView } from "../../lib/types";
 import CardImages from "../board/CardImages.vue";
 import OriginLabel from "./OriginLabel.vue";
+import RadioCalls from "./RadioCalls.vue";
 import SessionDay from "./SessionDay.vue";
 import SessionNotice from "./SessionNotice.vue";
 import SessionTerminal from "./SessionTerminal.vue";
@@ -198,6 +199,8 @@ const fuel = computed(() => {
         </template>
         <span v-else class="note">{{ t("sessions.fuel.none") }}</span>
       </section>
+
+      <RadioCalls v-if="!period" :session="row.id" />
 
       <!-- What Claude last said, with its terminal or without. A terminal shows the conversation
            itself, so the line on what is shown of it goes. -->

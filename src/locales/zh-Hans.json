@@ -362,6 +362,8 @@
   "setup.step.projectsHint": "在项目文件夹中找出带有 dev 脚本的项目。",
   "setup.step.hook": "即时看到 Claude 的状态",
   "setup.step.hookHint": "为 Claude Code 添加一个 Hook；授权请求也会显示。",
+  "setup.step.radio": "让 Claude 询问 Pitwall",
+  "setup.step.radioHint": "车队无线电：Claude Code 向 Pitwall 询问开发服务器，而不是自己启动。",
   "setup.step.extension": "与 VS Code 配合",
   "setup.step.extensionHint": "装了扩展，在编辑器里启动的服务器也会显示在这里。",
   "setup.step.startup": "快捷键与启动",
@@ -404,6 +406,8 @@
   "setup.hook.outdated": "有可用更新",
   "setup.hook.adds": "它会写入 {settings}；文件中的其他内容不变。",
   "setup.hook.reports": "Hook 只传递 Claude 的状态和请求授权的工具名称，绝不传递消息或命令。",
+  "setup.radio.adds": "Pitwall 通过 Claude Code 自己的命令（{command}）添加到它的 MCP 服务器中；关闭无线电时会移除。",
+  "setup.radio.acts": "调用只作用于会话所在的项目。Claude 能做什么，在“设置 › Claude”中选择。",
   "setup.ext.checking": "正在检查…",
   "setup.ext.failed": "无法检查扩展。",
   "setup.ext.recheck": "重新检查",
@@ -1116,6 +1120,36 @@
   "notifications.mute": "静音通知",
   "notifications.unmute": "取消静音",
   "notifications.mutedMark": "通知已静音",
+  "radio.title": "车队无线电",
+  "radio.kind": "Claude 的 MCP 服务器",
+  "radio.hint": "Claude Code 向 Pitwall 询问开发服务器，而不是自己启动。",
+  "radio.on": "已开启",
+  "radio.off": "已关闭",
+  "radio.onSessions": {
+    "other": "已开启 · 已连接 {count} 个会话"
+  },
+  "radio.turnOn": "开启无线电",
+  "radio.turnOff": "关闭无线电",
+  "radio.missing": "未找到 Claude Code。",
+  "radio.tools": "Claude 能做什么",
+  "radio.scope": "仅限它所在的项目",
+  "radio.reads": "读取",
+  "radio.acts": "操作",
+  "radio.tool.server_status": "服务器的状态、地址、端口和错误行",
+  "radio.tool.server_output": "服务器输出的最后几行",
+  "radio.tool.server_restart": "启动、停止和重启服务器",
+  "radio.tool.run_command": "运行项目已保存的命令，标记为“运行前询问”的除外",
+  "radio.tool.board_add": "在看板的“待办”中添加卡片",
+  "radio.tool.board_note": "在自己的卡片上留备注，并移到“待审查”",
+  "radio.calls": "无线电",
+  "radio.callsToday": {
+    "other": "今天 {count} 次调用"
+  },
+  "radio.result.lines": {
+    "other": "{count} 行"
+  },
+  "radio.result.card": "“{title}” · {column}",
+  "radio.result.refused": "已拒绝",
   "output.search": "在输出中搜索",
   "output.searchPrevious": "上一个匹配",
   "output.searchNext": "下一个匹配",
@@ -1219,5 +1253,8 @@
   "core.signal.serverCrashed": "开发服务器崩溃了。",
   "core.signal.commandDone": "{name} 已完成。",
   "core.signal.commandFailed": "{name} 失败了。",
-  "core.signal.deps": "车库里有待安装的包或待执行的迁移。"
+  "core.signal.deps": "车库里有待安装的包或待执行的迁移。",
+  "core.radio.noEndpoint": "无线电无法打开线路：{error}",
+  "core.radio.cliFailed": "Claude Code 的回答：{error}",
+  "core.radio.cliSilent": "Claude Code 没有回答。"
 }

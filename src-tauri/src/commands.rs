@@ -893,6 +893,40 @@ pub fn missed_clear(state: State<'_, AppState>) {
     state.core.missed_clear();
 }
 
+/* ---------- the team radio: Pitwall as Claude Code's MCP server ---------- */
+
+/// The tools there are, for their rows in Settings: the core's own list, answered at once.
+#[tauri::command]
+pub fn radio_tools() -> Vec<crate::core::RadioTool> {
+    crate::core::radio_tools()
+}
+
+/// The radio as Claude Code has it. It asks Claude Code's CLI, so it runs off the main thread.
+#[tauri::command]
+pub async fn radio_state(app: AppHandle) -> Result<crate::core::RadioState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.radio_state()).await.map_err(|error| error.to_string())
+}
+
+/// Turns the radio on (Pitwall is added to Claude Code's MCP servers) or off (it is taken out).
+#[tauri::command]
+pub async fn radio_set(app: AppHandle, on: bool) -> Result<crate::core::RadioState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.radio_set(on)).await.map_err(|error| error.to_string())?
+}
+
+/// One tool's switch.
+#[tauri::command]
+pub fn radio_tool(state: State<'_, AppState>, name: String, on: bool) -> Result<(), String> {
+    state.core.radio_tool(&name, on)
+}
+
+/// Today's calls of a session over the radio, the newest first.
+#[tauri::command]
+pub fn radio_calls(state: State<'_, AppState>, session: String) -> Vec<crate::core::RadioCall> {
+    state.core.radio_calls(&session)
+}
+
 /* ---------- the output pane ---------- */
 
 /// Opens the file an output line names (`file`, as it was printed) in the editor at `line`:

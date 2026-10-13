@@ -179,6 +179,28 @@ impl Default for Notifications {
     }
 }
 
+/// The team radio (`core/radio`): what a Claude Code session may ask Pitwall, and do through it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RadioSettings {
+    /// Its endpoint is open, and Pitwall is one of Claude Code's MCP servers.
+    pub on: bool,
+    /// Each tool's switch, by the tool's name (`mcp::TOOLS`). One not named here is off.
+    pub tools: BTreeMap<String, bool>,
+}
+
+impl Default for RadioSettings {
+    fn default() -> Self {
+        Self { on: false, tools: crate::mcp::TOOLS.iter().map(|tool| (tool.name.to_string(), tool.default_on)).collect() }
+    }
+}
+
+impl RadioSettings {
+    pub fn allows(&self, tool: &str) -> bool {
+        self.tools.get(tool).copied().unwrap_or(false)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -253,6 +275,9 @@ pub struct Settings {
     /// What is told, the quiet hours and the muted projects (`core/signals.rs`).
     #[serde(default)]
     pub notifications: Notifications,
+    /// The team radio: whether it is on, and what Claude may do over it.
+    #[serde(default)]
+    pub radio: RadioSettings,
 }
 
 impl Default for Settings {
@@ -289,6 +314,7 @@ impl Default for Settings {
             suggest_projects: false,
             seen_folders: Vec::new(),
             notifications: Notifications::default(),
+            radio: RadioSettings::default(),
         }
     }
 }

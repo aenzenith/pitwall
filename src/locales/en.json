@@ -365,6 +365,8 @@
   "setup.step.projectsHint": "Those in your projects folder with a dev script.",
   "setup.step.hook": "See Claude's state at once",
   "setup.step.hookHint": "A hook is added to Claude Code; permission prompts show too.",
+  "setup.step.radio": "Let Claude ask Pitwall",
+  "setup.step.radioHint": "Team radio: Claude Code asks about the dev server instead of starting one.",
   "setup.step.extension": "Together with VS Code",
   "setup.step.extensionHint": "With the extension, servers started in the editor show here.",
   "setup.step.startup": "Shortcut and startup",
@@ -413,6 +415,8 @@
   "setup.hook.outdated": "Update ready",
   "setup.hook.adds": "It is added to {settings}; nothing else in the file changes.",
   "setup.hook.reports": "The hook passes on only Claude's state and the name of the tool that asks for permission, never a message or a command.",
+  "setup.radio.adds": "Pitwall is added to Claude Code's MCP servers with Claude Code's own command ({command}); turning the radio off takes it out again.",
+  "setup.radio.acts": "A call acts only on the project the session works in. What Claude can do is chosen in Settings › Claude.",
   "setup.ext.checking": "Checking…",
   "setup.ext.failed": "The extension couldn't be checked.",
   "setup.ext.recheck": "Check again",
@@ -1160,6 +1164,39 @@
   "notifications.mute": "Mute notifications",
   "notifications.unmute": "Unmute notifications",
   "notifications.mutedMark": "Notifications muted",
+  "radio.title": "Team radio",
+  "radio.kind": "Claude MCP server",
+  "radio.hint": "Claude Code asks Pitwall about the dev server instead of starting one.",
+  "radio.on": "On",
+  "radio.off": "Off",
+  "radio.onSessions": {
+    "one": "On · {count} session connected",
+    "other": "On · {count} sessions connected"
+  },
+  "radio.turnOn": "Turn radio on",
+  "radio.turnOff": "Turn radio off",
+  "radio.missing": "Claude Code wasn't found.",
+  "radio.tools": "What Claude can do",
+  "radio.scope": "Only in the project it works in",
+  "radio.reads": "reads",
+  "radio.acts": "acts",
+  "radio.tool.server_status": "The server's state, address, port and error line",
+  "radio.tool.server_output": "The last lines of the server's output",
+  "radio.tool.server_restart": "Starts, stops and restarts the server",
+  "radio.tool.run_command": "Runs the project's saved commands, except those marked \"Ask before running\"",
+  "radio.tool.board_add": "Adds a card to “Up next” on the board",
+  "radio.tool.board_note": "Leaves a note on its own card and moves it to “To review”",
+  "radio.calls": "Radio",
+  "radio.callsToday": {
+    "one": "{count} call today",
+    "other": "{count} calls today"
+  },
+  "radio.result.lines": {
+    "one": "{count} line",
+    "other": "{count} lines"
+  },
+  "radio.result.card": "“{title}” · {column}",
+  "radio.result.refused": "Refused",
   "output.search": "Search the output",
   "output.searchPrevious": "Previous match",
   "output.searchNext": "Next match",
@@ -1264,5 +1301,8 @@
   "core.signal.serverCrashed": "The dev server crashed.",
   "core.signal.commandDone": "{name} finished.",
   "core.signal.commandFailed": "{name} failed.",
-  "core.signal.deps": "Packages to install or a pending migration in the Garage."
+  "core.signal.deps": "Packages to install or a pending migration in the Garage.",
+  "core.radio.noEndpoint": "The radio couldn't open its line: {error}",
+  "core.radio.cliFailed": "Claude Code answered: {error}",
+  "core.radio.cliSilent": "Claude Code didn't answer."
 }

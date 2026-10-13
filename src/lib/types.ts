@@ -144,6 +144,8 @@ export type Settings = {
   /** What is told, the quiet hours and the muted projects; changed through their own commands
    * only (lib/quiet). */
   notifications?: NotificationSettings;
+  /** The team radio; changed through the `radio*` commands only. */
+  radio?: RadioSettings;
 };
 
 /** An open project terminal. */
@@ -180,6 +182,8 @@ export type Snapshot = {
   quiet: Quiet | null;
   /** What the user wasn't told meanwhile, newest first. */
   missed: Missed[];
+  /** How many calls came over the team radio: when it moves, a session's calls are asked for again. */
+  radioCalls?: number;
 };
 
 /* ---------- First run and the projects folder (discover_projects, add_projects) ---------- */
@@ -618,3 +622,29 @@ export type NotificationSettings = {
   /** While quiet, the sounds are held too. */
   soundsToo: boolean;
 };
+
+/* ---------- The team radio: Claude Code asks Pitwall (radio_tools, radio_state, radio_set, radio_tool, radio_calls) ---------- */
+
+/** The radio's own settings: on or off, and each tool's switch by the tool's name. */
+export type RadioSettings = { on: boolean; tools: Record<string, boolean> };
+
+/** One tool of the radio, as the core lists it: it `acts` or only reads. Its switch is the
+ * settings' (`RadioSettings.tools`). */
+export type RadioTool = { name: string; acts: boolean };
+
+/** The radio as Claude Code has it. `unsupported`: not on this system. `missing`: Claude Code's CLI
+ * wasn't found. `sessions`: Claude Code sessions with a line to Pitwall right now. */
+export type RadioState = { status: "on" | "off" | "unsupported"; missing: boolean; sessions: number };
+
+/** What came of a call over the radio, for its session's list: the server as it was answered,
+ * lines of output read, a card added, a note left on the session's card, a saved command run. */
+export type RadioResult =
+  | { kind: "status"; status: Status; port: number | null; issue: string | null }
+  | { kind: "lines"; count: number }
+  | { kind: "card"; title: string }
+  | { kind: "noted" }
+  | { kind: "ran"; name: string }
+  | { kind: "refused" };
+
+/** One call a session made over the radio. */
+export type RadioCall = { at: number; tool: string; result: RadioResult };

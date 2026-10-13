@@ -91,6 +91,9 @@ pub struct Snapshot {
     pub quiet: Option<QuietView>,
     /// What the user wasn't told meanwhile, newest first.
     pub missed: Vec<Missed>,
+    /// How many calls came over the team radio: when it moves, a session's calls are asked for
+    /// again (`radio`). The calls themselves are no part of the snapshot.
+    pub radio_calls: u64,
 }
 
 impl Core {
@@ -296,5 +299,6 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         quiet: super::signals::quiet_at(&inner.settings.notifications, now_ms()),
         missed: super::signals::listed(&inner.missed, &projects),
         projects,
+        radio_calls: inner.radio.noted,
     }
 }

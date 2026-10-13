@@ -365,6 +365,8 @@
   "setup.step.projectsHint": "Im Projektordner werden die mit Dev-Skript gefunden.",
   "setup.step.hook": "Claudes Status sofort sehen",
   "setup.step.hookHint": "Claude Code bekommt einen Hook; auch Berechtigungsabfragen erscheinen.",
+  "setup.step.radio": "Claude fragt Pitwall",
+  "setup.step.radioHint": "Teamfunk: Claude Code fragt nach dem Dev-Server, statt selbst einen zu starten.",
   "setup.step.extension": "Zusammen mit VS Code",
   "setup.step.extensionHint": "Mit der Erweiterung erscheinen hier die Server, die im Editor starten.",
   "setup.step.startup": "Kurzbefehl und Start",
@@ -413,6 +415,8 @@
   "setup.hook.outdated": "Update verfügbar",
   "setup.hook.adds": "Er wird in {settings} eingetragen; sonst ändert sich in der Datei nichts.",
   "setup.hook.reports": "Der Hook meldet nur Claudes Status und den Namen des Tools, das um Erlaubnis fragt, nie eine Nachricht oder einen Befehl.",
+  "setup.radio.adds": "Pitwall wird mit Claude Codes eigenem Befehl ({command}) zu dessen MCP-Servern hinzugefügt; beim Ausschalten des Funks wird es wieder entfernt.",
+  "setup.radio.acts": "Ein Aufruf wirkt nur im Projekt, in dem die Sitzung arbeitet. Was Claude tun kann, wird unter Einstellungen › Claude gewählt.",
   "setup.ext.checking": "Wird geprüft …",
   "setup.ext.failed": "Die Erweiterung konnte nicht geprüft werden.",
   "setup.ext.recheck": "Erneut prüfen",
@@ -1160,6 +1164,39 @@
   "notifications.mute": "Benachrichtigungen stummschalten",
   "notifications.unmute": "Stummschaltung aufheben",
   "notifications.mutedMark": "Benachrichtigungen stummgeschaltet",
+  "radio.title": "Teamfunk",
+  "radio.kind": "Claude-MCP-Server",
+  "radio.hint": "Claude Code fragt Pitwall nach dem Dev-Server, statt selbst einen zu starten.",
+  "radio.on": "Ein",
+  "radio.off": "Aus",
+  "radio.onSessions": {
+    "one": "Ein · {count} Sitzung verbunden",
+    "other": "Ein · {count} Sitzungen verbunden"
+  },
+  "radio.turnOn": "Funk einschalten",
+  "radio.turnOff": "Funk ausschalten",
+  "radio.missing": "Claude Code wurde nicht gefunden.",
+  "radio.tools": "Was Claude tun kann",
+  "radio.scope": "Nur im Projekt, in dem es arbeitet",
+  "radio.reads": "liest",
+  "radio.acts": "handelt",
+  "radio.tool.server_status": "Status, Adresse, Port und Fehlerzeile des Servers",
+  "radio.tool.server_output": "Die letzten Zeilen der Serverausgabe",
+  "radio.tool.server_restart": "Startet, stoppt und startet den Server neu",
+  "radio.tool.run_command": "Führt gespeicherte Befehle des Projekts aus, außer denen mit „Vor dem Ausführen fragen“",
+  "radio.tool.board_add": "Legt im Board eine Karte unter „Als Nächstes“ an",
+  "radio.tool.board_note": "Notiert auf der eigenen Karte und schiebt sie nach „Zu prüfen“",
+  "radio.calls": "Funk",
+  "radio.callsToday": {
+    "one": "{count} Aufruf heute",
+    "other": "{count} Aufrufe heute"
+  },
+  "radio.result.lines": {
+    "one": "{count} Zeile",
+    "other": "{count} Zeilen"
+  },
+  "radio.result.card": "„{title}“ · {column}",
+  "radio.result.refused": "Abgelehnt",
   "output.search": "Ausgabe durchsuchen",
   "output.searchPrevious": "Vorheriger Treffer",
   "output.searchNext": "Nächster Treffer",
@@ -1264,5 +1301,8 @@
   "core.signal.serverCrashed": "Der Dev-Server ist abgestürzt.",
   "core.signal.commandDone": "{name} ist beendet.",
   "core.signal.commandFailed": "{name} ist fehlgeschlagen.",
-  "core.signal.deps": "In der Garage sind Pakete zu installieren oder eine Migration steht aus."
+  "core.signal.deps": "In der Garage sind Pakete zu installieren oder eine Migration steht aus.",
+  "core.radio.noEndpoint": "Der Funk konnte seine Leitung nicht öffnen: {error}",
+  "core.radio.cliFailed": "Claude Code antwortete: {error}",
+  "core.radio.cliSilent": "Claude Code hat nicht geantwortet."
 }

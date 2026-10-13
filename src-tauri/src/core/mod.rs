@@ -53,6 +53,7 @@ mod supervise;
 mod teams;
 mod terminal;
 mod watch;
+mod radio;
 mod reference;
 pub use activity::DaySummary;
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
@@ -68,6 +69,7 @@ pub use sessions::SessionsView;
 pub use snapshot::Snapshot;
 pub use relay::{PhoneConfig, PhoneView};
 pub use signals::{plain_banner, Missed, QuietFor, QuietView, SignalKind};
+pub use radio::{radio_tools, RadioCall, RadioState, RadioTool};
 use jobs::{job_key, Job, JobResult};
 use output::Outbox;
 use peers::Tail;
@@ -191,9 +193,14 @@ struct Inner {
     long_turns: HashMap<String, u64>,
     /// What the Garage's checks said last, to tell of what newly waits.
     deps_known: signals::DepsKnown,
+    /// The team radio: its endpoint while it is open, and the calls of the day (`radio`).
+    radio: radio::Radio,
     /// How each output's last run ended, and when, by the output's key: written into it as a
     /// marker when the next run starts (`output.rs`).
     ended: HashMap<String, (u64, String)>,
+    /// A start or restart Claude asked for over the radio whose run hasn't begun, by project:
+    /// the marker that run is told by, written where it begins (`output.rs`: `mark_run`).
+    asked_by_claude: HashMap<String, &'static str>,
 }
 
 pub struct Core {
