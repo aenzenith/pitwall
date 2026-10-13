@@ -25,21 +25,24 @@ pub fn find_free_port(from: u16, tries: u16) -> Option<u16> {
 
 #[derive(Default)]
 pub struct Reservations {
-    handed_out: HashMap<u16, Instant>,
+    /// Each port handed out: when, and to which project.
+    handed_out: HashMap<u16, (Instant, String)>,
 }
 
 impl Reservations {
-    /// The first port at or above `from` that nothing listens on and that wasn't just handed out.
-    pub fn reserve_free(&mut self, from: u16) -> Option<u16> {
-        self.handed_out.retain(|_, at| at.elapsed() < RESERVATION);
+    /// The first port at or above `from` that nothing listens on and that wasn't just handed out
+    /// to another project. `holder` (the project's folder) gets its own port again: a server
+    /// restarted right after its start keeps its address.
+    pub fn reserve_free(&mut self, from: u16, holder: &str) -> Option<u16> {
+        self.handed_out.retain(|_, (at, _)| at.elapsed() < RESERVATION);
 
         let mut candidate = from;
 
         for _ in 0..40 {
             let free = find_free_port(candidate, 40)?;
 
-            if let std::collections::hash_map::Entry::Vacant(slot) = self.handed_out.entry(free) {
-                slot.insert(Instant::now());
+            if self.handed_out.get(&free).is_none_or(|(_, held_by)| held_by == holder) {
+                self.handed_out.insert(free, (Instant::now(), holder.to_string()));
                 return Some(free);
             }
 
@@ -61,11 +64,13 @@ mod tests {
         let busy = listener.local_addr().unwrap().port();
         let mut reservations = Reservations::default();
 
-        let first = reservations.reserve_free(busy).unwrap();
-        let second = reservations.reserve_free(busy).unwrap();
+        let first = reservations.reserve_free(busy, "/projects/one").unwrap();
+        let second = reservations.reserve_free(busy, "/projects/two").unwrap();
 
         assert_ne!(first, busy);
         assert_ne!(second, busy);
         assert_ne!(first, second);
+        // A restart right after the start: the project's own port, not the next one.
+        assert_eq!(reservations.reserve_free(busy, "/projects/one"), Some(first));
     }
 }

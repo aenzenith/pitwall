@@ -90,7 +90,7 @@ impl Core {
 
         let (args, port) = if extra_args.is_empty() {
             let base = project.port.filter(|p| *p > 0).unwrap_or_else(|| vite_port(path));
-            let free = self.reservations.lock().ok().and_then(|mut r| r.reserve_free(base));
+            let free = self.reservations.lock().ok().and_then(|mut r| r.reserve_free(base, path));
 
             match free {
                 Some(free) if free != base => (vec!["--port".to_string(), free.to_string()], Some(free)),
@@ -207,7 +207,7 @@ impl Core {
             let path = path.to_string();
 
             thread::spawn(move || {
-                let free = core.reservations.lock().ok().and_then(|mut r| r.reserve_free(port.saturating_add(1)));
+                let free = core.reservations.lock().ok().and_then(|mut r| r.reserve_free(port.saturating_add(1), &path));
                 if let Some(free) = free {
                     core.stop_server(&path);
                     core.launch(&path, false, vec!["--port".into(), free.to_string()]);

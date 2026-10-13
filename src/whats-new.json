@@ -126,6 +126,27 @@
         "ja": "Retina ディスプレイと外部ディスプレイを並べて使っていると、メニューバーのウインドウがアイコンから離れた別のディスプレイに開くことがありました。クリックしたアイコンの下に開くようになりました。",
         "zh-Hans": "同时使用 Retina 显示屏和外接显示器时，菜单栏窗口有时会在另一块屏幕上打开，远离图标。现在会在你点击的图标下方打开。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "A restart keeps its port",
+        "tr": "Yeniden başlatmada aynı port",
+        "de": "Neustart behält den Port",
+        "es": "El reinicio conserva el puerto",
+        "ru": "Перезапуск сохраняет порт",
+        "ja": "再起動してもポートはそのまま",
+        "zh-Hans": "重启后端口不变"
+      },
+      "body": {
+        "en": "A dev server restarted within a minute of its start came back on the next port. It keeps its port now.",
+        "tr": "Başlatıldıktan sonraki bir dakika içinde yeniden başlatılan sunucu bir sonraki porta geçiyordu. Artık kendi portunda kalıyor.",
+        "de": "Ein Dev-Server, der innerhalb einer Minute nach dem Start neu gestartet wurde, kam auf dem nächsten Port zurück. Er behält jetzt seinen Port.",
+        "es": "Un servidor de desarrollo reiniciado en el primer minuto tras arrancar volvía en el puerto siguiente. Ahora conserva su puerto.",
+        "ru": "Dev-сервер, перезапущенный в первую минуту после запуска, возвращался на следующем порту. Теперь он сохраняет свой порт.",
+        "ja": "起動から 1 分以内に再起動した開発サーバーが、次のポートで立ち上がっていました。同じポートのままになりました。",
+        "zh-Hans": "开发服务器在启动后一分钟内重启时，会换到下一个端口。现在保持原端口。"
+      }
     }
   ]
 }
