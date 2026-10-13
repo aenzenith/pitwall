@@ -94,17 +94,7 @@ impl Core {
     }
 
     fn push_job_line(&self, path: &str, id: &str, line: String) {
-        let key = job_key(path, id);
-        {
-            let mut inner = self.lock();
-            let lines = inner.output.entry(key).or_default();
-            lines.push_back(line.clone());
-            while lines.len() > OUTPUT_LINES {
-                lines.pop_front();
-            }
-        }
-
-        self.send_output(path, Some(id), line);
+        self.push_output(path, Some(id), line);
     }
 
     fn finish_job(self: &Arc<Self>, path: &str, id: &str, result: JobResult) {
@@ -129,32 +119,28 @@ impl Core {
         self.deps_job_done(path, id);
     }
 
-    /// Runs a project's command. A run by hand starts a fresh output and restart series.
+    /// Runs a project's command. A run by hand starts a fresh restart series.
     pub fn run_command(self: &Arc<Self>, path: &str, id: &str) {
         self.lock().supervisor.reset_attempts(&job_key(path, id));
-        self.spawn_job(path, id, true);
+        self.spawn_job(path, id);
     }
 
-    pub(super) fn spawn_job(self: &Arc<Self>, path: &str, id: &str, fresh: bool) {
+    pub(super) fn spawn_job(self: &Arc<Self>, path: &str, id: &str) {
         let Some(command) = self.custom_command(path, id) else {
             return;
         };
-        self.spawn_job_line(path, id, Some(&command.name), &command.command, fresh);
+        self.spawn_job_line(path, id, Some(&command.name), &command.command);
     }
 
     /// Runs `command_line` as the project's job `id`: a custom command (`name` is its name, for
     /// the day's timeline) or one of the app's own (`dependencies.rs`). False when it never got
     /// going (another start of it, a stop, quitting); otherwise its end reaches `finish_job`.
-    pub(super) fn spawn_job_line(self: &Arc<Self>, path: &str, id: &str, name: Option<&str>, command_line: &str, fresh: bool) -> bool {
+    pub(super) fn spawn_job_line(self: &Arc<Self>, path: &str, id: &str, name: Option<&str>, command_line: &str) -> bool {
         let unit = Unit::Command(path.to_string(), id.to_string());
         let Some(start) = self.begin_start(&unit) else {
             return false;
         };
         let key = job_key(path, id);
-
-        if fresh {
-            self.lock().output.insert(key.clone(), VecDeque::new());
-        }
 
         let failed = |code| JobResult { ok: false, code, stopped: false, finished_at: now_ms() };
 
@@ -182,6 +168,8 @@ impl Core {
             return false;
         };
 
+        // The run before stays in the output, above these.
+        self.mark_run(path, Some(id));
         self.push_job_line(path, id, format!("$ {command_line}"));
         if let Some(name) = name {
             self.record_command(path, name, "running");
@@ -213,10 +201,8 @@ impl Core {
     ) {
         let code = status.and_then(|s| s.code());
         let ok = code == Some(0);
-        let text = code.map(|c| c.to_string()).unwrap_or_else(|| "-".into());
 
-        let line = if planned { t!("core.log.stopped", code = text) } else { t!("core.log.exited", code = text) };
-        self.push_job_line(path, id, format!("[pitwall] {line}"));
+        // The output says how it ended already (`output::end_line`, kept as the run was taken out).
         self.flush_output();
         self.finish_job(path, id, JobResult { ok: ok || planned, code, stopped: planned, finished_at: now_ms() });
 
@@ -272,6 +258,6 @@ impl Core {
     }
 
     pub fn command_output(&self, path: &str, id: &str) -> Vec<String> {
-        self.lock().output.get(&job_key(path, id)).map(|lines| lines.iter().cloned().collect()).unwrap_or_default()
+        self.read_output(&job_key(path, id))
     }
 }

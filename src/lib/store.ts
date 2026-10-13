@@ -424,6 +424,11 @@ export const api = {
   /** Opens what a missed notification was about; its line goes. */
   missedOpen: (path: string, kind: SignalKind) => invoke("missed_open", { path, kind }),
   missedClear: () => invoke("missed_clear"),
+
+  /* The output pane (core/reference.rs). */
+  /** Opens the file an output line names (`file`, as printed) in the editor, at its line. The
+   * core finds it, in the project's folder only: false when the project has no such file. */
+  openReference: (path: string, file: string, line: number, column: number | null) => invoke<boolean>("open_reference", { path, file, line, column }),
 };
 
 /** The Track page's settings as just picked, on the page or in Settings: shown at once, the core

@@ -892,3 +892,14 @@ pub fn missed_open(app: AppHandle, state: State<'_, AppState>, path: String, kin
 pub fn missed_clear(state: State<'_, AppState>) {
     state.core.missed_clear();
 }
+
+/* ---------- the output pane ---------- */
+
+/// Opens the file an output line names (`file`, as it was printed) in the editor at `line`:
+/// only a file of the project at `path` (`Core::open_reference`). False when there is none.
+/// It may look through the project's folder, so it runs off the main thread.
+#[tauri::command]
+pub async fn open_reference(app: AppHandle, path: String, file: String, line: u32, column: Option<u32>) -> bool {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.open_reference(&path, &file, line, column)).await.unwrap_or(false)
+}

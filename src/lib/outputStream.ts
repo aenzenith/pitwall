@@ -1,10 +1,10 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { onBeforeUnmount, shallowRef, toValue, type MaybeRefOrGetter, type ShallowRef } from "vue";
 
+import { lineReader, type OutputLine } from "./outputLines";
 import { api } from "./store";
 
-/** An output line; `id` only grows, so a line keeps its key as older ones scroll out. */
-export type OutputLine = { id: number; text: string; kind: "cmd" | "sys" | null };
+export type { OutputLine };
 
 /** The pane keeps the newest lines only, as the core does. */
 const MAX_LINES = 500;
@@ -32,31 +32,41 @@ function overlap(fetched: string[], late: string[]): number {
  *   arrive while it is on its way are added after its answer, less those it already had.
  * - Only the newest `load()` counts: an older one's answer is dropped.
  * - A batch of lines is one update, and the newest MAX_LINES are kept.
+ * - Each line is read once, as it arrives (lib/outputLines): what it is doesn't change after.
+ * - `runStart` is the id of the newest "started" marker (0 without one): the lines before it are
+ *   of a run before.
  */
 export function useOutputStream(
   path: MaybeRefOrGetter<string>,
   job: MaybeRefOrGetter<string | null>,
-): { lines: ShallowRef<OutputLine[]>; load: () => Promise<void> } {
+): { lines: ShallowRef<OutputLine[]>; runStart: ShallowRef<number>; load: () => Promise<void> } {
   const lines = shallowRef<OutputLine[]>([]);
+  const runStart = shallowRef(0);
 
   let lineSeq = 0;
+  /** Reads this output's lines in order; a new one for every `load`. */
+  let read = lineReader();
   /** Lines that arrive while `get_output` is on its way, added after its answer. */
   let arriving: string[] | null = null;
   /** The newest `load`: an older one's answer is dropped. */
   let outputLoad = 0;
 
   function toLines(texts: string[]): OutputLine[] {
-    return texts.map((text) => ({
-      id: ++lineSeq,
-      text,
-      kind: text.startsWith("$ ") ? "cmd" : text.startsWith("[pitwall]") ? "sys" : null,
-    }));
+    const made: OutputLine[] = [];
+    for (const text of texts) {
+      const line = read(text, ++lineSeq);
+      if (!line) continue;
+      if (line.marker?.kind === "started") runStart.value = line.id;
+      made.push(line);
+    }
+    return made;
   }
 
   /** A whole batch in one update. */
   function append(texts: string[]): void {
-    if (!texts.length) return;
-    const next = lines.value.concat(toLines(texts));
+    const made = toLines(texts);
+    if (!made.length) return;
+    const next = lines.value.concat(made);
     lines.value = next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
   }
 
@@ -87,6 +97,8 @@ export function useOutputStream(
 
     const late = arriving ?? [];
     arriving = null;
+    read = lineReader();
+    runStart.value = 0;
     lines.value = toLines(fetched.slice(-MAX_LINES));
     append(late.slice(overlap(fetched, late)));
   }
@@ -95,5 +107,5 @@ export function useOutputStream(
     void listening.then((unlisten: UnlistenFn) => unlisten());
   });
 
-  return { lines, load };
+  return { lines, runStart, load };
 }

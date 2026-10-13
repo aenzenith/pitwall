@@ -15,13 +15,14 @@ import CardImages from "./CardImages.vue";
  * Writes a card, or edits one (`card`): a title (needed) and a note. A new card goes to `path`;
  * without one it asks which of `projects` (`suggested` first chosen), and it never goes to a folder
  * that isn't one of them. Enter in the title or ⌘↵ anywhere saves; Esc, Cancel or a click outside
- * closes without saving.
+ * closes without saving. `prefill`: what a new card starts from (an error of the output), to be
+ * changed or saved as it is.
  *
  * An image pasted into the note becomes `[Image #n]` at the caret, as in Claude Code's prompt,
  * and shows under the note; it goes to Claude with the card's text. It stays the card's while the
  * note names it.
  */
-const props = defineProps<{ card: Card | null; path: string | null; suggested?: string | null; projects: Array<{ path: string; name: string }> }>();
+const props = defineProps<{ card: Card | null; path: string | null; suggested?: string | null; projects: Array<{ path: string; name: string }>; prefill?: { title: string; note: string } }>();
 const emit = defineEmits<{ added: [card: Card]; close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
@@ -30,7 +31,7 @@ useReturnFocus();
 const titleInput = ref<HTMLInputElement | null>(null);
 const noteInput = ref<HTMLTextAreaElement | null>(null);
 
-const draft = ref({ title: props.card?.title ?? "", note: props.card?.note ?? "", path: props.card?.path ?? props.path ?? props.suggested ?? props.projects[0]?.path ?? "" });
+const draft = ref({ title: props.card?.title ?? props.prefill?.title ?? "", note: props.card?.note ?? props.prefill?.note ?? "", path: props.card?.path ?? props.path ?? props.suggested ?? props.projects[0]?.path ?? "" });
 const error = ref("");
 const saving = ref(false);
 
@@ -58,7 +59,7 @@ watch(
 onMounted(() => {
   dialog.value?.showModal();
   titleInput.value?.focus();
-  if (props.card) titleInput.value?.select();
+  if (props.card || props.prefill) titleInput.value?.select();
 });
 
 /* ---------- the note's images ---------- */

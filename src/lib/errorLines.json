@@ -1,0 +1,7 @@
+[
+  "\\b(?:Failed to resolve|Cannot find module|Module not found)\\b",
+  "\\b(?:SyntaxError|TypeError|ReferenceError)\\b",
+  "\\[vite\\].*\\berror(?:[: \\t\\r]|$)",
+  "\\bELIFECYCLE\\b",
+  "\\bnpm ERR!"
+]

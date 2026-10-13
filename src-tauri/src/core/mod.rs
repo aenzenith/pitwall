@@ -53,6 +53,7 @@ mod supervise;
 mod teams;
 mod terminal;
 mod watch;
+mod reference;
 pub use activity::DaySummary;
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};
@@ -190,6 +191,9 @@ struct Inner {
     long_turns: HashMap<String, u64>,
     /// What the Garage's checks said last, to tell of what newly waits.
     deps_known: signals::DepsKnown,
+    /// How each output's last run ended, and when, by the output's key: written into it as a
+    /// marker when the next run starts (`output.rs`).
+    ended: HashMap<String, (u64, String)>,
 }
 
 pub struct Core {

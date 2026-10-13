@@ -125,7 +125,7 @@ impl Core {
             let mut lines = take_lines(&mut tail.rest);
 
             if fresh {
-                self.lock().output.insert(path.clone(), VecDeque::new());
+                self.forget_output(&path);
                 let skip = lines.len().saturating_sub(OUTPUT_LINES);
                 lines.drain(..skip);
             }

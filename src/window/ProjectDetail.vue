@@ -7,6 +7,7 @@ import { COLLAPSED_HEIGHT, outputCollapsed, outputHeight, outputRequest, termina
 import { forgetProjectSettings, projectSettings, updateProjectSettings } from "../lib/projectSettings";
 import { api } from "../lib/store";
 import type { CustomCommand, LinkSuggestion, Project } from "../lib/types";
+import CardDialog from "./board/CardDialog.vue";
 import CommandDialog from "./CommandDialog.vue";
 import ClaudeCard from "./detail/ClaudeCard.vue";
 import CommandsBlock from "./detail/CommandsBlock.vue";
@@ -38,7 +39,12 @@ const settings = computed(() => projectSettings(props.project));
 /* ---------- output ---------- */
 
 // Kept here rather than in the panel: its lines outlast a visit to the settings.
-const { lines, load: loadOutput } = useOutputStream(() => props.project.path, tab);
+const { lines, runStart, load: loadOutput } = useOutputStream(() => props.project.path, tab);
+
+/** An error of the output on its way to the board: the card dialog, filled in with it. */
+const errorCard = ref<{ title: string; note: string } | null>(null);
+/** The card is this project's. */
+const cardProjects = computed(() => [{ path: props.project.path, name: props.project.name }]);
 
 function showTab(id: string | null): void {
   tab.value = id;
@@ -151,6 +157,7 @@ watch(
     if (left) forgetProjectSettings(left);
     settingsOpen.value = false;
     dialog.value = null;
+    errorCard.value = null;
     confirming.value = null;
     tab.value = null;
     void loadOutput();
@@ -177,7 +184,7 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
         <CommandsBlock v-model:confirming="confirming" :project="project" :tab="tab" @show="showTab" @edit="editCommand" @remove="removeCommand" />
       </div>
 
-      <OutputPanel :project="project" :tab="tab" :lines="lines" :height="shownOutput" :resizer="resizer" @show="showTab" />
+      <OutputPanel :project="project" :tab="tab" :lines="lines" :run-start="runStart" :height="shownOutput" :resizer="resizer" @show="showTab" @card="errorCard = $event" />
     </div>
 
     <CommandDialog
@@ -188,6 +195,7 @@ watch(() => [props.project.status, props.project.url], () => void loadAddress())
       @save="saveCommand"
       @close="dialog = null"
     />
+    <CardDialog v-if="errorCard" :card="null" :path="project.path" :projects="cardProjects" :prefill="errorCard" @close="errorCard = null" />
   </section>
 </template>
 

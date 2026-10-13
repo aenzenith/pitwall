@@ -506,7 +506,8 @@ pub fn run() {
             commands::notify_event,
             commands::mute_project,
             commands::missed_open,
-            commands::missed_clear
+            commands::missed_clear,
+            commands::open_reference
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

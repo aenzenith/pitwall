@@ -149,6 +149,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "Output search and errors",
+        "tr": "Çıktıda arama ve hatalar",
+        "de": "Ausgabe: Suche und Fehler",
+        "es": "Salida: búsqueda y errores",
+        "ru": "Вывод: поиск и ошибки",
+        "ja": "出力の検索とエラー",
+        "zh-Hans": "输出：搜索与错误"
+      },
+      "body": {
+        "en": "Search a project's output, show only its errors, and go from an error line to the file in your editor or turn it into a card. The output stops following when you scroll up, and a restart keeps the run before above the new one.",
+        "tr": "Bir projenin çıktısında ara, yalnız hataları göster; hata satırından dosyayı editörde aç ya da hatayı karta çevir. Yukarı kaydırınca çıktı takibi durur, yeniden başlatınca önceki çalıştırma yeni olanın üstünde kalır.",
+        "de": "Die Ausgabe eines Projekts durchsuchen, nur ihre Fehler anzeigen und von einer Fehlerzeile zur Datei im Editor springen oder daraus eine Karte machen. Beim Hochscrollen hält die Ausgabe an, und nach einem Neustart bleibt der vorherige Lauf über dem neuen stehen.",
+        "es": "Busca en la salida de un proyecto, muestra solo sus errores y pasa de una línea de error al archivo en tu editor o conviértela en tarjeta. Al desplazarte hacia arriba la salida deja de seguir, y tras un reinicio la ejecución anterior queda encima de la nueva.",
+        "ru": "Ищите в выводе проекта, показывайте только ошибки и переходите от строки с ошибкой к файлу в редакторе или превращайте её в карточку. При прокрутке вверх вывод перестаёт следовать за новыми строками, а после перезапуска предыдущий запуск остаётся над новым.",
+        "ja": "プロジェクトの出力を検索し、エラーだけを表示できます。エラー行からエディタでファイルを開いたり、カードにしたりできます。上にスクロールすると追従が止まり、再起動しても前回の実行は新しい実行の上に残ります。",
+        "zh-Hans": "可在项目输出中搜索、只看错误，并从错误行在编辑器中打开文件或将其转为卡片。向上滚动时输出停止跟随；重启后，上次运行的输出保留在新输出之上。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Focus in dialogs",

@@ -213,7 +213,9 @@ fn a_crashing_server_is_restarted_three_times_then_given_up() {
     assert_eq!(issue.kind, "crashed");
     assert!(issue.text.contains("Cannot find module 'vite'"), "{}", issue.text);
     assert_eq!(view(&fx.core, &fx.project).status, "crashed");
-    assert_eq!(fx.core.output(&fx.project).iter().filter(|l| l.contains("process ended")).count(), 1, "output keeps the last run only");
+    let output = fx.core.output(&fx.project);
+    assert_eq!(output.iter().filter(|l| l.contains("process ended")).count(), 4, "every run of the series stays in the output");
+    assert_eq!(output.iter().filter(|l| l.starts_with("\u{1e}ended\t") && l.ends_with("\tcrashed:1")).count(), 3, "each under how it ended: {output:?}");
 }
 
 #[test]

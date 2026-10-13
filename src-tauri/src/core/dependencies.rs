@@ -377,7 +377,7 @@ impl Core {
             }
         }
 
-        if !self.spawn_job_line(path, id, None, command, true) {
+        if !self.spawn_job_line(path, id, None, command) {
             // Another start of it won the race (or the app quits): that one owns `installing`.
             if let Some(ecosystem) = install.filter(|_| !self.job_running(&key)) {
                 self.deps_lock().installing.remove(&(path.to_string(), ecosystem));

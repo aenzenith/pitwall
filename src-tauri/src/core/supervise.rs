@@ -227,16 +227,25 @@ impl Core {
 
     fn on_unit_exit(self: &Arc<Self>, unit: &Unit, id: u64, status: Option<std::process::ExitStatus>) {
         let key = unit.key();
-        let (started, planned, disposed) = {
-            let mut inner = self.lock();
-            let Some((pid, started)) = take_current(&mut inner, unit, id) else {
-                return;
-            };
+        let (path, job) = match unit {
+            Unit::Server(path) => (path, None),
+            Unit::Command(path, cid) => (path, Some(cid.as_str())),
+        };
+        // The line that says it ended goes into the output in the same hold that takes the run
+        // out: a start that finds the run gone writes its own lines under that one.
+        let taken = self.keep_line_with(path, job, |inner| {
+            let (pid, started) = take_current(inner, unit, id)?;
             // Whatever of its group is left stays recorded, to be cleaned up later.
             if group_alive(pid) {
                 inner.supervisor.lingering.insert(pid, key.clone());
             }
-            (started, inner.stopping.contains(&key), inner.disposed)
+            // Written down with the run taken out: the next start, however soon, finds it.
+            let planned = inner.stopping.contains(&key);
+            inner.ended.insert(key.clone(), (now_ms(), output::end_detail(unit, planned, status)));
+            Some(((started, planned, inner.disposed), output::end_line(unit, planned, status)))
+        });
+        let Some((started, planned, disposed)) = taken else {
+            return;
         };
 
         match unit {
@@ -275,7 +284,7 @@ impl Core {
         if wanted {
             match unit {
                 Unit::Server(path) => self.launch(path, false, Vec::new()),
-                Unit::Command(path, id) => self.spawn_job(path, id, false),
+                Unit::Command(path, id) => self.spawn_job(path, id),
             }
         }
     }

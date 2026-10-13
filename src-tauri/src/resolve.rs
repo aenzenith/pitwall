@@ -65,17 +65,12 @@ static ANY_LOCAL: LazyLock<Regex> =
 static PORT_TAKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)Port\s+(\d{2,5})\s+is\s+in\s+use").unwrap());
 static ADDR_IN_USE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)EADDRINUSE[^\n]*").unwrap());
 
+/// What a dev server prints for an error: one list for the project's issue here and for the
+/// output pane, which marks the same lines (`src/lib/outputLines.ts`). Each is searched for in a
+/// line, whatever its case, and keeps to what both regex engines read alike.
 static ERROR_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    [
-        r"(?im)^.*\b(?:Failed to resolve|Cannot find module|Module not found)\b.*$",
-        r"(?im)^.*\b(?:SyntaxError|TypeError|ReferenceError)\b.*$",
-        r"(?im)^.*\[vite\][^\n]*\berror\b[^\n]*$",
-        r"(?im)^.*\bELIFECYCLE\b.*$",
-        r"(?im)^.*\bnpm ERR!.*$",
-    ]
-    .iter()
-    .map(|pattern| Regex::new(pattern).unwrap())
-    .collect()
+    let found: Vec<String> = serde_json::from_str(include_str!("../../src/lib/errorLines.json")).expect("errorLines.json is a list of patterns");
+    found.iter().map(|pattern| Regex::new(&format!("(?im)^.*{pattern}.*$")).unwrap()).collect()
 });
 
 pub fn detect_package_manager(files: &[String]) -> PackageManager {

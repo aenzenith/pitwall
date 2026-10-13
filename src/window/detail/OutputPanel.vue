@@ -1,29 +1,37 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 import Icon from "../../components/Icon.vue";
 import { depJobName, depJobs } from "../../lib/deps";
 import { uptime } from "../../lib/format";
 import { t } from "../../lib/i18n";
+import { plainText, shownLines } from "../../lib/outputLines";
+import { useOutputSearch } from "../../lib/outputSearch";
 import type { OutputLine } from "../../lib/outputStream";
-import { outputCollapsed, outputShown, type useResizer } from "../../lib/panel";
-import { now } from "../../lib/store";
+import { outputCollapsed, outputErrorsOnly, outputShown, type useResizer } from "../../lib/panel";
+import { primary } from "../../lib/platform";
+import { api, now } from "../../lib/store";
 import { tabKey } from "../../lib/tabs";
 import type { Project } from "../../lib/types";
+import OutputLog from "./OutputLog.vue";
+import OutputSearch from "./OutputSearch.vue";
 
 type Resizer = ReturnType<typeof useResizer>;
 
 /**
  * The output over the details' lower part: a handle, a tab per output (the dev server, then every
- * command that ran in this session) and the shown one's lines.
+ * command that ran in this session), the shown one's tools (search, errors only, copy) and its
+ * lines (OutputLog).
  *
- * `tab`: the shown output, `null` for the dev server, otherwise a command id. `height`: the
- * panel's height as shown (collapsed or not). `resizer`: the handle's drag and keys (lib/panel).
+ * `tab`: the shown output, `null` for the dev server, otherwise a command id. `runStart`: where
+ * its newest run begins (lib/outputStream). `height`: the panel's height as shown (collapsed or
+ * not). `resizer`: the handle's drag and keys (lib/panel). `card`: an error of the output is to
+ * become a card, with this title and note.
  */
-const props = defineProps<{ project: Project; tab: string | null; lines: OutputLine[]; height: number; resizer: Resizer }>();
-const emit = defineEmits<{ show: [id: string | null] }>();
+const props = defineProps<{ project: Project; tab: string | null; lines: OutputLine[]; runStart: number; height: number; resizer: Resizer }>();
+const emit = defineEmits<{ show: [id: string | null]; card: [draft: { title: string; note: string }] }>();
 
-const log = ref<HTMLElement | null>(null);
+const log = ref<InstanceType<typeof OutputLog> | null>(null);
 
 const runsHere = computed(() => props.project.status !== "stopped" && !props.project.owner);
 /** While the handle is dragged, the panel follows the pointer without animating. */
@@ -57,25 +65,91 @@ function startDrag(event: PointerEvent): void {
   if (!outputCollapsed.value) props.resizer.start(event);
 }
 
-/** The newest lines in view: on every change, and when the panel comes back from the settings. */
-async function scrollDown(): Promise<void> {
+/* ---------- what the pane shows ---------- */
+
+/** The output shown: a project's server, or one of its commands. Each has its own filter. */
+const pane = computed(() => `${props.project.path}\u001f${props.tab ?? ""}`);
+
+const errorsOnly = computed({
+  get: () => outputErrorsOnly.value[pane.value] ?? false,
+  set: (on) => (outputErrorsOnly.value = { ...outputErrorsOnly.value, [pane.value]: on }),
+});
+/** The errors of the run that is on: those of a run before are no longer the server's state. */
+const errorCount = computed(() => props.lines.reduce((count, line) => count + (line.level === "error" && line.id >= props.runStart ? 1 : 0), 0));
+const shown = computed(() => shownLines(props.lines, errorsOnly.value));
+
+const empty = computed(() => {
+  if (props.lines.length) return t("output.noErrors");
+  if (props.tab !== null) return t("detail.noOutput");
+  return t(props.project.owner ? "detail.noServerOutput" : "detail.notRunning");
+});
+
+/* ---------- search ---------- */
+
+const { open: searching, query, ranges, count: matches, position, current, step, close } = useOutputSearch(shown);
+const field = ref<InstanceType<typeof OutputSearch> | null>(null);
+/** What had the keyboard when the search opened: closing gives it back. */
+let before: HTMLElement | null = null;
+
+async function openSearch(): Promise<void> {
+  if (!searching.value) before = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  outputCollapsed.value = false;
+  searching.value = true;
   await nextTick();
-  if (log.value) log.value.scrollTop = log.value.scrollHeight;
+  field.value?.focus();
 }
 
-watch(
-  () => props.lines,
-  () => void scrollDown(),
-);
-onMounted(() => void scrollDown());
+/** The marks go with the query; the keyboard goes back where it was, else to the lines. */
+function closeSearch(): void {
+  close();
+  const back = before;
+  before = null;
+  if (back?.isConnected) back.focus({ preventScroll: true });
+  else log.value?.focus();
+}
+
+/** ⌘F while the keyboard is anywhere in the panel (its lines take it with a click), and Esc
+ * there closes the search: from its own buttons as from its field, else the keyboard stays. */
+function onKey(event: KeyboardEvent): void {
+  if (event.key === "Escape" && searching.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.target instanceof Node && field.value?.$el.contains(event.target)) return closeSearch();
+    close();
+    before = null;
+    return;
+  }
+  if (!primary(event) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "f") return;
+  event.preventDefault();
+  void openSearch();
+}
+
+// Collapsed, there is no line to search in.
+watch(outputCollapsed, (collapsed) => collapsed && close());
+
+/* ---------- copy ---------- */
+
+const copied = ref(false);
+let copiedTimer = 0;
+
+/** What the pane shows, as text. */
+function copyAll(): void {
+  void api.copyText(plainText(shown.value));
+  copied.value = true;
+  window.clearTimeout(copiedTimer);
+  copiedTimer = window.setTimeout(() => (copied.value = false), 1200);
+}
 
 // The terminal panel snaps to the output only while the output is there.
 outputShown.value = true;
-onBeforeUnmount(() => (outputShown.value = false));
+onBeforeUnmount(() => {
+  outputShown.value = false;
+  window.clearTimeout(copiedTimer);
+});
 </script>
 
 <template>
-  <div :class="['out', { animated: !dragging, collapsed: outputCollapsed }]" :style="{ height: `${height}px` }">
+  <div :class="['out', { animated: !dragging, collapsed: outputCollapsed }]" :style="{ height: `${height}px` }" @keydown="onKey">
     <div
       class="grip"
       role="separator"
@@ -105,6 +179,25 @@ onBeforeUnmount(() => (outputShown.value = false));
       </button>
       <span class="grow"></span>
       <span v-if="tab === null && project.status === 'running' && runsHere" class="up">{{ uptime(project.startedAt, now) }}</span>
+      <template v-if="!outputCollapsed">
+        <button type="button" :class="['tool', { on: searching }]" :aria-pressed="searching" :aria-label="t('output.search')" :title="t('output.search')" @click="searching ? closeSearch() : openSearch()">
+          <Icon name="search" :size="13" />
+        </button>
+        <button
+          type="button"
+          :class="['tool', { on: errorsOnly }]"
+          :aria-pressed="errorsOnly"
+          :aria-label="errorCount ? `${t('output.errorsOnly')} (${errorCount})` : t('output.errorsOnly')"
+          :title="t('output.errorsOnly')"
+          @click="errorsOnly = !errorsOnly"
+        >
+          <Icon name="filter" :size="13" />
+          <span v-if="errorCount" class="errors">{{ errorCount }}</span>
+        </button>
+        <button type="button" class="tool" :disabled="!shown.length" :aria-label="t('output.copyAll')" :title="t(copied ? 'output.copied' : 'output.copyAll')" @click="copyAll">
+          <Icon :name="copied ? 'check' : 'copy'" :size="13" />
+        </button>
+      </template>
       <button
         type="button"
         :class="['collapse', { up: outputCollapsed }]"
@@ -116,14 +209,9 @@ onBeforeUnmount(() => (outputShown.value = false));
         <Icon name="chevron" :size="13" />
       </button>
     </div>
-    <div ref="log" class="log selectable">
-      <template v-if="lines.length">
-        <span v-for="line in lines" :key="line.id" :class="line.kind">{{ line.text }}</span>
-      </template>
-      <span v-else-if="tab === null && project.owner" class="dim">{{ t("detail.noServerOutput") }}</span>
-      <span v-else-if="tab === null" class="dim">{{ t("detail.notRunning") }}</span>
-      <span v-else class="dim">{{ t("detail.noOutput") }}</span>
-    </div>
+    <OutputSearch v-if="searching" ref="field" v-model:query="query" :position="position" :count="matches" @step="step" @close="closeSearch" />
+    <!-- One per output: each starts at its end, following. Collapsed, it is out of the keyboard's way. -->
+    <OutputLog ref="log" :key="pane" class="log" :inert="outputCollapsed" :path="project.path" :lines="shown" :run-start="runStart" :ranges="ranges" :current="current" :empty="empty" @card="emit('card', $event)" />
   </div>
 </template>
 
@@ -165,22 +253,53 @@ onBeforeUnmount(() => (outputShown.value = false));
 }
 
 /* Points down while open (collapse), up while collapsed (expand). */
-.collapse {
+.collapse,
+.tool {
+  position: relative;
   width: 24px;
   height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--text-subtle);
 }
 
-.collapse:hover {
+.collapse:hover,
+.tool:hover:not(:disabled),
+.tool.on {
   background: var(--bg-icon-hover);
   color: var(--text-strong);
+}
+
+.tool:disabled {
+  opacity: 0.45;
+}
+
+/* How many errors the output holds, on the corner of the button that shows them alone: the
+   button keeps its width. Inside the row's height, which cuts what leaves it. */
+.errors {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: var(--crash-bg);
+  box-shadow: 0 0 0 1px var(--crash-line);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--crash-text);
+  pointer-events: none;
 }
 
 .collapse :deep(svg) {
@@ -238,13 +357,17 @@ onBeforeUnmount(() => (outputShown.value = false));
   overflow: hidden;
 }
 
+/* With more tabs than there is room for, the names give way and the tools stay. */
 .tab {
+  min-width: 0;
   padding: 4px 6px;
   border: 0;
   background: transparent;
   font-size: 12px;
   color: var(--text-faint);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab:hover {
@@ -264,40 +387,12 @@ onBeforeUnmount(() => (outputShown.value = false));
   color: var(--text-subtle);
 }
 
+/* The lines' box (OutputLog) takes the room that is left. */
 .log {
   flex: 1 1 auto;
   min-height: 0;
   transition: opacity 160ms ease;
   margin: 6px 20px 20px;
   box-sizing: border-box;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--bg-log);
-  border: 1px solid var(--line-inset);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--text-log);
-  display: flex;
-  flex-direction: column;
-  overflow: auto;
-}
-
-.log span {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.log .cmd {
-  color: var(--text);
-}
-
-.log .sys {
-  color: var(--claude-text);
-}
-
-.log .dim {
-  white-space: normal;
-  color: var(--text-subtle);
 }
 </style>

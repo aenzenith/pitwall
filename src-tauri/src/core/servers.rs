@@ -112,7 +112,6 @@ impl Core {
         };
 
         let adopted = self.adopt(start, child, |inner, id, pid| {
-            inner.output.insert(path.to_string(), VecDeque::new());
             inner.issues.remove(path);
             inner.runs.insert(
                 path.to_string(),
@@ -135,6 +134,8 @@ impl Core {
             return;
         };
 
+        // The run before stays in the output, above these.
+        self.mark_run(path, None);
         self.push_line(path, format!("$ {command}"));
         self.push_line(path, format!("  {path}"));
         self.record_pids();
@@ -210,17 +211,19 @@ impl Core {
                 let free = core.reservations.lock().ok().and_then(|mut r| r.reserve_free(port.saturating_add(1), &path));
                 if let Some(free) = free {
                     core.stop_server(&path);
+                    // The same start, moved: what the busy port left behind is no run to keep.
+                    core.forget_output(&path);
                     core.launch(&path, false, vec!["--port".into(), free.to_string()]);
                 }
             });
         }
     }
 
-    /// The server's shell exited (taken out of `runs` already); `planned` when a stop did it.
+    /// The server's shell exited (taken out of `runs` already, and the output says so);
+    /// `planned` when a stop did it.
     pub(super) fn on_exit(self: &Arc<Self>, path: &str, started: Instant, planned: bool, disposed: bool, status: Option<std::process::ExitStatus>) {
         let (code, signal) = describe_exit(status);
 
-        self.push_line(path, format!("[pitwall] {}", t!("core.log.processEnded", code = code, signal = signal)));
         self.flush_output();
         self.record_pids();
         self.notify();
@@ -329,7 +332,7 @@ impl Core {
     }
 }
 
-fn describe_exit(status: Option<std::process::ExitStatus>) -> (String, String) {
+pub(super) fn describe_exit(status: Option<std::process::ExitStatus>) -> (String, String) {
     let Some(status) = status else {
         return ("-".into(), "-".into());
     };

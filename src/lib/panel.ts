@@ -126,3 +126,9 @@ export function useResizer(height: Ref<number>, max: () => number, snapTo: () =>
 
   return { start, move, end, nudge, dragging };
 }
+
+/**
+ * The output panes that show their errors only, by pane (a project's path, U+001F, and the
+ * command's id; none for the dev server). Off for every pane at each launch.
+ */
+export const outputErrorsOnly = ref<Record<string, boolean>>({});

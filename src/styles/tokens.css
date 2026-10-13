@@ -182,6 +182,11 @@
   --scroll-thumb-hover: rgba(255, 255, 255, 0.24);
   --scroll-thumb-active: rgba(255, 255, 255, 0.32);
 
+  /* What a search found in the output: every match, and the one it stands on with its text. */
+  --find-bg: #3d3718;
+  --find-on-bg: #7a6a1c;
+  --find-on-text: #fff6c9;
+
   color-scheme: dark;
 }
 
@@ -324,6 +329,10 @@
   --scroll-thumb: rgba(15, 17, 20, 0.2);
   --scroll-thumb-hover: rgba(15, 17, 20, 0.34);
   --scroll-thumb-active: rgba(15, 17, 20, 0.46);
+
+  --find-bg: #fbeeb0;
+  --find-on-bg: #f2c200;
+  --find-on-text: #1b1e24;
 
   color-scheme: light;
 }

@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter";
     size?: number;
   }>(),
   { size: 15 },
@@ -63,5 +63,6 @@ withDefaults(
     <g v-else-if="name === 'trash'"><path d="M5 7h14" /><path d="M9.500 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2" /><path d="M7 7l.8 11.200A2 2 0 0 0 9.800 20h4.400a2 2 0 0 0 2-1.800L17 7" /></g>
     <path v-else-if="name === 'folder'" d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
     <g v-else-if="name === 'bell-off'"><path d="M6.6 8.4A6 6 0 0 0 6 11v5.5l-1.5 2h12.3" /><path d="M9 5.8A6 6 0 0 1 18 11v4" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /><path d="M4.5 4 20 19.5" /></g>
+    <path v-else-if="name === 'filter'" d="M4 6h16M7 12h10M10 18h4" />
   </svg>
 </template>
