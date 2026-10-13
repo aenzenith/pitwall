@@ -274,7 +274,7 @@ impl Core {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -296,7 +296,6 @@ mod tests {
     /// comes back before the user says so, a folder that isn't a listed project gets no shell
     /// from it, what isn't a session id never reaches Claude's command line (the tab comes back
     /// as a plain shell), and the record is used once.
-    #[cfg(unix)]
     #[test]
     fn nothing_comes_back_unasked_and_only_listed_projects_do() {
         let tmp = tempfile::tempdir().unwrap();
@@ -339,10 +338,8 @@ mod tests {
 
     /// A process that passes for Claude Code's (`claude` in its command line), gone with the
     /// test however that ends.
-    #[cfg(unix)]
     struct Sleeper(std::process::Child);
 
-    #[cfg(unix)]
     impl Drop for Sleeper {
         fn drop(&mut self) {
             let _ = self.0.kill();
@@ -353,7 +350,6 @@ mod tests {
     /// Two processes on one session write one log, and nothing shows it. A tab's session comes
     /// back only once Claude Code's own list says no process runs it: while one does (the user
     /// went on with it in another terminal since the quit), the tab stays away.
-    #[cfg(unix)]
     #[test]
     fn a_session_that_runs_is_not_opened_a_second_time() {
         let tmp = tempfile::tempdir().unwrap();
