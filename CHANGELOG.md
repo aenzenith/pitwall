@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.10.0](https://github.com/aenzenith/pitwall/compare/v1.9.0...v1.10.0) (2026-10-13)
+
+
+### Features
+
+* **backup:** export and import in Settings, and folders that moved ([fff83bc](https://github.com/aenzenith/pitwall/commit/fff83bc1c648c566b8f9440d7aa9d00729e8da7b))
+* **notifications:** quiet mode, what you missed, a switch per event ([54fe93d](https://github.com/aenzenith/pitwall/commit/54fe93d21dff6452cec1e756fda850183979dbd4))
+* **output:** search, an error filter, from an error to the editor ([d5433a1](https://github.com/aenzenith/pitwall/commit/d5433a11ba573b25cf6e7bae2ee03b9a292e5942))
+* **phone:** the pit board on your phone, by ntfy, Telegram or a webhook ([26c7e5e](https://github.com/aenzenith/pitwall/commit/26c7e5efcecd5ecfbb710922632b22ee1292c2f5))
+* **radio:** the team radio, Pitwall as an MCP server for Claude Code ([ae1bf8b](https://github.com/aenzenith/pitwall/commit/ae1bf8b8f8fd083510bfcb7ad2e9d4cf59effd57))
+* **resume:** what was open at the last quit comes back at launch ([8b2f735](https://github.com/aenzenith/pitwall/commit/8b2f7352a2e62b119446f5368dc5aa89b9636332))
+* **setup:** a first run in four steps, and new projects are offered ([dd7a770](https://github.com/aenzenith/pitwall/commit/dd7a770fc775ad33767cd2a32f56d966f5e06ba0))
+* **teams:** projects in teams, ordered, started and stopped together ([6c5f57f](https://github.com/aenzenith/pitwall/commit/6c5f57f3e580bc544fb64d4ef1846c5b5a191bcd))
+* **theme:** a light theme, chosen in Settings as System, Dark or Light ([aab69e1](https://github.com/aenzenith/pitwall/commit/aab69e17044ae2dd7641bd7eba80452b243272a2))
+* **whats-new:** this version's notes, shown once after an update ([fce79cd](https://github.com/aenzenith/pitwall/commit/fce79cdbcca5be50a5f5237267bda3e9c1625e41))
+
+
+### Bug Fixes
+
+* **dialogs:** a dialog no longer opens with a button focused ([10bf8b8](https://github.com/aenzenith/pitwall/commit/10bf8b8597543295f9f76997f5f111e7349d6a4b))
+* **servers:** a server restarted right after its start keeps its port ([0b1ec9e](https://github.com/aenzenith/pitwall/commit/0b1ec9e4204a08c4c631ec829e15c69ef8aef0ad))
+* **tray:** the popover no longer opens on another screen ([e63768c](https://github.com/aenzenith/pitwall/commit/e63768c3748c7134a36984962dd31b18ae9fd0df))
+
 ## [1.9.0](https://github.com/aenzenith/pitwall/compare/v1.8.1...v1.9.0) (2026-10-12)
 
 
