@@ -32,6 +32,7 @@ import type {
 } from "./types";
 import { dayName } from "./day";
 import { trackSettings, type TrackSettings } from "./track";
+import type { PhoneConfig, PhoneView } from "./types";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -398,6 +399,16 @@ export const api = {
   forgetProject: (path: string) => invoke("forget_project", { path }),
 
   quit: () => invoke("quit"),
+
+  /* The phone's channel (core/relay.rs). Its settings are no part of the snapshot. */
+  /** The channel as it is set. */
+  phoneConfig: () => invoke<PhoneView>("phone_config"),
+  /** Keeps the form; resolves with the channel as stored. */
+  phoneSet: (config: PhoneConfig) => invoke<PhoneView>("phone_set", { config }),
+  /** Sends a test message and waits for the channel's answer; rejects with why it didn't arrive. */
+  phoneTest: () => invoke("phone_test"),
+  /** A fresh ntfy topic. */
+  phoneTopic: () => invoke<string>("phone_topic"),
 
   /* Notifications (core/signals.rs): `snapshot.quiet`, `snapshot.missed`, a project's `muted`. */
   /** Quiet from now on: for an hour, until tomorrow morning, or until it is switched off. */

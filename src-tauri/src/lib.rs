@@ -27,6 +27,7 @@ mod update;
 mod usage;
 mod whatsnew;
 mod windows;
+mod presence;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -494,6 +495,10 @@ pub fn run() {
             commands::rehome_project,
             commands::forget_project,
             commands::quit,
+            commands::phone_config,
+            commands::phone_set,
+            commands::phone_test,
+            commands::phone_topic,
             commands::quiet_start,
             commands::quiet_end,
             commands::quiet_option,

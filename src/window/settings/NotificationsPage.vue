@@ -2,7 +2,8 @@
 // Settings › Notifications: which events bring a notification, quiet mode's hours and what it
 // lets through, and the muted projects. Each change goes to the core by its own command
 // (core/signals.rs) and comes back in the next snapshot. Which sound an event plays is the
-// Settings form's to save: those rows come in through the `sounds` slot.
+// Settings form's to save: those rows come in through the `sounds` slot. The phone's section
+// stays last.
 import { computed, ref, watch } from "vue";
 
 import Icon from "../../components/Icon.vue";
@@ -10,6 +11,7 @@ import { t } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
 import { EVENTS, eventOn, notifications, type NotifyEvent } from "../../lib/quiet";
 import { api, snapshot } from "../../lib/store";
+import PhoneSection from "./PhoneSection.vue";
 
 /** A switch as just clicked goes to the core; one the core refuses goes back to what is stored. */
 async function flip(event: Event, send: (on: boolean) => Promise<unknown>, stored: () => boolean): Promise<void> {
@@ -128,6 +130,8 @@ function pickProject(event: MouseEvent): void {
       </div>
     </div>
   </div>
+
+  <PhoneSection />
 </template>
 
 <style scoped src="./settings.css"></style>

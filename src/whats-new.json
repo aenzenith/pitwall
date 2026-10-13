@@ -109,6 +109,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Pit board on phone",
+        "tr": "Telefonda pit tabelası",
+        "de": "Boxentafel aufs Handy",
+        "es": "Pizarra en el móvil",
+        "ru": "Пит-табло на телефоне",
+        "ja": "スマホにピットボード",
+        "zh-Hans": "手机上的指示牌"
+      },
+      "body": {
+        "en": "Pitwall can tell your phone too when Claude asks, needs a permission or a server crashes: through ntfy, a Telegram bot or a webhook of yours. Only the project's name, what happened and the tool's name are sent; turn it on in Settings › Notifications.",
+        "tr": "Claude soru sorduğunda, izin istediğinde ya da bir sunucu çöktüğünde Pitwall telefonuna da haber verebilir: ntfy, bir Telegram botu ya da kendi webhook'un üzerinden. Yalnız proje adı, olay ve aracın adı gider; Ayarlar › Bildirimler'den açılır.",
+        "de": "Pitwall kann auch dein Handy benachrichtigen, wenn Claude fragt, eine Erlaubnis braucht oder ein Server abstürzt: über ntfy, einen Telegram-Bot oder deinen eigenen Webhook. Gesendet werden nur der Projektname, das Ereignis und der Name des Tools; einschalten unter Einstellungen › Benachrichtigungen.",
+        "es": "Pitwall también puede avisar a tu móvil cuando Claude pregunta, pide permiso o se cae un servidor: por ntfy, un bot de Telegram o un webhook tuyo. Solo se envían el nombre del proyecto, lo que pasó y el nombre de la herramienta; se activa en Ajustes › Notificaciones.",
+        "ru": "Pitwall может сообщать и на телефон, когда Claude задаёт вопрос, просит разрешения или падает сервер: через ntfy, бота Telegram или ваш вебхук. Отправляются только название проекта, событие и название инструмента; включается в «Настройки › Уведомления».",
+        "ja": "Claude が質問したとき、許可を求めたとき、サーバーがクラッシュしたときに、Pitwall がスマホにも通知できます。ntfy、Telegram ボット、自分の Webhook が使えます。送信されるのはプロジェクト名、起きたこと、ツール名だけで、設定 › 通知でオンにします。",
+        "zh-Hans": "Claude 提问、需要授权或服务器崩溃时，Pitwall 也能通知你的手机：通过 ntfy、Telegram 机器人或你自己的 Webhook。只发送项目名称、发生的事件和工具名称；在“设置 › 通知”中开启。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Quiet mode",
         "tr": "Sessiz mod",
         "de": "Ruhemodus",

@@ -65,6 +65,7 @@ pub use restore::{RestartPlan, Restored};
 pub use routing::Action;
 pub use sessions::SessionsView;
 pub use snapshot::Snapshot;
+pub use relay::{PhoneConfig, PhoneView};
 pub use signals::{plain_banner, Missed, QuietFor, QuietView, SignalKind};
 use jobs::{job_key, Job, JobResult};
 use output::Outbox;
@@ -225,6 +226,8 @@ pub struct Core {
     /// The projects folder is being looked through (`discover.rs`).
     discover_busy: AtomicBool,
     sink: Sink,
+    /// The phone's channel (`relay.rs`); never held together with `inner`.
+    phone: relay::Phone,
 }
 
 fn folder_name(path: &str) -> String {
@@ -288,6 +291,7 @@ impl Core {
             settings_lock: Mutex::new(()),
             discover_busy: AtomicBool::new(false),
             sink,
+            phone: relay::Phone::default(),
         })
     }
 

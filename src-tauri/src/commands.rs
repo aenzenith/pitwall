@@ -807,6 +807,35 @@ pub fn quit(app: AppHandle) {
     app.exit(0);
 }
 
+/* ---------- the phone's channel (core/relay.rs) ---------- */
+
+/// The channel as Settings shows it. The Telegram token never comes along: only whether one is
+/// stored.
+#[tauri::command]
+pub fn phone_config(state: State<'_, AppState>) -> crate::core::PhoneView {
+    state.core.phone_view()
+}
+
+/// Settings' form, kept. An empty Telegram token keeps the stored one.
+#[tauri::command]
+pub fn phone_set(state: State<'_, AppState>, config: crate::core::PhoneConfig) -> Result<crate::core::PhoneView, String> {
+    state.core.phone_set(config)
+}
+
+/// "Send a test": answers once the channel did, with the error's text when it refused or
+/// wasn't reached.
+#[tauri::command]
+pub async fn phone_test(app: AppHandle) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.phone_test()).await.map_err(|error| error.to_string())?
+}
+
+/// A fresh ntfy topic, made here.
+#[tauri::command]
+pub fn phone_topic(state: State<'_, AppState>) -> String {
+    state.core.phone_topic()
+}
+
 /* ---------- notifications: quiet, what was missed, muted projects ---------- */
 
 /// Quiet from now on: `hour` (for an hour), `morning` (until tomorrow morning) or `open` (until

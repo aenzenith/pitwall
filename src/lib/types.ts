@@ -543,6 +543,43 @@ export type RestartPlan = {
   terminalProjects: number;
 };
 
+/* ---------- The phone's channel (core/relay.rs: phone_config, phone_set) ---------- */
+
+export type PhoneChannel = "ntfy" | "telegram" | "webhook";
+
+/** The moment something may go to the phone: while the screen is locked, after five minutes
+ *  without input (or locked), or whenever. */
+export type PhoneWhen = "locked" | "idle" | "always";
+
+/** The events offered, each with its box. */
+export type PhoneEvents = { asked: boolean; permission: boolean; finished: boolean; crashed: boolean; fuel: boolean; card: boolean };
+
+/** The channel as Settings sends it. Each channel keeps its address while another is picked. */
+export type PhoneConfig = {
+  on: boolean;
+  channel: PhoneChannel;
+  ntfyServer: string;
+  ntfyTopic: string;
+  /** A new token; empty keeps the one stored. */
+  telegramToken: string;
+  telegramChat: string;
+  webhookUrl: string;
+  when: PhoneWhen;
+  events: PhoneEvents;
+};
+
+/** The channel as the core holds it. */
+export type PhoneView = Omit<PhoneConfig, "telegramToken"> & {
+  /** A Telegram token is stored. The token itself never comes. */
+  telegramToken: boolean;
+  /** The moments this system can tell, in the order they are offered. */
+  moments: PhoneWhen[];
+  /** What a permission wait in the first listed project would send, word for word. */
+  sample: string;
+  /** Why the last message didn't arrive; null once one did. */
+  failure: string | null;
+};
+
 /* ---------- Notifications: quiet, what was missed, muted projects (core/signals.rs) ---------- */
 
 /** What happened, as the core names it. */

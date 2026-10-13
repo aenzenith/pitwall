@@ -108,14 +108,18 @@ fn replay(scrollback: &str, cut: bool, at: u64) -> String {
     format!("{scrollback}{RESET}\r\n\x1b[2m── {line} ──\x1b[0m\r\n")
 }
 
-/// The record's file, readable by the user alone: it holds what the terminals showed.
+/// The record's file, readable by the user alone: it holds what the terminals showed. Written
+/// beside it first and moved over it whole, so a quit in between leaves the one before (the
+/// phone's channel is kept this way too).
 pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
     use std::io::Write;
 
     if let Some(parent) = file.parent() {
         fs::create_dir_all(parent)?;
     }
-    let _ = fs::remove_file(file);
+    let temp = file.with_extension(format!("{}.tmp", std::process::id()));
+    // One a run before left under this pid.
+    let _ = fs::remove_file(&temp);
 
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
@@ -124,7 +128,11 @@ pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    options.open(file)?.write_all(json.as_bytes())
+    let written = options.open(&temp).and_then(|mut new| new.write_all(json.as_bytes())).and_then(|()| fs::rename(&temp, file));
+    if written.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    written
 }
 
 impl Core {
@@ -410,6 +418,38 @@ mod tests {
         assert!(wait_for(|| core.restart_plan().cut == vec![named.clone()]), "{:?}", core.restart_plan());
 
         core.dispose();
+    }
+
+    /// A file written over is the one before or the new one at every moment, never gone or half
+    /// there: the phone's channel is kept in such a file, and one that can't be read is a channel
+    /// that is off, its token lost.
+    #[cfg(unix)]
+    #[test]
+    fn a_private_file_is_whole_while_it_is_written_over() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("config").join("phone.json");
+        write_private(&file, &"a".repeat(8192)).unwrap();
+
+        let done = Arc::new(AtomicBool::new(false));
+        let (read, stop) = (file.clone(), Arc::clone(&done));
+        let reader = thread::spawn(move || {
+            let mut broken = 0;
+            while !stop.load(Ordering::SeqCst) {
+                broken += usize::from(!fs::read_to_string(&read).is_ok_and(|text| text.len() == 8192));
+            }
+            broken
+        });
+        for round in 0..300 {
+            write_private(&file, &["a", "b"][round % 2].repeat(8192)).unwrap();
+        }
+        done.store(true, Ordering::SeqCst);
+
+        assert_eq!(reader.join().unwrap(), 0, "read while gone or half written");
+        assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(fs::read_dir(file.parent().unwrap()).unwrap().count(), 1, "nothing is left beside it");
     }
 
     /// The record holds what the terminals showed: nobody but the user reads it.
