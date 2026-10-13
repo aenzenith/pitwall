@@ -898,7 +898,6 @@
   "board.none.search": "検索に一致するカードはありません",
   "board.noProjects": "まずプロジェクトを追加してから、そのカードを書きましょう。",
   "whatsNew.label": "Pitwall {version} の新機能",
-  "whatsNew.from": "{version} からアップデート",
   "whatsNew.features": "新機能",
   "whatsNew.fixes": "修正",
   "whatsNew.failed": "リリースノートを読み込めませんでした。",

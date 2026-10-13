@@ -203,10 +203,9 @@ export type Discovery = { dir: string | null; folders: number; candidates: Candi
 export type ReleaseNote = { kind: "new" | "fix"; title: string; body: string | null };
 
 /** This version's notes, written for each release in every language (src/whats-new.json).
- * `pending`: they haven't been shown yet; `from`: the version updated from, when known; `date`:
- * the release's day (`YYYY-MM-DD`), when it has one. No `notes`: there are none for this build,
- * and nothing is to be shown or offered. */
-export type WhatsNew = { current: string; date: string | null; pending: boolean; from: string | null; notes: ReleaseNote[] };
+ * `pending`: they haven't been shown yet; `date`: the release's day (`YYYY-MM-DD`), when it has
+ * one. No `notes`: there are none for this build, and nothing is to be shown or offered. */
+export type WhatsNew = { current: string; date: string | null; pending: boolean; notes: ReleaseNote[] };
 
 /* ---------- Resume: what was open at the last quit (snapshot.resume) ---------- */
 

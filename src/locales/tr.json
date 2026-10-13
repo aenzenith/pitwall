@@ -912,7 +912,6 @@
   "board.none.search": "Aramaya uyan kart yok",
   "board.noProjects": "Önce bir proje ekle, sonra kartlarını yaz.",
   "whatsNew.label": "Pitwall {version} yenilikleri",
-  "whatsNew.from": "{version} sürümünden güncellendi",
   "whatsNew.features": "Yeni",
   "whatsNew.fixes": "Düzeltmeler",
   "whatsNew.failed": "Sürüm notları okunamadı.",

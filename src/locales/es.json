@@ -938,7 +938,6 @@
   "board.none.search": "Ninguna tarjeta coincide con la búsqueda",
   "board.noProjects": "Agrega primero un proyecto y luego escribe sus tarjetas.",
   "whatsNew.label": "Novedades de Pitwall {version}",
-  "whatsNew.from": "Actualizado desde {version}",
   "whatsNew.features": "Novedades",
   "whatsNew.fixes": "Correcciones",
   "whatsNew.failed": "No se pudieron leer las notas de la versión.",

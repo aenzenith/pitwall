@@ -979,7 +979,6 @@
   "board.none.search": "Нет карточек по запросу",
   "board.noProjects": "Сначала добавьте проект, затем пишите его карточки.",
   "whatsNew.label": "Что нового в Pitwall {version}",
-  "whatsNew.from": "Обновлено с версии {version}",
   "whatsNew.features": "Новое",
   "whatsNew.fixes": "Исправления",
   "whatsNew.failed": "Не удалось прочитать заметки о выпуске.",

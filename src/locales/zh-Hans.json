@@ -898,7 +898,6 @@
   "board.none.search": "没有符合搜索的卡片",
   "board.noProjects": "先添加一个项目，再写它的卡片。",
   "whatsNew.label": "Pitwall {version} 的新内容",
-  "whatsNew.from": "从 {version} 更新",
   "whatsNew.features": "新增",
   "whatsNew.fixes": "修复",
   "whatsNew.failed": "无法读取发行说明。",

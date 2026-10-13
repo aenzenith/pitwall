@@ -925,7 +925,6 @@
   "board.none.search": "No cards match the search",
   "board.noProjects": "Add a project first, then write its cards.",
   "whatsNew.label": "What's new in Pitwall {version}",
-  "whatsNew.from": "Updated from {version}",
   "whatsNew.features": "New",
   "whatsNew.fixes": "Fixes",
   "whatsNew.failed": "The release notes couldn't be read.",

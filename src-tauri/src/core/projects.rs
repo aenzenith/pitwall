@@ -174,7 +174,7 @@ impl Core {
     /// This version's notes, in the language spoken.
     pub fn whats_new(&self) -> crate::whatsnew::WhatsNew {
         let inner = self.lock();
-        crate::whatsnew::view(inner.settings.seen_version.as_deref(), inner.whats_new, i18n::current())
+        crate::whatsnew::view(inner.whats_new, i18n::current())
     }
 
     /// The notes were shown: they don't come up by themselves again.

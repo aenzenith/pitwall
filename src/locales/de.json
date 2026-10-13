@@ -925,7 +925,6 @@
   "board.none.search": "Keine Karte passt zur Suche",
   "board.noProjects": "Füge zuerst ein Projekt hinzu und schreib dann seine Karten.",
   "whatsNew.label": "Neuerungen in Pitwall {version}",
-  "whatsNew.from": "Aktualisiert von {version}",
   "whatsNew.features": "Neu",
   "whatsNew.fixes": "Korrekturen",
   "whatsNew.failed": "Die Versionshinweise ließen sich nicht lesen.",

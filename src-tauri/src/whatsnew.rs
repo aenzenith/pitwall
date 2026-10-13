@@ -45,15 +45,14 @@ pub struct Note {
     pub body: Option<String>,
 }
 
-/// The notes to show. `pending`: they haven't been shown yet; `from`: the version updated from,
-/// when known; `date`: this version's release day (`YYYY-MM-DD`), when it has one. No `notes`:
-/// there are none for this build, and nothing is shown.
+/// The notes to show. `pending`: they haven't been shown yet; `date`: this version's release
+/// day (`YYYY-MM-DD`), when it has one. No `notes`: there are none for this build, and nothing
+/// is shown.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct WhatsNew {
     pub current: String,
     pub date: Option<String>,
     pub pending: bool,
-    pub from: Option<String>,
     pub notes: Vec<Note>,
 }
 
@@ -126,19 +125,13 @@ pub fn is_pending(seen: Option<&str>) -> bool {
 }
 
 /// What to show for this build in `language`. `pending`: as the core holds it since the start.
-pub fn view(seen: Option<&str>, pending: bool, language: &str) -> WhatsNew {
+pub fn view(pending: bool, language: &str) -> WhatsNew {
     let notes = notes_of(NOTES, CHANGELOG, CURRENT, language);
     // Notes written after this very version are a release's to come: it has no day yet.
     let to_come = serde_json::from_str::<File>(NOTES).is_ok_and(|file| file.since == CURRENT);
     let date = releases(CHANGELOG).into_iter().find(|(version, _)| !to_come && version == CURRENT).and_then(|(_, date)| date);
 
-    WhatsNew {
-        current: CURRENT.to_string(),
-        date,
-        pending: pending && !notes.is_empty(),
-        from: seen.filter(|seen| pending && *seen != CURRENT).map(str::to_string),
-        notes,
-    }
+    WhatsNew { current: CURRENT.to_string(), date, pending: pending && !notes.is_empty(), notes }
 }
 
 #[cfg(test)]

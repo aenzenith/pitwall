@@ -56,8 +56,8 @@ function day(date: string | null | undefined): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? dayShort(date) : date;
 }
 
-/** Under the title: the version updated from, when known, and the day of this one. */
-const sub = computed(() => [news.value?.from ? t("whatsNew.from", { version: news.value.from }) : "", day(news.value?.date)].filter(Boolean).join(" · "));
+/** Across from the title: the day this version came out, when it has one. */
+const released = computed(() => day(news.value?.date));
 
 /** What is new first, then the fixes under their label; what is new gets one only beside fixes. */
 const groups = computed<Array<{ label: string; notes: ReleaseNote[] }>>(() => {
@@ -92,7 +92,7 @@ function openNotes(): void {
     <div class="body">
       <div class="head">
         <div class="title">Pitwall {{ version }}</div>
-        <div v-if="sub" class="sub">{{ sub }}</div>
+        <div v-if="released" class="released">{{ released }}</div>
       </div>
 
       <!-- Long notes scroll in here: the dialog never outgrows the window. -->
@@ -152,11 +152,13 @@ function openNotes(): void {
   gap: 12px;
 }
 
+/* The title and, across from it, the day: one line, on one baseline. */
 .head {
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .title {
@@ -164,13 +166,12 @@ function openNotes(): void {
   font-weight: 600;
 }
 
-.sub {
+.released {
+  flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-subtle);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Out to the dialog's edges, so the scrollbar runs along its side. */
