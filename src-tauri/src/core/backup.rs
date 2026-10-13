@@ -959,7 +959,7 @@ mod tests {
         NewImage { n, data: format!("data:image/png;base64,{}", BASE64.encode(png(fill))) }
     }
 
-    /// Every file under `dir`, by its path from there.
+    /// Every file under `dir`, by its path from there, its parts joined by `/` on every system.
     fn files(dir: &Path) -> Vec<String> {
         fn walk(dir: &Path, root: &Path, found: &mut Vec<String>) {
             for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
@@ -967,7 +967,8 @@ mod tests {
                 if path.is_dir() {
                     walk(&path, root, found);
                 } else {
-                    found.push(path.strip_prefix(root).unwrap().to_string_lossy().into_owned());
+                    let parts: Vec<_> = path.strip_prefix(root).unwrap().iter().map(|part| part.to_string_lossy()).collect();
+                    found.push(parts.join("/"));
                 }
             }
         }
