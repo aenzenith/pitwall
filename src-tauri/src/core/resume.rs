@@ -368,6 +368,7 @@ mod tests {
         fs::write(&log, "{}\n").unwrap();
         let sleeper = Sleeper(std::process::Command::new("sh").args(["-c", "read line", "claude"]).stdin(std::process::Stdio::piped()).spawn().unwrap());
         let pid = sleeper.0.id();
+        assert!(crate::process::seen_with(pid, "claude"), "the stand-in shows as Claude Code's process");
         fs::create_dir_all(claude.join("sessions")).unwrap();
         fs::write(claude.join("sessions").join(format!("{pid}.json")), serde_json::json!({ "pid": pid, "sessionId": id }).to_string()).unwrap();
 

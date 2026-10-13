@@ -639,6 +639,7 @@ mod tests {
         // A Claude process, as far as the process table tells (`claude` in its command line).
         let mut child = std::process::Command::new("sh").args(["-c", "sleep 30; true", "claude"]).spawn().unwrap();
         let pid = child.id();
+        let seen = crate::process::seen_with(pid, "claude");
 
         fs::create_dir_all(claude.join("sessions")).unwrap();
         fs::write(
@@ -678,6 +679,7 @@ mod tests {
         let _ = child.kill();
         let _ = child.wait();
 
+        assert!(seen, "the stand-in shows as Claude Code's process");
         let row = view.sessions.iter().find(|row| row.id == id).expect("the running session has a row");
         assert_eq!((row.path.as_deref(), row.folder.as_str(), row.project.as_str()), (None, folder.as_str(), "app"));
         assert_eq!((row.phase, row.running, row.title.as_deref()), (RowPhase::Working, Some(true), Some("Login page")));

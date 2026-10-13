@@ -480,6 +480,23 @@ pub fn process_table() -> Option<HashMap<u32, ProcessInfo>> {
     (!table.is_empty()).then_some(table)
 }
 
+/// For a test that starts a stand-in process: waits until the table shows `pid` with `word` in
+/// its command line. A process just started is listed before its arguments can be read, and a
+/// test that looked at once took it for another program now and then.
+#[cfg(all(test, unix))]
+pub fn seen_with(pid: u32, word: &str) -> bool {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        if process_table().is_some_and(|table| table.get(&pid).is_some_and(|process| process.line.contains(word))) {
+            return true;
+        }
+        if std::time::Instant::now() >= until {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
 /// Where `name` is on `PATH`: on Windows as `name.exe`, `.cmd` or `.bat` (the launchers editors
 /// install are `.cmd` files), elsewhere under its own name. Relative entries are skipped.
 #[cfg(not(target_os = "macos"))]
