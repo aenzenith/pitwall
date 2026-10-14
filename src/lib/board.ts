@@ -39,7 +39,8 @@ export const LANE_LIMIT = 2;
 /**
  * A lane on every project's board: a project's cards per column (those the search leaves) and how
  * many it did in the days shown. `idle` and `next` are true whatever the search says: it has no card in
- * Claude's column at all, and its first card up next. `project` null: a folder no longer among the
+ * Claude's column at all, and its first card up next that isn't told to wait for a moment of its
+ * own. `project` null: a folder no longer among the
  * projects (`name`: its last part), whose cards are kept but never given.
  */
 export type Lane = {
@@ -81,7 +82,7 @@ export function laneOf(path: string, project: Project | null, shown: Card[], eve
     review: columnCards(shown, path, "review"),
     done: columnCards(shown, path, "done").length,
     idle: !mine.some((card) => card.column === "claude"),
-    next: project ? (mine.find((card) => card.column === "queued") ?? null) : null,
+    next: project ? (mine.find((card) => card.column === "queued" && !card.schedule) ?? null) : null,
   };
 }
 

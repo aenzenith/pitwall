@@ -29,6 +29,7 @@ mod whatsnew;
 mod windows;
 mod presence;
 mod mcp;
+mod start;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -516,7 +517,10 @@ pub fn run() {
             commands::radio_set,
             commands::radio_tool,
             commands::radio_calls,
-            commands::open_reference
+            commands::open_reference,
+            commands::board_schedule,
+            commands::board_unschedule,
+            commands::board_give_now
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

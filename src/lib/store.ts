@@ -30,6 +30,7 @@ import type {
   Settings,
   SignalKind,
   Snapshot,
+  StartChoice,
   TerminalView,
   UpdateView,
 } from "./types";
@@ -258,8 +259,10 @@ export const api = {
   linkSuggestions: (path: string) => invoke<LinkSuggestion[]>("link_suggestions", { path }),
   extensionStatus: (editor: string) => invoke<ExtensionStatus>("extension_status", { editor }),
   openExtensionPage: (editor: string) => invoke("open_extension_page", { editor }),
-  openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null) =>
-    invoke<TerminalView>("open_terminal", { path, claude, cols: size?.cols, rows: size?.rows }),
+  /** `start`: for a Claude tab, the model and the mode picked from "New Claude"'s list; without
+   * it, the project's own. */
+  openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null, start: StartChoice | null = null) =>
+    invoke<TerminalView>("open_terminal", { path, claude, cols: size?.cols, rows: size?.rows, start: start ?? undefined }),
   renameTerminal: (id: number, name: string) => invoke("rename_terminal", { id, name }),
   writeTerminal: (id: number, data: string) => invoke("write_terminal", { id, data }),
   resizeTerminal: (id: number, cols: number, rows: number) => invoke("resize_terminal", { id, cols, rows }),
@@ -338,9 +341,10 @@ export const api = {
   boardMove: (id: string, column: BoardColumn, index: number) => invoke("board_move", { id, column, index }),
   boardDelete: (id: string) => invoke("board_delete", { id }),
   /** Starts a Claude session in a new Pitwall terminal with the card's text (`plan`: in plan mode).
-   * `continue`: the session the card holds goes on instead; one that still runs opens no terminal (null). */
-  boardGive: (id: string, mode: "new" | "plan" | "continue", size: { cols: number; rows: number } | null = null) =>
-    invoke<TerminalView | null>("board_give", { id, mode, cols: size?.cols, rows: size?.rows }),
+   * `continue`: the session the card holds goes on instead; one that still runs opens no terminal (null).
+   * `start`: the model and the mode chosen for a new session; without it, the project's own. */
+  boardGive: (id: string, mode: "new" | "plan" | "continue", size: { cols: number; rows: number } | null = null, start: StartChoice | null = null) =>
+    invoke<TerminalView | null>("board_give", { id, mode, cols: size?.cols, rows: size?.rows, start: start ?? undefined }),
   boardLink: (id: string, session: string) => invoke("board_link", { id, session }),
   /** Every card of the folder `from` goes to the project `to`, each in its column. */
   boardRehome: (from: string, to: string) => invoke("board_rehome", { from, to }),
@@ -443,6 +447,14 @@ export const api = {
   /** Opens the file an output line names (`file`, as printed) in the editor, at its line. The
    * core finds it, in the project's folder only: false when the project has no such file. */
   openReference: (path: string, file: string, line: number, column: number | null) => invoke<boolean>("open_reference", { path, file, line, column }),
+  /** Tells a card up next to wait until the 5-hour session refills (the core's own reading of
+   * that moment): the core gives it then, with `start`. */
+  boardSchedule: (id: string, start: StartChoice) => invoke("board_schedule", { id, start }),
+  /** The card waits no longer; it stays up next. */
+  boardUnschedule: (id: string) => invoke("board_unschedule", { id }),
+  /** "Give now" on a card that waits: given at once with what was chosen for it; null when it
+   * no longer waits (the core gave it a moment ago). */
+  boardGiveNow: (id: string, size: { cols: number; rows: number } | null = null) => invoke<TerminalView | null>("board_give_now", { id, cols: size?.cols, rows: size?.rows }),
 };
 
 /** The Track page's settings as just picked, on the page or in Settings: shown at once, the core

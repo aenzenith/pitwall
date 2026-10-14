@@ -26,6 +26,15 @@
 //! A given card asks Claude to end with a short summary, and the card's details show what
 //! Claude last said in its session once the work is over, as a session's details do
 //! (`Core::last_message`): read from that session's log when asked, never kept.
+//!
+//! A card is given with a model and in a mode (`start.rs`: each one of a fixed list): those
+//! chosen for it, else its project's. A card in `queued` can be told to wait (`Schedule`): the
+//! core gives it when its moment comes (`board_due`), once. The schedule is the card's own, in
+//! the board's file, and whoever takes it off the card gives the card: it is off, and the file
+//! written, before anything starts. The cards that wait for the 5-hour session's refill share
+//! one fresh quota: they are given one at a time, each next one once Claude is no longer at work
+//! on the one before, or ten minutes after it when Claude was never seen at work on it
+//! (`Board::line_held`).
 
 use std::io::ErrorKind;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -42,6 +51,7 @@ use super::*;
 use crate::claude::TurnKind;
 use crate::registry::{base36, write_atomic};
 use crate::settings::set_aside;
+use crate::start::{Mode, Start};
 
 /// Done cards are dropped this long after they got there.
 const DONE_KEPT_MS: u64 = 30 * 24 * 60 * 60 * 1000;
@@ -59,6 +69,15 @@ const IMAGES_DIR: &str = "board-images";
 /// A card holds this many images at most, each this large at most.
 pub(super) const IMAGES_MAX: usize = 12;
 const IMAGE_BYTES_MAX: usize = 10 * 1024 * 1024;
+/// A card whose moment passed longer ago than this (Pitwall wasn't running, or the Mac slept) is
+/// not given any more: its schedule goes and it stays where it is.
+const LATE_MS: u64 = 30 * 60 * 1000;
+/// A card that waits for the session's refill follows a reading that names another moment, up to
+/// this much later: one further off is the next session's refill, not the one it waits for.
+const REFILL_REACH_MS: u64 = 4 * 60 * 60 * 1000;
+/// A card given from the line whose Claude isn't seen at work this long after the give (it sits
+/// idle, or nothing tells) holds the line no more: the next one goes, and the card stays.
+const UNSEEN_MS: u64 = 10 * 60 * 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -183,6 +202,35 @@ fn too_many() -> String {
     format!("a card holds at most {IMAGES_MAX} images")
 }
 
+/// A card told to wait: when it is given, and with what.
+///
+/// The cards that wait for the refill are given one at a time, in the line they stand in once
+/// it comes (`board_due_at`): the first at the refill, each next one once Claude is no longer at
+/// work on the one given before it, or never went to work on it (`UNSEEN_MS`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Schedule {
+    /// The moment, in ms. In the line (`line`): when the line last moved for it (it got in, a
+    /// card was given from it, Pitwall quit), which a restart reads as a missed moment's
+    /// (`LATE_MS`).
+    pub at: u64,
+    /// The moment is the 5-hour session's refill: it follows the reading (`board_refill`).
+    #[serde(default)]
+    pub refill: bool,
+    /// The model and the mode chosen for it.
+    #[serde(default)]
+    pub start: Start,
+    /// Its refill came while a card before it was given or still with Claude: it waits its turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub line: bool,
+}
+
+/// A part of a card that is there or not (`start`, `schedule`): what the file has when it fits,
+/// nothing when it doesn't. A part this version can't read never costs the card itself.
+fn part_or_none<'de, T: serde::de::DeserializeOwned, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<T>, D::Error> {
+    Ok(serde_json::from_value(Value::deserialize(deserializer)?).ok())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Card {
@@ -218,6 +266,13 @@ pub struct Card {
     /// The images pasted into its note, by number.
     #[serde(default)]
     pub images: Vec<CardImage>,
+    /// The model and the mode its last new session was started with; none before the first.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "part_or_none")]
+    pub start: Option<Start>,
+    /// In `queued`: told to wait, the core gives it when its moment comes (`board_due`). It goes
+    /// when the card is given, edited, moved to another column or to another project.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "part_or_none")]
+    pub schedule: Option<Schedule>,
 }
 
 pub(super) struct Board {
@@ -236,6 +291,33 @@ pub(super) struct Board {
     linked_busy: HashSet<String>,
     /// The cards were followed once since launch (`follow_board`).
     followed: bool,
+    /// Cards on their way to Claude right now (a tab is opening for them): none is given a
+    /// second time meanwhile, by hand or at its moment.
+    giving: HashSet<String>,
+    /// The cards the board's file says wait for a moment, as it was last read or written. None
+    /// of them is given until the file has taken note that it waits no longer (`board_noted`,
+    /// `board_due_at`): the next run would give it at its moment, a second time.
+    filed_waiting: HashSet<String>,
+    /// The cards given from the line of those that waited for the refill (at their turn, or by
+    /// hand), while Claude may still be at work on them: the next in line waits for them all
+    /// (`line_held`). This run's own: the Claude a card was given to ends with the run.
+    line: HashMap<String, Lined>,
+}
+
+/// A card given from the line, as `Board::line` keeps it.
+#[derive(Debug, Clone, Copy)]
+struct Lined {
+    /// When it was given.
+    at: u64,
+    /// Its Claude has been seen at work since (`follow_board`): working, or waiting on a
+    /// permission or a question.
+    worked: bool,
+}
+
+impl Lined {
+    fn given(at: u64) -> Self {
+        Self { at, worked: false }
+    }
 }
 
 impl Board {
@@ -244,7 +326,8 @@ impl Board {
     pub(super) fn load(file: PathBuf, now: u64) -> Self {
         let (cards, writable, changed, dropped) = read_cards(&file, now);
         let images = file.with_file_name(IMAGES_DIR);
-        let board = Self { file, images, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new(), followed: false };
+        let filed_waiting = waiting_ids(&cards);
+        let mut board = Self { file, images, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new(), followed: false, giving: HashSet::new(), filed_waiting, line: HashMap::new() };
         if changed && board.save() {
             // Gone from the board's file for good: their images go with them.
             for card in &dropped {
@@ -287,7 +370,7 @@ impl Board {
     }
 
     /// Writes the board; false when it isn't on disk as it is now.
-    fn save(&self) -> bool {
+    fn save(&mut self) -> bool {
         if !self.writable {
             return false;
         }
@@ -299,6 +382,9 @@ impl Board {
         let written = serde_json::to_string_pretty(&json).map_err(|error| error.to_string()).and_then(|text| write_atomic(&self.file, &text).map_err(|error| error.to_string()));
         if let Err(error) = &written {
             eprintln!("[pitwall] {} could not be written: {error}", self.file.display());
+        }
+        if written.is_ok() {
+            self.filed_waiting = waiting_ids(&self.cards);
         }
         written.is_ok()
     }
@@ -318,7 +404,8 @@ impl Board {
 
     /// Takes the card out and puts it at `index` among its project's cards in `column` (past the
     /// last one: at the end), as the board shows them. A new column sets `moved_at`, and the
-    /// card is no longer `rested`: that is told anew where it got to.
+    /// card is no longer `rested`: that is told anew where it got to. Nor does it wait for a
+    /// moment any more (`schedule`): only a card left in `queued` does.
     pub(super) fn place(&mut self, id: &str, column: Column, index: usize, now: u64) -> Option<&mut Card> {
         let at = self.cards.iter().position(|card| card.id == id)?;
         let mut card = self.cards.remove(at);
@@ -326,6 +413,7 @@ impl Board {
             card.column = column;
             card.moved_at = now;
             card.rested = false;
+            card.schedule = None;
         }
 
         let slots: Vec<usize> =
@@ -337,6 +425,34 @@ impl Board {
         self.cards.insert(target, card);
         self.cards.get_mut(target)
     }
+
+    /// Claude may still be at work on a card given from the line: the next in line waits. A card
+    /// on its way (a tab opening for it) holds the line, and so does one in `claude`: it leaves
+    /// that column once its session's turn is over (not while Claude Code still calls it busy) or
+    /// the session ended, its tab closed (`follow_board`, `board_terminal_gone`), or the user
+    /// moved or deleted it. A permission wait or a question keeps it there. Without a session
+    /// past `ADOPT_MS` its own Claude never started in its tab (the board shows it closed): it
+    /// holds nothing. Nor does one whose Claude wasn't seen at work within `UNSEEN_MS` of the
+    /// give (`Lined::worked`): it stays in `claude`, and the next goes. The cards that no longer
+    /// hold the line are let go.
+    fn line_held(&mut self, now: u64) -> bool {
+        let Self { cards, giving, line, .. } = self;
+        line.retain(|id, lined| {
+            giving.contains(id)
+                || cards.iter().any(|card| {
+                    card.id == *id
+                        && card.column == Column::Claude
+                        && (card.session.is_some() || now.saturating_sub(card.given_at.unwrap_or(card.moved_at)) <= ADOPT_MS)
+                        && (lined.worked || now.saturating_sub(lined.at) <= UNSEEN_MS)
+                })
+        });
+        !line.is_empty()
+    }
+}
+
+/// The cards of `cards` that wait for a moment, by id.
+fn waiting_ids(cards: &[Card]) -> HashSet<String> {
+    cards.iter().filter(|card| card.schedule.is_some()).map(|card| card.id.clone()).collect()
 }
 
 /// The cards in `file`, whether it may be written, whether what was read changed (to be
@@ -377,6 +493,17 @@ fn read_cards(file: &Path, now: u64) -> (Vec<Card>, bool, bool, Vec<Card>) {
     for card in &mut cards {
         if card.session.as_deref().is_some_and(|session| !is_session_id(session)) {
             card.session = None;
+            changed = true;
+        }
+        // Only a card up next waits for a moment, whatever the file says.
+        if card.column != Column::Queued && card.schedule.take().is_some() {
+            changed = true;
+        }
+        // The line stood still while Pitwall wasn't running: one left longer than a missed
+        // moment would be is let go as that moment is (`LATE_MS`); the rest goes on from its
+        // first card, one at a time (`board_due_at`).
+        if card.schedule.is_some_and(|schedule| schedule.line && now.saturating_sub(schedule.at) > LATE_MS) {
+            card.schedule = None;
             changed = true;
         }
         // A terminal belongs to the run that opened it, and the Claude in it ended with that run.
@@ -521,7 +648,39 @@ impl Core {
     /// Saves the board and sends it to the window, the lock let go first. A board that couldn't
     /// be written says so in the snapshot (`board_unsaved`).
     pub(super) fn board_changed(&self, board: MutexGuard<'_, Board>) {
+        self.board_written(board);
+    }
+
+    /// `board_changed`, saying whether the board is on disk as it is now.
+    fn board_written(&self, mut board: MutexGuard<'_, Board>) -> bool {
         let saved = board.save();
+        self.board_told(board, saved);
+        saved
+    }
+
+    /// The board written for a give by hand of a card the file says waits (`filed_waiting`): its
+    /// schedule is off the file before anything starts, and the card is on its way (`giving`).
+    /// When the file can't be written the give is off, as at the card's moment (`board_due_at`):
+    /// the card waits on as it did (`waited`, the schedule taken off it, is put back), and the
+    /// answer is the board's own words for that.
+    fn board_noted(&self, mut board: MutexGuard<'_, Board>, id: &str, waited: Option<Schedule>) -> Result<(), String> {
+        let saved = board.save();
+        if saved {
+            board.giving.insert(id.to_string());
+        } else if let Some(card) = board.find_mut(id) {
+            card.schedule = waited;
+        }
+        self.board_told(board, saved);
+        if saved {
+            Ok(())
+        } else {
+            Err(t!("board.unsaved.title"))
+        }
+    }
+
+    /// Sends the board to the window, the lock let go first, and notes whether it is on disk as
+    /// it is now (`saved`).
+    fn board_told(&self, board: MutexGuard<'_, Board>, saved: bool) {
         let cards = board.cards.clone();
         drop(board);
         self.emit(CoreEvent::Board(cards));
@@ -579,6 +738,8 @@ impl Core {
             ran: false,
             rested: false,
             images: held,
+            start: None,
+            schedule: None,
         };
         board.cards.push(card.clone());
         board.place(&card.id, Column::Queued, usize::MAX, now);
@@ -588,7 +749,8 @@ impl Core {
 
     /// A card's new text. `images`: those pasted into its note since it was saved. An image
     /// stays while the note names it (`[Image #n]`), and its file goes once the note no longer
-    /// does; a new one under a held number takes that one's place.
+    /// does; a new one under a held number takes that one's place. A card that waited for its
+    /// moment no longer does: what was to be given then was the text as it stood.
     pub fn board_edit(&self, id: &str, title: &str, note: &str, images: &[NewImage]) -> Result<(), String> {
         let title = title.trim();
         if title.is_empty() {
@@ -612,6 +774,7 @@ impl Core {
         card.title = title.to_string();
         card.note = note.to_string();
         card.images = held;
+        card.schedule = None;
         board.remove_images(id, &gone);
         self.board_changed(board);
         Ok(())
@@ -678,6 +841,8 @@ impl Core {
         let any = !moved.is_empty();
         for card in &mut moved {
             card.path = to.to_string();
+            // Another project's now, with settings of its own: it waits for nothing.
+            card.schedule = None;
         }
         board.cards = kept;
         board.cards.append(&mut moved);
@@ -696,18 +861,284 @@ impl Core {
     /// `Give::Continue` keeps the session the card holds instead (`carry`): one that runs is
     /// followed where it is, with no tab opened (`None`); one that has ended opens again in a
     /// tab, as it was.
+    ///
+    /// A new session starts with the model and in the mode of the card's project
+    /// (`board_give_with`: with those chosen for it).
     pub fn board_give(self: &Arc<Self>, id: &str, give: Give, size: Option<(u16, u16)>) -> Result<Option<TerminalView>, String> {
-        let card = self.board().find(id).ok_or_else(|| no_card(id))?.clone();
+        self.board_give_with(id, give, None, size)
+    }
+
+    /// `board_give`, with the model and the mode chosen for the card (`chosen`). Without a
+    /// choice, a card that waited for its moment starts with what was chosen when it was told to
+    /// wait (it is given by hand now, and waits no longer); any other as its project's settings
+    /// say, or, going on without a session to go on with (`Give::Continue`), as it started last.
+    /// `Give::Plan` is plan mode whatever else holds.
+    ///
+    /// A card on its way to Claude already (a tab is opening for it) is left to that: `None`.
+    /// A card the board's file says waits is not given while that file can't be written, by
+    /// hand as at its moment (`board_noted`): refused, in the words the board has for that.
+    pub fn board_give_with(self: &Arc<Self>, id: &str, give: Give, chosen: Option<Start>, size: Option<(u16, u16)>) -> Result<Option<TerminalView>, String> {
+        let (card, waited) = {
+            let mut board = self.board();
+            if board.giving.contains(id) {
+                return Ok(None);
+            }
+            let card = board.find_mut(id).ok_or_else(|| no_card(id))?;
+            let waited = card.schedule.take();
+            let card = card.clone();
+            // Taken from the line by hand: the next in line waits for it too.
+            if waited.is_some_and(|schedule| schedule.line) {
+                board.line.insert(id.to_string(), Lined::given(now_ms()));
+            }
+            // Its schedule is off the file before anything starts (`board_due`).
+            if waited.is_some() || board.filed_waiting.contains(id) {
+                self.board_noted(board, id, waited)?;
+            } else {
+                board.giving.insert(id.to_string());
+            }
+            (card, waited)
+        };
+
+        let kept = card.start.filter(|_| give == Give::Continue);
+        let mut start = chosen.or(waited.map(|schedule| schedule.start)).or(kept).unwrap_or_else(|| self.project_start(&card.path));
+        if give == Give::Plan {
+            start.mode = Mode::Plan;
+        }
+
+        let given = self.launch_card(&card, give, start, size, false);
+        self.board().giving.remove(id);
+        given
+    }
+
+    /// How card `id` starts when nothing is chosen for it: as its project's settings say.
+    pub fn board_start(&self, id: &str) -> Option<Start> {
+        let path = self.board().find(id)?.path.clone();
+        Some(self.project_start(&path))
+    }
+
+    /// "Give now" on a card that waits for its moment: given at once, with what was chosen for
+    /// it. One that waits no longer (the core gave it a moment ago, it was given or edited
+    /// elsewhere) is left as it is, `None`: a card is given by whoever takes its schedule off
+    /// it, so never twice for one. Nor is it given while the board's file can't be written
+    /// (`board_noted`): refused, in the words the board has for that, it waits on.
+    pub fn board_give_now(self: &Arc<Self>, id: &str, size: Option<(u16, u16)>) -> Result<Option<TerminalView>, String> {
+        let (card, schedule) = {
+            let mut board = self.board();
+            if board.giving.contains(id) {
+                return Ok(None);
+            }
+            let card = board.find_mut(id).ok_or_else(|| no_card(id))?;
+            let Some(schedule) = card.schedule.take() else {
+                return Ok(None);
+            };
+            let card = card.clone();
+            // Taken from the line by hand: the next in line waits for it too.
+            if schedule.line {
+                board.line.insert(id.to_string(), Lined::given(now_ms()));
+            }
+            self.board_noted(board, id, Some(schedule))?;
+            (card, schedule)
+        };
+
+        let given = self.launch_card(&card, Give::New, schedule.start, size, false);
+        self.board().giving.remove(id);
+        given
+    }
+
+    /// Tells a card in `queued` to wait until `at` (ms): the core gives it then (`board_due`),
+    /// with `start`. `refill`: the moment is the 5-hour session's refill, and follows the
+    /// reading (`board_refill`). Only a listed project's card waits: no other is ever given.
+    pub fn board_schedule(&self, id: &str, at: u64, refill: bool, start: Start) -> Result<(), String> {
+        let listed = self.listed_paths();
+        let mut board = self.board();
+        if board.giving.contains(id) {
+            return Err(format!("card {id} is being given"));
+        }
+        let card = board.find_mut(id).ok_or_else(|| no_card(id))?;
+        if card.column != Column::Queued {
+            return Err(format!("card {id} is not up next"));
+        }
+        if !listed.contains(&card.path) {
+            return Err(t!("core.error.depsNotListed", path = card.path));
+        }
+        if at <= now_ms() {
+            return Err(t!("core.start.noRefill"));
+        }
+        card.schedule = Some(Schedule { at, refill, start, line: false });
+        self.board_changed(board);
+        Ok(())
+    }
+
+    /// The card no longer waits; it stays where it is.
+    pub fn board_unschedule(&self, id: &str) {
+        let mut board = self.board();
+        if board.find_mut(id).and_then(|card| card.schedule.take()).is_some() {
+            self.board_changed(board);
+        }
+    }
+
+    /// A reading of Claude's limits says the 5-hour session refills at `at`: the cards that wait
+    /// for the refill follow it. Only while their own moment is still ahead (one that has passed
+    /// is `board_due`'s, whatever is read later), and only to a moment of the session they wait
+    /// on: the next session's refill, hours on, is not theirs. Nor is a moment already past: a
+    /// card that followed it would be given at once, or dropped as long past (`LATE_MS`). A card
+    /// in the line has had its refill: it waits its turn, whatever is read.
+    pub fn board_refill(&self, at: u64) {
+        let now = now_ms();
+        if at <= now {
+            return;
+        }
+        let mut board = self.board();
+        let mut moved = false;
+        for schedule in board.cards.iter_mut().filter_map(|card| card.schedule.as_mut()) {
+            if schedule.refill && !schedule.line && schedule.at > now && schedule.at != at && at < schedule.at + REFILL_REACH_MS {
+                schedule.at = at;
+                moved = true;
+            }
+        }
+        if moved {
+            self.board_changed(board);
+        }
+    }
+
+    /// Pitwall quits, and with it the Claude of a card given from the line: the line stands still
+    /// from now. Its cards say so, for the next start (`read_cards`).
+    pub(super) fn board_quit(&self) {
+        let now = now_ms();
+        let mut board = self.board();
+        let mut lined = false;
+        for schedule in board.cards.iter_mut().filter_map(|card| card.schedule.as_mut()).filter(|schedule| schedule.line) {
+            schedule.at = now;
+            lined = true;
+        }
+        if lined {
+            board.save();
+        }
+    }
+
+    /// Gives the cards whose moment has come, as their button would, with nothing brought to
+    /// the front. Runs every second (`tick`), and costs a look at the cards while none is due
+    /// and while the line waits on a card given from it.
+    pub(super) fn board_due(self: &Arc<Self>) {
+        self.board_due_at(now_ms(), &mut |card, start| self.launch_card(card, Give::New, start, None, true).map(|_| ()));
+    }
+
+    /// `board_due` at `now`, giving through `give`.
+    ///
+    /// Each due card's schedule is taken off it and the board written before anything starts,
+    /// so it is given once: not again by a second look, nor after a restart, nor by a hand that
+    /// gives it at the same moment. With that, the card is given only if it is still up next, its
+    /// project is still listed, the board could be written (else the file would still say it
+    /// waits), and its moment is not long past (`LATE_MS`: Pitwall wasn't running, or the Mac
+    /// slept through it). Otherwise, and when giving it fails, it stays where it is without its
+    /// schedule: nothing is tried again.
+    ///
+    /// The cards whose refill came are given one at a time, in the order the board shows them
+    /// (the projects as listed, each one's cards up next from the top): the first while no card
+    /// given from the line holds it (`Board::line_held`), the others wait their turn in the line
+    /// (`Schedule::line`), where no moment makes them late. A card of the line that is not given
+    /// (its project no longer listed, its give failed) holds nothing: the next goes in its place.
+    /// A card waiting for a moment of its own (not the refill) is given at it, line or not.
+    fn board_due_at(&self, now: u64, give: &mut dyn FnMut(&Card, Start) -> Result<(), String>) {
+        {
+            let mut board = self.board();
+            let new = board.cards.iter().any(|card| card.schedule.is_some_and(|schedule| schedule.at <= now && !schedule.line));
+            let lined = board.cards.iter().any(|card| card.schedule.is_some_and(|schedule| schedule.line));
+            if !new && !(lined && !board.line_held(now)) {
+                return;
+            }
+        }
+        // Before the board is locked: it takes the core's own lock.
+        let listed = self.listed_paths();
+        let place = |path: &str| listed.iter().position(|listed| listed == path).unwrap_or(usize::MAX);
+
+        let mut board = self.board();
+        let mut free = !board.line_held(now);
+        let mut changed = false;
+        let mut due: Vec<(Card, Start)> = Vec::new();
+        let Board { cards, giving, line, .. } = &mut *board;
+
+        // Each at its own moment.
+        for card in cards.iter_mut() {
+            let Some(schedule) = card.schedule.filter(|schedule| schedule.at <= now && !schedule.refill) else {
+                continue;
+            };
+            card.schedule = None;
+            changed = true;
+            let on_time = now - schedule.at <= LATE_MS;
+            if on_time && card.column == Column::Queued && listed.contains(&card.path) && giving.insert(card.id.clone()) {
+                due.push((card.clone(), schedule.start));
+            }
+        }
+
+        // The refill's, in the line.
+        let mut order: Vec<usize> = (0..cards.len()).filter(|&i| cards[i].schedule.is_some_and(|schedule| schedule.refill && schedule.at <= now)).collect();
+        order.sort_by_key(|&i| (place(&cards[i].path), i));
+        let mut moved = false;
+        for i in order {
+            let card = &mut cards[i];
+            let Some(mut schedule) = card.schedule else {
+                continue;
+            };
+            let late = !schedule.line && now - schedule.at > LATE_MS;
+            if late || card.column != Column::Queued || !listed.contains(&card.path) {
+                card.schedule = None;
+                changed = true;
+            } else if free {
+                card.schedule = None;
+                changed = true;
+                free = false;
+                moved = true;
+                line.insert(card.id.clone(), Lined::given(now));
+                // On its way already, by hand: that give is its own.
+                if giving.insert(card.id.clone()) {
+                    due.push((card.clone(), schedule.start));
+                }
+            } else if !schedule.line {
+                schedule.line = true;
+                schedule.at = now;
+                card.schedule = Some(schedule);
+                changed = true;
+            }
+        }
+        // What is left in the line saw it move now: after a restart it goes on from here.
+        if moved {
+            for schedule in cards.iter_mut().filter_map(|card| card.schedule.as_mut()).filter(|schedule| schedule.line) {
+                schedule.at = now;
+            }
+        }
+
+        if !changed {
+            return;
+        }
+        let written = self.board_written(board);
+
+        for (card, start) in due {
+            if written {
+                if let Err(error) = give(&card, start) {
+                    eprintln!("[pitwall] a card could not be given at its moment: {error}");
+                }
+            }
+            self.board().giving.remove(&card.id);
+        }
+    }
+
+    /// Starts `card`'s work as `give` says (`board_give`), a new session with `start`. `card`:
+    /// as the board had it when the give was decided. `unasked`: given at its moment by the core
+    /// (`board_due`), not by the user: its tab says so (`TerminalView::unasked`).
+    fn launch_card(self: &Arc<Self>, card: &Card, give: Give, start: Start, size: Option<(u16, u16)>, unasked: bool) -> Result<Option<TerminalView>, String> {
+        let id = card.id.as_str();
 
         let carry = match give {
             Give::New | Give::Plan => Carry::Fresh,
-            Give::Continue => self.carry_of(&card),
+            Give::Continue => self.carry_of(card),
         };
         let launch = match (carry, &card.session) {
             (Carry::Follow, _) => {
                 let mut board = self.board();
                 if let Some(card) = board.place(id, Column::Claude, usize::MAX, now_ms()) {
                     card.worked = false;
+                    card.schedule = None;
                 }
                 self.board_changed(board);
                 return Ok(None);
@@ -716,7 +1147,7 @@ impl Core {
             _ => {
                 let mut text = if card.note.is_empty() { card.title.clone() } else { format!("{}\n\n{}", card.title, card.note) };
                 // What `[Image #n]` in the note stands for: Claude reads the file.
-                let images = self.card_images(&card);
+                let images = self.card_images(card);
                 if let Some((_, files)) = &images {
                     text.push_str(&format!("\n\n{}", t!("board.imagesPrompt")));
                     for (n, file) in files {
@@ -726,7 +1157,7 @@ impl Core {
                 // A one-word card alone would be read as one of Claude's subcommands (`update`,
                 // `doctor`, `mcp`…) even after `--`; with the line under it, it never is one word.
                 let prompt = format!("{text}\n\n{}", t!("board.summaryPrompt"));
-                Launch::Claude { prompt: Some(prompt), plan: give == Give::Plan, images: images.map(|(dir, _)| dir) }
+                Launch::Claude { prompt: Some(prompt), start, images: images.map(|(dir, _)| dir) }
             }
         };
         let resumed = match &launch {
@@ -734,7 +1165,7 @@ impl Core {
             _ => None,
         };
 
-        let view = self.open_terminal_as(&card.path, &launch, Some(tab_name(&card.title)), false, size)?;
+        let view = self.open_terminal_as(&card.path, &launch, Some(tab_name(&card.title)), false, size, unasked)?;
 
         let now = now_ms();
         let mut board = self.board();
@@ -749,9 +1180,11 @@ impl Core {
         card.terminal = open.then_some(view.id);
         card.given_at = Some(now);
         card.worked = false;
+        card.schedule = None;
         if resumed.is_none() {
             card.session = None;
             card.ran = false;
+            card.start = Some(start);
         }
         board.linked_busy.remove(id);
         if let (true, Some(session)) = (open, resumed) {
@@ -797,6 +1230,7 @@ impl Core {
         card.given_at = Some(now);
         card.worked = false;
         card.ran = false;
+        card.schedule = None;
         if busy {
             board.linked_busy.insert(id.to_string());
         } else {
@@ -922,7 +1356,7 @@ impl Core {
         let now = now_ms();
         let mut board = self.board();
         let mut changed = false;
-        let Board { cards, resumed, pids, linked_busy, .. } = &mut *board;
+        let Board { cards, resumed, pids, linked_busy, line, .. } = &mut *board;
 
         if let Some(running) = &running {
             pids.extend(ids.iter().filter_map(|id| Some((id.clone(), running.get(id)?.pid))));
@@ -991,6 +1425,10 @@ impl Core {
                 }
             }
 
+            // Given from the line and seen at work: it holds the line for as long as its turn runs.
+            if let (Stand::Busy, Some(lined)) = (state, line.get_mut(&card.id)) {
+                lined.worked = true;
+            }
             match state {
                 Stand::Busy if !card.worked => {
                     card.worked = true;
@@ -1062,6 +1500,8 @@ mod tests {
             ran: false,
             rested: false,
             images: Vec::new(),
+            start: None,
+            schedule: None,
         }
     }
 
@@ -1257,6 +1697,533 @@ mod tests {
         assert_eq!(of(&listed), [("b".to_string(), Column::Queued), ("a".into(), Column::Queued), ("c".into(), Column::Done), ("e".into(), Column::Queued)]);
         assert_eq!(of(other), [("d".to_string(), Column::Queued)]);
         assert!(of(gone).is_empty());
+    }
+
+    /// A core whose files are under `root`: made again over the same folder, it is the app
+    /// started again.
+    fn core_at(root: &Path) -> Arc<Core> {
+        Core::new(
+            CoreConfig {
+                registry_dir: root.join("registry"),
+                claude_dir: root.join("claude").join("projects"),
+                settings_file: root.join("config").join("settings.json"),
+                claude_settings: root.join("claude").join("settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            Arc::new(|_| {}),
+        )
+    }
+
+    /// A folder under `root` with a dev script, listed in `core`.
+    fn listed_project(core: &Core, root: &Path) -> String {
+        let project = root.join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("package.json"), r#"{"name":"paddock","scripts":{"dev":"vite"}}"#).unwrap();
+        let path = project.to_string_lossy().into_owned();
+        core.add_project(&path).unwrap();
+        path
+    }
+
+    const CHOSEN: Start = Start { model: Some(crate::start::Model::Sonnet), mode: Mode::Plan };
+
+    /// The board's file says card `id` waits for a moment.
+    fn waits_on_disk(file: &Path, id: &str) -> bool {
+        let raw: Value = serde_json::from_slice(&fs::read(file).unwrap()).unwrap();
+        raw["cards"].as_array().unwrap().iter().any(|card| card["id"] == id && !card["schedule"].is_null())
+    }
+
+    /// One look at the cards at `now` (`board_due_at`): the cards given, each with what it was
+    /// given with. Giving starts nothing here, and a card must be off the file by the time it
+    /// is given.
+    fn look(core: &Core, now: u64) -> Vec<(String, Start)> {
+        let file = core.cfg.settings_file.with_file_name("board.json");
+        let mut given = Vec::new();
+        core.board_due_at(now, &mut |card, start| {
+            assert!(!waits_on_disk(&file, &card.id), "its schedule is off the file before it is given");
+            given.push((card.id.clone(), start));
+            Ok(())
+        });
+        given
+    }
+
+    /// A card in `queued` that waits until `at`.
+    fn waiting(core: &Core, path: &str, title: &str, at: u64) -> String {
+        let id = core.board_add(path, title, "", &[]).unwrap().id;
+        core.board_schedule(&id, at, false, CHOSEN).unwrap();
+        id
+    }
+
+    fn schedule_of(core: &Core, id: &str) -> Option<Schedule> {
+        core.board_state().into_iter().find(|card| card.id == id).unwrap().schedule
+    }
+
+    /// A card told to wait is given by the core, which starts Claude on the user's account: it
+    /// must happen once. Not before its moment, not again at a second look or after a restart,
+    /// not at all once the moment is long past (the app wasn't running, the Mac slept), and
+    /// never while the board's file can't take note of it: the file would still say it waits.
+    #[test]
+    fn a_card_told_to_wait_is_given_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_project(&core, tmp.path());
+        let file = tmp.path().join("config").join("board.json");
+        let at = now_ms() + 3_600_000;
+
+        // Not before its moment; at it, once, with what was chosen; a second look gives nothing.
+        let first = waiting(&core, &project, "First", at);
+        assert!(waits_on_disk(&file, &first));
+        assert_eq!(look(&core, at - 1), []);
+        assert_eq!(schedule_of(&core, &first), Some(Schedule { at, refill: false, start: CHOSEN, line: false }));
+        assert_eq!(look(&core, at), [(first.clone(), CHOSEN)]);
+        assert_eq!(look(&core, at), []);
+        assert_eq!(look(&core, at + 1_000), []);
+        assert_eq!(schedule_of(&core, &first), None);
+
+        // Nor does a restart give it again.
+        let again = core_at(tmp.path());
+        assert_eq!(again.board_state().len(), 1);
+        assert_eq!(look(&again, at + 2_000), []);
+
+        // The app starts after the moment: a little late it is still given, once, and a second
+        // start gives nothing; long past, it is not given, and waits no longer.
+        let late = waiting(&again, &project, "A little late", at);
+        let missed = waiting(&again, &project, "Long past", at - LATE_MS - 1);
+        let restarted = core_at(tmp.path());
+        assert_eq!(look(&restarted, at + LATE_MS), [(late.clone(), CHOSEN)]);
+        assert_eq!(schedule_of(&restarted, &missed), None);
+        assert!(!waits_on_disk(&file, &missed));
+        assert_eq!(restarted.board_state().iter().map(|card| card.column).collect::<Vec<_>>(), [Column::Queued; 3]);
+        assert_eq!(look(&core_at(tmp.path()), at + LATE_MS), []);
+
+        // A give that fails is not tried again.
+        let failing = waiting(&restarted, &project, "Fails", at);
+        let mut tries = 0;
+        restarted.board_due_at(at, &mut |_, _| {
+            tries += 1;
+            Err("no shell".into())
+        });
+        assert_eq!((tries, schedule_of(&restarted, &failing)), (1, None));
+        assert_eq!(look(&restarted, at + 1_000), []);
+        assert!(restarted.board().giving.is_empty());
+
+        // The board can't be written: nothing is given, in this run or the next.
+        let unwritten = waiting(&restarted, &project, "Unwritten", at);
+        fs::remove_file(&file).unwrap();
+        fs::create_dir_all(file.join("in the way")).unwrap();
+        assert_eq!(look(&restarted, at), []);
+        assert_eq!(schedule_of(&restarted, &unwritten), None);
+    }
+
+    /// What takes a card's schedule away before its moment: it is edited, moved to another
+    /// column, moved to another project, called off, deleted, or its project is no longer
+    /// listed. None of those is given when the moment comes; a card only moved up or down
+    /// among the cards up next still is.
+    #[test]
+    fn a_card_that_no_longer_waits_is_not_given() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_project(&core, tmp.path());
+        let at = now_ms() + 3_600_000;
+
+        let edited = waiting(&core, &project, "Edited", at);
+        let moved = waiting(&core, &project, "Moved", at);
+        let called_off = waiting(&core, &project, "Called off", at);
+        let deleted = waiting(&core, &project, "Deleted", at);
+        let reordered = waiting(&core, &project, "Reordered", at);
+
+        core.board_edit(&edited, "Edited since", "", &[]).unwrap();
+        core.board_move(&moved, "done", 0).unwrap();
+        core.board_move(&moved, "queued", 0).unwrap();
+        core.board_unschedule(&called_off);
+        core.board_delete(&deleted);
+        core.board_move(&reordered, "queued", 0).unwrap();
+        for id in [&edited, &moved, &called_off] {
+            assert_eq!(schedule_of(&core, id), None);
+        }
+        assert_eq!(look(&core, at), [(reordered.clone(), CHOSEN)]);
+
+        // Only a card up next of a listed project is told to wait, and only for a moment ahead.
+        let given = core.board_add(&project, "With Claude", "", &[]).unwrap().id;
+        core.board_move(&given, "claude", 0).unwrap();
+        assert!(core.board_schedule(&given, at, false, CHOSEN).is_err());
+        let stray = core.board_add("/Users/me/projects/elsewhere", "Stray", "", &[]).unwrap().id;
+        assert!(core.board_schedule(&stray, at, false, CHOSEN).is_err());
+        let past = core.board_add(&project, "Past", "", &[]).unwrap().id;
+        assert!(core.board_schedule(&past, now_ms() - 1, false, CHOSEN).is_err());
+
+        // Its cards went to another project, or its project left the list: not given.
+        let rehomed = core.board_add("/Users/me/projects/elsewhere", "Rehomed", "", &[]).unwrap().id;
+        core.board().find_mut(&rehomed).unwrap().schedule = Some(Schedule { at, refill: false, start: CHOSEN, line: false });
+        core.board_rehome("/Users/me/projects/elsewhere", &project).unwrap();
+        assert_eq!(schedule_of(&core, &rehomed), None);
+        let unlisted = waiting(&core, &project, "Unlisted", at);
+        core.set_favourite(&project, false);
+        assert_eq!(look(&core, at), []);
+        assert_eq!(schedule_of(&core, &unlisted), None);
+    }
+
+    /// A listed project whose folder isn't there. A card of it can be told to wait, and a give
+    /// by hand stops where its tab would open (`open_terminal_as` refuses a folder that isn't
+    /// one): nothing is ever started by a test that gives by hand.
+    fn listed_without_a_folder(core: &Core, root: &Path) -> String {
+        let path = root.join("not-there").to_string_lossy().into_owned();
+        core.set_favourite(&path, true);
+        path
+    }
+
+    /// How far a give by hand got, for a card of `listed_without_a_folder`. `terminal`: it went
+    /// through to where its tab would open (the error names the folder); `nothing`: the card was
+    /// left as it is; `refused`: it was held back before any tab was asked for.
+    fn got(given: Result<Option<TerminalView>, String>, project: &str) -> &'static str {
+        match given {
+            Err(error) if error.contains(project) => "terminal",
+            Err(_) => "refused",
+            Ok(None) => "nothing",
+            Ok(Some(_)) => "started",
+        }
+    }
+
+    /// A waiting card given by hand ("Give now", or a plain give) starts Claude as the core does
+    /// at the card's moment, so the same holds: whoever takes the schedule off the card gives
+    /// it, once. Not a second press, not the core at the moment that follows, and nobody while
+    /// the card is on its way already (a tab is opening for it).
+    #[test]
+    fn a_waiting_card_given_by_hand_is_given_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_without_a_folder(&core, tmp.path());
+        let file = tmp.path().join("config").join("board.json");
+        let at = now_ms() + 3_600_000;
+        let now = waiting(&core, &project, "Give now", at);
+        let plain = waiting(&core, &project, "A plain give", at);
+        let on_its_way = waiting(&core, &project, "On its way", at);
+
+        // "Give now": the schedule is off the card and off the file, and the card is given.
+        assert_eq!(got(core.board_give_now(&now, None), &project), "terminal");
+        assert_eq!(schedule_of(&core, &now), None);
+        assert!(!waits_on_disk(&file, &now));
+        // It waits no longer: a second press gives nothing.
+        assert_eq!(got(core.board_give_now(&now, None), &project), "nothing");
+
+        // A plain give of a waiting card takes its schedule the same way, and leaves "Give now"
+        // nothing to give.
+        assert_eq!(got(core.board_give_with(&plain, Give::New, None, None), &project), "terminal");
+        assert_eq!(schedule_of(&core, &plain), None);
+        assert!(!waits_on_disk(&file, &plain));
+        assert_eq!(got(core.board_give_now(&plain, None), &project), "nothing");
+        assert!(core.board().giving.is_empty());
+
+        // On its way to Claude already: no hand gives it again, and nor does the core when its
+        // moment comes meanwhile.
+        core.board().giving.insert(on_its_way.clone());
+        assert_eq!(got(core.board_give_now(&on_its_way, None), &project), "nothing");
+        assert_eq!(got(core.board_give_with(&on_its_way, Give::New, None, None), &project), "nothing");
+        assert_eq!(look(&core, at), []);
+    }
+
+    /// The board's file can't be written: a card the file says waits is given by nobody, by hand
+    /// as at its moment (`board_due_at`). Once given here, the file would still say it waits, and
+    /// the next run would give it a second time. Refused, it waits on; and what takes its
+    /// schedule off in this run (a wait called off, the moment coming) takes it off in memory
+    /// only, so it still isn't given. A card that doesn't wait is given as ever: the file names
+    /// no moment for it.
+    #[test]
+    fn a_waiting_card_is_not_given_by_hand_while_the_board_cant_be_written() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_without_a_folder(&core, tmp.path());
+        let file = tmp.path().join("config").join("board.json");
+        let at = now_ms() + 3_600_000;
+        let now = waiting(&core, &project, "Give now", at);
+        let plain = waiting(&core, &project, "A plain give", at);
+        let called_off = waiting(&core, &project, "Called off", at);
+        let came = waiting(&core, &project, "Its moment came", at);
+        let ordinary = core.board_add(&project, "Doesn't wait", "", &[]).unwrap().id;
+        let written = fs::read(&file).unwrap();
+        // The disk refuses the board's file, and takes it again as it was last written.
+        let refuse = || {
+            fs::remove_file(&file).unwrap();
+            fs::create_dir_all(file.join("in the way")).unwrap();
+        };
+        let take_again = || {
+            fs::remove_dir_all(&file).unwrap();
+            fs::write(&file, &written).unwrap();
+        };
+        refuse();
+
+        // Refused, and nothing is changed by it: asked again, refused the same.
+        for _ in 0..2 {
+            assert_eq!(got(core.board_give_with(&plain, Give::New, None, None), &project), "refused");
+            assert_eq!(got(core.board_give_now(&now, None), &project), "refused");
+        }
+        assert_eq!((schedule_of(&core, &now).map(|schedule| schedule.at), schedule_of(&core, &plain).map(|schedule| schedule.at)), (Some(at), Some(at)));
+        assert!(core.board().giving.is_empty());
+
+        // A wait called off, a moment that came (the core's look gave nothing): off the card,
+        // not off the file.
+        core.board_unschedule(&called_off);
+        assert_eq!(got(core.board_give_with(&called_off, Give::New, None, None), &project), "refused");
+        assert_eq!(look(&core, at), []);
+        assert_eq!(schedule_of(&core, &came), None);
+        assert_eq!(got(core.board_give_with(&came, Give::New, None, None), &project), "refused");
+        assert_eq!(got(core.board_give_with(&ordinary, Give::New, None, None), &project), "terminal");
+
+        // The file as it was last written still says the four wait. Started again on it, Pitwall
+        // knows so before it has written anything: the same holds from the start.
+        take_again();
+        let next = core_at(tmp.path());
+        refuse();
+        next.board_unschedule(&called_off);
+        assert_eq!(got(next.board_give_with(&called_off, Give::New, None, None), &project), "refused");
+
+        // The disk is back. At their moment Pitwall gives the three that still wait there, and
+        // that is the first time; and by hand it gives as ever, in either run.
+        take_again();
+        let mut given: Vec<String> = look(&next, at).into_iter().map(|(id, _)| id).collect();
+        given.sort();
+        let mut still = vec![now, plain, came];
+        still.sort();
+        assert_eq!(given, still);
+        assert_eq!(got(next.board_give_with(&called_off, Give::New, None, None), &project), "terminal");
+        assert_eq!(got(core.board_give_with(&called_off, Give::New, None, None), &project), "terminal");
+    }
+
+    /// A card that waits for the session's refill is given when the reading says the session
+    /// refills: it follows a reading that names another moment of that session, never one that
+    /// names the next session's (five hours on) or a moment already past, and never once its
+    /// own moment has passed.
+    #[test]
+    fn a_card_that_waits_for_the_refill_follows_the_reading() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_project(&core, tmp.path());
+        let at = now_ms() + 3_600_000;
+        let minutes = |n: u64| n * 60_000;
+
+        let refill = core.board_add(&project, "At the refill", "", &[]).unwrap().id;
+        core.board_schedule(&refill, at, true, CHOSEN).unwrap();
+        let fixed = waiting(&core, &project, "At its hour", at);
+
+        core.board_refill(at + minutes(7));
+        assert_eq!(schedule_of(&core, &refill).map(|schedule| schedule.at), Some(at + minutes(7)));
+        assert_eq!(schedule_of(&core, &fixed).map(|schedule| schedule.at), Some(at));
+        assert_eq!(look(&core, at), [(fixed.clone(), CHOSEN)]);
+
+        // Earlier again; the next session's refill is not followed.
+        core.board_refill(at - minutes(2));
+        core.board_refill(at - minutes(2) + 5 * minutes(60));
+        assert_eq!(schedule_of(&core, &refill).map(|schedule| schedule.at), Some(at - minutes(2)));
+        assert_eq!(look(&core, at - minutes(2) - 1), []);
+        assert_eq!(look(&core, at - minutes(2)), [(refill.clone(), CHOSEN)]);
+
+        // A moment that has passed stays where it was: it is given or dropped by it.
+        let passed = core.board_add(&project, "Passed", "", &[]).unwrap().id;
+        let before = now_ms() - minutes(1);
+        core.board().find_mut(&passed).unwrap().schedule = Some(Schedule { at: before, refill: true, start: CHOSEN, line: false });
+        core.board_refill(now_ms() + minutes(30));
+        assert_eq!(schedule_of(&core, &passed).map(|schedule| schedule.at), Some(before));
+
+        // A reading that names a moment already past is no refill to wait for: followed, the card
+        // would be given at once, or dropped as long past. It keeps its own moment.
+        let ahead = core.board_add(&project, "Ahead", "", &[]).unwrap().id;
+        core.board_schedule(&ahead, at, true, CHOSEN).unwrap();
+        core.board_refill(now_ms() - minutes(10));
+        core.board_refill(now_ms() - minutes(120));
+        assert_eq!(schedule_of(&core, &ahead).map(|schedule| schedule.at), Some(at));
+        assert!(look(&core, now_ms()).iter().all(|(id, _)| *id != ahead));
+        assert_eq!(schedule_of(&core, &ahead).map(|schedule| schedule.at), Some(at));
+    }
+
+    /// One look at the cards at `now` (`board_due_at`), and Claude started on each card given as
+    /// `launch_card` leaves it: with Claude, in a tab of its own, its session found (a new one).
+    fn give_due(core: &Core, now: u64) -> Vec<String> {
+        let mut given = Vec::new();
+        core.board_due_at(now, &mut |card, _| {
+            given.push(card.id.clone());
+            Ok(())
+        });
+        for id in &given {
+            let mut board = core.board();
+            let n = board.cards.iter().filter(|card| card.session.is_some()).count();
+            let session = format!("9bb85e86-f618-4861-9858-{n:012}");
+            let card = board.place(id, Column::Claude, usize::MAX, now_ms()).unwrap();
+            (card.terminal, card.given_at, card.session, card.worked, card.ran) = (Some(1), Some(now), Some(session), false, false);
+        }
+        given
+    }
+
+    /// Where card `id`'s session stands, as the hook tells it; then the board follows it.
+    fn session_is(core: &Core, id: &str, phase: SessionPhase, turn: Option<(TurnKind, u64)>, ended: bool) {
+        let session = core.board_state().into_iter().find(|card| card.id == id).unwrap().session.unwrap();
+        {
+            let mut inner = core.lock();
+            inner.scanned.retain(|state| state.id != session);
+            let turn = turn.map(|(kind, at)| crate::claude::Turn { kind, at });
+            inner.scanned.push(SessionState { id: session, path: String::new(), folder: None, title: None, phase, turn, since: Some(now_ms()), hooked: true, ended, tool: None, subagents: 0 });
+        }
+        core.follow_board();
+    }
+
+    fn column_of(core: &Core, id: &str) -> Column {
+        core.board_state().into_iter().find(|card| card.id == id).unwrap().column
+    }
+
+    /// Cards that wait for one refill share its fresh quota, and Claude started on them all at
+    /// once would burn it in parallel, with nobody there. They are given one at a time, in the
+    /// order the board shows them: at the refill only the first; the next only once Claude is no
+    /// longer at work on the one before (its turn over, or its session ended), not while it
+    /// works or waits on a permission. A restart in the middle goes on the same way: the Claude
+    /// it was at work on ended with the run, and only the next card goes.
+    #[test]
+    fn cards_that_wait_for_one_refill_are_given_one_at_a_time() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_project(&core, tmp.path());
+        let at = now_ms() + 3_600_000;
+        let minutes = |n: u64| n * 60_000;
+
+        let mut cards = Vec::new();
+        for title in ["First", "Second", "Third", "Fourth"] {
+            let id = core.board_add(&project, title, "", &[]).unwrap().id;
+            core.board_schedule(&id, at, true, CHOSEN).unwrap();
+            cards.push(id);
+        }
+        let [first, second, third, fourth] = <[String; 4]>::try_from(cards).unwrap();
+        // Up next, the fourth stands second.
+        core.board_move(&fourth, "queued", 1).unwrap();
+
+        // At the refill only the first goes; a second look gives nothing more.
+        assert_eq!(give_due(&core, at - 1), Vec::<String>::new());
+        assert_eq!(give_due(&core, at), [first.as_str()]);
+        assert_eq!(give_due(&core, at + 1_000), Vec::<String>::new());
+        assert!([&second, &third, &fourth].iter().all(|id| column_of(&core, id) == Column::Queued));
+
+        // Claude at work on it, then waiting on a permission: the line waits.
+        session_is(&core, &first, SessionPhase::Working, None, false);
+        assert_eq!(give_due(&core, at + minutes(10)), Vec::<String>::new());
+        session_is(&core, &first, SessionPhase::Waiting, Some((TurnKind::Permission, at + minutes(20))), false);
+        assert_eq!(give_due(&core, at + minutes(60)), Vec::<String>::new());
+
+        // Its turn is over: the next on the board, alone.
+        session_is(&core, &first, SessionPhase::Waiting, Some((TurnKind::Finished, at + minutes(61))), false);
+        assert_eq!(column_of(&core, &first), Column::Review);
+        assert_eq!(give_due(&core, at + minutes(62)), [fourth.as_str()]);
+        assert_eq!(give_due(&core, at + minutes(63)), Vec::<String>::new());
+
+        // Pitwall starts again while Claude works on it: that Claude ended with the run, and of
+        // the two left only the next goes.
+        session_is(&core, &fourth, SessionPhase::Working, None, false);
+        let restarted = core_at(tmp.path());
+        assert_eq!(give_due(&restarted, at + minutes(64)), [second.as_str()]);
+        assert_eq!(give_due(&restarted, at + minutes(65)), Vec::<String>::new());
+
+        // Its session ends before its turn does: the last one goes.
+        session_is(&restarted, &second, SessionPhase::Working, None, false);
+        assert_eq!(give_due(&restarted, at + minutes(66)), Vec::<String>::new());
+        session_is(&restarted, &second, SessionPhase::Working, None, true);
+        assert_eq!(column_of(&restarted, &second), Column::Review);
+        assert_eq!(give_due(&restarted, at + minutes(67)), [third.as_str()]);
+    }
+
+    /// A card given from the line whose Claude never goes to work (it started and sits idle, or
+    /// nothing tells) would hold the line, and the refill's quota with it, until the user moved
+    /// the card: ten minutes after the give the next goes, and the card stays where it is. One
+    /// seen at work, however late in those ten minutes, holds the line as long as its turn runs.
+    #[test]
+    fn a_card_never_seen_at_work_holds_the_line_ten_minutes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_project(&core, tmp.path());
+        let at = now_ms() + 3_600_000;
+        let minutes = |n: u64| n * 60_000;
+
+        let mut cards = Vec::new();
+        for title in ["First", "Second", "Third"] {
+            let id = core.board_add(&project, title, "", &[]).unwrap().id;
+            core.board_schedule(&id, at, true, CHOSEN).unwrap();
+            cards.push(id);
+        }
+        let [first, second, third] = <[String; 3]>::try_from(cards).unwrap();
+
+        // Its Claude started and sits idle: the line waits ten minutes, then the next goes.
+        assert_eq!(give_due(&core, at), [first.as_str()]);
+        session_is(&core, &first, SessionPhase::Idle, None, false);
+        assert_eq!(give_due(&core, at + minutes(10)), Vec::<String>::new());
+        assert_eq!(give_due(&core, at + minutes(11)), [second.as_str()]);
+        assert_eq!(column_of(&core, &first), Column::Claude);
+
+        // Seen at work nine minutes in, then waiting on a permission: the line waits past ten.
+        let given = at + minutes(11);
+        assert_eq!(give_due(&core, given + minutes(9)), Vec::<String>::new());
+        session_is(&core, &second, SessionPhase::Working, None, false);
+        session_is(&core, &second, SessionPhase::Waiting, Some((TurnKind::Permission, given + minutes(10))), false);
+        assert_eq!(give_due(&core, given + minutes(60)), Vec::<String>::new());
+
+        // Its turn is over: the next.
+        session_is(&core, &second, SessionPhase::Waiting, Some((TurnKind::Finished, given + minutes(61))), false);
+        assert_eq!(give_due(&core, given + minutes(62)), [third.as_str()]);
+    }
+
+    /// The board's file is the only copy of the cards. One written before cards could wait
+    /// loads as it is, untouched; one this version writes (a card that waits, a card's model and
+    /// mode) loads back the same; and a card whose new parts don't fit (another version's, a
+    /// hand's) keeps everything else, with nothing set aside.
+    #[test]
+    fn the_boards_file_loads_across_versions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("config").join("board.json");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let now = now_ms();
+
+        // As 1.10.0 wrote it.
+        let before = format!(
+            r#"{{
+  "version": 1,
+  "cards": [
+    {{ "id": "mf1x-0", "path": "/Users/me/projects/paddock", "title": "Invoice header", "note": "two lines", "column": "queued", "createdAt": 1790000000000, "movedAt": 1790000000000, "session": null, "terminal": null, "givenAt": null, "worked": false, "ran": false, "rested": false, "images": [{{ "n": 1, "kind": "png" }}] }},
+    {{ "id": "mf1x-1", "path": "/Users/me/projects/paddock", "title": "Coupon rounding", "note": "", "column": "review", "createdAt": 1790000000000, "movedAt": {now}, "session": "9bb85e86-f618-4861-9858-03ec8fc36c28", "terminal": null, "givenAt": 1790000100000, "worked": true, "ran": true, "rested": true, "images": [] }}
+  ]
+}}"#
+        );
+        fs::write(&file, &before).unwrap();
+        let old = Board::load(file.clone(), now);
+        assert!(old.writable);
+        assert_eq!(old.cards.iter().map(|card| (card.id.as_str(), card.title.as_str(), card.column)).collect::<Vec<_>>(), [("mf1x-0", "Invoice header", Column::Queued), ("mf1x-1", "Coupon rounding", Column::Review)]);
+        assert_eq!(old.cards[0].images, [CardImage { n: 1, kind: ImageKind::Png }]);
+        assert_eq!((old.cards[1].session.as_deref(), old.cards[1].given_at, old.cards[1].worked), (Some("9bb85e86-f618-4861-9858-03ec8fc36c28"), Some(1_790_000_100_000), true));
+        assert!(old.cards.iter().all(|card| card.start.is_none() && card.schedule.is_none()));
+        assert_eq!(fs::read_to_string(&file).unwrap(), before, "loading it changes nothing");
+
+        // As this version writes it: a card that waits, and one given with a model and a mode.
+        let mut new = Board::load(file.clone(), now);
+        new.cards[0].schedule = Some(Schedule { at: now + 3_600_000, refill: true, start: CHOSEN, line: false });
+        new.cards[1].start = Some(Start { model: Some(crate::start::Model::Opus), mode: Mode::AcceptEdits });
+        assert!(new.save());
+        let again = Board::load(file.clone(), now);
+        assert_eq!(again.cards, new.cards);
+        assert_eq!(again.cards[0].schedule, Some(Schedule { at: now + 3_600_000, refill: true, start: CHOSEN, line: false }));
+
+        // Parts that don't fit cost only themselves: the cards and the file stay.
+        let mut odd: Value = serde_json::from_str(&before).unwrap();
+        odd["cards"][0]["schedule"] = serde_json::json!({ "at": "at four", "start": { "model": "sonnet" } });
+        odd["cards"][0]["start"] = serde_json::json!("opus");
+        odd["cards"][1]["schedule"] = serde_json::json!({ "at": now + 3_600_000, "refill": 1 });
+        odd["cards"][1]["start"] = serde_json::json!({ "model": "opus; touch /tmp/pwned", "mode": "bypassPermissions", "later": true });
+        fs::write(&file, odd.to_string()).unwrap();
+        let read = Board::load(file.clone(), now);
+        assert!(read.writable);
+        assert_eq!(read.cards.iter().map(|card| card.title.as_str()).collect::<Vec<_>>(), ["Invoice header", "Coupon rounding"]);
+        assert_eq!((read.cards[0].schedule, read.cards[0].start), (None, None));
+        assert_eq!((read.cards[1].schedule, read.cards[1].start), (None, Some(Start::default())));
+        let aside = fs::read_dir(file.parent().unwrap()).unwrap().flatten().filter(|entry| entry.file_name().to_string_lossy().contains(".broken-")).count();
+        assert_eq!(aside, 0);
+
+        // A card that isn't up next waits for nothing, whatever the file says.
+        let mut stray: Value = serde_json::from_str(&before).unwrap();
+        stray["cards"][1]["schedule"] = serde_json::json!({ "at": now + 3_600_000 });
+        fs::write(&file, stray.to_string()).unwrap();
+        assert_eq!(Board::load(file.clone(), now).cards[1].schedule, None);
     }
 
     /// A card moved back into `claude` goes on with its own session, and a session that runs or

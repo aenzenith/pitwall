@@ -317,6 +317,7 @@ impl Core {
     /// Quit: every server goes, nothing is left behind.
     pub fn dispose(&self) {
         self.record_app("stop");
+        self.board_quit();
 
         let mut pids: Vec<u32> = {
             let mut inner = self.lock();
@@ -376,6 +377,9 @@ impl Core {
         }
 
         self.deps_tick(tick);
+
+        // A board card told to wait for its moment is given when it comes (`board.rs`).
+        self.board_due();
     }
 }
 

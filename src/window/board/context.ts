@@ -10,7 +10,16 @@ export type BoardActions = {
   edit: (id: string) => void;
   menu: (at: MenuPoint, id: string) => void;
   give: (id: string, mode: "new" | "plan") => void;
+  /** Given again, with the model and in the mode it was started with last. */
+  giveAgain: (id: string) => void;
+  /** The panel of ways to give it (the model, the mode, when), under its button; a second ask
+   * closes it. */
   giveMenu: (at: MenuPoint, id: string) => void;
+  /** The card that panel is open for; null while it is closed. */
+  panelFor: () => string | null;
+  /** A card that waits for its moment: given now, or left up next without waiting. */
+  giveNow: (id: string) => void;
+  unschedule: (id: string) => void;
   /** Its session brought up: one in a Pitwall terminal in the card's details, the rest where they run. */
   reveal: (id: string) => void;
   done: (id: string) => void;

@@ -160,8 +160,31 @@ impl Fuel {
         self.send(app);
         if let Some(state) = app.try_state::<AppState>() {
             crate::tray::refresh(app, &state.core.snapshot());
+            // A board card that waits for the session's refill follows what was just read.
+            if let Some(at) = self.refill_read() {
+                state.core.board_refill(at);
+            }
         }
         self.alert(app);
+    }
+
+    /// When the 5-hour session refills, as a reading that has just come says; none while the
+    /// last request failed (what is kept then is an older reading), the session hasn't started,
+    /// or the moment it names is already past (as `refill`: that is no refill to wait for).
+    fn refill_read(&self) -> Option<u64> {
+        let limits = self.usage.state();
+        if limits.status != Status::Ready {
+            return None;
+        }
+        let session = limits.usage?.windows.into_iter().find(|window| window.id == "five_hour")?;
+        u64::try_from(session.resets_at?).ok().filter(|at| *at > now_ms())
+    }
+
+    /// When the 5-hour session refills, as far as the last good reading knows a moment still
+    /// ahead: what a board card can be told to wait for (`commands::board_schedule`).
+    pub fn refill(&self) -> Option<u64> {
+        let session = self.usage.state().usage?.windows.into_iter().find(|window| window.id == "five_hour")?;
+        u64::try_from(session.resets_at?).ok().filter(|at| *at > now_ms())
     }
 
     /// To the Fuel page and the popover's dials.

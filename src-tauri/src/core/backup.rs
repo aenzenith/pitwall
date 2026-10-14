@@ -413,6 +413,10 @@ fn move_project(settings: &mut Settings, from: &str, to: &str) {
         ours.script = ours.script.or(theirs.script);
         ours.port = ours.port.or(theirs.port);
         ours.url = ours.url.or(theirs.url);
+        ours.claude_model = ours.claude_model.or(theirs.claude_model);
+        if ours.claude_mode.is_normal() {
+            ours.claude_mode = theirs.claude_mode;
+        }
 
         for mut command in theirs.commands {
             // The same command but for its id: `to` has it.
@@ -510,9 +514,13 @@ impl Core {
         write_atomic(file, &json).map_err(|error| failed(&error))
     }
 
-    /// Every card as the board's file has it, and each image file that is there.
+    /// Every card as the board's file has it, and each image file that is there. The moment a
+    /// card was told to wait for is this Mac's own, and stays out.
     fn backup_board(&self) -> BoardPart {
-        let cards = self.board_state();
+        let mut cards = self.board_state();
+        for card in &mut cards {
+            card.schedule = None;
+        }
         let mut images: Vec<ImageEntry> = Vec::new();
 
         for card in &cards {
@@ -650,6 +658,9 @@ impl Core {
             card.images = held.iter().map(|(image, _)| *image).collect();
 
             card.session = card.session.filter(|session| is_session_id(session));
+            // A card told to wait was told so where the backup was made: here it arrives as any
+            // other card up next, with the model and the mode it was last started with.
+            card.schedule = None;
             found.push(Taken { card, images: held });
         }
 
@@ -1214,6 +1225,35 @@ mod tests {
         assert_eq!(fs::read_to_string(b.path().join("config/activity/2026-10-11.jsonl")).unwrap(), format!("{}\n{}\n", event(&moved), event(&elsewhere)));
     }
 
+    /// A card told to wait was told so on the Mac the backup was made on, for a session that is
+    /// that Mac's. Imported, it waits for nothing: the core here would give it to Claude at that
+    /// moment, with nobody having asked. The model and the mode it was last started with are the
+    /// card's own, and come along.
+    #[test]
+    fn an_imported_card_waits_for_nothing() {
+        use crate::start::{Mode, Model, Start};
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (home_a, home_b) = (a.path().join("home"), b.path().join("home"));
+        let project = home_a.join("projects/paddock").to_string_lossy().into_owned();
+        fs::create_dir_all(&project).unwrap();
+
+        let from = core_in(a.path());
+        from.add_project(&project).unwrap();
+        let chosen = Start { model: Some(Model::Sonnet), mode: Mode::Plan };
+        let waits = from.board_add(&project, "Waits", "", &[]).unwrap();
+        from.board_schedule(&waits.id, crate::registry::now_ms() + 3_600_000, true, chosen).unwrap();
+        let started = from.board_add(&project, "Started before", "", &[]).unwrap();
+        from.board().cards.iter_mut().find(|card| card.id == started.id).unwrap().start = Some(chosen);
+
+        let file = a.path().join("pitwall-backup.json");
+        from.backup_write_as(&file, ALL, &home_a.to_string_lossy()).unwrap();
+        core_in(b.path()).backup_import_as(&file, ALL, &home_b.to_string_lossy()).unwrap();
+
+        // As a core started on what the import wrote has them.
+        let cards = core_in(b.path()).board_state();
+        assert_eq!(cards.iter().map(|card| (card.title.as_str(), card.schedule, card.start)).collect::<Vec<_>>(), [("Waits", None, None), ("Started before", None, Some(chosen))]);
+    }
+
     /// What is kept for a project is typed in by hand: its commands, its links, its team, its
     /// place in the list, its cards, its mute. A move to the project's new folder that left any
     /// of it behind, or wrote over what the new folder already had, would lose it without a word.
@@ -1245,6 +1285,8 @@ mod tests {
             url: Some("https://paddock.test".into()),
             commands: vec![command("c1", "worker"), command("c2", "tests")],
             links: vec![link("staging")],
+            claude_model: Some(crate::start::Model::Sonnet),
+            claude_mode: crate::start::Mode::Plan,
         };
         core.set_project_settings(&old, kept.clone());
         core.mute_project(&old, true);
@@ -1279,6 +1321,7 @@ mod tests {
         assert_eq!(merged.commands.iter().map(|command| command.name.as_str()).collect::<Vec<_>>(), ["worker", "deploy", "tests"]);
         assert_eq!(merged.commands.iter().map(|command| command.id.as_str()).collect::<HashSet<_>>().len(), 3, "{:?}", merged.commands);
         assert_eq!(merged.links, [link("docs"), link("staging")]);
+        assert_eq!((merged.claude_model, merged.claude_mode), (kept.claude_model, kept.claude_mode));
         assert_eq!(settings.teams[0].projects, [new.clone(), other.clone()]);
         assert_eq!(settings.notifications.muted, [new.as_str()]);
         assert_eq!(listed(&core), sorted(vec![new.clone(), other.clone()]));

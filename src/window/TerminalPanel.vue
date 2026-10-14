@@ -22,9 +22,10 @@ import {
   useResizer,
 } from "../lib/panel";
 import { statusLine } from "../lib/sessions";
+import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
 import { api, now, sessions } from "../lib/store";
 import { attach, fitView, focusView, measure } from "../lib/terminals";
-import type { Project } from "../lib/types";
+import type { Project, StartChoice } from "../lib/types";
 import RenameDialog from "./RenameDialog.vue";
 
 /** How long a `reveal-terminal` request waits for its project and tab to show up. */
@@ -105,8 +106,9 @@ function startDrag(event: PointerEvent): void {
   if (!collapsed.value) resizer.start(event);
 }
 
-/** A new tab: the shell, or with `claude` a Claude Code session. */
-async function openTerminal(claude = false): Promise<void> {
+/** A new tab: the shell, or with `claude` a Claude Code session (`start`: with the model and in
+ * the mode picked from its list; without one, as the project's settings say). */
+async function openTerminal(claude = false, start: StartChoice | null = null): Promise<void> {
   if (opening.value) return;
   opening.value = true;
   try {
@@ -116,7 +118,7 @@ async function openTerminal(claude = false): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
     const size = viewport.value ? measure(viewport.value) : null;
-    const view = await api.openTerminal(props.project.path, claude, size);
+    const view = await api.openTerminal(props.project.path, claude, size, start);
     if (props.track) trackTerminals.add(view.id);
     chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: view.id };
   } finally {
@@ -125,7 +127,137 @@ async function openTerminal(claude = false): Promise<void> {
 }
 
 function show(id: number): void {
+  unasked.delete(id);
   chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: id };
+}
+
+/**
+ * A tab that came by itself while this panel was up: one the core opened at a board card's
+ * moment (`unasked`). The tab in sight stays in sight and the keyboard stays where it is: whoever
+ * is typing here goes on typing where they were. With no tab in sight, the one that came shows,
+ * without the keyboard, and only that one is noted here, until it is shown. From then on it is a
+ * tab like any other: clicked, brought up, or shown in the place of one that closed, it takes the
+ * keyboard. A tab the user asked for (put back, a card given by hand) is shown as any other.
+ */
+const unasked = new Set<number>();
+
+watch(
+  () => [props.project.path, terminals.value] as const,
+  ([path, list], [wasPath, was]) => {
+    if (path !== wasPath) return unasked.clear();
+    const came = list.filter((term) => !was.some((old) => old.id === term.id));
+    // One this panel is opening is asked for, and so is any the core doesn't call unasked.
+    if (!came.length || opening.value || !came.every((term) => term.unasked)) return;
+    const chosen = chosenTerminal.value[path];
+    if (came.some((term) => term.id === chosen)) return;
+    const shown = was.find((term) => term.id === chosen) ?? was[was.length - 1];
+    // No tab was in sight: the last one is the one shown now.
+    if (!shown) {
+      unasked.add(list[list.length - 1].id);
+      return;
+    }
+    if (shown.id !== chosen && list.some((term) => term.id === shown.id)) chosenTerminal.value = { ...chosenTerminal.value, [path]: shown.id };
+  },
+  // Before the shown tab is worked out again.
+  { flush: "sync" },
+);
+
+/* ---------- "New Claude"'s list ---------- */
+
+/** How "New Claude" starts a session here when nothing is picked: the project's own settings. */
+const defaults = computed(() => projectChoice(props.project));
+
+type ClaudeEntry = { key: string; label: string; checked: boolean; line: boolean; start: StartChoice };
+
+/** The models (the project's own checked), then plan mode: each starts a session at once, the
+ * rest as the project's settings say. */
+const claudeEntries = computed<ClaudeEntry[]>(() => [
+  ...MODELS.map((model) => ({ key: model, label: t(MODEL_LABELS[model]), checked: defaults.value.model === model, line: false, start: { model, mode: defaults.value.mode } })),
+  { key: "plan", label: t("start.newClaudePlan"), checked: defaults.value.mode === "plan", line: true, start: { model: defaults.value.model, mode: "plan" as const } },
+]);
+
+const claudeSplit = ref<HTMLElement | null>(null);
+const claudeMore = ref<HTMLButtonElement | null>(null);
+const claudeMenu = ref<HTMLElement | null>(null);
+const claudeOpen = ref(false);
+/** The line under the pointer or the keyboard. */
+const claudeAt = ref(0);
+const claudePlace = ref<Record<string, string>>({});
+
+/** Under the button, their right edges level; over it where the window has no room below (the
+ * panel lies along its bottom). Drawn in the page: a checked line beside plain ones, as the
+ * board picker's list. */
+async function showClaudeMenu(): Promise<void> {
+  if (claudeOpen.value || opening.value) return;
+  claudeAt.value = Math.max(0, claudeEntries.value.findIndex((entry) => entry.checked));
+  claudePlace.value = { visibility: "hidden" };
+  claudeOpen.value = true;
+  window.addEventListener("pointerdown", onClaudeOutside, true);
+  window.addEventListener("blur", hideClaudeMenu);
+  window.addEventListener("resize", hideClaudeMenu);
+  await nextTick();
+  const box = claudeSplit.value?.getBoundingClientRect();
+  const list = claudeMenu.value;
+  if (!box || !list) return hideClaudeMenu();
+  const height = list.getBoundingClientRect().height;
+  const below = box.bottom + 6;
+  const top = below + height <= window.innerHeight - 8 ? below : Math.max(8, box.top - 6 - height);
+  claudePlace.value = { top: `${top}px`, right: `${Math.max(8, window.innerWidth - box.right)}px` };
+  // Once it is in its place and in sight: until then it takes no focus.
+  await nextTick();
+  claudeMenu.value?.focus();
+}
+
+function hideClaudeMenu(): void {
+  claudeOpen.value = false;
+  window.removeEventListener("pointerdown", onClaudeOutside, true);
+  window.removeEventListener("blur", hideClaudeMenu);
+  window.removeEventListener("resize", hideClaudeMenu);
+}
+
+/** A press anywhere else closes it; one on its own button is that button's to answer. */
+function onClaudeOutside(event: PointerEvent): void {
+  const target = event.target instanceof Node ? event.target : null;
+  if (!(target && (claudeMenu.value?.contains(target) || claudeMore.value?.contains(target)))) hideClaudeMenu();
+}
+
+function pickClaude(entry: ClaudeEntry): void {
+  hideClaudeMenu();
+  void openTerminal(true, entry.start);
+}
+
+/** In the list: arrows, Home and End move, ↵ or Space starts the session, Esc and Tab close (the
+ * keyboard goes back to the button); a shortcut closes it and stays the page's. */
+function onClaudeKey(event: KeyboardEvent): void {
+  if (event.metaKey || event.ctrlKey || event.altKey) return hideClaudeMenu();
+  const last = claudeEntries.value.length - 1;
+  switch (event.key) {
+    case "ArrowDown":
+      claudeAt.value = Math.min(last, claudeAt.value + 1);
+      break;
+    case "ArrowUp":
+      claudeAt.value = Math.max(0, claudeAt.value - 1);
+      break;
+    case "Home":
+      claudeAt.value = 0;
+      break;
+    case "End":
+      claudeAt.value = last;
+      break;
+    case "Enter":
+    case " ":
+      pickClaude(claudeEntries.value[claudeAt.value]);
+      break;
+    case "Escape":
+    case "Tab":
+      hideClaudeMenu();
+      claudeMore.value?.focus();
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 /** A tab asked for by a click, Return or Space: shown, and a collapsed panel comes up with it. */
@@ -218,7 +350,9 @@ watch(
     const onTabs = stayOnTabs;
     stayOnTabs = false;
     await nextTick();
-    if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value);
+    // A tab that came by itself is shown without the keyboard.
+    const quiet = id !== undefined && unasked.delete(id);
+    if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value && !quiet);
     if (onTabs) focusTab(id);
   },
   { immediate: true },
@@ -274,6 +408,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   observer?.disconnect();
   clearTimeout(settle);
+  hideClaudeMenu();
 });
 
 defineExpose({ openTerminal, collapse });
@@ -346,9 +481,27 @@ defineExpose({ openTerminal, collapse });
       <button type="button" class="action" :title="t('terminal.newTabTitle', { shortcut: keys(`${TERMINAL_MOD}+T`) })" :disabled="opening" @click="openTerminal()">
         <Icon name="plus" :size="13" /> {{ t("terminal.newTab") }}
       </button>
-      <button type="button" class="action" :title="t('terminal.newClaudeTitle')" :disabled="opening" @click="openTerminal(true)">
-        <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
-      </button>
+      <!-- One button in two parts: a session as the project starts them, and the list of others. -->
+      <span ref="claudeSplit" class="split">
+        <button type="button" class="action" :title="t('terminal.newClaudeTitle')" :disabled="opening" @click="openTerminal(true)">
+          <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
+        </button>
+        <button
+          ref="claudeMore"
+          type="button"
+          :class="['action', 'more', { open: claudeOpen }]"
+          aria-haspopup="menu"
+          :aria-expanded="claudeOpen"
+          :aria-label="t('start.newClaudeOptions')"
+          :title="claudeOpen ? undefined : t('start.newClaudeOptions')"
+          :disabled="opening"
+          @click="claudeOpen ? hideClaudeMenu() : showClaudeMenu()"
+          @keydown.down.prevent="showClaudeMenu"
+          @keydown.up.prevent="showClaudeMenu"
+        >
+          <Icon name="chevron-down" :size="11" />
+        </button>
+      </span>
       <button
         type="button"
         :class="['icon', 'collapse', { up: collapsed }]"
@@ -366,6 +519,35 @@ defineExpose({ openTerminal, collapse });
         <span>{{ t("terminal.none", { name: project.name }) }}</span>
       </div>
     </div>
+
+    <!-- "New Claude"'s list. A press on a line leaves the keyboard in the list. -->
+    <ul
+      v-if="claudeOpen"
+      ref="claudeMenu"
+      class="claude-menu"
+      role="menu"
+      tabindex="-1"
+      :aria-label="t('start.newClaudeOptions')"
+      :aria-activedescendant="`claude-menu-${claudeAt}`"
+      :style="claudePlace"
+      @keydown="onClaudeKey"
+      @mousedown.prevent
+    >
+      <template v-for="(entry, i) in claudeEntries" :key="entry.key">
+        <li v-if="entry.line" class="claude-menu-line" role="separator"></li>
+        <li
+          :id="`claude-menu-${i}`"
+          :class="['claude-menu-item', { on: i === claudeAt }]"
+          :role="entry.line ? 'menuitemcheckbox' : 'menuitemradio'"
+          :aria-checked="entry.checked"
+          @mousemove="claudeAt = i"
+          @click="pickClaude(entry)"
+        >
+          <span class="claude-menu-check"><Icon v-if="entry.checked" name="check" :size="13" /></span>
+          <span class="claude-menu-name">{{ entry.label }}</span>
+        </li>
+      </template>
+    </ul>
 
     <RenameDialog v-if="renaming" :name="renaming.name" :project-name="project.name" @save="rename" @close="endRename" />
   </section>
@@ -555,6 +737,83 @@ defineExpose({ openTerminal, collapse });
 .action:hover:not(:disabled) {
   background: var(--bg-icon-hover);
   color: var(--text-strong);
+}
+
+/* "New Claude" and the arrow of its list: one button in two parts, side by side. */
+.split {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.split > .action:first-child {
+  padding-right: 5px;
+  border-radius: 6px 0 0 6px;
+}
+
+.action.more {
+  width: 18px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 0 6px 6px 0;
+}
+
+.action.more.open {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+/* Its list, over the page wherever the panel's edges are. */
+.claude-menu {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 210px;
+  max-width: calc(100vw - 16px);
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  border: 1px solid var(--line-dialog);
+  border-radius: var(--radius-card);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-menu);
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* The keyboard's place is the lit line, not a ring round the list. */
+.claude-menu:focus-visible {
+  outline: none;
+}
+
+.claude-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.claude-menu-item.on {
+  background: var(--bg-lit);
+}
+
+/* The project's own: a check, in a place every line keeps so the names line up. */
+.claude-menu-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  width: 14px;
+  color: var(--run);
+}
+
+.claude-menu-line {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--line);
 }
 
 /* The project, first in the row, set off from its tabs. */

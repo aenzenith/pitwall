@@ -23,15 +23,16 @@ import {
 import { SETTLE_MS, useCardDrag, type DropTarget } from "../lib/cardDrag";
 import { useCardImages } from "../lib/cardImages";
 import { t, type Key } from "../lib/i18n";
-import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
+import { useNativeMenu, type MenuPoint } from "../lib/nativeMenu";
 import { cardRequest, detailTerminalHeight } from "../lib/panel";
 import { ALL as EVERY_DAY, type Period } from "../lib/period";
 import { dragRegion, keys, primary } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { originView, othersWaiting, sessionTerminal } from "../lib/sessions";
+import { choiceOf, projectChoice } from "../lib/start";
 import { api, board, now, sessions, snapshot } from "../lib/store";
 import { focusView, measure } from "../lib/terminals";
-import type { BoardColumn, Card, SessionRow, TerminalView } from "../lib/types";
+import type { BoardColumn, Card, SessionRow, StartChoice, TerminalView } from "../lib/types";
 import BoardCard from "./board/BoardCard.vue";
 import BoardColumns from "./board/BoardColumns.vue";
 import BoardLanes from "./board/BoardLanes.vue";
@@ -39,6 +40,7 @@ import CardDetail from "./board/CardDetail.vue";
 import CardDialog from "./board/CardDialog.vue";
 import { BOARD_ACTIONS, type BoardActions, type CardBusy } from "./board/context";
 import DeleteDialog from "./board/DeleteDialog.vue";
+import GivePanel from "./board/GivePanel.vue";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionNotice from "./sessions/SessionNotice.vue";
 
@@ -442,9 +444,33 @@ function terminalSize(): { cols: number; rows: number } | null {
 }
 
 /** A new Claude session in one of the project's Pitwall terminals, with the card's text; the card
- * goes to Claude's column, and the board stays on screen. */
-function give(id: string, mode: "new" | "plan"): void {
-  void run(id, "give", () => api.boardGive(id, mode, terminalSize()));
+ * goes to Claude's column, and the board stays on screen. `start`: the model and the mode chosen
+ * for it; without a choice, its project's own. A card that waits for its moment is given now,
+ * with what was chosen when it was told to wait. */
+function give(id: string, mode: "new" | "plan", start: StartChoice | null = null): void {
+  if (byId.value.get(id)?.schedule) return giveNow(id);
+  void run(id, "give", () => api.boardGive(id, mode, terminalSize(), start));
+}
+
+/** Given again once its session closed: as it was started last. */
+function giveAgain(id: string): void {
+  const kept = byId.value.get(id)?.start;
+  give(id, "new", kept ? choiceOf(kept) : null);
+}
+
+/** A card that waits: given now. The core gives it only while it still waits, so a press that
+ * crosses its moment never starts it a second time. */
+function giveNow(id: string): void {
+  void run(id, "give", () => api.boardGiveNow(id, terminalSize()));
+}
+
+/** Told to wait until the session refills: it stays up next and says so. */
+function schedule(id: string, start: StartChoice): void {
+  void run(id, "move", () => api.boardSchedule(id, start));
+}
+
+function unschedule(id: string): void {
+  void run(id, "move", () => api.boardUnschedule(id));
 }
 
 function link(id: string, session: string): void {
@@ -616,6 +642,8 @@ function cardMenu(at: MenuPoint, id: string): void {
   void menu.popup(at, [
     { text: t("common.edit"), action: () => edit(id) },
     { text: t("board.move"), enabled: !busy.value[id], items: columns.map((column) => ({ text: t(COLUMN_LABELS[column]), action: () => moveToEnd(id, column) })) },
+    // Its text, to paste into a session by hand: the card stays where it is.
+    { text: t("board.copyText"), action: () => void api.copyText(cardText(card)) },
     "separator",
     { text: t("common.delete"), action: () => askDelete(id) },
   ]);
@@ -630,27 +658,75 @@ function rehomeMenu(at: MenuPoint, from: string): void {
   );
 }
 
-/** "Give to Claude"'s other ways: in plan mode, to a session already open in the project, or
- * just its text to paste (the card stays where it is). */
+/* ---------- "Give to Claude"'s panel ---------- */
+
+/** The panel of ways to give a card (board/GivePanel): the card it is open for, the button it
+ * hangs under, and what a plain click on that button would start the card with. */
+const givePanel = ref<{ id: string; anchor: { left: number; top: number; bottom: number }; initial: StartChoice; linkable: boolean } | null>(null);
+
+/** The card's own arrow button, where the panel hangs and the keyboard goes back to. */
+function giveArrow(id: string): HTMLElement | null {
+  return Array.from(document.querySelectorAll<HTMLElement>("[data-card] [data-give-more]")).find((el) => el.closest<HTMLElement>("[data-card]")?.dataset.card === id) ?? null;
+}
+
+/** The sessions open in a card's project: those it can be linked to. */
+function openSessions(card: Card): SessionRow[] {
+  return (sessions.value?.sessions ?? []).filter((row) => (row.path ?? row.folder) === card.path && row.phase !== "ended" && row.running !== false);
+}
+
+/** "Give to Claude"'s other ways, under the card's arrow: the model, the mode and when, and a
+ * session already open to link it to. Asked for again while it is open, it closes. */
 function giveMenu(at: MenuPoint, id: string): void {
   const card = byId.value.get(id);
   if (!card) return;
-  const editor = snapshot.value?.settings.editor;
-  const open = (sessions.value?.sessions ?? []).filter((row) => (row.path ?? row.folder) === card.path && row.phase !== "ended" && row.running !== false);
-  const linkEntry: MenuEntry = open.length
-    ? {
-        text: t("board.giveLink"),
-        items: open.map((row) => ({ text: `${row.title || t("board.untitledSession")} · ${originView(row.origin, row.project, editor).short}`, action: () => link(id, row.id) })),
-      }
-    : { text: t("board.giveLink"), enabled: false };
-  void menu.popup(at, [
-    { text: t("board.giveNew"), accelerator: "CmdOrCtrl+Enter", action: () => give(id, "new") },
-    { text: t("board.givePlan"), action: () => give(id, "plan") },
-    linkEntry,
-    "separator",
-    { text: t("board.copyText"), action: () => void api.copyText(cardText(card)) },
-  ]);
+  if (givePanel.value?.id === id) {
+    givePanel.value = null;
+    return;
+  }
+  const box = giveArrow(id)?.closest<HTMLElement>(".bsplit")?.getBoundingClientRect();
+  const anchor = box ? { left: box.left, top: box.top, bottom: box.bottom } : { left: at.clientX, top: at.clientY, bottom: at.clientY };
+  givePanel.value = { id, anchor, initial: projectChoice(projects.value.find((p) => p.path === card.path)), linkable: openSessions(card).length > 0 };
 }
+
+/** `keyed`: closed from the keyboard, which goes back to the arrow it was opened from. */
+function closeGivePanel(keyed = false): void {
+  const id = givePanel.value?.id;
+  givePanel.value = null;
+  if (keyed && id) void nextTick(() => giveArrow(id)?.focus());
+}
+
+/** One of the panel's answers: it closes, and the card is given, told to wait, or linked.
+ * `keyed`: answered from the keyboard, which goes back to the card's arrow. */
+function fromPanel(act: (id: string) => void, keyed: boolean): void {
+  const id = givePanel.value?.id;
+  closeGivePanel(keyed);
+  if (id) act(id);
+}
+
+/** The sessions open in the card's project, in a menu: the one picked takes the card. */
+function linkMenu(at: MenuPoint, id: string): void {
+  const card = byId.value.get(id);
+  if (!card) return;
+  const editor = snapshot.value?.settings.editor;
+  void menu.popup(
+    at,
+    openSessions(card).map((row) => ({ text: `${row.title || t("board.untitledSession")} · ${originView(row.origin, row.project, editor).short}`, action: () => link(id, row.id) })),
+  );
+}
+
+// The panel is its card's while that card can be given: it goes with the card, with the
+// selection, and when a dialog or a drag takes over.
+watch(
+  () => {
+    const open = givePanel.value;
+    if (!open) return true;
+    const card = byId.value.get(open.id);
+    return !!card && card.column === "queued" && !card.schedule && !busy.value[open.id] && selectedId.value === open.id && !dialog.value && !deleting.value && !dragging.value;
+  },
+  (holds) => {
+    if (!holds) givePanel.value = null;
+  },
+);
 
 const actions: BoardActions = {
   select: (id) => (selectedId.value = id),
@@ -658,7 +734,11 @@ const actions: BoardActions = {
   edit,
   menu: cardMenu,
   give,
+  giveAgain,
   giveMenu,
+  panelFor: () => givePanel.value?.id ?? null,
+  giveNow,
+  unschedule,
   reveal,
   done: (id) => moveTo(id, "done", 0, "done"),
   // Not while an action on it is under way: the move at the drop would be dropped.
@@ -676,10 +756,19 @@ function givable(card: Card): boolean {
   return listed.value.has(card.path) && (card.column === "queued" || statuses.value.get(card.id)?.closed === true);
 }
 
-/** ⌘N writes a card, ⌘↵ gives the selected one; not while a dialog is open. */
+/** ⌘N writes a card, ⌘↵ gives the selected one, ⇧⌘↵ opens the ways to give it (its arrow's
+ * panel); not while a dialog is open. */
 function onWindowKey(event: KeyboardEvent): void {
   if (event.defaultPrevented || dragging.value || document.querySelector("dialog[open]")) return;
-  if (!primary(event) || event.shiftKey || event.altKey) return;
+  if (!primary(event) || event.altKey) return;
+  if (event.shiftKey) {
+    const card = selected.value;
+    if (event.key === "Enter" && !(event.target instanceof HTMLTextAreaElement) && card && giveArrow(card.id)) {
+      event.preventDefault();
+      giveMenu({ clientX: 0, clientY: 0 }, card.id);
+    }
+    return;
+  }
   if (event.code === "KeyN") {
     event.preventDefault();
     openAdd();
@@ -687,7 +776,10 @@ function onWindowKey(event: KeyboardEvent): void {
     const card = selected.value;
     if (card && givable(card)) {
       event.preventDefault();
-      give(card.id, "new");
+      // As its button does: a card up next as its project starts them, one whose session closed
+      // as it was started last ("Give again").
+      if (card.column === "queued") give(card.id, "new");
+      else giveAgain(card.id);
     }
   }
 }
@@ -948,6 +1040,20 @@ const ghostStyle = computed(() =>
       :status="statuses.get(draggedCard.id) ?? null"
       :row="rowOf(draggedCard)"
       ghost
+    />
+
+    <!-- The ways to give the selected card, under its arrow. -->
+    <GivePanel
+      v-if="givePanel"
+      :key="givePanel.id"
+      :anchor="givePanel.anchor"
+      :initial="givePanel.initial"
+      :linkable="givePanel.linkable"
+      :card="givePanel.id"
+      @give="(start, keyed) => fromPanel((id) => give(id, 'new', start), keyed)"
+      @schedule="(start, keyed) => fromPanel((id) => schedule(id, start), keyed)"
+      @link="(at, keyed) => fromPanel((id) => linkMenu(at, id), keyed)"
+      @close="closeGivePanel"
     />
 
     <CardDialog v-if="dialog" :card="dialog.card" :path="project?.path ?? null" :suggested="props.projectPath" :projects="projects" @added="added" @close="dialog = null" />

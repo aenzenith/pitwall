@@ -163,6 +163,8 @@ pub async fn claude_last_message(app: AppHandle, session: String) -> Option<Stri
 
 /* ---------- project terminals ---------- */
 
+/// `start`: for a Claude tab, the model and the mode chosen from "New Claude"'s list; without
+/// it, the project's own.
 #[tauri::command]
 pub fn open_terminal(
     state: State<'_, AppState>,
@@ -170,8 +172,12 @@ pub fn open_terminal(
     claude: Option<bool>,
     cols: Option<u16>,
     rows: Option<u16>,
+    start: Option<StartChoice>,
 ) -> Result<crate::core::TerminalView, String> {
-    state.core.open_terminal(&path, claude.unwrap_or(false), cols.zip(rows))
+    match (claude.unwrap_or(false), start) {
+        (true, Some(start)) => state.core.open_claude_terminal(&path, Some(start.gated()), cols.zip(rows)),
+        (claude, _) => state.core.open_terminal(&path, claude, cols.zip(rows)),
+    }
 }
 
 #[tauri::command]
@@ -241,12 +247,14 @@ pub fn board_delete(state: State<'_, AppState>, id: String) {
 
 /// Gives a card to Claude. `mode` is `new` or `plan` (a new terminal tab of its project), or
 /// `continue`: the session it holds goes on, and no tab opens for one that still runs. It
-/// starts a shell and reads the process table, so it runs off the main thread.
+/// starts a shell and reads the process table, so it runs off the main thread. `start`: the
+/// model and the mode chosen for a new session; without it, the project's own.
 #[tauri::command]
-pub async fn board_give(app: AppHandle, id: String, mode: String, cols: Option<u16>, rows: Option<u16>) -> Result<Option<crate::core::TerminalView>, String> {
+pub async fn board_give(app: AppHandle, id: String, mode: String, cols: Option<u16>, rows: Option<u16>, start: Option<StartChoice>) -> Result<Option<crate::core::TerminalView>, String> {
     let give = crate::core::Give::parse(&mode).ok_or_else(|| format!("unknown mode: {mode}"))?;
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
-    tauri::async_runtime::spawn_blocking(move || core.board_give(&id, give, cols.zip(rows))).await.map_err(|error| error.to_string())?
+    let start = start.map(|start| start.gated());
+    tauri::async_runtime::spawn_blocking(move || core.board_give_with(&id, give, start, cols.zip(rows))).await.map_err(|error| error.to_string())?
 }
 
 /// Every card of the folder `from` goes to the listed project `to`.
@@ -936,4 +944,46 @@ pub fn radio_calls(state: State<'_, AppState>, session: String) -> Vec<crate::co
 pub async fn open_reference(app: AppHandle, path: String, file: String, line: u32, column: Option<u32>) -> bool {
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     tauri::async_runtime::spawn_blocking(move || core.open_reference(&path, &file, line, column)).await.unwrap_or(false)
+}
+
+/// The model and the mode the window chose for a Claude session, as it names them. Neither is
+/// used as it comes: `gated` keeps only the values of the two fixed lists (`start.rs`).
+#[derive(serde::Deserialize)]
+pub struct StartChoice {
+    model: Option<String>,
+    mode: Option<String>,
+}
+
+impl StartChoice {
+    fn gated(&self) -> crate::start::Start {
+        crate::start::Start::of(self.model.as_deref(), self.mode.as_deref())
+    }
+}
+
+/// Tells a card up next to wait until the 5-hour session refills, as the last reading of
+/// Claude's limits says: the core gives it then, in its turn among the cards that wait for the
+/// refill too, with the model and in the mode of `start` (without it, the project's own). The
+/// moment is the core's own reading, never the window's.
+#[tauri::command]
+pub fn board_schedule(state: State<'_, AppState>, id: String, start: Option<StartChoice>) -> Result<(), String> {
+    let at = state.fuel.refill().ok_or_else(|| t!("core.start.noRefill"))?;
+    let start = match start {
+        Some(start) => start.gated(),
+        None => state.core.board_start(&id).ok_or_else(|| format!("no such card: {id}"))?,
+    };
+    state.core.board_schedule(&id, at, true, start)
+}
+
+/// The card waits no longer; it stays up next.
+#[tauri::command]
+pub fn board_unschedule(state: State<'_, AppState>, id: String) {
+    state.core.board_unschedule(&id);
+}
+
+/// "Give now" on a card that waits: given at once with what was chosen for it, unless it waits
+/// no longer (`None`). It starts a shell, so it runs off the main thread.
+#[tauri::command]
+pub async fn board_give_now(app: AppHandle, id: String, cols: Option<u16>, rows: Option<u16>) -> Result<Option<crate::core::TerminalView>, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.board_give_now(&id, cols.zip(rows))).await.map_err(|error| error.to_string())?
 }

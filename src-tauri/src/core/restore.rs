@@ -270,7 +270,7 @@ impl Core {
             };
             let name: String = tab.name.trim().chars().take(40).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
-            let Ok(view) = self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size) else {
+            let Ok(view) = self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false) else {
                 continue;
             };
 

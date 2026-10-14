@@ -5,7 +5,8 @@ import Icon from "../../components/Icon.vue";
 import Rich from "../../components/Rich.vue";
 import { t } from "../../lib/i18n";
 import { projectSettings, updateProjectSettings } from "../../lib/projectSettings";
-import type { Project } from "../../lib/types";
+import { MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice } from "../../lib/start";
+import type { ClaudeMode, ClaudeModel, Project } from "../../lib/types";
 
 const props = defineProps<{ project: Project }>();
 /** `edit`: the command dialog (`null` for a new command); `close`: saved, back to the details. */
@@ -30,6 +31,21 @@ function saveSettings(): void {
   void updateProjectSettings(props.project.path, (s) => ({ ...s, ...server }));
   emit("close");
 }
+
+/** How a Claude session started in this project begins unless something else is picked for it:
+ * a board card given, "New Claude". Kept as it is picked, as the commands are. */
+const claude = computed(() => projectChoice(props.project));
+
+/** The choice that is Claude Code's own is left out of the settings: no model, the normal mode. */
+function setModel(value: string): void {
+  const model = MODELS.find((known) => known === value);
+  void updateProjectSettings(props.project.path, (s) => ({ ...s, claudeModel: model satisfies ClaudeModel | undefined }));
+}
+
+function setMode(value: string): void {
+  const mode = MODES.find((known) => known === value && known !== "normal");
+  void updateProjectSettings(props.project.path, (s) => ({ ...s, claudeMode: mode satisfies ClaudeMode | undefined }));
+}
 </script>
 
 <template>
@@ -45,6 +61,25 @@ function saveSettings(): void {
         <button type="submit" class="control primary">{{ t("common.save") }}</button>
       </div>
     </form>
+
+    <section class="group" :aria-label="t('settings.claude')">
+      <div class="section-label">{{ t("settings.claude") }}</div>
+      <div class="picks">
+        <label class="pick">
+          <span class="pick-name">{{ t("start.model") }}</span>
+          <select :value="claude.model ?? ''" @change="setModel(($event.target as HTMLSelectElement).value)">
+            <option value="">{{ t("start.model.auto") }}</option>
+            <option v-for="model in MODELS" :key="model" :value="model">{{ t(MODEL_LABELS[model]) }}</option>
+          </select>
+        </label>
+        <label class="pick">
+          <span class="pick-name">{{ t("start.mode") }}</span>
+          <select :value="claude.mode" @change="setMode(($event.target as HTMLSelectElement).value)">
+            <option v-for="mode in MODES" :key="mode" :value="mode">{{ t(MODE_LABELS[mode]) }}</option>
+          </select>
+        </label>
+      </div>
+    </section>
 
     <section class="group" :aria-label="t('common.commands')">
       <div class="section-label">{{ t("common.commands") }}</div>
@@ -130,6 +165,38 @@ function saveSettings(): void {
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-subtle);
+}
+
+/* A line each: what it is, and its choice at the line's end; no rule between them. */
+.picks {
+  display: flex;
+  flex-direction: column;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.pick-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pick select {
+  flex-shrink: 0;
+  max-width: 70%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
 }
 
 .hint code {

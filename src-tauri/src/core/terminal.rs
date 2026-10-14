@@ -10,6 +10,7 @@ use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, Pt
 use super::board::tab_name;
 use super::reveal::is_session_id;
 use super::*;
+use crate::start::Start;
 
 /// Output kept per terminal to redraw it when its view comes back.
 const SCROLLBACK_BYTES: usize = 512 * 1024;
@@ -26,6 +27,10 @@ pub struct TerminalView {
     /// The user gave it its name: it no longer takes its session's (`name_terminals`).
     #[serde(skip)]
     pub renamed: bool,
+    /// Opened by the core for a board card at its moment (`board_due`: its time, or its turn in
+    /// the refill's line), not by the user: it doesn't take the keyboard. Set as the tab is made,
+    /// so the first snapshot it is in says so.
+    pub unasked: bool,
 }
 
 /// A terminal's recent output and the number of its last chunk, so a view can draw the history
@@ -41,9 +46,10 @@ pub struct TerminalBuffer {
 pub(super) enum Launch {
     /// The user's shell.
     Shell,
-    /// Claude Code, then the shell: with a first prompt (a board card's text), in plan mode, and
-    /// with the folder of that card's images among Claude's directories.
-    Claude { prompt: Option<String>, plan: bool, images: Option<PathBuf> },
+    /// Claude Code, then the shell: with a first prompt (a board card's text), with the model and
+    /// in the mode of `start`, and with the folder of that card's images among Claude's
+    /// directories.
+    Claude { prompt: Option<String>, start: Start, images: Option<PathBuf> },
     /// Claude Code with a session that has ended opened again (`claude --resume`), then the
     /// shell: a board card's session, going on.
     Resume { session: String },
@@ -102,13 +108,29 @@ impl Core {
     /// `size` (cols, rows) is the view's: a shell that starts at another width draws its first
     /// prompt for that width, and zsh leaves its partial-line mark behind.
     pub fn open_terminal(self: &Arc<Self>, path: &str, claude: bool, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
-        let launch = if claude { Launch::Claude { prompt: None, plan: false, images: None } } else { Launch::Shell };
-        self.open_terminal_as(path, &launch, None, false, size)
+        if claude {
+            return self.open_claude_terminal(path, None, size);
+        }
+        self.open_terminal_as(path, &Launch::Shell, None, false, size, false)
+    }
+
+    /// A Claude Code tab in the project's folder ("New Claude"): with the model and in the mode
+    /// of `start`, or, without one, as the project's own settings say.
+    pub fn open_claude_terminal(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
+        let start = start.unwrap_or_else(|| self.project_start(path));
+        self.open_terminal_as(path, &Launch::Claude { prompt: None, start, images: None }, None, false, size, false)
+    }
+
+    /// How a Claude session of the project at `path` starts when nothing else was chosen: the
+    /// model and the mode of the project's settings.
+    pub(super) fn project_start(&self, path: &str) -> Start {
+        self.lock().settings.project(path).start()
     }
 
     /// `open_terminal`, starting with `launch`; `name` is the tab's title instead of the
     /// numbered `claude` / shell name, and `renamed` says the user chose it (a tab put back
-    /// after a restart).
+    /// after a restart). `unasked`: the core opens it for a board card at its moment, not the
+    /// user (`TerminalView::unasked`).
     pub(super) fn open_terminal_as(
         self: &Arc<Self>,
         path: &str,
@@ -116,6 +138,7 @@ impl Core {
         name: Option<String>,
         renamed: bool,
         size: Option<(u16, u16)>,
+        unasked: bool,
     ) -> Result<TerminalView, String> {
         // A folder that is gone would start the shell in the home folder instead, unasked.
         if !Path::new(path).is_dir() {
@@ -129,7 +152,7 @@ impl Core {
 
         let shell_path = CommandBuilder::new_default_prog().get_shell();
         let mut command = match launch {
-            Launch::Claude { prompt, plan, images } => claude_command(&shell_path, prompt.as_deref(), *plan, images.as_deref()),
+            Launch::Claude { prompt, start, images } => claude_command(&shell_path, prompt.as_deref(), *start, images.as_deref()),
             Launch::Resume { session } => resume_command(&shell_path, session)?,
             Launch::Shell => CommandBuilder::new_default_prog(),
         };
@@ -178,7 +201,7 @@ impl Core {
                 None if same == 0 => base,
                 None => format!("{base} {}", same + 1),
             };
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), renamed };
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), renamed, unasked };
             inner.terminal_list.push(view.clone());
             view
         };
@@ -433,8 +456,9 @@ const PROMPT_VAR: &str = "PITWALL_PROMPT";
 const IMAGES_VAR: &str = "PITWALL_IMAGES";
 
 /// The user's shell, interactive and login (so PATH and version managers load), running
-/// `claude` and then becoming an ordinary shell when Claude ends. `plan` starts Claude in plan
-/// mode.
+/// `claude` and then becoming an ordinary shell when Claude ends. `start` names Claude's model
+/// and mode: its own words for them (`Start::line`: `--model sonnet --permission-mode plan`),
+/// which are the only thing but the fixed script that is written into the command line.
 ///
 /// A first prompt (a board card's text) is never put into the command line: it goes in
 /// `PITWALL_PROMPT`, and the fixed script hands it to Claude as one quoted argument after `--`,
@@ -445,9 +469,9 @@ const IMAGES_VAR: &str = "PITWALL_IMAGES";
 /// (`--add-dir`): Claude reads a file outside the project only after asking, and a card's images
 /// are outside it. The folder goes in `PITWALL_IMAGES`, never into the command line either.
 #[cfg(unix)]
-pub(super) fn claude_command(shell: &str, prompt: Option<&str>, plan: bool, images: Option<&Path>) -> CommandBuilder {
+pub(super) fn claude_command(shell: &str, prompt: Option<&str>, start: Start, images: Option<&Path>) -> CommandBuilder {
     let quoted = shell.replace('\'', "'\\''");
-    let mode = if plan { " --permission-mode plan" } else { "" };
+    let mode = start.line();
     let images = images.filter(|_| prompt.is_some());
     let script = match (prompt, images) {
         (Some(_), Some(_)) => format!("claude{mode} --add-dir \"${IMAGES_VAR}\" -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} -u {IMAGES_VAR} '{quoted}' -l"),
@@ -470,13 +494,19 @@ pub(super) fn claude_command(shell: &str, prompt: Option<&str>, plan: bool, imag
 /// quotes, `&` or `|` in a card would end the argument and run as commands. Claude starts
 /// without the card's text here (it stays unused) rather than risk that.
 #[cfg(windows)]
-pub(super) fn claude_command(_shell: &str, _prompt: Option<&str>, plan: bool, _images: Option<&Path>) -> CommandBuilder {
+pub(super) fn claude_command(_shell: &str, _prompt: Option<&str>, start: Start, _images: Option<&Path>) -> CommandBuilder {
     let mut command = CommandBuilder::new("cmd.exe");
-    command.args(["/K", "claude"]);
-    if plan {
-        command.args(["--permission-mode", "plan"]);
-    }
+    command.args(windows_args(start));
     command
+}
+
+/// What `cmd.exe` is given on Windows: `/K claude`, then the model and the mode as arguments of
+/// their own (`Start::args`), each a constant.
+#[cfg(any(windows, test))]
+fn windows_args(start: Start) -> Vec<&'static str> {
+    let mut args = vec!["/K", "claude"];
+    args.extend(start.args());
+    args
 }
 
 /// The same shell, opening a session again (`claude --resume <id>`) and then becoming an ordinary
@@ -544,6 +574,66 @@ fn trim_scrollback(scrollback: &mut String) {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use crate::start::{Mode, Model};
+
+    /// Every way a session starts, with what it must put on the command line, written out: on
+    /// Unix as part of the shell's line, on Windows as arguments of `cmd.exe`.
+    const STARTS: [(Option<Model>, Mode, &str, &[&str]); 12] = [
+        (None, Mode::Normal, "", &[]),
+        (None, Mode::Plan, " --permission-mode plan", &["--permission-mode", "plan"]),
+        (None, Mode::AcceptEdits, " --permission-mode acceptEdits", &["--permission-mode", "acceptEdits"]),
+        (Some(Model::Opus), Mode::Normal, " --model opus", &["--model", "opus"]),
+        (Some(Model::Opus), Mode::Plan, " --model opus --permission-mode plan", &["--model", "opus", "--permission-mode", "plan"]),
+        (Some(Model::Opus), Mode::AcceptEdits, " --model opus --permission-mode acceptEdits", &["--model", "opus", "--permission-mode", "acceptEdits"]),
+        (Some(Model::Sonnet), Mode::Normal, " --model sonnet", &["--model", "sonnet"]),
+        (Some(Model::Sonnet), Mode::Plan, " --model sonnet --permission-mode plan", &["--model", "sonnet", "--permission-mode", "plan"]),
+        (Some(Model::Sonnet), Mode::AcceptEdits, " --model sonnet --permission-mode acceptEdits", &["--model", "sonnet", "--permission-mode", "acceptEdits"]),
+        (Some(Model::Haiku), Mode::Normal, " --model haiku", &["--model", "haiku"]),
+        (Some(Model::Haiku), Mode::Plan, " --model haiku --permission-mode plan", &["--model", "haiku", "--permission-mode", "plan"]),
+        (Some(Model::Haiku), Mode::AcceptEdits, " --model haiku --permission-mode acceptEdits", &["--model", "haiku", "--permission-mode", "acceptEdits"]),
+    ];
+
+    fn script(command: &CommandBuilder) -> String {
+        command.get_argv().last().unwrap().to_string_lossy().into_owned()
+    }
+
+    /// The model and the mode are the one thing of the user's choosing that is written into
+    /// Claude's command line. In both forms of it (the script the Unix shell runs, the arguments
+    /// `cmd.exe` gets on Windows) that is the fixed words of the two lists, before `--`, and
+    /// nothing else: a choice named in any other words starts Claude as if none had been made.
+    #[test]
+    fn the_model_and_the_mode_are_on_the_command_line_in_their_own_words_only() {
+        for (model, mode, line, args) in STARTS {
+            let start = Start { model, mode };
+
+            assert_eq!(script(&claude_command("/bin/zsh", None, start, None)), format!("claude{line}; exec '/bin/zsh' -l"));
+            assert_eq!(script(&claude_command("/bin/zsh", Some("x"), start, None)), format!("claude{line} -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT '/bin/zsh' -l"));
+            assert_eq!(
+                script(&claude_command("/bin/zsh", Some("x"), start, Some(Path::new("/tmp/images")))),
+                format!("claude{line} --add-dir \"$PITWALL_IMAGES\" -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT -u PITWALL_IMAGES '/bin/zsh' -l")
+            );
+
+            assert_eq!(windows_args(start), [&["/K", "claude"][..], args].concat());
+        }
+
+        // Named in other words (by the window, a settings file, the board's file): nothing of it
+        // is on either command line.
+        for (model, mode) in [
+            ("opus; touch /tmp/pwned", "plan; touch /tmp/pwned"),
+            ("sonnet --dangerously-skip-permissions", "bypassPermissions"),
+            ("$(touch /tmp/pwned)", "`touch /tmp/pwned`"),
+            ("claude-opus-5-5", "acceptEdits --dangerously-skip-permissions"),
+            ("' -- ; touch /tmp/pwned #", "dontAsk"),
+        ] {
+            let said = Start::of(Some(model), Some(mode));
+            let read: Start = serde_json::from_value(serde_json::json!({ "model": model, "mode": mode })).unwrap();
+            for start in [said, read] {
+                assert_eq!(script(&claude_command("/bin/zsh", None, start, None)), "claude; exec '/bin/zsh' -l", "{model} {mode}");
+                assert_eq!(script(&claude_command("/bin/zsh", Some("x"), start, None)), "claude -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT '/bin/zsh' -l", "{model} {mode}");
+                assert_eq!(windows_args(start), ["/K", "claude"], "{model} {mode}");
+            }
+        }
+    }
 
     /// A card's text reaches Claude only through `PITWALL_PROMPT`: shell syntax in it never
     /// becomes part of the command line, whatever it holds.
@@ -553,15 +643,16 @@ mod tests {
         let prompt = format!("{title}\n\n$(touch /tmp/pwned) `touch /tmp/pwned` ' --dangerously-skip-permissions");
         let argv = |command: &CommandBuilder| -> Vec<String> { command.get_argv().iter().map(|arg| arg.to_string_lossy().into_owned()).collect() };
 
-        for plan in [false, true] {
-            let command = claude_command("/bin/zsh", Some(&prompt), plan, None);
+        for (model, mode, _, _) in STARTS {
+            let start = Start { model, mode };
+            let command = claude_command("/bin/zsh", Some(&prompt), start, None);
             let args = argv(&command);
             for arg in &args {
                 assert!(!arg.contains("pwned") && !arg.contains("dangerously"), "{arg}");
             }
             assert_eq!(command.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
             // The same command line for any text: it only names the variable.
-            assert_eq!(args, argv(&claude_command("/bin/zsh", Some("x"), plan, None)));
+            assert_eq!(args, argv(&claude_command("/bin/zsh", Some("x"), start, None)));
 
             let script = args.last().unwrap();
             assert!(script.contains(r#"-- "$PITWALL_PROMPT";"#), "{script}");
@@ -570,7 +661,7 @@ mod tests {
 
             // The folder of its images travels the same way, whatever its path holds.
             let folder = Path::new(r#"/Users/it's "me"; touch /tmp/pwned/board-images/a-0"#);
-            let command = claude_command("/bin/zsh", Some(&prompt), plan, Some(folder));
+            let command = claude_command("/bin/zsh", Some(&prompt), start, Some(folder));
             let args = argv(&command);
             for arg in &args {
                 assert!(!arg.contains("pwned") && !arg.contains("dangerously"), "{arg}");

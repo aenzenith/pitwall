@@ -196,7 +196,7 @@ impl Core {
             Claim::Opening => return true,
             Claim::Tab(tab) => tab,
             Claim::Open => {
-                let opened = self.open_terminal_as(&path, &Launch::Resume { session: session.to_string() }, None, false, None);
+                let opened = self.open_terminal_as(&path, &Launch::Resume { session: session.to_string() }, None, false, None, false);
                 let mut cache = self.sessions_cache();
                 let Ok(view) = opened else {
                     cache.reopened.remove(session);

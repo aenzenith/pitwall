@@ -8,9 +8,11 @@ import { clock } from "../../lib/day";
 import type { CardStatus } from "../../lib/board";
 import { moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
+import { places, waitText } from "../../lib/line";
 import { stamp } from "../../lib/period";
 import { keys } from "../../lib/platform";
 import { useGrow } from "../../lib/slide";
+import { choiceOf, MODE_LABELS, MODEL_LABELS } from "../../lib/start";
 import type { Card, SessionRow } from "../../lib/types";
 import OriginLabel from "../sessions/OriginLabel.vue";
 import { useBoardActions, type CardBusy } from "./context";
@@ -24,6 +26,12 @@ import { useBoardActions, type CardBusy } from "./context";
  * `lifted`: being dragged (its place stays empty); `ghost`: the image that follows the pointer.
  * `givable` false: a card of a folder no longer listed, which is never given to Claude (no button
  * offers it).
+ *
+ * A card up next that was told to wait (`card.schedule`) says so wherever it is drawn: a tag with
+ * its moment and, behind the first of the refill's line, its place there (once its refill came
+ * and a card before it went to Claude, that it waits its turn, and where: lib/line), and one each
+ * for a model and a mode chosen for it. Selected, it offers to be given now or to
+ * wait no longer, in place of the buttons that give it.
  */
 const props = withDefaults(
   defineProps<{
@@ -61,13 +69,24 @@ const noted = computed(() => !!props.card.note && (props.variant === "full" || p
 const located = computed(() => (props.variant === "full" || props.variant === "row") && props.card.column === "claude" && !!props.row && !props.status?.closed);
 
 const giveKeys = computed(() => keys("mod+Enter"));
+/** The panel of ways to give it opens from the keyboard too. */
+const moreKeys = computed(() => keys("mod+shift+Enter"));
 
-/** The buttons it shows: giving when selected and queued; ending a closed session's card; a
- * finished card's look and close when selected (or not seen yet, on a project's board). */
-const buttons = computed<"give" | "closed" | "review" | "bringUp" | null>(() => {
+/** Told to wait: when it is given (`when`: its moment and its place in the refill's line, or its
+ * turn once the refill came), and what was chosen for it. */
+const waiting = computed(() => {
+  const schedule = props.card.column === "queued" && props.variant !== "done" ? props.card.schedule : null;
+  if (!schedule) return null;
+  return { when: waitText(schedule, places.value.get(props.card.id) ?? null, language.value), ...choiceOf(schedule.start) };
+});
+
+/** The buttons it shows: giving when selected and queued (a card that waits: giving it now, or
+ * calling the wait off); ending a closed session's card; a finished card's look and close when
+ * selected (or not seen yet, on a project's board). */
+const buttons = computed<"give" | "waiting" | "closed" | "review" | "bringUp" | null>(() => {
   if (props.ghost || props.variant === "done") return null;
   const { column } = props.card;
-  if (column === "queued") return props.selected && props.givable ? "give" : null;
+  if (column === "queued") return props.selected && props.givable ? (waiting.value ? "waiting" : "give") : null;
   if (column === "claude") {
     if (props.status?.closed) return "closed";
     return props.variant === "compact" && props.selected && revealable.value ? "bringUp" : null;
@@ -80,7 +99,7 @@ const root = ref<HTMLElement | null>(null);
 
 // Its buttons come and go with the selection, an error with what they did: the card grows to hold
 // them and shrinks back, rather than jumping there, and the cards under it follow.
-useGrow(root, () => `${buttons.value} ${props.error}`);
+useGrow(root, () => `${buttons.value} ${waiting.value !== null} ${props.error}`);
 
 function onClick(): void {
   if (actions.isClick()) actions.select(props.card.id);
@@ -104,7 +123,8 @@ function onStatus(event: MouseEvent): void {
   if (event.type === "click") actions.reveal(props.card.id);
 }
 
-function giveMenu(event: MouseEvent): void {
+/** The model, the mode and the moment to give it with, in a panel under the button. */
+function giveMenu(event: Event): void {
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
   actions.giveMenu({ clientX: box.left, clientY: box.bottom + 4 }, props.card.id);
 }
@@ -139,6 +159,14 @@ function giveMenu(event: MouseEvent): void {
         <span v-if="noted" class="bcard-note">{{ card.note }}</span>
       </div>
 
+      <!-- Told to wait: when it is given (or that it waits its turn), and the model and the mode
+           chosen for it. -->
+      <div v-if="waiting" class="bcard-tags">
+        <span class="btag clock"><Icon name="clock" :size="11" /><span class="btag-text">{{ waiting.when }}</span></span>
+        <span v-if="waiting.model" class="btag">{{ t(MODEL_LABELS[waiting.model]) }}</span>
+        <span v-if="waiting.mode !== 'normal'" class="btag">{{ t(MODE_LABELS[waiting.mode]) }}</span>
+      </div>
+
       <!-- Its session's state; a click brings the session up where it runs. -->
       <component
         :is="revealable ? 'button' : 'span'"
@@ -164,19 +192,44 @@ function giveMenu(event: MouseEvent): void {
 
         <div v-if="buttons" class="bcard-actions" data-no-drag @dblclick.stop>
           <template v-if="buttons === 'give'">
-            <button type="button" class="bbtn claude" :disabled="busy === 'give'" :title="giveKeys" @click.stop="actions.give(card.id, 'new')">
-              <Spinner v-if="busy === 'give'" :size="11" />
-              <ClaudeLogo v-else :size="12" />
-              <span class="bbtn-text">{{ t("board.give") }}</span>
-            </button>
-            <button type="button" class="bbtn claude square" :aria-label="t('board.giveOptions')" :title="t('board.giveOptions')" :disabled="busy === 'give'" @click.stop="giveMenu">
-              <Icon name="chevron-down" :size="11" />
-            </button>
+            <!-- One button in two parts: giving it as the project starts its sessions, and the
+                 panel of other ways. -->
+            <span class="bsplit">
+              <button type="button" class="bbtn claude" :disabled="busy === 'give'" :title="giveKeys" @click.stop="actions.give(card.id, 'new')">
+                <Spinner v-if="busy === 'give'" :size="11" />
+                <ClaudeLogo v-else :size="12" />
+                <span class="bbtn-text">{{ t("board.give") }}</span>
+              </button>
+              <button
+                type="button"
+                :class="['bbtn', 'claude', 'square', { open: actions.panelFor() === card.id }]"
+                data-give-more
+                aria-haspopup="dialog"
+                :aria-expanded="actions.panelFor() === card.id"
+                :aria-label="t('board.giveOptions')"
+                :title="actions.panelFor() === card.id ? undefined : `${t('board.giveOptions')} (${moreKeys})`"
+                :disabled="busy === 'give'"
+                @click.stop="giveMenu"
+                @keydown.down.prevent.stop="actions.panelFor() === card.id || giveMenu($event)"
+              >
+                <Icon name="chevron-down" :size="11" />
+              </button>
+            </span>
             <span v-if="variant !== 'compact'" class="bcard-keys" aria-hidden="true">{{ giveKeys }}</span>
           </template>
 
+          <template v-else-if="buttons === 'waiting'">
+            <button type="button" class="bbtn quiet strong" :disabled="!!busy" :title="giveKeys" @click.stop="actions.giveNow(card.id)">
+              <Spinner v-if="busy === 'give'" :size="11" class="bbtn-over" />
+              <span :class="['bbtn-text', { unseen: busy === 'give' }]">{{ t("start.giveNow") }}</span>
+            </button>
+            <button type="button" class="bbtn quiet" :disabled="!!busy" @click.stop="actions.unschedule(card.id)">
+              <span class="bbtn-text">{{ t("common.cancel") }}</span>
+            </button>
+          </template>
+
           <template v-else-if="buttons === 'closed'">
-            <button v-if="givable" type="button" class="bbtn claude" :disabled="busy === 'give'" @click.stop="actions.give(card.id, 'new')">
+            <button v-if="givable" type="button" class="bbtn claude" :disabled="busy === 'give'" @click.stop="actions.giveAgain(card.id)">
               <Spinner v-if="busy === 'give'" :size="11" />
               <span class="bbtn-text">{{ t("board.giveAgain") }}</span>
             </button>
@@ -249,7 +302,7 @@ function giveMenu(event: MouseEvent): void {
   overflow: hidden;
 }
 
-.bcard:not(.row)[data-growing] :is(.bcard-title, .bcard-note, .bcard-status, .bcard-where, .bcard-actions, .bcard-error) {
+.bcard:not(.row)[data-growing] :is(.bcard-title, .bcard-note, .bcard-tags, .bcard-status, .bcard-where, .bcard-actions, .bcard-error) {
   flex-shrink: 0;
 }
 
@@ -303,6 +356,48 @@ function giveMenu(event: MouseEvent): void {
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* A card told to wait: when it is given in Claude's colours, what was chosen for it plain. A tag
+   keeps to one line; a card too narrow for them all sets them on a second. */
+.bcard-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.btag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--bg-well);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.btag.clock {
+  background: var(--claude-bg);
+  box-shadow: inset 0 0 0 1px var(--claude-line);
+  color: var(--claude-text);
+}
+
+.btag svg {
+  flex-shrink: 0;
+}
+
+.btag-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Its session's state: a filled dot waits on you, a breathing ring works, a grey ring is quiet. */
@@ -474,6 +569,79 @@ function giveMenu(event: MouseEvent): void {
   justify-content: center;
 }
 
+/* "Give to Claude" and the arrow that opens its panel: one button in two parts. */
+.bsplit {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.bsplit > .bbtn:first-child {
+  border-right: 0;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.bsplit > .bbtn.square {
+  width: 26px;
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.bsplit > .bbtn.square.open {
+  background: var(--btn-claude-hover);
+}
+
+/* A waiting card's own: no box, as the links of a line are. The first is the one to press. */
+.bbtn.quiet {
+  position: relative;
+  height: 26px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.bbtn.quiet.strong {
+  color: var(--text);
+}
+
+/* Its label starts where the card's lines do. */
+.bcard-actions > .bbtn.quiet:first-child {
+  margin-left: -8px;
+}
+
+.row .bcard-actions > .bbtn.quiet:first-child {
+  margin-left: 0;
+}
+
+/* Russian's two are the longest and a lane's card is the narrowest: there they sit closer, so
+   neither is shortened. */
+:lang(ru) .compact .bcard-actions:has(> .bbtn.quiet) {
+  gap: 0;
+}
+
+:lang(ru) .compact .bcard-actions > .bbtn.quiet {
+  padding: 0 6px;
+}
+
+:lang(ru) .compact .bcard-actions > .bbtn.quiet:first-child {
+  margin-left: -6px;
+}
+
+.bbtn.quiet:hover:not(:disabled) {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+/* Busy, its label stays, unseen, under the spinner: the button keeps its width. */
+.bbtn-text.unseen {
+  visibility: hidden;
+}
+
+.bbtn-over {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
 .bcard-keys {
   flex-shrink: 0;
   margin-left: auto;
@@ -551,6 +719,12 @@ function giveMenu(event: MouseEvent): void {
 
 .row .bcard-status {
   flex: 0 0 184px;
+}
+
+/* A row's tags follow its title on the same line. */
+.row .bcard-tags {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
 }
 
 .row .bcard-end {

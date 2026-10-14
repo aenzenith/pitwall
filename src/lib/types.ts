@@ -29,7 +29,17 @@ export type ExtensionStatus = { version: string | null; marketplace: boolean };
 /** An address the project names itself, offered as a link; `source`: `git`, `.env`, `package.json`. */
 export type LinkSuggestion = { name: string; url: string; source: string };
 
-export type ProjectSettings = { script?: string; port?: number; url?: string; commands?: CustomCommand[]; links?: ProjectLink[] };
+export type ProjectSettings = {
+  script?: string;
+  port?: number;
+  url?: string;
+  commands?: CustomCommand[];
+  links?: ProjectLink[];
+  /** The model a Claude session started here takes; unset: the one Claude Code picks itself. */
+  claudeModel?: ClaudeModel;
+  /** The mode such a session starts in; unset: normal. */
+  claudeMode?: ClaudeMode;
+};
 
 export type JobResult = { ok: boolean; code: number | null; stopped: boolean; finishedAt: number };
 
@@ -149,7 +159,14 @@ export type Settings = {
 };
 
 /** An open project terminal. */
-export type TerminalView = { id: number; path: string; name: string; kind: "shell" | "claude" };
+export type TerminalView = {
+  id: number;
+  path: string;
+  name: string;
+  kind: "shell" | "claude";
+  /** Opened by a board card's moment, not by the user: it takes neither the view nor the keyboard. */
+  unasked: boolean;
+};
 
 /** A subfolder of the projects folder. */
 export type Folder = { name: string; path: string };
@@ -498,6 +515,10 @@ export type Card = {
   terminal: number | null;
   givenAt: number | null;
   images: CardImage[];
+  /** The model and the mode its last new session was started with; unset before the first. */
+  start?: ClaudeStart | null;
+  /** Up next and told to wait: the core gives it at its moment. */
+  schedule?: CardSchedule | null;
 };
 
 /** An image a card holds: its number in the note, and what its file is. */
@@ -647,3 +668,22 @@ export type RadioResult =
 
 /** One call a session made over the radio. */
 export type RadioCall = { at: number; tool: string; result: RadioResult };
+
+/** A model by the alias Claude Code's `--model` takes for the newest one of its name. */
+export type ClaudeModel = "opus" | "sonnet" | "haiku";
+
+/** The mode a Claude session starts in: Claude Code's own, plan first, or edits made without asking. */
+export type ClaudeMode = "normal" | "plan" | "acceptEdits";
+
+/** How a Claude session starts, as the core keeps it: no model is Claude Code's own choice, no
+ * mode is normal. */
+export type ClaudeStart = { model?: ClaudeModel; mode?: ClaudeMode };
+
+/** How a Claude session is to start, as the window says it to the core (the core keeps only
+ * values of its two lists): `model` null is Claude Code's own choice. */
+export type StartChoice = { model: ClaudeModel | null; mode: ClaudeMode };
+
+/** A card told to wait: when it is given (ms), whether that moment is the 5-hour session's
+ * refill (it then follows the reading), and what was chosen for it. `line`: its refill came while
+ * a card before it was given or still with Claude, and it waits its turn (`at` is no moment then). */
+export type CardSchedule = { at: number; refill: boolean; start: ClaudeStart; line?: boolean };

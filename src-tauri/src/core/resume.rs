@@ -249,7 +249,7 @@ impl Core {
                 let Some(launch) = self.launch_of(tab) else {
                     continue;
                 };
-                let Ok(view) = self.open_terminal_as(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None) else {
+                let Ok(view) = self.open_terminal_as(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false) else {
                     continue;
                 };
                 if let Some(session) = &tab.session {

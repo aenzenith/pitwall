@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::registry::{now_ms, write_atomic};
+use crate::start::{Mode, Model, Start};
 
 /// A project's own command (queue worker, migrations, tests…), run from the detail panel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -47,6 +48,20 @@ pub struct ProjectSettings {
     pub commands: Vec<CustomCommand>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<ProjectLink>,
+    /// The model a Claude session started here takes (a board card given, "New Claude"); none:
+    /// the one Claude Code picks itself. One of a fixed list, whatever the file says (`start.rs`).
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "crate::start::model_or_none")]
+    pub claude_model: Option<Model>,
+    /// The mode such a session starts in.
+    #[serde(skip_serializing_if = "Mode::is_normal", deserialize_with = "crate::start::mode_or_normal")]
+    pub claude_mode: Mode,
+}
+
+impl ProjectSettings {
+    /// How a Claude session of the project starts when nothing else was chosen.
+    pub fn start(&self) -> Start {
+        Start { model: self.claude_model, mode: self.claude_mode }
+    }
 }
 
 /// A team: projects listed together, started and stopped together.
