@@ -39,6 +39,8 @@ export type ProjectSettings = {
   claudeModel?: ClaudeModel;
   /** The mode such a session starts in; unset: normal. */
   claudeMode?: ClaudeMode;
+  /** The three letters the Track page and the mini tower write for it; unset: told from its name. */
+  code?: string;
 };
 
 export type JobResult = { ok: boolean; code: number | null; stopped: boolean; finishedAt: number };

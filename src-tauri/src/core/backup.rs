@@ -417,6 +417,7 @@ fn move_project(settings: &mut Settings, from: &str, to: &str) {
         ours.port = ours.port.or(theirs.port);
         ours.url = ours.url.or(theirs.url);
         ours.claude_model = ours.claude_model.or(theirs.claude_model);
+        ours.code = ours.code.or(theirs.code);
         if ours.claude_mode.is_normal() {
             ours.claude_mode = theirs.claude_mode;
         }
@@ -1290,6 +1291,7 @@ mod tests {
             links: vec![link("staging")],
             claude_model: Some(crate::start::Model::Sonnet),
             claude_mode: crate::start::Mode::Plan,
+            code: Some("PDK".into()),
         };
         core.set_project_settings(&old, kept.clone());
         core.mute_project(&old, true);
@@ -1324,7 +1326,7 @@ mod tests {
         assert_eq!(merged.commands.iter().map(|command| command.name.as_str()).collect::<Vec<_>>(), ["worker", "deploy", "tests"]);
         assert_eq!(merged.commands.iter().map(|command| command.id.as_str()).collect::<HashSet<_>>().len(), 3, "{:?}", merged.commands);
         assert_eq!(merged.links, [link("docs"), link("staging")]);
-        assert_eq!((merged.claude_model, merged.claude_mode), (kept.claude_model, kept.claude_mode));
+        assert_eq!((merged.claude_model, merged.claude_mode, merged.code.as_deref()), (kept.claude_model, kept.claude_mode, Some("PDK")));
         assert_eq!(settings.teams[0].projects, [new.clone(), other.clone()]);
         assert_eq!(settings.notifications.muted, [new.as_str()]);
         assert_eq!(listed(&core), sorted(vec![new.clone(), other.clone()]));

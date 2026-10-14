@@ -172,6 +172,8 @@
   "detail.backToDetails": "返回项目详情",
   "detail.serverSettings": "开发服务器设置",
   "detail.port": "端口",
+  "detail.code": "代号",
+  "detail.codeTaken": "{name} 已在使用",
   "detail.address": "地址",
   "detail.portPlaceholder": "自动（vite.config，否则 5173）",
   "detail.addressPlaceholder": "自动（APP_URL、.test、服务器）",

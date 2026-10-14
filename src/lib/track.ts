@@ -447,14 +447,22 @@ export function towerOrder(projects: Project[]): Project[] {
 }
 
 /**
- * Three letters for each project, as a timing tower writes its drivers: the first three letters
- * of the name, and for a name already taken, its first letter with the next free pair, then with a
- * number. By path.
+ * Three letters for each project, as a timing tower writes its drivers: the code set in the
+ * project's settings, else the first three letters of the name, and for a name already taken, its
+ * first letter with the next free pair, then with a number. A code set for two projects is the
+ * first one's. By path.
  */
 export function codes(projects: Project[]): Map<string, string> {
   const taken = new Set<string>();
   const result = new Map<string, string>();
   for (const project of projects) {
+    const own = project.settings.code;
+    if (!own || taken.has(own)) continue;
+    taken.add(own);
+    result.set(project.path, own);
+  }
+  for (const project of projects) {
+    if (result.has(project.path)) continue;
     const letters = project.name.toLocaleUpperCase("en").replace(/[^\p{L}\p{N}]/gu, "");
     const chars = [...letters];
     const candidates = [chars.slice(0, 3).join("")];

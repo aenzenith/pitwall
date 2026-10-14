@@ -6,6 +6,8 @@ import Rich from "../../components/Rich.vue";
 import { t } from "../../lib/i18n";
 import { projectSettings, updateProjectSettings } from "../../lib/projectSettings";
 import { MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice } from "../../lib/start";
+import { snapshot } from "../../lib/store";
+import { codes } from "../../lib/track";
 import type { ClaudeMode, ClaudeModel, Project } from "../../lib/types";
 
 const props = defineProps<{ project: Project }>();
@@ -46,6 +48,39 @@ function setMode(value: string): void {
   const mode = MODES.find((known) => known === value && known !== "normal");
   void updateProjectSettings(props.project.path, (s) => ({ ...s, claudeMode: mode satisfies ClaudeMode | undefined }));
 }
+
+/** The three letters the Track page and the mini tower write for the project when none is set:
+ * told from its name, beside the others' (lib/track). */
+const nameCode = computed(() => {
+  const projects = (snapshot.value?.projects ?? []).map((project) => (project.path === props.project.path ? { ...project, settings: { ...project.settings, code: undefined } } : project));
+  return codes(projects).get(props.project.path) ?? "";
+});
+
+/** The code as typed: letters and digits in capitals, three at most, as the core keeps it. */
+const code = ref(settings.value.code ?? "");
+/** The project that has the typed code set already. */
+const codeTakenBy = ref<string | null>(null);
+
+/** Not while an input method composes (kana, pinyin): what it holds is put right once it ends. */
+function typeCode(event: Event): void {
+  if ((event as InputEvent).isComposing) return;
+  const input = event.target as HTMLInputElement;
+  code.value = [...input.value.toLocaleUpperCase("en").replace(/[^\p{L}\p{N}]/gu, "")].slice(0, 3).join("");
+  input.value = code.value;
+  codeTakenBy.value = null;
+}
+
+/** Kept as it is left, as the picks above are; an empty field goes back to the name's letters. */
+function saveCode(): void {
+  const value = code.value || undefined;
+  if (value === settings.value.code) return;
+  const other = value ? snapshot.value?.projects.find((project) => project.path !== props.project.path && project.settings.code === value) : undefined;
+  if (other) {
+    codeTakenBy.value = other.name;
+    return;
+  }
+  void updateProjectSettings(props.project.path, (s) => ({ ...s, code: value }));
+}
 </script>
 
 <template>
@@ -79,6 +114,28 @@ function setMode(value: string): void {
           </select>
         </label>
       </div>
+    </section>
+
+    <section class="group" :aria-label="t('track.nav')">
+      <div class="section-label">{{ t("track.nav") }}</div>
+      <div class="picks">
+        <label class="pick">
+          <span class="pick-name">{{ t("detail.code") }}</span>
+          <input
+            class="code"
+            :value="code"
+            :placeholder="nameCode"
+            maxlength="3"
+            spellcheck="false"
+            autocomplete="off"
+            :aria-invalid="codeTakenBy !== null"
+            @input="typeCode"
+            @compositionend="typeCode"
+            @change="saveCode"
+          />
+        </label>
+      </div>
+      <p v-if="codeTakenBy" class="error" role="alert">{{ t("detail.codeTaken", { name: codeTakenBy }) }}</p>
     </section>
 
     <section class="group" :aria-label="t('common.commands')">
@@ -248,5 +305,33 @@ function setMode(value: string): void {
 
 .control.add {
   align-self: flex-start;
+}
+
+/* Three capitals, as the tower writes them. */
+.pick input.code {
+  flex-shrink: 0;
+  width: 64px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.pick input.code::placeholder {
+  color: var(--text-subtle);
+  font-weight: 400;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--crash-text);
 }
 </style>

@@ -126,6 +126,27 @@
         "ja": "ライトテーマでは、コースとメーターも明るくなります。路面はインクの線、ライトは緑とオレンジ、メーターは白いガラスの上に。ダークテーマの夜はそのままです。",
         "zh-Hans": "浅色主题下，赛道和仪表也变为浅色：路面用墨线勾勒，灯光是绿色与橙色，仪表落在白色玻璃上。深色主题仍是原来的夜色。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "A project's own code",
+        "tr": "Projeye kendi kodu",
+        "de": "Ein eigenes Kürzel je Projekt",
+        "es": "Un código propio para cada proyecto",
+        "ru": "Свой код для проекта",
+        "ja": "プロジェクトごとのコード",
+        "zh-Hans": "项目的自定代号"
+      },
+      "body": {
+        "en": "The three letters the Track and the mini tower write for a project can be set in its settings. Left empty, they come from its name as before.",
+        "tr": "Pistin ve mini kulenin bir projeye yazdığı üç harf, projenin ayarlarından verilebiliyor. Boş bırakılırsa eskisi gibi adından gelir.",
+        "de": "Die drei Buchstaben, mit denen Strecke und Mini-Turm ein Projekt schreiben, lassen sich in seinen Einstellungen festlegen. Leer gelassen, kommen sie wie bisher aus dem Namen.",
+        "es": "Las tres letras con que la Pista y la minitorre escriben un proyecto se pueden fijar en sus ajustes. Si se deja vacío, salen de su nombre como antes.",
+        "ru": "Три буквы, которыми Трасса и мини-башня обозначают проект, можно задать в его настройках. Если поле пустое, они, как и раньше, берутся из названия.",
+        "ja": "コースとミニタワーがプロジェクトに付ける3文字を、プロジェクトの設定で決められます。空欄なら、これまでどおり名前から作られます。",
+        "zh-Hans": "赛道和迷你塔为项目显示的三字母代号，可以在项目设置中自定。留空时，仍按名称生成。"
+      }
     }
   ]
 }

@@ -172,6 +172,8 @@
   "detail.backToDetails": "プロジェクトの詳細に戻る",
   "detail.serverSettings": "開発サーバーの設定",
   "detail.port": "ポート",
+  "detail.code": "コード",
+  "detail.codeTaken": "{name} が使っています",
   "detail.address": "アドレス",
   "detail.portPlaceholder": "自動（vite.config、なければ5173）",
   "detail.addressPlaceholder": "自動（APP_URL、.test、サーバー）",

@@ -177,6 +177,8 @@
   "detail.backToDetails": "Volver a los detalles del proyecto",
   "detail.serverSettings": "Ajustes del servidor de desarrollo",
   "detail.port": "Puerto",
+  "detail.code": "Código",
+  "detail.codeTaken": "{name} ya lo usa",
   "detail.address": "Dirección",
   "detail.portPlaceholder": "automático (vite.config; si no, 5173)",
   "detail.addressPlaceholder": "automático (APP_URL, .test, servidor)",

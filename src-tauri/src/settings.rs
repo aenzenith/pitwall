@@ -55,6 +55,18 @@ pub struct ProjectSettings {
     /// The mode such a session starts in.
     #[serde(skip_serializing_if = "Mode::is_normal", deserialize_with = "crate::start::mode_or_normal")]
     pub claude_mode: Mode,
+    /// The three letters the Track page and the mini tower write for the project, in place of
+    /// those told from its name (`codes` in `src/lib/track.ts`).
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "code_or_none")]
+    pub code: Option<String>,
+}
+
+/// A project's code as a file has it: its letters and digits in capitals, three at most; none
+/// when nothing is left.
+fn code_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    let code: String = value.as_str().unwrap_or_default().chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_uppercase).take(3).collect();
+    Ok((!code.is_empty()).then_some(code))
 }
 
 impl ProjectSettings {

@@ -181,6 +181,8 @@
   "detail.backToDetails": "Назад к сведениям о проекте",
   "detail.serverSettings": "Настройки dev-сервера",
   "detail.port": "Порт",
+  "detail.code": "Код",
+  "detail.codeTaken": "Уже у проекта {name}",
   "detail.address": "Адрес",
   "detail.portPlaceholder": "авто (vite.config, иначе 5173)",
   "detail.addressPlaceholder": "авто (APP_URL, .test, сервер)",

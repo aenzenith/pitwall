@@ -175,6 +175,8 @@
   "detail.backToDetails": "Back to project details",
   "detail.serverSettings": "Dev server settings",
   "detail.port": "Port",
+  "detail.code": "Code",
+  "detail.codeTaken": "{name} already has it",
   "detail.address": "Address",
   "detail.portPlaceholder": "auto (vite.config, else 5173)",
   "detail.addressPlaceholder": "auto (APP_URL, .test, server)",
