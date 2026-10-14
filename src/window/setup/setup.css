@@ -274,3 +274,34 @@ code {
 .opt input:focus-visible {
   outline-offset: 2px;
 }
+
+/* The app's segmented control, as Settings has it (settings/settings.css). */
+.seg {
+  flex-shrink: 0;
+  display: inline-flex;
+  max-width: 100%;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-seg);
+}
+
+.seg button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.seg button:hover:not([aria-pressed="true"]):not(:disabled) {
+  color: var(--text);
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
+  color: var(--text-strong);
+}

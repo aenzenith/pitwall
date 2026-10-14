@@ -25,6 +25,21 @@ pub fn start(bundled: bool, on_click: impl Fn(String) + Send + Sync + 'static) {
     let _ = ON_CLICK.set(Box::new(on_click));
 }
 
+/// Whether a toast may show: Windows isn't asked here.
+pub fn access() -> &'static str {
+    "unknown"
+}
+
+/// Nothing to ask for before a toast.
+pub fn ask() -> bool {
+    true
+}
+
+/// No place in Settings is opened for it (`access` never says it is off).
+pub fn settings_url(_identifier: &str) -> Option<String> {
+    None
+}
+
 /// A notification about `path`, with `image` (a PNG) as the toast's logo.
 pub fn post(path: String, title: String, body: String, image: Option<&Path>) {
     let sender = if BUNDLED.get().copied().unwrap_or(false) { APP_ID } else { Toast::POWERSHELL_APP_ID };

@@ -59,6 +59,35 @@ pub fn status(editor: &str) -> ExtensionStatus {
     ExtensionStatus { version: installed_version(editor), marketplace: matches!(editor, "vscode" | "vscode-insiders") }
 }
 
+/// The editors Settings offers (`settings.editor`), in its order: each with its macOS bundle
+/// identifier and the command it puts on the PATH elsewhere.
+const EDITORS: [(&str, &str, &str); 4] = [
+    ("vscode", "com.microsoft.VSCode", "code"),
+    ("vscode-insiders", "com.microsoft.VSCodeInsiders", "code-insiders"),
+    ("cursor", "com.todesktop.230313mzl4w4u92", "cursor"),
+    ("windsurf", "com.exafunction.windsurf", "windsurf"),
+];
+
+/// Which of them are on this machine (the first run's editor row). macOS's LaunchServices is
+/// asked for each bundle identifier, elsewhere the PATH for each command: nothing of the apps
+/// themselves is read.
+pub fn installed_editors() -> Vec<&'static str> {
+    EDITORS.iter().filter(|(_, bundle, command)| installed(bundle, command)).map(|(editor, ..)| *editor).collect()
+}
+
+#[cfg(target_os = "macos")]
+fn installed(bundle: &str, _command: &str) -> bool {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::NSString;
+
+    NSWorkspace::sharedWorkspace().URLForApplicationWithBundleIdentifier(&NSString::from_str(bundle)).is_some()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn installed(_bundle: &str, command: &str) -> bool {
+    crate::process::find_program(command).is_some()
+}
+
 /// Where to get it: its page in VS Code itself (one click installs), else the latest release.
 pub fn page(editor: &str) -> String {
     match editor {

@@ -34,6 +34,8 @@ const NIGHT_ENDS: u32 = 4;
 /// are the project's path, as they always were.
 const BANNER: &str = "pitwall:signal:";
 const DETAIL: char = '\u{1f}';
+/// The first run's test banner (`test_banner`); a click on it brings Pitwall's window up (lib.rs).
+pub const TEST_BANNER: &str = "pitwall:signal:test";
 
 /// What happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, serde::Deserialize)]
@@ -431,6 +433,12 @@ impl Core {
         let signal = Signal { kind: SignalKind::FuelHigh, path: String::new(), name: String::new(), detail: None };
         let told = self.tell(vec![(Some(Banner { id: id.to_string(), title, body }), signal)], !again);
         told.iter().any(|verdict| verdict.banner || verdict.missed)
+    }
+
+    /// A banner the user asked for (the first run's "Send a test"), so nothing holds it: not
+    /// quiet, not an event's switch. A banner only: no sound, nothing listed, nothing to the phone.
+    pub fn test_banner(&self) {
+        self.emit(CoreEvent::Notify { path: TEST_BANNER.to_string(), title: "Pitwall".into(), body: t!("core.notify.test") });
     }
 
     /// `phone`: its channel is asked. What became of each comes back.

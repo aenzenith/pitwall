@@ -28,9 +28,10 @@ import TrackOptions from "./track/TrackOptions.vue";
 type Tab = "general" | "servers" | "editor" | "claude" | "track" | "notifications" | "about";
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
- * page's settings button Track's). `openSetup`: the first run's steps are asked for again;
+ * page's settings button Track's); `startPart`: a part of it scrolled to the top (the first run's
+ * phone row asks for the phone's). `openSetup`: the first run's steps are asked for again;
  * `openWhatsNew`: this version's notes. */
-const props = defineProps<{ startTab?: Tab }>();
+const props = defineProps<{ startTab?: Tab; startPart?: "phone" }>();
 const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNew: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
@@ -231,11 +232,31 @@ async function onRecordKey(event: KeyboardEvent): Promise<void> {
   }
 }
 
+/** The parts a start can ask for, by their labels' ids. */
+const PARTS = { phone: "phone-section" } as const;
+
+/** Scrolls the part whose label is `id` to the top of the tab, a little room above it, once it is
+ * drawn (the phone's waits for the core's answer); not looked for after two seconds. */
+function revealPart(id: string): void {
+  const reveal = (): boolean => {
+    const label = document.getElementById(id);
+    if (label && body.value) body.value.scrollTop += label.getBoundingClientRect().top - body.value.getBoundingClientRect().top - 16;
+    return !!label;
+  };
+  if (reveal() || !body.value) return;
+  const watcher = new MutationObserver(() => {
+    if (reveal()) watcher.disconnect();
+  });
+  watcher.observe(body.value, { childList: true, subtree: true });
+  setTimeout(() => watcher.disconnect(), 2000);
+}
+
 // showModal focuses the first control; settings open with nothing focused.
 onMounted(() => {
   dialog.value?.showModal();
   (document.activeElement as HTMLElement | null)?.blur();
   void getVersion().then((v) => (version.value = v));
+  if (props.startPart) revealPart(PARTS[props.startPart]);
 });
 
 onBeforeUnmount(() => {

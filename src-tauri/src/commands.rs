@@ -118,6 +118,42 @@ pub fn open_extension_page(app: AppHandle, editor: String) -> Result<(), String>
     app.opener().open_url(crate::extension::page(&editor), None::<&str>).map_err(|error| error.to_string())
 }
 
+/* ---------- the first run's last step: the editors here, and notifications ---------- */
+
+/// Which of the editors Settings offers are on this machine, in Settings' order.
+#[tauri::command]
+pub async fn installed_editors() -> Result<Vec<&'static str>, String> {
+    tauri::async_runtime::spawn_blocking(crate::extension::installed_editors).await.map_err(|error| error.to_string())
+}
+
+/// Whether the system lets Pitwall post notifications, asked of it now: `allowed`, `off`,
+/// `notAsked`, `borrowed` (a dev build posts as another app, whose permission it is) or `unknown`.
+#[tauri::command]
+pub async fn notification_access() -> Result<&'static str, String> {
+    tauri::async_runtime::spawn_blocking(crate::notify::access).await.map_err(|error| error.to_string())
+}
+
+/// "Send a test": one banner through the door (`Core::test_banner`) once the system lets Pitwall
+/// post (macOS asks first when it never had an answer). What it allows then comes back.
+#[tauri::command]
+pub async fn notification_test(app: AppHandle) -> Result<&'static str, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    let tested = move || {
+        if crate::notify::ask() {
+            core.test_banner();
+        }
+        crate::notify::access()
+    };
+    tauri::async_runtime::spawn_blocking(tested).await.map_err(|error| error.to_string())
+}
+
+/// The system's notification settings, at the entry whose permission it is.
+#[tauri::command]
+pub fn notification_settings(app: AppHandle) -> Result<(), String> {
+    let url = crate::notify::settings_url(&app.config().identifier).ok_or("no notification settings here")?;
+    app.opener().open_url(url, None::<&str>).map_err(|error| error.to_string())
+}
+
 /// Settings' preview of a notification sound.
 #[tauri::command]
 pub fn play_sound(app: AppHandle, id: String) {

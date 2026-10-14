@@ -259,6 +259,15 @@ export const api = {
   linkSuggestions: (path: string) => invoke<LinkSuggestion[]>("link_suggestions", { path }),
   extensionStatus: (editor: string) => invoke<ExtensionStatus>("extension_status", { editor }),
   openExtensionPage: (editor: string) => invoke("open_extension_page", { editor }),
+  /** Which of the editors Settings offers are on this machine, in Settings' order. */
+  installedEditors: () => invoke<import("./types").Editor[]>("installed_editors"),
+  /** Whether the system lets Pitwall post notifications, asked of it now. */
+  notificationAccess: () => invoke<import("./types").NotifyAccess>("notification_access"),
+  /** One test banner, once the system lets Pitwall post (macOS asks first when it never had an
+   * answer, and this waits for it); what it allows then. */
+  notificationTest: () => invoke<import("./types").NotifyAccess>("notification_test"),
+  /** The system's notification settings, at the entry whose permission it is. */
+  notificationSettings: () => invoke("notification_settings"),
   /** `start`: for a Claude tab, the model and the mode picked from "New Claude"'s list; without
    * it, the project's own. */
   openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null, start: StartChoice | null = null) =>

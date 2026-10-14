@@ -147,6 +147,27 @@
         "ja": "コースとミニタワーがプロジェクトに付ける3文字を、プロジェクトの設定で決められます。空欄なら、これまでどおり名前から作られます。",
         "zh-Hans": "赛道和迷你塔为项目显示的三字母代号，可以在项目设置中自定。留空时，仍按名称生成。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "More in the setup steps",
+        "tr": "Kurulum adımlarında daha fazlası",
+        "de": "Mehr in den Einrichtungsschritten",
+        "es": "Más en los pasos de configuración",
+        "ru": "Больше в шагах настройки",
+        "ja": "セットアップ手順に項目を追加",
+        "zh-Hans": "初始设置步骤新增内容"
+      },
+      "body": {
+        "en": "The setup steps now offer what used to wait in Settings: the mini tower, with its layout and its own shortcut, and a last step for notifications (whether the system lets Pitwall post them, with a test), the pitwall command (on macOS), the editor projects open in when you have more than one, and the phone. Settings › General opens the steps again.",
+        "tr": "Kurulum adımları artık Ayarlar'da bekleyenleri de sunuyor: biçimi ve kendi kısayoluyla mini kule; son adımda da bildirimler (sistemin Pitwall'a izin verip vermediği, bir denemeyle), pitwall komutu (macOS'ta), birden fazla editörün varsa projelerin açılacağı editör ve telefon. Adımlar Ayarlar › Genel'den yeniden açılır.",
+        "de": "Die Einrichtungsschritte bieten jetzt, was bisher in den Einstellungen wartete: den Mini-Turm mit seiner Ansicht und eigenem Tastaturkurzbefehl, und einen letzten Schritt für Benachrichtigungen (ob das System sie Pitwall erlaubt, mit einem Test), den pitwall-Befehl (unter macOS), den Editor, in dem Projekte öffnen, wenn du mehr als einen hast, und das Handy. Einstellungen › Allgemein öffnet die Schritte erneut.",
+        "es": "Los pasos de configuración ofrecen ahora lo que antes esperaba en Ajustes: la minitorre, con su vista y su propio atajo, y un último paso para las notificaciones (si el sistema permite que Pitwall las envíe, con una prueba), el comando pitwall (en macOS), el editor en el que se abren los proyectos si tienes más de uno, y el móvil. Ajustes › General vuelve a abrir los pasos.",
+        "ru": "Шаги настройки теперь предлагают то, что раньше ждало в Настройках: мини-башню с её видом и собственным сочетанием клавиш и последний шаг для уведомлений (разрешает ли их система для Pitwall, с пробным уведомлением), команды pitwall (в macOS), редактора, в котором открываются проекты, если их у вас несколько, и телефона. Шаги снова открываются в Настройках › Основные.",
+        "ja": "セットアップ手順で、これまで設定にあった項目も選べるようになりました。表示と専用ショートカットを含むミニタワー、そして最後の手順で通知（システムが Pitwall の通知を許可しているか、テスト付き）、pitwall コマンド（macOS のみ）、複数ある場合はプロジェクトを開くエディタ、スマホ。手順は 設定 › 一般 からもう一度開けます。",
+        "zh-Hans": "初始设置步骤现在也提供以前只在设置中才有的选项：迷你塔及其视图和专用快捷键；最后一步还有通知（系统是否允许 Pitwall 发送通知，可发送测试）、pitwall 命令（仅限 macOS）、装有多个编辑器时用来打开项目的编辑器，以及手机。可在 设置 › 通用 中再次打开这些步骤。"
+      }
     }
   ]
 }

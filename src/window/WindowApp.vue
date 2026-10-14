@@ -132,11 +132,14 @@ watch(visible, (on) => {
 });
 const settingsOpen = ref(false);
 /** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's, the Track
- * page's settings button on Track's, the popover's "Quiet hours…" on Notifications'. */
+ * page's settings button on Track's, the popover's "Quiet hours…" on Notifications'. The first
+ * run's phone row opens it on Notifications' too, at the phone's part (`settingsPart`). */
 const settingsTab = ref<"claude" | "track" | "notifications" | undefined>(undefined);
+const settingsPart = ref<"phone" | undefined>(undefined);
 
-function openSettings(tab?: "claude" | "track" | "notifications"): void {
+function openSettings(tab?: "claude" | "track" | "notifications", part?: "phone"): void {
   settingsTab.value = tab;
+  settingsPart.value = part;
   settingsOpen.value = true;
 }
 
@@ -772,7 +775,7 @@ function server(project: Project): string {
     <BoardView v-else-if="view === 'board'" :project-path="selected?.path ?? null" @open-settings="openSettings('claude')" />
     <DepsView v-else-if="view === 'deps'" @open-project="revealProject" @open-output="revealOutput" />
     <!-- The first run's steps, in place of the list and its details. -->
-    <SetupView v-else-if="setupOpen" @done="setupOpen = false" />
+    <SetupView v-else-if="setupOpen" :covered="settingsOpen" @done="setupOpen = false" @open-phone="openSettings('notifications', 'phone')" />
 
     <template v-else>
       <main class="main">
@@ -919,7 +922,7 @@ function server(project: Project): string {
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
     </template>
 
-    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" @open-whats-new="whatsNewOpen = true" />
+    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" :start-part="settingsPart" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" @open-whats-new="whatsNewOpen = true" />
     <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
     <UpdateDialog v-if="updateOpen && update" :update="update" @close="updateOpen = false" />
     <!-- What was open at the last quit, asked once; then this version's notes, which Settings

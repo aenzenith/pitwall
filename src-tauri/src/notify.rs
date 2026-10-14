@@ -4,10 +4,15 @@
 //! notification of a project replaces the older one. A dev binary has no bundle for that API; it
 //! posts through the older one on behalf of Script Editor, the one borrowed name macOS still
 //! shows banners for (Terminal's are dropped).
+//!
+//! Whether macOS lets Pitwall post is asked of it when the first run's last step shows it
+//! (`access`), never kept.
 
 use std::path::Path;
-use std::sync::OnceLock;
+use std::ptr::NonNull;
+use std::sync::{mpsc, OnceLock};
 use std::thread;
+use std::time::Duration;
 
 use block2::RcBlock;
 use objc2::rc::Retained;
@@ -15,13 +20,17 @@ use objc2::runtime::{Bool, NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{define_class, msg_send, AllocAnyThread};
 use objc2_foundation::{NSArray, NSError, NSString, NSURL};
 use objc2_user_notifications::{
-    UNAuthorizationOptions, UNMutableNotificationContent, UNNotification, UNNotificationAttachment,
-    UNNotificationPresentationOptions, UNNotificationRequest, UNNotificationResponse, UNUserNotificationCenter,
-    UNUserNotificationCenterDelegate,
+    UNAuthorizationOptions, UNAuthorizationStatus, UNMutableNotificationContent, UNNotification, UNNotificationAttachment,
+    UNNotificationPresentationOptions, UNNotificationRequest, UNNotificationResponse, UNNotificationSettings,
+    UNUserNotificationCenter, UNUserNotificationCenterDelegate,
 };
 
 /// Who a dev binary's notifications come from.
 const DEV_SENDER: &str = "com.apple.ScriptEditor2";
+/// How long the system is given to say what it allows.
+const READ_WAIT: Duration = Duration::from_secs(3);
+/// How long a test waits for the answer to macOS's question, when it asks one.
+const ASK_WAIT: Duration = Duration::from_secs(60);
 
 type OnClick = Box<dyn Fn(String) + Send + Sync>;
 
@@ -102,9 +111,55 @@ pub fn start(bundled: bool, on_click: impl Fn(String) + Send + Sync + 'static) {
     center.requestAuthorizationWithOptions_completionHandler(UNAuthorizationOptions::Alert, &answered);
 }
 
+fn bundled() -> bool {
+    BUNDLED.get().copied().unwrap_or(false)
+}
+
+/// Whether macOS lets Pitwall post, asked of it now: `allowed`, `off` or `notAsked` (no answer to
+/// its question yet). A dev binary's are Script Editor's, and so is their permission:
+/// `borrowed`. `unknown` when the system doesn't answer in time.
+pub fn access() -> &'static str {
+    if !bundled() {
+        return "borrowed";
+    }
+    let (tell, heard) = mpsc::channel();
+    let answered = RcBlock::new(move |settings: NonNull<UNNotificationSettings>| {
+        // SAFETY: the system hands the handler a live settings object.
+        let _ = tell.send(unsafe { settings.as_ref() }.authorizationStatus());
+    });
+    UNUserNotificationCenter::currentNotificationCenter().getNotificationSettingsWithCompletionHandler(&answered);
+    match heard.recv_timeout(READ_WAIT) {
+        Ok(UNAuthorizationStatus::NotDetermined) => "notAsked",
+        Ok(UNAuthorizationStatus::Denied) => "off",
+        Ok(_) => "allowed",
+        Err(_) => "unknown",
+    }
+}
+
+/// Whether Pitwall may post, once macOS has said: it asks first when it never had an answer (its
+/// question shows then), and waits a while for it. A dev binary has nothing to ask.
+pub fn ask() -> bool {
+    if !bundled() {
+        return true;
+    }
+    let (tell, heard) = mpsc::channel();
+    let answered = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
+        let _ = tell.send(granted.as_bool());
+    });
+    UNUserNotificationCenter::currentNotificationCenter().requestAuthorizationWithOptions_completionHandler(UNAuthorizationOptions::Alert, &answered);
+    heard.recv_timeout(ASK_WAIT).unwrap_or(false)
+}
+
+/// System Settings › Notifications at the entry whose permission it is: Pitwall's (`identifier`,
+/// the bundle's), or for a dev binary the app it posts as.
+pub fn settings_url(identifier: &str) -> Option<String> {
+    let id = if bundled() { identifier } else { DEV_SENDER };
+    Some(format!("x-apple.systempreferences:com.apple.Notifications-Settings.extension?id={id}"))
+}
+
 /// A notification about `path`, with `image` (a PNG) beside the text.
 pub fn post(path: String, title: String, body: String, image: Option<&Path>) {
-    if BUNDLED.get().copied().unwrap_or(false) {
+    if bundled() {
         post_bundled(&path, &title, &body, image);
         return;
     }

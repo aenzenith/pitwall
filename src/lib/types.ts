@@ -26,6 +26,14 @@ export type ProjectLink = { name: string; url: string };
 /** Pitwall for VS Code in the chosen editor: its version when installed; where it installs from. */
 export type ExtensionStatus = { version: string | null; marketplace: boolean };
 
+/** The editors Settings offers (`settings.editor`). */
+export type Editor = "vscode" | "vscode-insiders" | "cursor" | "windsurf";
+
+/** Whether the system lets Pitwall post notifications (notify.rs: `access`): `notAsked` while its
+ * question has no answer; `borrowed` from a dev build, which posts as another app whose
+ * permission it is; `unknown` where the system isn't asked. */
+export type NotifyAccess = "allowed" | "off" | "notAsked" | "borrowed" | "unknown";
+
 /** An address the project names itself, offered as a link; `source`: `git`, `.env`, `package.json`. */
 export type LinkSuggestion = { name: string; url: string; source: string };
 

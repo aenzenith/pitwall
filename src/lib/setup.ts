@@ -60,19 +60,41 @@ export function shortcutCaps(hotkey: string): string[] {
 }
 
 type SwitchKey = "suggestProjects" | "shortcut" | "launchAtLogin";
+type Picks = Partial<Record<SwitchKey, boolean>> & { editor?: string };
 
-/** What the switches were just set to and the snapshot doesn't say yet: every save carries all of
- * them, so one switch's save never writes an older value over another's. */
-const picked = reactive<Partial<Record<SwitchKey, boolean>>>({});
+/** What the switches (and the editor) were just set to and the snapshot doesn't say yet: every
+ * save carries all of them, so one save never writes an older value over another's. */
+const picked = reactive<Picks>({});
 
 /** Picks whose save the core took while the snapshot still said otherwise: the next snapshot is
  * what is stored. */
-const answered = new Set<SwitchKey>();
+const answered = new Set<keyof Picks>();
 
 watch(snapshot, () => {
   for (const key of answered) delete picked[key];
   answered.clear();
 });
+
+/** Saves `next` for `key` with the other picks. A save the core refuses takes the pick back and
+ * leaves the reason in `error`. */
+async function save<K extends keyof Picks>(key: K, next: NonNullable<Picks[K]>, stored: () => Picks[K], error: Ref<string>): Promise<void> {
+  const settings = snapshot.value?.settings;
+  if (!settings) return;
+  error.value = "";
+  picked[key] = next;
+  answered.delete(key);
+  try {
+    await api.setSettings({ ...settings, ...picked });
+  } catch (reason) {
+    // Nothing was stored: the pick goes back, unless it was made again meanwhile.
+    if (picked[key] === next) delete picked[key];
+    error.value = String(reason);
+    return;
+  }
+  if (picked[key] !== next) return;
+  if (stored() === next) delete picked[key];
+  else answered.add(key);
+}
 
 /**
  * One on/off setting as a switch: `on` is what was just picked until the snapshot says what is
@@ -83,24 +105,15 @@ export function useSwitch(key: SwitchKey): { on: ComputedRef<boolean>; error: Re
   const stored = computed(() => snapshot.value?.settings[key] ?? false);
   const on = computed(() => picked[key] ?? stored.value);
 
-  async function set(next: boolean): Promise<void> {
-    const settings = snapshot.value?.settings;
-    if (!settings) return;
-    error.value = "";
-    picked[key] = next;
-    answered.delete(key);
-    try {
-      await api.setSettings({ ...settings, ...picked });
-    } catch (reason) {
-      // Nothing was stored: the switch goes back, unless it was set again meanwhile.
-      if (picked[key] === next) delete picked[key];
-      error.value = String(reason);
-      return;
-    }
-    if (picked[key] !== next) return;
-    if (stored.value === next) delete picked[key];
-    else answered.add(key);
-  }
+  return { on, error, set: (next) => save(key, next, () => stored.value, error) };
+}
 
-  return { on, error, set };
+/** The editor projects open in, as a select: what was just picked until the snapshot says what is
+ * stored, as `useSwitch` has it. */
+export function useEditor(): { editor: ComputedRef<string>; error: Ref<string>; set: (next: string) => Promise<void> } {
+  const error = ref("");
+  const stored = computed(() => snapshot.value?.settings.editor ?? "vscode");
+  const editor = computed(() => picked.editor ?? stored.value);
+
+  return { editor, error, set: (next) => save("editor", next, () => stored.value, error) };
 }

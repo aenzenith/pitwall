@@ -5,10 +5,11 @@ import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
 import { shortcutLabel } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
-import { dragRegion, isWindows } from "../lib/platform";
+import { dragRegion, isMac, isWindows } from "../lib/platform";
 import { api, snapshot } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus } from "../lib/types";
+import StepAlerts from "./setup/StepAlerts.vue";
 import StepExtension from "./setup/StepExtension.vue";
 import StepHook from "./setup/StepHook.vue";
 import StepProjects from "./setup/StepProjects.vue";
@@ -16,13 +17,15 @@ import StepRadio from "./setup/StepRadio.vue";
 import StepStartup from "./setup/StepStartup.vue";
 
 /**
- * The first run: five steps beside the sidebar, where the project list and the details are
+ * The first run: six steps beside the sidebar, where the project list and the details are
  * otherwise. A checklist, not a wizard: any step opens at any time, and one whose condition
- * holds shows a check. `done`: the steps are over, finished or put off.
+ * holds shows a check. `covered`: Settings stands over it. `done`: the steps are over, finished or
+ * put off; `openPhone`: Settings at the phone's part is asked for.
  */
-const emit = defineEmits<{ done: [] }>();
+defineProps<{ covered: boolean }>();
+const emit = defineEmits<{ done: []; openPhone: [] }>();
 
-type Step = "projects" | "hook" | "radio" | "extension" | "startup";
+type Step = "projects" | "hook" | "radio" | "extension" | "startup" | "alerts";
 
 /** The team radio is not on Windows yet: nothing of it is shown there. */
 const hasRadio = !isWindows;
@@ -33,6 +36,8 @@ const every: Array<{ id: Step; title: Key; hint: Key }> = [
   { id: "radio", title: "setup.step.radio", hint: "setup.step.radioHint" },
   { id: "extension", title: "setup.step.extension", hint: "setup.step.extensionHint" },
   { id: "startup", title: "setup.step.startup", hint: "setup.step.startupHint" },
+  // The pitwall command is macOS's alone so far: elsewhere its line says nothing of it.
+  { id: "alerts", title: "setup.step.alerts", hint: isMac ? "setup.step.alertsHint" : "setup.step.alertsHintNoCli" },
 ];
 const steps = every.filter((item) => item.id !== "radio" || hasRadio);
 const order = steps.map((item) => item.id);
@@ -74,17 +79,19 @@ onBeforeUnmount(() => window.removeEventListener("focus", checkExtension));
 
 /* ---------- the steps ---------- */
 
-/** A step is done when its condition holds. The last one never is: its button ends the run. */
+/** A step is done when its condition holds. The last two never are: they have none, and the
+ * last one's button ends the run. */
 const done = computed<Record<Step, boolean>>(() => ({
   projects: !!snapshot.value?.projects.length,
   hook: !!snapshot.value?.claudeHook && !snapshot.value.claudeHookOutdated,
   radio: !!snapshot.value?.settings.radio?.on,
   extension: !!extension.value?.version,
   startup: false,
+  alerts: false,
 }));
 
 /** It opens on the first step still to do. */
-const step = ref<Step>(order.find((id) => !done.value[id]) ?? "startup");
+const step = ref<Step>(order.find((id) => !done.value[id]) ?? "alerts");
 /** A step was opened by hand, or by a step's own button: the view no longer picks one itself. */
 let chosen = false;
 
@@ -193,7 +200,18 @@ async function leave(by: "later" | "finish"): Promise<void> {
           :failed="checkFailed"
           @recheck="checkExtension"
         />
-        <StepStartup v-show="step === 'startup'" id="setup-pane-startup" role="tabpanel" aria-labelledby="setup-tab-startup" :finishing="leaving === 'finish'" @finish="leave('finish')" />
+        <StepStartup v-show="step === 'startup'" id="setup-pane-startup" role="tabpanel" aria-labelledby="setup-tab-startup" @next="advance('startup')" />
+        <StepAlerts
+          v-show="step === 'alerts'"
+          id="setup-pane-alerts"
+          role="tabpanel"
+          aria-labelledby="setup-tab-alerts"
+          :shown="step === 'alerts'"
+          :covered="covered"
+          :finishing="leaving === 'finish'"
+          @finish="leave('finish')"
+          @open-phone="emit('openPhone')"
+        />
       </div>
     </div>
   </section>

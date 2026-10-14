@@ -31,6 +31,21 @@ pub fn start(_bundled: bool, on_click: impl Fn(String) + Send + Sync + 'static) 
     let _ = ON_CLICK.set(Box::new(on_click));
 }
 
+/// Whether the server shows what it is sent: it isn't asked.
+pub fn access() -> &'static str {
+    "unknown"
+}
+
+/// Nothing to ask for before a notification.
+pub fn ask() -> bool {
+    true
+}
+
+/// No settings of the desktop's are opened for it (`access` never says it is off).
+pub fn settings_url(_identifier: &str) -> Option<String> {
+    None
+}
+
 /// A notification about `path`, with `image` (a PNG) beside the text.
 pub fn post(path: String, title: String, body: String, image: Option<&Path>) {
     let image = image.map(|image| image.to_string_lossy().into_owned());

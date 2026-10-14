@@ -74,7 +74,7 @@ pub use routing::Action;
 pub use sessions::SessionsView;
 pub use snapshot::Snapshot;
 pub use relay::{PhoneConfig, PhoneView};
-pub use signals::{plain_banner, Missed, QuietFor, QuietView, SignalKind};
+pub use signals::{plain_banner, Missed, QuietFor, QuietView, SignalKind, TEST_BANNER};
 pub use radio::{radio_tools, RadioCall, RadioState, RadioTool};
 use jobs::{job_key, Job, JobResult};
 use output::Outbox;

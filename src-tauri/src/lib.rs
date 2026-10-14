@@ -280,7 +280,7 @@ pub fn run() {
                 if path == fuel::NOTIFICATION_ID {
                     tray::show_main(&clicks);
                     let _ = clicks.emit("reveal-fuel", ());
-                } else if path == update::NOTIFICATION_ID {
+                } else if path == update::NOTIFICATION_ID || path == core::TEST_BANNER {
                     tray::show_main(&clicks);
                 } else if let Some(state) = clicks.try_state::<AppState>() {
                     state.core.open_banner(&path);
@@ -434,6 +434,10 @@ pub fn run() {
             commands::link_suggestions,
             commands::extension_status,
             commands::open_extension_page,
+            commands::installed_editors,
+            commands::notification_access,
+            commands::notification_test,
+            commands::notification_settings,
             commands::day_summary,
             commands::claude_sessions,
             commands::claude_history,
