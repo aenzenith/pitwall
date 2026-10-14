@@ -180,8 +180,10 @@ function saveCode(): void {
 }
 
 .group {
-  margin: 0;
-  padding: 0 0 18px;
+  /* The line between two parts runs the pane's whole width, past its padding: the one line the
+     pane draws, so it reads as where a part ends. */
+  margin: 0 -20px;
+  padding: 0 20px 18px;
   border: 0;
   border-bottom: 1px solid var(--line);
   display: flex;
