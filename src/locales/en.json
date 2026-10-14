@@ -1301,6 +1301,58 @@
   "core.radio.noEndpoint": "The radio couldn't open its line: {error}",
   "core.radio.cliFailed": "Claude Code answered: {error}",
   "core.radio.cliSilent": "Claude Code didn't answer.",
+  "flag.title": "Chequered flag",
+  "flag.day": "Close the day",
+  "flag.commit": "Waiting for commit",
+  "flag.push": "Waiting for push",
+  "flag.claude": "Claude is waiting on you",
+  "flag.review": "To review",
+  "flag.running": "Running",
+  "flag.projects": {
+    "one": "{count} project",
+    "other": "{count} projects"
+  },
+  "flag.sessions": {
+    "one": "{count} session",
+    "other": "{count} sessions"
+  },
+  "flag.servers": {
+    "one": "{count} server",
+    "other": "{count} servers"
+  },
+  "flag.commands": {
+    "one": "{count} command",
+    "other": "{count} commands"
+  },
+  "flag.changes": {
+    "one": "{count} change",
+    "other": "{count} changes"
+  },
+  "flag.commits": {
+    "one": "{count} commit",
+    "other": "{count} commits"
+  },
+  "flag.cards": {
+    "one": "{count} card",
+    "other": "{count} cards"
+  },
+  "flag.more": {
+    "one": "and {count} more project",
+    "other": "and {count} more projects"
+  },
+  "flag.finished": "Finished · {duration}",
+  "flag.asking": "Asked a question · {duration}",
+  "flag.permission": "Needs permission · {duration}",
+  "flag.openEditor": "Open in editor: {name}",
+  "flag.openTerminal": "Open in terminal: {name}",
+  "flag.openBoard": "Open {name}'s board",
+  "flag.bringUp": "Bring up: {name}",
+  "flag.none": "Nothing is left open.",
+  "flag.atQuit": "Show when quitting",
+  "flag.quitAnyway": "Quit anyway",
+  "flag.keys": "Arrow keys move between the rows and their buttons. Return opens a row.",
+  "flag.settings.section": "Quitting",
+  "flag.settings.atQuit": "Show the chequered flag when quitting",
   "start.model": "Model",
   "start.model.auto": "Claude Code's choice",
   "start.model.opus": "Opus",
@@ -1325,5 +1377,6 @@
   "start.link": "Link to an open session…",
   "start.newClaudeOptions": "New Claude: options",
   "start.newClaudePlan": "Start in plan mode",
-  "core.start.noRefill": "There is no refill time to wait for."
+  "core.start.noRefill": "There is no refill time to wait for.",
+  "flag.scheduled": "To give when fuel refills"
 }

@@ -84,8 +84,9 @@ export type Project = {
   claude: Turn | null;
   /** Claude is mid-turn here right now. */
   claudeWorking: boolean;
-  /** Its Claude sessions that are working, or wait on you (notifications not read yet). */
-  claudeSessions: Array<{ id: string; phase: "working" | "waiting"; turn: Turn | null }>;
+  /** Its Claude sessions that are working, or wait on you (notifications not read yet). `since`:
+   * when a working one began, as the hook told it; `tool`: the tool a permission wait is for. */
+  claudeSessions: Array<{ id: string; phase: "working" | "waiting"; turn: Turn | null; since?: number; tool?: string }>;
   git: GitInfo | null;
   script: string;
   /** The exact command the dev server runs: `npm run dev`, `pnpm dev`, `bun run dev`… */
@@ -156,7 +157,12 @@ export type Settings = {
   notifications?: NotificationSettings;
   /** The team radio; changed through the `radio*` commands only. */
   radio?: RadioSettings;
+  /** The chequered flag; changed through its own command only. */
+  flag?: FlagSettings;
 };
+
+/** The chequered flag: a quit from Pitwall's own menus shows what is still open first. */
+export type FlagSettings = { atQuit: boolean };
 
 /** An open project terminal. */
 export type TerminalView = {
@@ -668,6 +674,32 @@ export type RadioResult =
 
 /** One call a session made over the radio. */
 export type RadioCall = { at: number; tool: string; result: RadioResult };
+
+/* ---------- The chequered flag: what is still open (flag_state) ---------- */
+
+/** A project with something of Git's left: `count` changes to commit, or commits to push. */
+export type FlagGit = { path: string; name: string; branch: string; count: number };
+
+/** A Claude session that waits on you: with what (`tool`: a permission prompt's tool, by name
+ * alone), and since when (ms). */
+export type FlagWait = { path: string; name: string; session: string; kind: Turn["kind"]; tool: string | null; since: number };
+
+/** A project's cards in "To review". */
+export type FlagReview = { path: string; name: string; cards: number };
+
+/** A project's cards that wait for their moment: how many, and the earliest moment (ms); null
+ * while one of them waits its turn in the refill's line. */
+export type FlagScheduled = { path: string; name: string; cards: number; at: number | null };
+
+/** What still runs: the projects whose dev server does, the commands (each with its `project`'s
+ * name), and whether some of it is being stopped right now. */
+export type FlagRunning = { servers: Array<{ path: string; name: string }>; commands: Array<{ path: string; project: string; id: string; name: string }>; stopping: boolean };
+
+/** What is still open, part by part; a part with nothing in it is empty. */
+export type Flag = { commit: FlagGit[]; push: FlagGit[]; claude: FlagWait[]; review: FlagReview[]; scheduled: FlagScheduled[]; running: FlagRunning };
+
+/** The core's answer: what is open, and whether a quit was held and waits on the dialog. */
+export type FlagState = { open: Flag; asked: boolean };
 
 /** A model by the alias Claude Code's `--model` takes for the newest one of its name. */
 export type ClaudeModel = "opus" | "sonnet" | "haiku";

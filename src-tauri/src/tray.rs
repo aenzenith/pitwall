@@ -932,7 +932,8 @@ mod menu {
         match id {
             OPEN => super::show_main(app),
             SWITCHER => super::toggle_switcher(app),
-            QUIT => app.exit(0),
+            // With something still open, the chequered flag's dialog first (`flag.rs`).
+            QUIT => crate::flag::request_quit(app),
             _ => {
                 if let (Some(path), Some(state)) = (id.strip_prefix(PROJECT), app.try_state::<AppState>()) {
                     state.core.open_editor(path);

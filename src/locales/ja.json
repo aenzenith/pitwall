@@ -1253,6 +1253,50 @@
   "core.radio.noEndpoint": "無線の回線を開けませんでした: {error}",
   "core.radio.cliFailed": "Claude Code の応答: {error}",
   "core.radio.cliSilent": "Claude Code から応答がありません。",
+  "flag.title": "チェッカーフラッグ",
+  "flag.day": "今日を締める",
+  "flag.commit": "コミット待ち",
+  "flag.push": "プッシュ待ち",
+  "flag.claude": "Claudeが入力を待っています",
+  "flag.review": "レビュー待ち",
+  "flag.running": "実行中",
+  "flag.projects": {
+    "other": "{count} プロジェクト"
+  },
+  "flag.sessions": {
+    "other": "{count} セッション"
+  },
+  "flag.servers": {
+    "other": "{count} サーバー"
+  },
+  "flag.commands": {
+    "other": "{count} コマンド"
+  },
+  "flag.changes": {
+    "other": "{count}件の変更"
+  },
+  "flag.commits": {
+    "other": "{count} コミット"
+  },
+  "flag.cards": {
+    "other": "{count}枚のカード"
+  },
+  "flag.more": {
+    "other": "ほか {count} プロジェクト"
+  },
+  "flag.finished": "完了 · {duration}",
+  "flag.asking": "質問あり · {duration}",
+  "flag.permission": "許可待ち · {duration}",
+  "flag.openEditor": "エディタで開く: {name}",
+  "flag.openTerminal": "ターミナルで開く: {name}",
+  "flag.openBoard": "{name}のボードを開く",
+  "flag.bringUp": "前面に表示: {name}",
+  "flag.none": "開いたままのものはありません。",
+  "flag.atQuit": "終了時に表示",
+  "flag.quitAnyway": "このまま終了",
+  "flag.keys": "矢印キーで行とそのボタンの間を移動します。returnで行を開きます。",
+  "flag.settings.section": "終了時",
+  "flag.settings.atQuit": "終了時にチェッカーフラッグを表示",
   "start.model": "モデル",
   "start.model.auto": "Claude Code に任せる",
   "start.model.opus": "Opus",
@@ -1277,5 +1321,6 @@
   "start.link": "開いているセッションにつなぐ…",
   "start.newClaudeOptions": "新規Claude: オプション",
   "start.newClaudePlan": "プランモードで開始",
-  "core.start.noRefill": "待てる回復時刻がありません。"
+  "core.start.noRefill": "待てる回復時刻がありません。",
+  "flag.scheduled": "燃料が回復したら渡す"
 }

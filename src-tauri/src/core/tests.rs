@@ -152,7 +152,10 @@ fn a_settings_form_leaves_what_has_a_command_of_its_own() {
     core.set_quiet_option("questions", false).unwrap();
     core.set_quiet_hours(true, "23:00", "07:00").unwrap();
     core.quiet_start(QuietFor::Open);
+    // The chequered flag's own (`flag.rs`): away from what a form that never heard of it holds.
+    core.set_flag_at_quit(false);
     let held = core.settings();
+    assert!(!held.flag.at_quit);
     assert_eq!((held.notify, held.fuel_alert, held.notifications.muted.len(), held.notifications.quiet.is_some()), (false, false, 1, true));
 
     // A form that knows none of it.

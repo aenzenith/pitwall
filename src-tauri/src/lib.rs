@@ -29,6 +29,7 @@ mod whatsnew;
 mod windows;
 mod presence;
 mod mcp;
+mod flag;
 mod start;
 
 use std::path::PathBuf;
@@ -335,6 +336,9 @@ pub fn run() {
             #[cfg(not(target_os = "linux"))]
             let _ = windows::get_or_create(app.handle(), POPOVER);
             tray::create(app.handle())?;
+            // ⌘Q asks what is still open first, as the popover's quit button does (`flag.rs`).
+            #[cfg(target_os = "macos")]
+            flag::own_quit_item(app.handle());
             #[cfg(target_os = "macos")]
             tray::hide_popover_on_outside_click(app.handle());
             // The main window and the switcher are made on first use (`windows`).
@@ -518,6 +522,14 @@ pub fn run() {
             commands::radio_tool,
             commands::radio_calls,
             commands::open_reference,
+            commands::flag_state,
+            commands::flag_set,
+            commands::flag_shown,
+            commands::flag_keep,
+            commands::flag_quit,
+            commands::flag_stop_all,
+            commands::flag_terminal,
+            commands::flag_board,
             commands::board_schedule,
             commands::board_unschedule,
             commands::board_give_now

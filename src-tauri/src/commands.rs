@@ -810,9 +810,11 @@ pub fn open_link(app: AppHandle, link: String) -> Result<(), String> {
     app.opener().open_url(url, None::<&str>).map_err(|error| error.to_string())
 }
 
+/// The popover's quit button. With something still open it brings the window up with the
+/// chequered flag's dialog first, while Settings says so (`flag::request_quit`).
 #[tauri::command]
 pub fn quit(app: AppHandle) {
-    app.exit(0);
+    crate::flag::request_quit(&app);
 }
 
 /* ---------- the phone's channel (core/relay.rs) ---------- */
@@ -944,6 +946,68 @@ pub fn radio_calls(state: State<'_, AppState>, session: String) -> Vec<crate::co
 pub async fn open_reference(app: AppHandle, path: String, file: String, line: u32, column: Option<u32>) -> bool {
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     tauri::async_runtime::spawn_blocking(move || core.open_reference(&path, &file, line, column)).await.unwrap_or(false)
+}
+
+/* ---------- the chequered flag: what is still open (core/flag.rs, flag.rs) ---------- */
+
+/// What is still open, and whether a quit waits on the dialog's answer. `fresh`: the projects'
+/// Git state is read again first (as the dialog opens), so it runs off the main thread.
+#[tauri::command]
+pub async fn flag_state(app: AppHandle, fresh: bool) -> Result<crate::core::FlagState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || {
+        if fresh {
+            core.flag_refresh(crate::flag::FRESH);
+        }
+        core.flag_state()
+    })
+    .await
+    .map_err(|error| error.to_string())
+}
+
+/// Whether a quit from Pitwall's own menus shows what is still open first: Settings › General's
+/// switch and the dialog's box.
+#[tauri::command]
+pub fn flag_set(state: State<'_, AppState>, on: bool) {
+    state.core.set_flag_at_quit(on);
+}
+
+/// The dialog is up for the quit that was held.
+#[tauri::command]
+pub fn flag_shown() {
+    crate::flag::shown();
+}
+
+/// "Cancel" on a held quit (Esc, a click outside, the dialog gone): Pitwall stays, and the next
+/// quit asks again.
+#[tauri::command]
+pub fn flag_keep(state: State<'_, AppState>) {
+    state.core.quit_dropped();
+}
+
+/// "Quit anyway": the quit that was held goes on.
+#[tauri::command]
+pub fn flag_quit(app: AppHandle) {
+    app.exit(0);
+}
+
+/// "Stop all" in the dialog: every server and every running command.
+#[tauri::command]
+pub fn flag_stop_all(state: State<'_, AppState>) {
+    state.core.flag_stop_all();
+}
+
+/// A listed project shown in the window's list, for the new shell tab its terminal panel then
+/// opens. Async, as every command that brings a window up.
+#[tauri::command]
+pub async fn flag_terminal(app: AppHandle, path: String) -> Result<(), String> {
+    app.state::<AppState>().core.flag_terminal(&path)
+}
+
+/// The window's Board page. Async, as every command that brings a window up.
+#[tauri::command]
+pub async fn flag_board(app: AppHandle) {
+    app.state::<AppState>().core.flag_board();
 }
 
 /// The model and the mode the window chose for a Claude session, as it names them. Neither is

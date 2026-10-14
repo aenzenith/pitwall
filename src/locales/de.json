@@ -1301,6 +1301,58 @@
   "core.radio.noEndpoint": "Der Funk konnte seine Leitung nicht öffnen: {error}",
   "core.radio.cliFailed": "Claude Code antwortete: {error}",
   "core.radio.cliSilent": "Claude Code hat nicht geantwortet.",
+  "flag.title": "Zielflagge",
+  "flag.day": "Tag abschließen",
+  "flag.commit": "Wartet auf Commit",
+  "flag.push": "Wartet auf Push",
+  "flag.claude": "Claude wartet auf dich",
+  "flag.review": "Zu prüfen",
+  "flag.running": "Aktiv",
+  "flag.projects": {
+    "one": "{count} Projekt",
+    "other": "{count} Projekte"
+  },
+  "flag.sessions": {
+    "one": "{count} Sitzung",
+    "other": "{count} Sitzungen"
+  },
+  "flag.servers": {
+    "one": "{count} Server",
+    "other": "{count} Server"
+  },
+  "flag.commands": {
+    "one": "{count} Befehl",
+    "other": "{count} Befehle"
+  },
+  "flag.changes": {
+    "one": "{count} Änderung",
+    "other": "{count} Änderungen"
+  },
+  "flag.commits": {
+    "one": "{count} Commit",
+    "other": "{count} Commits"
+  },
+  "flag.cards": {
+    "one": "{count} Karte",
+    "other": "{count} Karten"
+  },
+  "flag.more": {
+    "one": "und {count} weiteres Projekt",
+    "other": "und {count} weitere Projekte"
+  },
+  "flag.finished": "Fertig · {duration}",
+  "flag.asking": "Frage gestellt · {duration}",
+  "flag.permission": "Braucht Erlaubnis · {duration}",
+  "flag.openEditor": "Im Editor öffnen: {name}",
+  "flag.openTerminal": "Im Terminal öffnen: {name}",
+  "flag.openBoard": "Board von {name} öffnen",
+  "flag.bringUp": "Nach vorn holen: {name}",
+  "flag.none": "Es ist nichts mehr offen.",
+  "flag.atQuit": "Beim Beenden anzeigen",
+  "flag.quitAnyway": "Trotzdem beenden",
+  "flag.keys": "Die Pfeiltasten wechseln zwischen den Zeilen und ihren Schaltflächen. Return öffnet eine Zeile.",
+  "flag.settings.section": "Beenden",
+  "flag.settings.atQuit": "Beim Beenden die Zielflagge zeigen",
   "start.model": "Modell",
   "start.model.auto": "Wahl von Claude Code",
   "start.model.opus": "Opus",
@@ -1325,5 +1377,6 @@
   "start.link": "Mit offener Sitzung verknüpfen…",
   "start.newClaudeOptions": "Claude starten: Optionen",
   "start.newClaudePlan": "Im Planmodus starten",
-  "core.start.noRefill": "Es gibt keine Füllzeit, auf die gewartet werden kann."
+  "core.start.noRefill": "Es gibt keine Füllzeit, auf die gewartet werden kann.",
+  "flag.scheduled": "Bei vollem Tank zu geben"
 }

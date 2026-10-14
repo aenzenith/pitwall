@@ -216,6 +216,20 @@ impl RadioSettings {
     }
 }
 
+/// The chequered flag (`core/flag.rs`): what is still open, shown before a quit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FlagSettings {
+    /// A quit from one of Pitwall's own menus shows what is still open first.
+    pub at_quit: bool,
+}
+
+impl Default for FlagSettings {
+    fn default() -> Self {
+        Self { at_quit: true }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -293,6 +307,9 @@ pub struct Settings {
     /// The team radio: whether it is on, and what Claude may do over it.
     #[serde(default)]
     pub radio: RadioSettings,
+    /// The chequered flag; changed through its own command only.
+    #[serde(default)]
+    pub flag: FlagSettings,
 }
 
 impl Default for Settings {
@@ -330,6 +347,7 @@ impl Default for Settings {
             seen_folders: Vec::new(),
             notifications: Notifications::default(),
             radio: RadioSettings::default(),
+            flag: FlagSettings::default(),
         }
     }
 }

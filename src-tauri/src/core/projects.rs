@@ -61,6 +61,8 @@ impl Core {
                 notifications: kept.notifications,
                 fuel_alert: kept.fuel_alert,
                 radio: kept.radio,
+                // The chequered flag's: by its own commands.
+                flag: kept.flag,
                 ..form
             };
         }

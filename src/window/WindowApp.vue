@@ -40,6 +40,7 @@ import TerminalPanel from "./TerminalPanel.vue";
 import SettingsView from "./SettingsView.vue";
 import TrackView from "./TrackView.vue";
 import UpdateDialog from "./UpdateDialog.vue";
+import FlagDialog from "./FlagDialog.vue";
 import WhatsNewDialog from "./WhatsNewDialog.vue";
 import TeamDeleteDialog from "./team/TeamDeleteDialog.vue";
 import TeamHead from "./team/TeamHead.vue";
@@ -909,6 +910,7 @@ function server(project: Project): string {
          › About opens too. -->
     <ResumeDialog v-if="resumeOffer" :offer="resumeOffer" @close="resumeClosed = true" />
     <WhatsNewDialog v-if="whatsNewOpen" @close="whatsNewOpen = false" />
+    <FlagDialog />
     <!-- Naming a team (a new one, or a rename) and deleting one, asked for from the sidebar, the
          list or the team's details (lib/teams: teamAsk). -->
     <TeamNameDialog v-if="teamAsk?.kind === 'create'" :name="null" :choices="teamChoices" :picked="teamAsk.projects" @save="saveTeamName" @close="teamAsk = null" />

@@ -447,6 +447,25 @@ export const api = {
   /** Opens the file an output line names (`file`, as printed) in the editor, at its line. The
    * core finds it, in the project's folder only: false when the project has no such file. */
   openReference: (path: string, file: string, line: number, column: number | null) => invoke<boolean>("open_reference", { path, file, line, column }),
+  /* The chequered flag (core/flag.rs): what is still open, before a quit and from Today's bar. */
+  /** What is open, and whether a quit waits on the dialog. `fresh`: the projects' Git state is
+   * read again first, so the answer takes a moment. */
+  flagState: (fresh = false) => invoke<import("./types").FlagState>("flag_state", { fresh }),
+  /** Whether a quit from Pitwall's own menus shows what is still open first. */
+  flagSet: (on: boolean) => invoke("flag_set", { on }),
+  /** The dialog is up for the quit that was held. */
+  flagShown: () => invoke("flag_shown"),
+  /** The held quit is given up: Pitwall stays, and the next quit asks again. */
+  flagKeep: () => invoke("flag_keep"),
+  /** The held quit goes on. */
+  flagQuit: () => invoke("flag_quit"),
+  /** Every server and every running command stops; each shows in the state until it is down. */
+  flagStopAll: () => invoke("flag_stop_all"),
+  /** The project shown in the list, for the new shell tab its terminal panel then opens. */
+  flagTerminal: (path: string) => invoke("flag_terminal", { path }),
+  /** The window's Board page. */
+  flagBoard: () => invoke("flag_board"),
+
   /** Tells a card up next to wait until the 5-hour session refills (the core's own reading of
    * that moment): the core gives it then, with `start`. */
   boardSchedule: (id: string, start: StartChoice) => invoke("board_schedule", { id, start }),

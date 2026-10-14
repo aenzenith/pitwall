@@ -1331,6 +1331,66 @@
   "core.radio.noEndpoint": "La radio no pudo abrir su línea: {error}",
   "core.radio.cliFailed": "Claude Code respondió: {error}",
   "core.radio.cliSilent": "Claude Code no respondió.",
+  "flag.title": "Bandera a cuadros",
+  "flag.day": "Cerrar el día",
+  "flag.commit": "Pendiente de commit",
+  "flag.push": "Pendiente de push",
+  "flag.claude": "Claude te está esperando",
+  "flag.review": "Por revisar",
+  "flag.running": "En ejecución",
+  "flag.projects": {
+    "one": "{count} proyecto",
+    "many": "{count} proyectos",
+    "other": "{count} proyectos"
+  },
+  "flag.sessions": {
+    "one": "{count} sesión",
+    "many": "{count} sesiones",
+    "other": "{count} sesiones"
+  },
+  "flag.servers": {
+    "one": "{count} servidor",
+    "many": "{count} servidores",
+    "other": "{count} servidores"
+  },
+  "flag.commands": {
+    "one": "{count} comando",
+    "many": "{count} comandos",
+    "other": "{count} comandos"
+  },
+  "flag.changes": {
+    "one": "{count} cambio",
+    "many": "{count} cambios",
+    "other": "{count} cambios"
+  },
+  "flag.commits": {
+    "one": "{count} commit",
+    "many": "{count} commits",
+    "other": "{count} commits"
+  },
+  "flag.cards": {
+    "one": "{count} tarjeta",
+    "many": "{count} tarjetas",
+    "other": "{count} tarjetas"
+  },
+  "flag.more": {
+    "one": "y {count} proyecto más",
+    "many": "y {count} proyectos más",
+    "other": "y {count} proyectos más"
+  },
+  "flag.finished": "Terminó · {duration}",
+  "flag.asking": "Hizo una pregunta · {duration}",
+  "flag.permission": "Pide permiso · {duration}",
+  "flag.openEditor": "Abrir en el editor: {name}",
+  "flag.openTerminal": "Abrir en la terminal: {name}",
+  "flag.openBoard": "Abrir el tablero de {name}",
+  "flag.bringUp": "Traer al frente: {name}",
+  "flag.none": "No queda nada abierto.",
+  "flag.atQuit": "Mostrar al salir",
+  "flag.quitAnyway": "Salir de todos modos",
+  "flag.keys": "Las flechas recorren las filas y sus botones. Retorno abre una fila.",
+  "flag.settings.section": "Salida",
+  "flag.settings.atQuit": "Mostrar la bandera a cuadros al salir",
   "start.model": "Modelo",
   "start.model.auto": "El que elija Claude Code",
   "start.model.opus": "Opus",
@@ -1355,5 +1415,6 @@
   "start.link": "Vincular a una sesión abierta…",
   "start.newClaudeOptions": "Nuevo Claude: opciones",
   "start.newClaudePlan": "Iniciar en modo plan",
-  "core.start.noRefill": "No hay hora de rellenado que esperar."
+  "core.start.noRefill": "No hay hora de rellenado que esperar.",
+  "flag.scheduled": "Por dar al rellenarse"
 }

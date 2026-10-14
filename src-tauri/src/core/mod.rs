@@ -55,6 +55,8 @@ mod terminal;
 mod watch;
 mod radio;
 mod reference;
+mod flag;
+pub use flag::FlagState;
 pub use activity::DaySummary;
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};
@@ -201,6 +203,8 @@ struct Inner {
     /// A start or restart Claude asked for over the radio whose run hasn't begun, by project:
     /// the marker that run is told by, written where it begins (`output.rs`: `mark_run`).
     asked_by_claude: HashMap<String, &'static str>,
+    /// A quit was held for the chequered flag's dialog and waits on its answer (`flag.rs`).
+    flag_asked: bool,
 }
 
 pub struct Core {

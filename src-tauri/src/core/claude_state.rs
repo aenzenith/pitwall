@@ -112,7 +112,9 @@ impl Core {
 fn live_sessions(sessions: &[crate::claude::SessionState]) -> HashMap<String, Vec<LiveSession>> {
     let mut found: HashMap<String, Vec<LiveSession>> = HashMap::new();
     for session in sessions.iter().filter(|s| s.phase != SessionPhase::Idle) {
-        let live = LiveSession { id: session.id.clone(), phase: session.phase, turn: session.turn };
+        // Only the hook tells when the work began; a log's last line doesn't.
+        let since = session.since.filter(|_| session.hooked && session.phase == SessionPhase::Working);
+        let live = LiveSession { id: session.id.clone(), phase: session.phase, turn: session.turn, since, tool: session.tool.clone() };
         found.entry(session.path.clone()).or_default().push(live);
     }
     found

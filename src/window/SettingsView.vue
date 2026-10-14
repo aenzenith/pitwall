@@ -17,6 +17,7 @@ import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
+import FlagSection from "./settings/FlagSection.vue";
 import RadioSection from "./settings/RadioSection.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
 import TrackOptions from "./track/TrackOptions.vue";
@@ -692,6 +693,11 @@ function setTheme(theme: Theme): void {
                 {{ t(mode.label) }}
               </button>
             </span>
+          </div>
+
+          <!-- Each its own part, label and rows, saved by its own commands (`@change.stop`). -->
+          <div @change.stop>
+            <FlagSection />
           </div>
 
           <!-- The backup's own: its dialogs' boxes are no settings for the form to save (`@change.stop`). -->

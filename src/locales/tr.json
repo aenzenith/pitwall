@@ -1288,6 +1288,58 @@
   "core.radio.noEndpoint": "Radyo hattı açılamadı: {error}",
   "core.radio.cliFailed": "Claude Code'un yanıtı: {error}",
   "core.radio.cliSilent": "Claude Code yanıt vermedi.",
+  "flag.title": "Damalı bayrak",
+  "flag.day": "Günü kapat",
+  "flag.commit": "Commit bekliyor",
+  "flag.push": "Push bekliyor",
+  "flag.claude": "Claude seni bekliyor",
+  "flag.review": "İncelenecek",
+  "flag.running": "Çalışıyor",
+  "flag.projects": {
+    "one": "{count} proje",
+    "other": "{count} proje"
+  },
+  "flag.sessions": {
+    "one": "{count} oturum",
+    "other": "{count} oturum"
+  },
+  "flag.servers": {
+    "one": "{count} sunucu",
+    "other": "{count} sunucu"
+  },
+  "flag.commands": {
+    "one": "{count} komut",
+    "other": "{count} komut"
+  },
+  "flag.changes": {
+    "one": "{count} değişiklik",
+    "other": "{count} değişiklik"
+  },
+  "flag.commits": {
+    "one": "{count} commit",
+    "other": "{count} commit"
+  },
+  "flag.cards": {
+    "one": "{count} kart",
+    "other": "{count} kart"
+  },
+  "flag.more": {
+    "one": "ve {count} proje daha",
+    "other": "ve {count} proje daha"
+  },
+  "flag.finished": "Bitirdi · {duration}",
+  "flag.asking": "Soru sordu · {duration}",
+  "flag.permission": "İzin istiyor · {duration}",
+  "flag.openEditor": "Editörde aç: {name}",
+  "flag.openTerminal": "Terminalde aç: {name}",
+  "flag.openBoard": "{name} panosunu aç",
+  "flag.bringUp": "Öne getir: {name}",
+  "flag.none": "Açık kalan bir şey yok.",
+  "flag.atQuit": "Çıkarken göster",
+  "flag.quitAnyway": "Yine de çık",
+  "flag.keys": "Ok tuşları satırlar ve düğmeleri arasında gezinir. Return satırı açar.",
+  "flag.settings.section": "Çıkış",
+  "flag.settings.atQuit": "Çıkarken damalı bayrağı göster",
   "start.model": "Model",
   "start.model.auto": "Claude Code'un seçtiği",
   "start.model.opus": "Opus",
@@ -1312,5 +1364,6 @@
   "start.link": "Açık oturuma bağla…",
   "start.newClaudeOptions": "Yeni Claude: seçenekler",
   "start.newClaudePlan": "Plan kipinde başlat",
-  "core.start.noRefill": "Beklenecek bir dolum saati yok."
+  "core.start.noRefill": "Beklenecek bir dolum saati yok.",
+  "flag.scheduled": "Yakıt dolunca verilecek"
 }

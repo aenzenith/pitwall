@@ -34,7 +34,7 @@ use super::board::{taken, CardImage, Column, ImageKind, IMAGES_MAX};
 use super::reveal::is_session_id;
 use super::*;
 use crate::registry::{base36, write_atomic};
-use crate::settings::{CustomCommand, Sounds, Team};
+use crate::settings::{CustomCommand, FlagSettings, Sounds, Team};
 
 const FORMAT: &str = "pitwall-backup";
 const VERSION: u64 = 1;
@@ -128,6 +128,7 @@ struct General {
     theme: String,
     resume: String,
     suggest_projects: bool,
+    flag: FlagSettings,
 }
 
 impl General {
@@ -137,7 +138,7 @@ impl General {
         let Settings {
             language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
-            theme, resume, suggest_projects,
+            theme, resume, suggest_projects, flag,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
@@ -152,7 +153,7 @@ impl General {
         Self {
             language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
-            theme, resume, suggest_projects,
+            theme, resume, suggest_projects, flag,
         }
     }
 
@@ -177,13 +178,13 @@ impl General {
         let Self {
             language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
-            theme, resume, suggest_projects,
+            theme, resume, suggest_projects, flag,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
             language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
-            theme, resume, suggest_projects,
+            theme, resume, suggest_projects, flag,
             ..settings.clone()
         })
     }

@@ -4,6 +4,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Chequered flag",
+        "tr": "Damalı bayrak",
+        "de": "Zielflagge",
+        "es": "Bandera a cuadros",
+        "ru": "Клетчатый флаг",
+        "ja": "チェッカーフラッグ",
+        "zh-Hans": "方格旗"
+      },
+      "body": {
+        "en": "What is still open, in one dialog: projects waiting for a commit or a push, Claude sessions waiting on you, cards to review, cards waiting for the fuel to refill, and what still runs. \"Close the day\" on the Today page opens it; it also comes up when you quit Pitwall with something still open (Settings › General).",
+        "tr": "Açık kalanlar tek pencerede: commit ve push bekleyen projeler, seni bekleyen Claude oturumları, incelenecek kartlar, yakıt dolunca verilecek kartlar ve çalışanlar. Bugün sayfasındaki \"Günü kapat\" ile açılır; açık kalan bir şey varken Pitwall'dan çıkarken de gelir (Ayarlar › Genel).",
+        "de": "Was noch offen ist, in einem Dialog: Projekte, die auf Commit oder Push warten, Claude-Sitzungen, die auf dich warten, Karten zum Prüfen, Karten, die auf den vollen Tank warten, und was noch läuft. „Tag abschließen“ auf der Seite Heute öffnet ihn; er erscheint auch, wenn du Pitwall beendest, solange etwas offen ist (Einstellungen › Allgemein).",
+        "es": "Lo que queda abierto, en un solo diálogo: proyectos pendientes de commit o de push, sesiones de Claude que te esperan, tarjetas por revisar, tarjetas que esperan a que se rellene el combustible y lo que sigue en ejecución. Se abre con «Cerrar el día» en la página Hoy; también aparece al salir de Pitwall si queda algo abierto (Ajustes › General).",
+        "ru": "Всё, что осталось открытым, в одном окне: проекты, которые ждут коммита или пуша, сессии Claude, которые ждут вас, карточки на проверку, карточки, которые ждут пополнения топлива, и то, что ещё запущено. Открывается кнопкой «Закрыть день» на странице «Сегодня»; появляется и при выходе из Pitwall, если что-то осталось открытым (Настройки › Основные).",
+        "ja": "開いたままのものを1つのダイアログで確認できます。コミット待ち・プッシュ待ちのプロジェクト、入力を待っているClaudeセッション、レビュー待ちのカード、燃料の回復を待っているカード、実行中のもの。「今日」ページの「今日を締める」で開きます。何か残ったままPitwallを終了しようとしたときにも表示されます（設定 › 一般）。",
+        "zh-Hans": "未处理的事项集中在一个对话框里：待提交、待推送的项目，正在等你的 Claude 会话，待审查的卡片，等燃料恢复后交出的卡片，以及仍在运行的内容。在“今天”页面点“结束今天”打开；还有事项未处理时退出 Pitwall，它也会出现（设置 › 通用）。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Model, mode and timing for Claude",
         "tr": "Claude'a verirken model, kip ve zaman",
         "de": "Modell, Modus und Zeitpunkt für Claude",

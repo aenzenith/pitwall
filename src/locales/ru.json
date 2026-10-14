@@ -1397,6 +1397,74 @@
   "core.radio.noEndpoint": "Радио не смогло открыть свою линию: {error}",
   "core.radio.cliFailed": "Claude Code ответил: {error}",
   "core.radio.cliSilent": "Claude Code не ответил.",
+  "flag.title": "Клетчатый флаг",
+  "flag.day": "Закрыть день",
+  "flag.commit": "Ждёт коммита",
+  "flag.push": "Ждёт пуша",
+  "flag.claude": "Claude ждёт вас",
+  "flag.review": "На проверку",
+  "flag.running": "Запущено",
+  "flag.projects": {
+    "one": "{count} проект",
+    "few": "{count} проекта",
+    "many": "{count} проектов",
+    "other": "{count} проекта"
+  },
+  "flag.sessions": {
+    "one": "{count} сессия",
+    "few": "{count} сессии",
+    "many": "{count} сессий",
+    "other": "{count} сессии"
+  },
+  "flag.servers": {
+    "one": "{count} сервер",
+    "few": "{count} сервера",
+    "many": "{count} серверов",
+    "other": "{count} сервера"
+  },
+  "flag.commands": {
+    "one": "{count} команда",
+    "few": "{count} команды",
+    "many": "{count} команд",
+    "other": "{count} команды"
+  },
+  "flag.changes": {
+    "one": "{count} изменение",
+    "few": "{count} изменения",
+    "many": "{count} изменений",
+    "other": "{count} изменения"
+  },
+  "flag.commits": {
+    "one": "{count} коммит",
+    "few": "{count} коммита",
+    "many": "{count} коммитов",
+    "other": "{count} коммита"
+  },
+  "flag.cards": {
+    "one": "{count} карточка",
+    "few": "{count} карточки",
+    "many": "{count} карточек",
+    "other": "{count} карточки"
+  },
+  "flag.more": {
+    "one": "и ещё {count} проект",
+    "few": "и ещё {count} проекта",
+    "many": "и ещё {count} проектов",
+    "other": "и ещё {count} проекта"
+  },
+  "flag.finished": "Закончил · {duration}",
+  "flag.asking": "Задал вопрос · {duration}",
+  "flag.permission": "Просит разрешения · {duration}",
+  "flag.openEditor": "Открыть в редакторе: {name}",
+  "flag.openTerminal": "Открыть в терминале: {name}",
+  "flag.openBoard": "Открыть доску проекта {name}",
+  "flag.bringUp": "Показать: {name}",
+  "flag.none": "Ничего не осталось открытым.",
+  "flag.atQuit": "Показывать при выходе",
+  "flag.quitAnyway": "Всё равно выйти",
+  "flag.keys": "Стрелки переходят между строками и их кнопками. Return открывает строку.",
+  "flag.settings.section": "Выход",
+  "flag.settings.atQuit": "Показывать клетчатый флаг при выходе",
   "start.model": "Модель",
   "start.model.auto": "По выбору Claude Code",
   "start.model.opus": "Opus",
@@ -1421,5 +1489,6 @@
   "start.link": "Привязать к открытой сессии…",
   "start.newClaudeOptions": "Новый Claude: варианты",
   "start.newClaudePlan": "Запустить в режиме плана",
-  "core.start.noRefill": "Нет времени пополнения, которого можно ждать."
+  "core.start.noRefill": "Нет времени пополнения, которого можно ждать.",
+  "flag.scheduled": "Отдать после пополнения"
 }

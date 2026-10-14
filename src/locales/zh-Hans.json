@@ -1253,6 +1253,50 @@
   "core.radio.noEndpoint": "无线电无法打开线路：{error}",
   "core.radio.cliFailed": "Claude Code 的回答：{error}",
   "core.radio.cliSilent": "Claude Code 没有回答。",
+  "flag.title": "方格旗",
+  "flag.day": "结束今天",
+  "flag.commit": "待提交",
+  "flag.push": "待推送",
+  "flag.claude": "Claude 正在等你",
+  "flag.review": "待审查",
+  "flag.running": "运行中",
+  "flag.projects": {
+    "other": "{count} 个项目"
+  },
+  "flag.sessions": {
+    "other": "{count} 个会话"
+  },
+  "flag.servers": {
+    "other": "{count} 个服务器"
+  },
+  "flag.commands": {
+    "other": "{count} 个命令"
+  },
+  "flag.changes": {
+    "other": "{count} 项更改"
+  },
+  "flag.commits": {
+    "other": "{count} 个提交"
+  },
+  "flag.cards": {
+    "other": "{count} 张卡片"
+  },
+  "flag.more": {
+    "other": "另有 {count} 个项目"
+  },
+  "flag.finished": "已完成 · {duration}",
+  "flag.asking": "提了一个问题 · {duration}",
+  "flag.permission": "需要授权 · {duration}",
+  "flag.openEditor": "在编辑器中打开：{name}",
+  "flag.openTerminal": "在终端中打开：{name}",
+  "flag.openBoard": "打开 {name} 的看板",
+  "flag.bringUp": "调到前台：{name}",
+  "flag.none": "没有未处理的事项。",
+  "flag.atQuit": "退出时显示",
+  "flag.quitAnyway": "仍然退出",
+  "flag.keys": "方向键在各行及其按钮之间移动。Return 打开该行。",
+  "flag.settings.section": "退出",
+  "flag.settings.atQuit": "退出时显示方格旗",
   "start.model": "模型",
   "start.model.auto": "由 Claude Code 决定",
   "start.model.opus": "Opus",
@@ -1277,5 +1321,6 @@
   "start.link": "关联到已打开的会话…",
   "start.newClaudeOptions": "新建 Claude：选项",
   "start.newClaudePlan": "以计划模式启动",
-  "core.start.noRefill": "没有可等待的恢复时间。"
+  "core.start.noRefill": "没有可等待的恢复时间。",
+  "flag.scheduled": "燃料恢复后交出"
 }

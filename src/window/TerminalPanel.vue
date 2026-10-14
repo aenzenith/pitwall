@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import ClaudeDot from "../components/ClaudeDot.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
+import { shellRequest } from "../lib/flag";
 import { t } from "../lib/i18n";
 import { keys, TERMINAL_MOD } from "../lib/platform";
 import {
@@ -390,6 +391,25 @@ watch(
       await nextTick();
       focusView(request.id);
     }
+  },
+  { immediate: true },
+);
+
+// The chequered flag's "Open in terminal" (lib/flag: shellRequest): a new shell tab of this
+// project, opened as "New tab" opens one. The list's panel only, once it is on the page (its
+// size is the tab's); a request waits a moment for its project to be the one shown, then lapses.
+watch(
+  () => [shellRequest.value, props.project.path] as const,
+  async ([request, path]) => {
+    if (!request || props.track) return;
+    if (Date.now() - request.at > REQUEST_MS) {
+      shellRequest.value = null;
+      return;
+    }
+    if (request.path !== path) return;
+    shellRequest.value = null;
+    await nextTick();
+    void openTerminal();
   },
   { immediate: true },
 );

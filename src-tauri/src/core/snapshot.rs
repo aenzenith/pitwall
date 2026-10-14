@@ -22,6 +22,12 @@ pub struct LiveSession {
     pub phase: SessionPhase,
     /// While it waits: the turn it waits with.
     pub turn: Option<Turn>,
+    /// While it works: since when, as the hook told it (none without the hook).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    /// While it waits on a permission prompt: the tool's name, when the hook told it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
