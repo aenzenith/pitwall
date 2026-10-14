@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.11.0](https://github.com/aenzenith/pitwall/compare/v1.10.0...v1.11.0) (2026-10-14)
+
+
+### Features
+
+* **capture:** a board card written in the quick switcher ([909bb10](https://github.com/aenzenith/pitwall/commit/909bb109c32c76970a557a416c33b83197147839))
+* **cli:** the pitwall command and pitwall:// links ([0b4c966](https://github.com/aenzenith/pitwall/commit/0b4c966e68d96359ec99a5ac82df77c0f8289c89))
+* **flag:** the chequered flag, what is still open before you leave ([ec7a757](https://github.com/aenzenith/pitwall/commit/ec7a75741edc64a528932f4dad5923c8dc757490))
+* **projects:** a project's own three-letter code ([f9d9417](https://github.com/aenzenith/pitwall/commit/f9d94177de095ced7aaac4885a536df3212375fb))
+* **setup:** the mini tower in step five, and a sixth step for alerts ([850b1b6](https://github.com/aenzenith/pitwall/commit/850b1b6bb5c877c042d8962e4bef885821d97307))
+* **start:** Claude's model and mode, and cards given at the refill ([778c34f](https://github.com/aenzenith/pitwall/commit/778c34f8897a0ed188c64b06e794c8f169add00f))
+* **tower:** the mini tower, a small window over every other ([fe4b956](https://github.com/aenzenith/pitwall/commit/fe4b9563118b9be4e5db6f3350d5b0b51e5de9e3))
+* **track:** Track and Fuel in the light theme ([7ead96a](https://github.com/aenzenith/pitwall/commit/7ead96ad1b0ca21936664c9f7a68d1eb19918cf2))
+
+
+### Bug Fixes
+
+* **tray:** no crash at quit while the menu bar item redraws ([bb7c077](https://github.com/aenzenith/pitwall/commit/bb7c077c872d6d8bdf4f3e2f83da549aa0085347))
+
 ## [1.10.0](https://github.com/aenzenith/pitwall/compare/v1.9.0...v1.10.0) (2026-10-13)
 
 
