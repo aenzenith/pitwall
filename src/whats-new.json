@@ -46,6 +46,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "pitwall in the terminal",
+        "tr": "Terminalde pitwall",
+        "de": "pitwall im Terminal",
+        "es": "pitwall en la terminal",
+        "ru": "pitwall в терминале",
+        "ja": "ターミナルで pitwall",
+        "zh-Hans": "在终端里用 pitwall"
+      },
+      "body": {
+        "en": "On macOS, Settings › General installs a pitwall command for your shell. pitwall lists your projects with their servers and what Claude is at; pitwall start, stop, restart, logs -f, run, card, open and edit act on the project of the folder you are in, or on the one you name, and pitwall quiet turns quiet on or off. pitwall run shows a saved command's output until it ends, and ^C stops the command as it would in the terminal; pitwall stop --command stops one by its name. For Raycast, Shortcuts and scripts there are pitwall:// links, off until you turn them on; a project's menu copies them.",
+        "tr": "macOS'ta Ayarlar › Genel, kabuğuna pitwall komutunu kurar. pitwall projelerini, sunucularını ve Claude'un orada ne yaptığını listeler; pitwall start, stop, restart, logs -f, run, card, open ve edit, bulunduğun klasörün projesinde ya da adını verdiğin projede çalışır; pitwall quiet de sessiz modu açar ya da kapatır. pitwall run kayıtlı bir komutun çıktısını bitene kadar gösterir; ^C, terminalde olduğu gibi komutu durdurur. pitwall stop --command bir komutu adıyla durdurur. Raycast, Kestirmeler ve betikler için pitwall:// bağlantıları da var: sen açana dek kapalıdır, bir projenin menüsünden kopyalanır.",
+        "de": "Unter macOS installiert Einstellungen › Allgemein den Befehl pitwall für deine Shell. pitwall listet deine Projekte mit ihren Servern und dem, woran Claude gerade ist; pitwall start, stop, restart, logs -f, run, card, open und edit gelten für das Projekt des Ordners, in dem du bist, oder für das, das du nennst, und pitwall quiet schaltet die Ruhe ein oder aus. pitwall run zeigt die Ausgabe eines gespeicherten Befehls, bis er endet, und ^C stoppt ihn wie im Terminal; pitwall stop --command stoppt einen über seinen Namen. Für Raycast, Kurzbefehle und Skripte gibt es pitwall://-Links: aus, bis du sie einschaltest, und im Menü eines Projekts zu kopieren.",
+        "es": "En macOS, Ajustes › General instala el comando pitwall para tu shell. pitwall lista tus proyectos con sus servidores y en qué está Claude; pitwall start, stop, restart, logs -f, run, card, open y edit actúan sobre el proyecto de la carpeta en la que estás, o sobre el que indiques, y pitwall quiet activa o quita el silencio. pitwall run muestra la salida de un comando guardado hasta que termina, y ^C lo detiene como en la terminal; pitwall stop --command detiene uno por su nombre. Para Raycast, Atajos y scripts hay enlaces pitwall://, desactivados hasta que los actives; se copian desde el menú de un proyecto.",
+        "ru": "В macOS Настройки › Основные устанавливают команду pitwall для вашей оболочки. pitwall показывает проекты, их серверы и чем занят Claude; pitwall start, stop, restart, logs -f, run, card, open и edit действуют на проект папки, в которой вы находитесь, или на тот, что вы назовёте, а pitwall quiet включает и выключает тишину. pitwall run показывает вывод сохранённой команды до её завершения, а ^C останавливает её, как в терминале; pitwall stop --command останавливает команду по имени. Для Raycast, Команд и скриптов есть ссылки pitwall://: они выключены, пока вы их не включите, и копируются из меню проекта.",
+        "ja": "macOS では、設定 › 一般 から、シェルで使える pitwall コマンドをインストールできます。pitwall はプロジェクトとそのサーバー、Claude の状況を一覧表示し、pitwall start、stop、restart、logs -f、run、card、open、edit は、今いるフォルダのプロジェクト、または名前で指定したプロジェクトに対して働きます。pitwall quiet はおやすみモードをオン・オフします。pitwall run は保存済みコマンドの出力を終わるまで表示し、^C でターミナルと同じようにそのコマンドを停止します。pitwall stop --command はコマンドを名前で停止します。Raycast、ショートカット、スクリプト向けに pitwall:// リンクもあります。オンにするまでは無効で、プロジェクトのメニューからコピーできます。",
+        "zh-Hans": "在 macOS 上，可在“设置 › 通用”中为你的 shell 安装 pitwall 命令。pitwall 列出各项目及其服务器和 Claude 的情况；pitwall start、stop、restart、logs -f、run、card、open 和 edit 作用于当前文件夹所在的项目，或你按名称指定的项目；pitwall quiet 开启或关闭勿扰。pitwall run 显示某个已保存命令的输出直到结束，^C 会像在终端里一样停止该命令；pitwall stop --command 按名称停止一个命令。还有供 Raycast、快捷指令和脚本使用的 pitwall:// 链接：默认关闭，开启后可从项目的菜单中复制。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Model, mode and timing for Claude",
         "tr": "Claude'a verirken model, kip ve zaman",
         "de": "Modell, Modus und Zeitpunkt für Claude",

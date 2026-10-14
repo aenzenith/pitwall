@@ -69,6 +69,12 @@ pub fn leave_claude_session() {
     }
 }
 
+/// One of those is among `names` (the variables a process was started with, the empty ones
+/// left out): it was started from inside a Claude Code session.
+pub fn in_claude_session(mut names: impl Iterator<Item = String>) -> bool {
+    names.any(|name| CLAUDE_SESSION_VARS.contains(&name.as_str()))
+}
+
 /// The user's login shell: `$SHELL`, else the system's own (zsh on macOS, sh elsewhere).
 #[cfg(unix)]
 fn login_shell() -> String {
@@ -124,6 +130,24 @@ pub fn reread_terminal_env() {
 /// On Windows a command runs with the app's own environment.
 #[cfg(windows)]
 pub fn reread_terminal_env() {}
+
+/// The folders of the terminal's `PATH` as the shell gave it, in its order (`terminal_env`);
+/// none when the shell gave nothing (it didn't answer in time), which says nothing about what
+/// is on it.
+pub fn shell_path() -> Option<Vec<std::path::PathBuf>> {
+    #[cfg(unix)]
+    let shells = terminal_env(false).iter().find(|(name, _)| name == "PATH").map(|(_, value)| value.clone());
+    #[cfg(not(unix))]
+    let shells: Option<std::ffi::OsString> = None;
+
+    shells.map(|path| std::env::split_paths(&path).collect())
+}
+
+/// The folders of the terminal's `PATH`, in its order (`shell_path`); the app's own `PATH`
+/// where the shell gave none. Where the `pitwall` command goes (`core/cli`).
+pub fn terminal_path() -> Vec<std::path::PathBuf> {
+    shell_path().unwrap_or_else(|| std::env::var_os("PATH").map(|path| std::env::split_paths(&path).collect()).unwrap_or_default())
+}
 
 /// Asks an interactive login shell, in the home folder, for its environment (`env -0` between
 /// two marks). The shell gets a session of its own: an interactive shell takes its terminal's

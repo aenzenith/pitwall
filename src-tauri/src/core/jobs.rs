@@ -119,17 +119,18 @@ impl Core {
         self.deps_job_done(path, id);
     }
 
-    /// Runs a project's command. A run by hand starts a fresh restart series.
-    pub fn run_command(self: &Arc<Self>, path: &str, id: &str) {
+    /// Runs a project's command. A run by hand starts a fresh restart series. False as for
+    /// `spawn_job_line`, and for a command that isn't saved.
+    pub fn run_command(self: &Arc<Self>, path: &str, id: &str) -> bool {
         self.lock().supervisor.reset_attempts(&job_key(path, id));
-        self.spawn_job(path, id);
+        self.spawn_job(path, id)
     }
 
-    pub(super) fn spawn_job(self: &Arc<Self>, path: &str, id: &str) {
+    pub(super) fn spawn_job(self: &Arc<Self>, path: &str, id: &str) -> bool {
         let Some(command) = self.custom_command(path, id) else {
-            return;
+            return false;
         };
-        self.spawn_job_line(path, id, Some(&command.name), &command.command);
+        self.spawn_job_line(path, id, Some(&command.name), &command.command)
     }
 
     /// Runs `command_line` as the project's job `id`: a custom command (`name` is its name, for

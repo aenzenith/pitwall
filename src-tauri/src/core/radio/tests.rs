@@ -202,3 +202,39 @@ fn the_endpoint_answers_only_who_shows_its_key() {
     assert!(say(endpoint.port, &[hello(&endpoint.key), card]).is_empty());
     assert_eq!(pad.cards().len(), 1);
 }
+
+/// Strangers who come and say nothing (any process here can) keep no caller out: with as many
+/// of them on the line as callers are answered at once, and with many more, a caller that shows
+/// the key is answered and its call is done. And a stranger is soon hung up on, not kept for as
+/// long as a caller may take to say what it wants.
+#[test]
+fn silent_strangers_keep_no_caller_out() {
+    let pad = paddock(false);
+    let alpha = pad.project("alpha");
+    pad.core.radio_turn(true).unwrap();
+    let endpoint: Endpoint = serde_json::from_str(&fs::read_to_string(pad.core.radio_file()).unwrap()).unwrap();
+    let hello = serde_json::to_string(&Hello { v: mcp::ENDPOINT_VERSION, key: endpoint.key.clone() }).unwrap();
+    let card = |title: &str| serde_json::to_string(&Call { cwd: alpha.clone(), ppid: 0, tool: "board_add".into(), args: json!({ "title": title }) }).unwrap();
+    let silent = |count: usize| -> Vec<TcpStream> { (0..count).map(|_| TcpStream::connect((Ipv4Addr::LOCALHOST, endpoint.port)).unwrap()).collect() };
+
+    let mut held = Vec::new();
+    for strangers in [CALLERS_MAX, 4 * CALLERS_MAX] {
+        held.extend(silent(strangers));
+        let title = format!("past {strangers} strangers");
+        let said = say(endpoint.port, &[hello.clone(), card(&title)]);
+        let mut lines = said.lines();
+        let welcome = lines.next().map(|line| serde_json::from_str::<Welcome>(line).unwrap().answer);
+        assert_eq!(welcome, Some(endpoint.answer.clone()), "{strangers} silent strangers kept the caller out");
+        let reply: Reply = serde_json::from_str(lines.next().unwrap()).unwrap();
+        assert!(!reply.error, "{}", reply.text);
+        assert_eq!(pad.cards().last(), Some(&(alpha.clone(), title)));
+    }
+
+    // Every one of them is hung up on in a moment, well before a caller's time is up.
+    for mut stranger in held {
+        stranger.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+        let read = stranger.read(&mut [0u8; 1]);
+        assert!(matches!(read, Ok(0)) || read.as_ref().is_err_and(|error| error.kind() == std::io::ErrorKind::ConnectionReset), "{read:?}");
+    }
+    pad.core.radio_turn(false).unwrap();
+}

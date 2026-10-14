@@ -12,6 +12,11 @@ fn main() {
     if pitwall_lib::mcp_mode(std::env::args_os().skip(1)) {
         return;
     }
+    // The `pitwall` command (the app's binary through its link, or with a subcommand): it asks
+    // the running app, prints the answer and ends, and nothing of the app starts here.
+    if let Some(code) = pitwall_lib::cli_mode(std::env::args_os()) {
+        std::process::exit(code);
+    }
 
     pitwall_lib::run()
 }

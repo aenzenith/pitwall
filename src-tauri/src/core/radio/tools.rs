@@ -73,7 +73,7 @@ fn status(project: &ProjectView) -> Outcome {
 }
 
 /// The project's saved command of that name, as the user wrote it or in any letter case.
-fn saved<'a>(project: &'a ProjectView, name: &str) -> Option<&'a CommandView> {
+pub(in crate::core) fn saved<'a>(project: &'a ProjectView, name: &str) -> Option<&'a CommandView> {
     let name = name.trim();
     project.commands.iter().find(|command| command.name == name).or_else(|| project.commands.iter().find(|command| command.name.eq_ignore_ascii_case(name)))
 }
@@ -91,7 +91,7 @@ fn no_such_command(project: &ProjectView) -> Outcome {
 /// launch leaves the run before in the output, over a marker that this one started
 /// (`output.rs`: `mark_run`). Answered with both, a run that passes would read as the one that
 /// failed before it.
-fn last_lines(lines: &[String], count: usize) -> Vec<&str> {
+pub(in crate::core) fn last_lines(lines: &[String], count: usize) -> Vec<&str> {
     let started = format!("{MARKER}started\t");
     let run = lines.iter().rposition(|line| line.starts_with(&started)).map_or(0, |at| at + 1);
     let shown: Vec<&str> = lines[run..].iter().filter(|line| !line.starts_with(MARKER)).map(String::as_str).collect();
@@ -168,7 +168,7 @@ impl Core {
     /// system names it (a project listed through a link is the folder it leads to). A folder
     /// that isn't on disk is in no project, and holds none: its text alone
     /// (`<project>/gone/../../<another>`) doesn't say where it is.
-    fn radio_project(&self, cwd: &str) -> Option<ProjectView> {
+    pub(in crate::core) fn radio_project(&self, cwd: &str) -> Option<ProjectView> {
         let real = |path: &str| fs::canonicalize(path).ok().map(|real| real.to_string_lossy().into_owned());
         let cwd = real(cwd)?;
 

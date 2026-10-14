@@ -265,6 +265,11 @@ impl Timed {
     pub(crate) fn new(stream: TcpStream, limit: Duration) -> Self {
         Self { stream, until: Instant::now() + limit }
     }
+
+    /// A new deadline, `limit` from now: what comes next may take that long.
+    pub(crate) fn extend(&mut self, limit: Duration) {
+        self.until = Instant::now() + limit;
+    }
 }
 
 impl Read for Timed {
@@ -273,7 +278,10 @@ impl Read for Timed {
         if left.is_zero() {
             return Err(ErrorKind::TimedOut.into());
         }
-        self.stream.set_read_timeout(Some(left))?;
+        // A socket shut both ways (the command line shuts its side at ^C, then the app's end
+        // comes) takes no option on macOS (EINVAL), and needs none: a read of it never waits,
+        // and what it still holds is read all the same.
+        let _ = self.stream.set_read_timeout(Some(left));
         self.stream.read(buffer)
     }
 }
@@ -300,28 +308,32 @@ enum Lost {
     TooLong,
 }
 
+/// Greets the app on `port`, as both of its lines begin (the radio's here, the command line's
+/// in `cli.rs`): this end shows `key` and its version `v`, and takes the app for the app only
+/// when it shows `answer` back.
+pub(crate) fn greet(port: u16, v: u32, key: &str, answer: &str) -> std::io::Result<(BufReader<Timed>, TcpStream)> {
+    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let stream = TcpStream::connect_timeout(&address, CONNECT_LIMIT)?;
+    stream.set_write_timeout(Some(GREETING_LIMIT))?;
+    let mut reader = BufReader::new(Timed::new(stream.try_clone()?, GREETING_LIMIT));
+    let mut writer = stream;
+
+    send(&mut writer, &Hello { v, key: key.to_string() })?;
+    let welcome: Welcome = receive(&mut reader)?;
+    // Something else on a port the app once had: it is told nothing more.
+    if !same_secret(&welcome.answer, answer) {
+        return Err(ErrorKind::PermissionDenied.into());
+    }
+    Ok((reader, writer))
+}
+
 /// Passes one call to the app.
 fn ask(endpoint: &Endpoint, tool: &str, args: Value) -> Result<Reply, Lost> {
-    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, endpoint.port));
-    let greet = || -> std::io::Result<(BufReader<Timed>, TcpStream)> {
-        let stream = TcpStream::connect_timeout(&address, CONNECT_LIMIT)?;
-        stream.set_write_timeout(Some(GREETING_LIMIT))?;
-        let mut reader = BufReader::new(Timed::new(stream.try_clone()?, GREETING_LIMIT));
-        let mut writer = stream;
-
-        send(&mut writer, &Hello { v: ENDPOINT_VERSION, key: endpoint.key.clone() })?;
-        let welcome: Welcome = receive(&mut reader)?;
-        // Something else on a port the app once had: it is told nothing more.
-        if !same_secret(&welcome.answer, &endpoint.answer) {
-            return Err(ErrorKind::PermissionDenied.into());
-        }
-        Ok((reader, writer))
-    };
-    let (mut reader, mut writer) = greet().map_err(|_| Lost::Unreached)?;
+    let (mut reader, mut writer) = greet(endpoint.port, ENDPOINT_VERSION, &endpoint.key, &endpoint.answer).map_err(|_| Lost::Unreached)?;
 
     let cwd = std::env::current_dir().map(|dir| dir.to_string_lossy().into_owned()).unwrap_or_default();
     send(&mut writer, &Call { cwd, ppid: parent_pid(), tool: tool.to_string(), args }).map_err(|_| Lost::Unreached)?;
-    reader.get_mut().until = Instant::now() + ANSWER_LIMIT;
+    reader.get_mut().extend(ANSWER_LIMIT);
     match read_line(&mut reader) {
         Ok(Some(line)) => serde_json::from_str(&line).map_err(|_| Lost::Quiet),
         // The app writes JSON: a line that can't be taken is one too long.

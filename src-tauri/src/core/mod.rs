@@ -58,6 +58,8 @@ mod reference;
 mod flag;
 pub use flag::FlagState;
 mod tower;
+mod cli;
+pub use cli::CliState;
 pub use activity::DaySummary;
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};
@@ -198,6 +200,8 @@ struct Inner {
     deps_known: signals::DepsKnown,
     /// The team radio: its endpoint while it is open, and the calls of the day (`radio`).
     radio: radio::Radio,
+    /// The command line: its line while it is open, and who follows an output (`cli`).
+    cli: cli::Cli,
     /// How each output's last run ended, and when, by the output's key: written into it as a
     /// marker when the next run starts (`output.rs`).
     ended: HashMap<String, (u64, String)>,

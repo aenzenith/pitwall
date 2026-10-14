@@ -259,6 +259,24 @@ impl Default for TowerSettings {
     }
 }
 
+/// The command line (`cli.rs`, `core/cli`): the `pitwall` command and `pitwall://` links.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CliSettings {
+    /// The command line's line is open (`core/cli`): the `pitwall` command is installed. A dev
+    /// build installs nothing, and has its line only when this is set by hand.
+    pub on: bool,
+    /// `pitwall://` links are answered.
+    pub links: bool,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for CliSettings {
+    fn default() -> Self {
+        Self { on: false, links: false }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -342,6 +360,9 @@ pub struct Settings {
     /// The mini tower; changed through its own commands only.
     #[serde(default)]
     pub tower: TowerSettings,
+    /// The command line and `pitwall://` links; changed through their own commands only.
+    #[serde(default)]
+    pub cli: CliSettings,
 }
 
 impl Default for Settings {
@@ -381,6 +402,7 @@ impl Default for Settings {
             radio: RadioSettings::default(),
             flag: FlagSettings::default(),
             tower: TowerSettings::default(),
+            cli: CliSettings::default(),
         }
     }
 }

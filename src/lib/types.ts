@@ -161,6 +161,8 @@ export type Settings = {
   flag?: FlagSettings;
   /** The mini tower; changed through its own commands only. */
   tower?: TowerSettings;
+  /** The command line and `pitwall://` links; changed through their own commands only. */
+  cli?: CliSettings;
 };
 
 /** The chequered flag: a quit from Pitwall's own menus shows what is still open first. */
@@ -179,6 +181,10 @@ export type TowerSettings = {
   shortcutKeys: string;
   place?: [number, number, number, number];
 };
+
+/** The command line: its line is open (the `pitwall` command is installed), and `pitwall://`
+ * links are answered. */
+export type CliSettings = { on: boolean; links: boolean };
 
 /** An open project terminal. */
 export type TerminalView = {
@@ -716,6 +722,15 @@ export type Flag = { commit: FlagGit[]; push: FlagGit[]; claude: FlagWait[]; rev
 
 /** The core's answer: what is open, and whether a quit was held and waits on the dialog. */
 export type FlagState = { open: Flag; asked: boolean };
+
+/* ---------- The command line: the `pitwall` command and pitwall:// links (cli_state, cli_install, cli_remove, cli_links, cli_copy_link) ---------- */
+
+/** The `pitwall` command as Settings › General shows it. `unsupported`: not on this system.
+ * `path`: where the command is, none while it isn't installed. */
+export type CliState = { status: "ready" | "unsupported"; path: string | null };
+
+/** What a `pitwall://` link asks for. */
+export type LinkAction = "start" | "stop" | "restart" | "show";
 
 /** A model by the alias Claude Code's `--model` takes for the newest one of its name. */
 export type ClaudeModel = "opus" | "sonnet" | "haiku";

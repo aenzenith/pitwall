@@ -16,5 +16,19 @@
     <string>ja</string>
     <string>zh-Hans</string>
   </array>
+  <!-- pitwall:// links (Raycast, Shortcuts, scripts), answered only while Settings › General has them on. -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.aenzenith.pitwall</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>pitwall</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>

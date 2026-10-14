@@ -6,7 +6,8 @@
 //! The gates, in the order a call meets them:
 //! - the endpoint: a port on 127.0.0.1 that is there only while the radio is on, and says
 //!   nothing to a caller that doesn't show the key from the endpoint's file, which only the user
-//!   can read (`~/.pitwall/radio.json`);
+//!   can read (`~/.pitwall/radio.json`); until it has shown it, it is a stranger with a second's
+//!   time and no caller's place (`Stranger`);
 //! - the radio's own switch, read again for every call;
 //! - the folder: a call acts on the listed project that holds the folder it comes from (the
 //!   longest match) and on no other. No tool takes a project or a path, and from any other
@@ -19,7 +20,7 @@
 //! but a new card's title.
 
 use std::io::BufReader;
-use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
@@ -28,15 +29,23 @@ use crate::mcp::{self, receive, same_secret, send, Call, Endpoint, Hello, Reply,
 mod register;
 mod tools;
 
+// The command line (`cli`) tells a saved command and an output's current run the same way.
+pub(in crate::core) use tools::{last_lines, saved};
+
 use register::Listed;
 
 /// Not on Windows yet: none of it has run there (how Claude Code starts its servers, the shell
 /// its CLI is asked through).
 const SUPPORTED: bool = cfg!(unix);
-/// Callers answered at once; one more is closed unanswered.
+/// Callers answered at once, each having shown the key; one more is closed unanswered.
 const CALLERS_MAX: usize = 16;
-/// A caller shows its key, and says what it wants, within this long: all of it, so one that says
-/// a byte now and then keeps no line.
+/// Those who haven't shown the key yet, at once, on either line (this one and the command
+/// line's, `cli`): a newcomer takes the place of the oldest.
+const STRANGERS_MAX: usize = 8;
+/// A caller shows its key within this long,
+pub(in crate::core) const HELLO_LIMIT: Duration = Duration::from_secs(1);
+/// and, having shown it, says what it wants within this long: all of it, so one that says a byte
+/// now and then keeps no line.
 const SAY_LIMIT: Duration = Duration::from_secs(5);
 /// What Claude Code said of the radio is good for this long: Settings asks each time the section
 /// comes into view.
@@ -155,6 +164,39 @@ impl Drop for Line {
     }
 }
 
+/// Those who came and haven't shown the key yet: each one's number and a hold on its line, the
+/// oldest first.
+pub(in crate::core) type Strangers = Mutex<VecDeque<(u64, TcpStream)>>;
+
+/// One of them, until it has said its hello or is gone.
+pub(in crate::core) struct Stranger {
+    number: u64,
+    among: Arc<Strangers>,
+}
+
+impl Stranger {
+    /// Takes a place among the strangers for whoever is on `stream`. They have few places: the
+    /// one who waited longest without a word is hung up on for a newcomer, so that those who
+    /// say nothing keep nobody out.
+    pub(in crate::core) fn come(among: &Arc<Strangers>, number: u64, stream: &TcpStream) -> std::io::Result<Self> {
+        let hold = stream.try_clone()?;
+        let mut waiting = among.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if waiting.len() >= STRANGERS_MAX {
+            if let Some((_, oldest)) = waiting.pop_front() {
+                let _ = oldest.shutdown(Shutdown::Both);
+            }
+        }
+        waiting.push_back((number, hold));
+        Ok(Self { number, among: Arc::clone(among) })
+    }
+}
+
+impl Drop for Stranger {
+    fn drop(&mut self) {
+        self.among.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).retain(|(number, _)| *number != self.number);
+    }
+}
+
 #[cfg(unix)]
 fn system_random(bytes: &mut [u8]) -> bool {
     fs::File::open("/dev/urandom").and_then(|mut source| source.read_exact(bytes)).is_ok()
@@ -179,8 +221,8 @@ pub(in crate::core) fn random(bytes: &mut [u8]) {
     }
 }
 
-/// A secret nobody can guess, as 32 hex digits.
-fn secret() -> String {
+/// A secret nobody can guess, as 32 hex digits. The command line's line has its own two (`cli`).
+pub(in crate::core) fn secret() -> String {
     let mut bytes = [0u8; 16];
     random(&mut bytes);
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
@@ -226,7 +268,9 @@ impl Core {
         // that waits (a server on its way up) holds nobody else up.
         let core = Arc::downgrade(self);
         let callers = Arc::new(AtomicUsize::new(0));
+        let strangers = Arc::new(Strangers::default());
         thread::spawn(move || {
+            let mut came: u64 = 0;
             for stream in listener.incoming() {
                 if closed.load(Ordering::SeqCst) {
                     break;
@@ -239,13 +283,14 @@ impl Core {
                     continue;
                 };
 
-                let line = Line(Arc::clone(&callers));
-                if callers.fetch_add(1, Ordering::SeqCst) >= CALLERS_MAX {
+                // A stranger until it shows the key: it has a place among the callers only then.
+                came += 1;
+                let Ok(stranger) = Stranger::come(&strangers, came, &stream) else {
                     continue;
-                }
+                };
+                let callers = Arc::clone(&callers);
                 thread::spawn(move || {
-                    let _line = line;
-                    let _ = core.radio_answer(stream);
+                    let _ = core.radio_answer(stream, stranger, &callers);
                 });
             }
         });
@@ -283,13 +328,16 @@ impl Core {
     }
 
     /// One caller: its key, then its call. Anything else on the line (a wrong key, no JSON, a
-    /// line too long, silence) closes it without a word.
-    fn radio_answer(self: &Arc<Self>, stream: TcpStream) -> std::io::Result<()> {
+    /// line too long, silence) closes it without a word. Only one who showed the key counts
+    /// among the `callers`: until then it is a `stranger`, with a stranger's place and time.
+    fn radio_answer(self: &Arc<Self>, stream: TcpStream, stranger: Stranger, callers: &Arc<AtomicUsize>) -> std::io::Result<()> {
         stream.set_write_timeout(Some(SAY_LIMIT))?;
-        let mut reader = BufReader::new(Timed::new(stream.try_clone()?, SAY_LIMIT));
+        let mut reader = BufReader::new(Timed::new(stream.try_clone()?, HELLO_LIMIT));
         let mut writer = stream;
 
-        let hello: Hello = receive(&mut reader)?;
+        let hello = receive::<Hello>(&mut reader);
+        drop(stranger);
+        let hello = hello?;
         // The key as it is now: a caller that came in before the radio was closed has none.
         let answer = {
             let inner = self.lock();
@@ -298,8 +346,13 @@ impl Core {
         let Some(answer) = answer else {
             return Ok(());
         };
+        let _line = Line(Arc::clone(callers));
+        if callers.fetch_add(1, Ordering::SeqCst) >= CALLERS_MAX {
+            return Ok(());
+        }
         send(&mut writer, &Welcome { answer })?;
 
+        reader.get_mut().extend(SAY_LIMIT);
         let call: Call = receive(&mut reader)?;
         // The other end is as old as its session: one of another version of the app is told so,
         // and nothing is done for it.

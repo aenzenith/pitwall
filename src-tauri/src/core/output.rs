@@ -122,7 +122,7 @@ impl Core {
         let (given, line) = {
             let mut inner = self.lock();
             let (given, line) = step(&mut inner)?;
-            let lines = inner.output.entry(key).or_default();
+            let lines = inner.output.entry(key.clone()).or_default();
             if marker_kind(&line).is_some_and(|kind| lines.back().and_then(|last| marker_kind(last)) == Some(kind)) {
                 lines.pop_back();
             }
@@ -130,6 +130,8 @@ impl Core {
             while lines.len() > OUTPUT_LINES {
                 lines.pop_front();
             }
+            // The command line's `logs -f` and `run` follow along (`cli`).
+            inner.cli.heard(&key, &line);
             (given, line)
         };
 

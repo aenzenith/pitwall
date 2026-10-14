@@ -477,6 +477,17 @@ export const api = {
   towerShortcut: (keys: string) => invoke("tower_shortcut", { keys }),
   /** The tower's own page: how large its content is. Its window takes that size and comes up. */
   towerFit: (width: number, height: number) => invoke("tower_fit", { width, height }),
+  /* The command line (core/cli): the `pitwall` command and pitwall:// links. */
+  /** Where the `pitwall` command is; the core asks the shell for its PATH, so it takes a moment. */
+  cliState: () => invoke<import("./types").CliState>("cli_state"),
+  /** Puts the command on the shell's PATH, as a link to this app. */
+  cliInstall: () => invoke<import("./types").CliState>("cli_install"),
+  /** Takes it out again. */
+  cliRemove: () => invoke<import("./types").CliState>("cli_remove"),
+  /** Whether `pitwall://` links are answered. */
+  cliLinks: (on: boolean) => invoke("cli_links", { on }),
+  /** Puts the link that does `action` to the project at `path` on the clipboard. */
+  cliCopyLink: (path: string, action: import("./types").LinkAction) => invoke("cli_copy_link", { path, action }),
   /** Tells a card up next to wait until the 5-hour session refills (the core's own reading of
    * that moment): the core gives it then, with `start`. */
   boardSchedule: (id: string, start: StartChoice) => invoke("board_schedule", { id, start }),

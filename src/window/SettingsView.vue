@@ -18,6 +18,7 @@ import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
+import CliSection from "./settings/CliSection.vue";
 import FlagSection from "./settings/FlagSection.vue";
 import RadioSection from "./settings/RadioSection.vue";
 import TowerSection from "./settings/TowerSection.vue";
@@ -704,6 +705,7 @@ function setTheme(theme: Theme): void {
           <div @change.stop>
             <FlagSection />
             <TowerSection />
+            <CliSection />
           </div>
 
           <!-- The backup's own: its dialogs' boxes are no settings for the form to save (`@change.stop`). -->

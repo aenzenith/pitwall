@@ -32,6 +32,7 @@ mod mcp;
 mod flag;
 mod shortcuts;
 mod tower;
+mod cli;
 mod start;
 
 use std::path::PathBuf;
@@ -48,6 +49,7 @@ use crate::core::{Core, CoreConfig, CoreEvent};
 
 pub use crate::hooks::hook_mode;
 pub use crate::mcp::mcp_mode;
+pub use crate::cli::cli_mode;
 
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";
@@ -214,6 +216,25 @@ pub fn apply_shortcut(app: &AppHandle, on: bool, keys: &str) -> Result<(), Strin
     shortcuts::apply(app, shortcuts::Which::Switcher, on, keys)
 }
 
+/// `pitwall://` links that came before the app was set up, until it is: in memory only.
+fn early_links() -> std::sync::MutexGuard<'static, Vec<String>> {
+    static EARLY: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    EARLY.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// A `pitwall://` link the system handed over (`Core::open_link`): it does one of its four
+/// things or nothing at all, and nothing of it is logged. The window comes up when it asks.
+fn open_link(app: &AppHandle, url: &str) {
+    match app.try_state::<AppState>() {
+        Some(state) => {
+            if state.core.open_link(url) {
+                tray::show_main(app);
+            }
+        }
+        None => early_links().push(url.to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Passed by the login item, so a launch at login stays in the menu bar.
 const AUTOSTART_ARG: &str = "--autostart";
@@ -291,6 +312,8 @@ pub fn run() {
             core.record_app("start");
             // The team radio's endpoint, when it is on.
             core.radio_start();
+            // The command line's line, when the `pitwall` command is installed.
+            core.cli_start();
             // After a restart for an update: the servers, tabs and Claude sessions it closed.
             let restored = core.restore();
             // After a quit: what was open, put back or offered as Settings says.
@@ -346,6 +369,10 @@ pub fn run() {
             }
             if let Some(restored) = &restored {
                 update::restored(app.handle(), restored);
+            }
+            // A link that started the app came before there was anything to answer it.
+            for url in std::mem::take(&mut *early_links()) {
+                open_link(app.handle(), &url);
             }
 
             Ok(())
@@ -523,6 +550,11 @@ pub fn run() {
             commands::tower_form,
             commands::tower_shortcut,
             commands::tower_fit,
+            commands::cli_state,
+            commands::cli_install,
+            commands::cli_remove,
+            commands::cli_links,
+            commands::cli_copy_link,
             commands::board_schedule,
             commands::board_unschedule,
             commands::board_give_now
@@ -545,6 +577,13 @@ pub fn run() {
         // Opening the app again (Finder, Dock, Spotlight) while it runs brings the window up.
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => tray::show_main(app),
+        // `pitwall://` links, from whatever opened them: each is the core's to answer or not.
+        #[cfg(target_os = "macos")]
+        RunEvent::Opened { urls } => {
+            for url in urls {
+                open_link(app, url.as_str());
+            }
+        }
         _ => {}
     });
 }

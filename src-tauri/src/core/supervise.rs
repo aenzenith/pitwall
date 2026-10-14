@@ -284,7 +284,9 @@ impl Core {
         if wanted {
             match unit {
                 Unit::Server(path) => self.launch(path, false, Vec::new()),
-                Unit::Command(path, id) => self.spawn_job(path, id),
+                Unit::Command(path, id) => {
+                    self.spawn_job(path, id);
+                }
             }
         }
     }

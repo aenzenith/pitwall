@@ -1065,6 +1065,44 @@ pub fn tower_fit(window: tauri::WebviewWindow, width: f64, height: f64) {
     }
 }
 
+/* ---------- the command line: the `pitwall` command and `pitwall://` links (core/cli) ---------- */
+
+/// Where the `pitwall` command is. It asks the shell for its PATH, so it runs off the main thread.
+#[tauri::command]
+pub async fn cli_state(app: AppHandle) -> Result<crate::core::CliState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.cli_state()).await.map_err(|error| error.to_string())
+}
+
+/// Puts the command on the shell's PATH, as a link to this app, and says where it is.
+#[tauri::command]
+pub async fn cli_install(app: AppHandle) -> Result<crate::core::CliState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.cli_install()).await.map_err(|error| error.to_string())?
+}
+
+/// Takes the command out again: only a link that leads to this app.
+#[tauri::command]
+pub async fn cli_remove(app: AppHandle) -> Result<crate::core::CliState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.cli_remove()).await.map_err(|error| error.to_string())?
+}
+
+/// Whether `pitwall://` links are answered.
+#[tauri::command]
+pub fn cli_links(state: State<'_, AppState>, on: bool) {
+    state.core.cli_links(on);
+}
+
+/// Puts the link that does `action` (`start` | `stop` | `restart` | `show`) to the listed
+/// project at `path` on the clipboard.
+#[tauri::command]
+pub fn cli_copy_link(app: AppHandle, state: State<'_, AppState>, path: String, action: String) -> Result<(), String> {
+    let link = state.core.link_text(&path, &action).ok_or_else(|| format!("unknown link: {action}"))?;
+    crate::copy_text(&app, link);
+    Ok(())
+}
+
 /// The model and the mode the window chose for a Claude session, as it names them. Neither is
 /// used as it comes: `gated` keeps only the values of the two fixed lists (`start.rs`).
 #[derive(serde::Deserialize)]

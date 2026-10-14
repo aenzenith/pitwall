@@ -465,7 +465,23 @@ function rowMenu(event: MouseEvent, project: Project): void {
   entries.push({ text: t("team.newMenu"), action: () => (teamAsk.value = { kind: "create", projects: [project.path], show: false }) });
   if (own) entries.push("separator", { text: t("team.leave"), action: () => void leaveTeam(project.path) });
   entries.push("separator", { text: t(project.muted ? "notifications.unmute" : "notifications.mute"), action: () => void api.muteProject(project.path, !project.muted) });
+  // While `pitwall://` links are answered: the project's own, to copy (Raycast, Shortcuts, scripts).
+  // Not for a name another listed project shares: a link on it does nothing.
+  const named = projects.value.filter((other) => other.name === project.name).length;
+  if (snapshot.value?.settings.cli?.links && named === 1) entries.push("separator", { text: t("cli.copyLink"), items: linkEntries(project.path) });
   void menu.popup(event, entries);
+}
+
+/** A project's `pitwall://` links, each copied by its line of the row's menu. */
+function linkEntries(path: string): MenuEntry[] {
+  const copy = (action: import("../lib/types").LinkAction) => () => void api.cliCopyLink(path, action);
+  return [
+    { text: t("common.start"), action: copy("start") },
+    { text: t("common.restart"), action: copy("restart") },
+    { text: t("common.stop"), action: copy("stop") },
+    "separator",
+    { text: t("cli.link.show"), action: copy("show") },
+  ];
 }
 
 /** Right-click on a team, on its head in the list or its entry in the sidebar. */
