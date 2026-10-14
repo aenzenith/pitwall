@@ -10,7 +10,8 @@ import type { Theme } from "./types";
  */
 export type ResolvedTheme = "dark" | "light";
 
-/** What is drawn for a dark ground and stays so in the light theme (styles/tokens.css). */
+/** What is drawn for a dark ground and stays so in the light theme (styles/tokens.css): a picture
+ * shown large, a badge laid on a picture. The Track and Fuel pages are not: they have a day. */
 export const NIGHT = "night";
 
 const systemQuery = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: light)") : null;

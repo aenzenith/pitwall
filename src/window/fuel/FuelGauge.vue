@@ -124,20 +124,21 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
   flex: 0 1 calc(var(--dial, 300px) * 2 / 3);
 }
 
-/* Smoked glass over the backdrop, lit faintly from below, in a shadow of its own. */
+/* Glass over the backdrop (smoked in the dark theme, frosted in the light one), lit faintly from
+   below, in a shadow of its own. */
 .pod {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, rgba(30, 32, 38, 0.72), rgba(8, 9, 11, 0.9) 72%);
+  background: radial-gradient(circle at 50% 35%, var(--glass-top), var(--glass-bottom-pod) 72%);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -6cqi 12cqi -3cqi color-mix(in srgb, var(--tint) 18%, transparent),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 6cqi 16cqi rgba(0, 0, 0, 0.55);
+    inset 0 1px 0 var(--glass-shine),
+    inset 0 -6cqi 12cqi -3cqi color-mix(in srgb, var(--tint) var(--glass-glow-pod), transparent),
+    0 0 0 1px var(--glass-edge),
+    0 6cqi 16cqi var(--glass-shade);
 }
 
 /* The bezel: a thin ring catching the light at two corners, like brushed metal. */
@@ -146,14 +147,7 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(
-    from 200deg,
-    rgba(255, 255, 255, 0.3),
-    rgba(255, 255, 255, 0.03) 22%,
-    rgba(255, 255, 255, 0.16) 50%,
-    rgba(255, 255, 255, 0.03) 78%,
-    rgba(255, 255, 255, 0.3)
-  );
+  background: conic-gradient(from 200deg, var(--bezel-lit), var(--bezel-dim) 22%, var(--bezel-half) 50%, var(--bezel-dim) 78%, var(--bezel-lit));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
   pointer-events: none;
@@ -166,29 +160,26 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
   height: 100%;
 }
 
-/* The marks in a see-through warm white: they take the glass's colour, never a cold grey. */
-.gauge {
-  --mark: 255, 238, 222;
-}
-
+/* The marks, see-through, in the glass's own warmth (a warm white on the smoked glass, a warm ink
+   on the frosted one): they take the glass's colour, never a cold grey. */
 .minute {
-  stroke: rgba(var(--mark), 0.08);
+  stroke: var(--dial-minute);
   stroke-width: 0.8;
 }
 
 .minute.major {
-  stroke: rgba(var(--mark), 0.22);
+  stroke: var(--dial-major);
   stroke-width: 1.4;
 }
 
 /* The arc's unlit part: the dial's own colour, faint, as a lamp's dark side. */
 .track {
-  stroke: color-mix(in srgb, var(--tint) 14%, transparent);
+  stroke: color-mix(in srgb, var(--tint) var(--dial-track), transparent);
   stroke-linecap: round;
 }
 
 .tick {
-  stroke: rgba(var(--mark), 0.18);
+  stroke: var(--dial-tick);
   stroke-width: 1.5;
 }
 
@@ -199,9 +190,9 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
   transition: stroke-dasharray 0.6s ease;
 }
 
-/* A blurred copy under the arc: it reads as lit. */
+/* A blurred copy under the arc: it reads as lit (on the frosted glass, as tinted). */
 .glow {
-  opacity: 0.7;
+  opacity: var(--dial-glow);
 }
 
 .needle {

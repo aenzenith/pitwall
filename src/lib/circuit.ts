@@ -1,9 +1,16 @@
-// The Track page's circuit, drawn with WebGL as additive point sprites, after the website's night
-// circuit (pitwall-website: resources/js/lib/circuit.ts). Lines and trails are points packed far
-// closer than they are wide, so they read as strokes. Everything moves on the GPU: a point knows
-// where along its light's trail it sits, the vertex shader looks the circuit's centre line up and
+// The Track page's circuit, drawn with WebGL as point sprites, after the website's night circuit
+// (pitwall-website: resources/js/lib/circuit.ts). Lines and trails are points packed far closer
+// than they are wide, so they read as strokes. Everything moves on the GPU: a point knows where
+// along its light's trail it sits, the vertex shader looks the circuit's centre line up and
 // places it. A frame costs a handful of uniforms. The circuit's own marks are placed the same way,
 // so one circuit can turn into another: the line the shader holds is mixed from the two.
+//
+// It has two looks (`Look`). By night (the dark theme) the sprites are added to one another:
+// light on a dark ground. Added light is lost on a pale ground, so by day (the light theme) the
+// same points are laid over one another as ink: the road in a slate, a light's trail in its
+// colour, deepest at its head, its glow a tint of the ground. Each look is a program of its own,
+// built from one source: the night's is the source it always was, the day's lines stand beside
+// the night's under `DAY`.
 
 import { LINE_SAMPLES, onLine, type Circuit } from "./track";
 
@@ -32,6 +39,20 @@ export type Light = {
 /** The room the page keeps round the circuit, in CSS pixels from the canvas's edges. */
 export type Inset = { top: number; right: number; bottom: number; left: number };
 
+/** How the circuit is drawn: for the dark theme, and for the light one. */
+export type Look = "night" | "day";
+
+type Colour = readonly [number, number, number];
+
+/** A light's colour in each look: a dev server's, Claude's, and a server's with an issue. By night
+ * the states' own colours as light. By day the light set's (styles/tokens.css), each a step
+ * brighter than its token: a thin trail holds less colour than a dot does, and the shader
+ * deepens it a little towards the head. */
+export const LIGHTS: Record<Look, { run: Colour; claude: Colour; warn: Colour }> = {
+  night: { run: [0.45, 0.79, 0.57], claude: [0.94, 0.53, 0.24], warn: [0.8, 0.65, 0.0] },
+  day: { run: [0.09, 0.67, 0.3], claude: [0.94, 0.37, 0.06], warn: [0.83, 0.58, 0.0] },
+};
+
 export interface Renderer {
   /** The circuit drawn from now on. `lanes`: the straight's lanes (their offsets); `wall`: half
    * the pit wall's length, in world units. `animate`: the one drawn until now turns into it. A lap
@@ -42,6 +63,12 @@ export interface Renderer {
   /** Fits the circuit into the canvas, inside `inset`. Call when either changes. */
   layout(inset: Inset): void;
   draw(time: number, lights: readonly Light[], glow: boolean): void;
+  /** The look drawn from now on (the theme changed): the next frame is in it, everything where it
+   * was. False when its program can't be made: nothing is drawn then, never the other look in its
+   * place, until a look that can be made is asked for. */
+  setLook(look: Look): boolean;
+  /** Whether the look last asked for is drawn. */
+  drawable(): boolean;
   /** Where a point of the circuit lands on the canvas, in CSS pixels. While a lap turns into
    * another, where it is on the way: with the pit wall (what stands at it rides with it), or,
    * `onRoad`, with the road (where the lights are drawn). */
@@ -63,9 +90,9 @@ const SPRITE = 0.0095;
 /** The lens: half the vertical field of view is 0.36 rad. */
 const FOCAL = 1 / Math.tan(0.36);
 
-const vertexSource = (line: number, lights: number): string => `
+const vertexSource = (line: number, lights: number, look: Look): string => `
 #define LINE ${line}
-#define LIGHTS ${lights}
+#define LIGHTS ${lights}${look === "day" ? "\n#define DAY" : ""}
 attribute vec4 aA;
 attribute vec4 aB;
 uniform mat4 uVP;
@@ -118,9 +145,18 @@ void main() {
         vec2 p = onLine(at, off);
         pos = vec3(p.x, 0., p.y);
         float pulse = aB.y < 0. ? 1. : .5 + .5 * sin(TAU * (aB.y * 6. - uTime * .05));
+#ifdef DAY
+        // Ink: the edges and the dashes in a slate, the start line and the wall towards black.
+        col = mix(vec3(.34, .38, .43), vec3(.11, .12, .14), aB.z);
+#else
         col = mix(vec3(.50, .56, .66), vec3(.92), aB.z);
+#endif
         size = aA.w;
         alpha = aB.x * (.5 + .5 * pulse) * uMark.y;
+#ifdef DAY
+        // A thin line of ink holds less of the eye than one of light: a little more of it.
+        alpha *= 1.3;
+#endif
     } else if (kind < 2.5) {
         vec4 light = uLightA[int(aB.x)];
         vec4 tint = uLightB[int(aB.x)];
@@ -142,18 +178,33 @@ void main() {
             size = mix(mix(6.4, 1.3, lag), mix(30., 12., lag), halo);
             // tint.a: fewer points to a unit of a longer trail, each gives that much more light.
             alpha = pow(1. - lag, 1.35) * mix(.2, .05, halo) * light.z * tint.a * mix(1., uGlow, halo);
+#ifdef DAY
+            // Its colour deepens towards the head; the halo is a wash of it, not a bloom.
+            col *= mix(1., .9, (1. - halo) * (1. - smoothstep(0., .16, lag)));
+            alpha *= mix(1.5, .55, halo);
+#endif
             if (uClosed < .5) alpha *= mix(1., ends(t), turn.w);
         } else {
             // The car: a bright head, and its glow (aB.y = 1).
             vec2 p = onLine(light.x, mix(light.w, turn.z, smoothstep(turn.x, turn.y, light.x)));
             pos = vec3(p.x, .01, p.y);
+#ifdef DAY
+            // The head is its colour a shade deeper, where the night's is its whitest; its glow a
+            // tint of the ground round it.
+            col = tint.rgb * mix(.8, 1., aB.y);
+#else
             col = mix(tint.rgb, vec3(1.), .55);
+#endif
             size = aA.w;
             alpha = aA.x * light.z * mix(1., uGlow, aB.y);
+#ifdef DAY
+            // No bloom to widen it: the head itself is a little larger.
+            size *= mix(1.2, 1., aB.y);
+#endif
             if (uClosed < .5) alpha *= mix(1., ends(light.x), turn.w);
         }
     } else {
-        // Dust drifting above the circuit.
+        // Dust drifting above the circuit: motes of light, the night's alone.
         pos = vec3(aA.x, fract(aA.y + uTime * .006 * (.4 + aA.w)) * 2.6, aB.x);
         col = vec3(.62, .68, .78);
         size = .9 + aA.w;
@@ -326,8 +377,10 @@ function align(from: Float32Array, to: Float32Array): number {
   return best;
 }
 
-/** Null where WebGL isn't to be had: the page's lists work without the circuit. */
-export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
+/** Null where WebGL isn't to be had: the page's lists work without the circuit. A look whose
+ * program can't be made is another matter: the renderer is there and says so (`drawable`), and
+ * draws again once a look it can make is asked for. */
+export function startCircuit(canvas: HTMLCanvasElement, look: Look = "night"): Renderer | null {
   const gl = canvas.getContext("webgl", { antialias: false, alpha: true, premultipliedAlpha: true, depth: false, stencil: false, powerPreference: "low-power" });
   if (!gl) return null;
 
@@ -337,20 +390,77 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
   const lineCount = room >= 400 ? LINE_SAMPLES : 64;
   const lightCount = room >= 400 ? 32 : 12;
 
-  const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource(lineCount, lightCount));
-  const fragment = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT);
-  const program = gl.createProgram();
-  if (!vertex || !fragment || !program) return null;
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.bindAttribLocation(program, 0, "aA");
-  gl.bindAttribLocation(program, 1, "aB");
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.warn("track circuit:", gl.getProgramInfoLog(program));
-    return null;
+  /** A look's program and where its uniforms are. Null when it can't be made: nothing of the
+   * attempt is left in the context. */
+  function build(of: Look) {
+    const vertex = compile(gl!, gl!.VERTEX_SHADER, vertexSource(lineCount, lightCount, of));
+    const fragment = compile(gl!, gl!.FRAGMENT_SHADER, FRAGMENT);
+    const program = gl!.createProgram();
+    const drop = (): null => {
+      gl!.deleteProgram(program);
+      gl!.deleteShader(vertex);
+      gl!.deleteShader(fragment);
+      return null;
+    };
+    if (!vertex || !fragment || !program) return drop();
+    gl!.attachShader(program, vertex);
+    gl!.attachShader(program, fragment);
+    gl!.bindAttribLocation(program, 0, "aA");
+    gl!.bindAttribLocation(program, 1, "aB");
+    gl!.linkProgram(program);
+    if (!gl!.getProgramParameter(program, gl!.LINK_STATUS)) {
+      console.warn("track circuit:", gl!.getProgramInfoLog(program));
+      return drop();
+    }
+    const at = (name: string): WebGLUniformLocation | null => gl!.getUniformLocation(program, name);
+    return {
+      program,
+      uniforms: {
+        vp: at("uVP"),
+        line: at("uLine"),
+        lightA: at("uLightA"),
+        lightB: at("uLightB"),
+        lightC: at("uLightC"),
+        time: at("uTime"),
+        px: at("uPx"),
+        glow: at("uGlow"),
+        closed: at("uClosed"),
+        fade: at("uFade"),
+        view: at("uView"),
+        mark: at("uMark"),
+        wall: at("uWall"),
+      },
+    };
   }
-  gl.useProgram(program);
+
+  // Each look's program is made when it is first asked for, and kept. One that can't be made is
+  // kept as that (null): it is not tried again while this context lives.
+  type Made = NonNullable<ReturnType<typeof build>>;
+  const built: Partial<Record<Look, Made | null>> = {};
+  built[look] = build(look);
+  /** Where the worn program's uniforms are: read only while a look is worn (`draw`). */
+  let uniforms!: Made["uniforms"];
+  /** The look drawn; null while the one asked for can't be made. */
+  let worn: Look | null = null;
+
+  /** Takes a look's program, and its way of laying colour down: by night each sprite's light is
+   * added to what is there, by day each lies over it (both premultiplied, as the fragment shader
+   * writes them). A look that can't be made is not worn, and neither is the other in its place:
+   * the canvas is left empty. */
+  function wear(of: Look): boolean {
+    if (!(of in built)) built[of] = build(of);
+    const made = built[of];
+    if (!made) {
+      worn = null;
+      gl!.clear(gl!.COLOR_BUFFER_BIT);
+      return false;
+    }
+    uniforms = made.uniforms;
+    worn = of;
+    gl!.useProgram(made.program);
+    gl!.blendFunc(gl!.ONE, of === "day" ? gl!.ONE_MINUS_SRC_ALPHA : gl!.ONE);
+    return true;
+  }
 
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.enableVertexAttribArray(0);
@@ -359,25 +469,8 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
   gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 16);
   gl.disable(gl.DEPTH_TEST);
   gl.enable(gl.BLEND);
-  gl.blendFunc(gl.ONE, gl.ONE);
+  wear(look);
   gl.clearColor(0, 0, 0, 0);
-
-  const at = (name: string): WebGLUniformLocation | null => gl.getUniformLocation(program, name);
-  const uniforms = {
-    vp: at("uVP"),
-    line: at("uLine"),
-    lightA: at("uLightA"),
-    lightB: at("uLightB"),
-    lightC: at("uLightC"),
-    time: at("uTime"),
-    px: at("uPx"),
-    glow: at("uGlow"),
-    closed: at("uClosed"),
-    fade: at("uFade"),
-    view: at("uView"),
-    mark: at("uMark"),
-    wall: at("uWall"),
-  };
 
   /** A circuit as it is drawn: its centre line, its marks, and how it sits in the canvas. */
   type Stage = {
@@ -625,7 +718,7 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
   }
 
   function draw(time: number, lights: readonly Light[], glow: boolean): void {
-    if (stopped || !shown) return;
+    if (stopped || !shown || worn === null) return;
     const [width, height] = size();
     // Two buffer pixels to a CSS pixel on every screen (a 1x display gets the frame supersampled,
     // which keeps a hairline smooth there), less on a canvas too wide for that.
@@ -647,6 +740,10 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
       gl!.uniformMatrix4fv(uniforms.vp, false, matrix);
       gl!.uniform1f(uniforms.px, (SPRITE * fit * FOCAL * bufferHeight) / 2);
       gl!.uniform2f(uniforms.fade, fade[0], fade[1]);
+    };
+    /** The dust, in the frame last set: light in the dark, so by day there is none. */
+    const dust = (): void => {
+      if (worn === "night") gl!.drawArrays(gl!.POINTS, 0, DUST);
     };
     const road = (first: number, count: number, shift: number, alpha: number): void => {
       if (alpha <= 0 || !count) return;
@@ -715,7 +812,7 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
       const slid = smooth(0, 1, p);
       for (let i = 0; i < 16; i++) mixedMatrix[i] = mixed(before.matrix[i], shown.matrix[i], slid);
       frame(mixedMatrix, mixed(before.fit, shown.fit, slid), [mixed(before.fade[0], shown.fade[0], slid), mixed(before.fade[1], shown.fade[1], slid)]);
-      gl!.drawArrays(gl!.POINTS, 0, DUST);
+      dust();
 
       holdStage(before);
       frame(moved(before.matrix, up * SLIDE * slid), before.fit, before.fade);
@@ -741,7 +838,7 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
         holdStage(shown);
       }
       frame(mixedMatrix, mixed(before.fit, shown.fit, e), [mixed(before.fade[0], shown.fade[0], e), mixed(before.fade[1], shown.fade[1], e)]);
-      gl!.drawArrays(gl!.POINTS, 0, DUST);
+      dust();
       road(roadFirst, marked, mixing?.road ?? 0, e);
       road(roadFirst + marked, before.road.length / 8, 0, 1 - e);
       const length = other ? mixedRoad.length : shown.circuit.line.length;
@@ -754,7 +851,7 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
 
     holdStage(shown);
     frame(shown.matrix, shown.fit, shown.fade);
-    gl!.drawArrays(gl!.POINTS, 0, DUST);
+    dust();
     road(roadFirst, marked, 0, 1);
     wall(shown.circuit, shown.circuit.wall.t, shown.wall, shown.circuit.line.length, 1);
     // What a change that starts now would leave: the lights as they are.
@@ -777,6 +874,13 @@ export function startCircuit(canvas: HTMLCanvasElement): Renderer | null {
     setCircuit,
     layout,
     draw,
+    setLook(next) {
+      if (stopped || !wear(next)) return false;
+      // The new program has no centre line yet: the next frame hands it over.
+      held = null;
+      return true;
+    },
+    drawable: () => worn !== null,
     project,
     scale: () => shown?.wallScale ?? 0,
     moving() {

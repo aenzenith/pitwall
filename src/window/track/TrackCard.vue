@@ -114,8 +114,8 @@ function toggle(): void {
   padding: 14px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  /* The panel's ground, the circuit showing through a little: on the stage, night in both themes. */
-  background: rgba(22, 24, 29, 0.94);
+  /* The panel's ground on the stage, the circuit showing through a little. */
+  background: var(--bg-stage-card);
 }
 
 .card-head {

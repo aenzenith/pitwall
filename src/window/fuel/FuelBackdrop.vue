@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import { burnRate, left, LOW_LEFT } from "../../lib/fuel";
 import { visible } from "../../lib/store";
+import { resolvedTheme } from "../../lib/theme";
 import type { UsageWindow } from "../../lib/types";
 
 /**
@@ -12,6 +13,16 @@ import type { UsageWindow } from "../../lib/types";
  * climbs as high as the session has fuel left, the embers and sparks thicken and quicken with its
  * burn rate; red when low, grey and still when stale. Drawn for the eye only; the dials say the
  * same. `readAt`: when `window` was read.
+ *
+ * In the dark theme the smoke is lit: its colour is added to the dark ground. Nothing can be lit
+ * on the light theme's pale ground, so there the same smoke is a warm haze that takes light away,
+ * and the embers and sparks are specks of the tint at its hottest. One source, a program for each
+ * (`DAY`): the dark theme's is the source it always was. Under the page's footer (`[data-foot]` in
+ * the canvas's parent) the light theme's specks are a trace of themselves: its muted words stand
+ * on this ground with no glass under them.
+ *
+ * A theme whose program can't be made is not drawn in the other's: the canvas stays out of sight
+ * and the page keeps its plain ground, until the theme is one that can be drawn.
  */
 const props = defineProps<{ window: UsageWindow | null; readAt: number; stale: boolean }>();
 
@@ -45,6 +56,11 @@ uniform float uLevel;
 uniform float uHeat;
 // Each pod: its centre in canvas pixels (from the bottom left) and its radius; 0 when absent.
 uniform vec3 uRings[${RINGS}];
+#ifdef DAY
+// The footer: its top edge in canvas pixels from the bottom (0 with none), and how far under that
+// edge the specks have faded.
+uniform vec2 uFoot;
+#endif
 
 float hash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -175,12 +191,24 @@ void main() {
   float e = embers(uv, aspect, 9.0, 0.28, 0.0) + embers(uv, aspect, 14.0, 0.42, 11.0) * 0.7 + embers(uv, aspect, 22.0, 0.6, 23.0) * 0.45;
   e *= smoothstep(1.0, 0.15, uv.y);
 
+#ifdef DAY
+  // The haze and the rims take away the light the tint lacks; the embers and the sparks lie over
+  // them, in the tint made hot.
+  vec3 col = uBase - (vec3(1.0) - uTint) * (k * 0.12 + rims * 0.07);
+  vec3 hot = min(uTint * 1.3 + vec3(0.12, 0.06, 0.0), vec3(1.0));
+  float specks = clamp((e + sparks) * 0.85, 0.0, 1.0);
+  // Under the footer a speck is a trace of itself: at its full strength it would take the ground
+  // of the muted words there below what they read on. Above the footer's edge nothing changes.
+  if (uFoot.x > 0.0) specks *= mix(0.12, 1.0, smoothstep(uFoot.x - uFoot.y, uFoot.x, gl_FragCoord.y));
+  col = mix(col, hot, specks);
+#else
   vec3 col = uBase + uTint * k * 0.55;
   // The densest smoke and the embers burn whiter.
   col += vec3(1.0, 0.9, 0.75) * pow(smoke, 3.0) * rise * 0.08;
   col += mix(uTint, vec3(1.0, 0.92, 0.8), 0.45) * e * 1.1;
   col += uTint * rims * 0.22;
   col += mix(uTint, vec3(1.0, 0.92, 0.8), 0.45) * sparks * 1.1;
+#endif
 
   // Darker towards the edges, so the panel's border stays calm.
   vec2 v = (uv - 0.5) * vec2(0.9, 1.1);
@@ -205,10 +233,16 @@ const heat = computed(() => {
 });
 const running = computed(() => visible.value && !props.stale && !reducedMotion.value);
 
+type Uniforms = Record<"res" | "time" | "base" | "tint" | "level" | "heat" | "rings" | "foot", WebGLUniformLocation | null>;
+type Program = { program: WebGLProgram; uniforms: Uniforms };
+
 type Scene = {
   gl: WebGLRenderingContext;
-  program: WebGLProgram;
-  uniforms: Record<"res" | "time" | "base" | "tint" | "level" | "heat" | "rings", WebGLUniformLocation | null>;
+  /** The theme's program, made when it is first drawn and kept. One that can't be made is kept
+   * as that (null): it is not tried again while this context lives. */
+  programs: Partial<Record<"dark" | "light", Program | null>>;
+  /** The program in use's; null while the theme's can't be made: nothing is drawn then. */
+  uniforms: Uniforms | null;
 };
 
 let scene: Scene | null = null;
@@ -224,10 +258,17 @@ let base: [number, number, number] = [0, 0, 0];
 let tint: [number, number, number] = [0, 0, 0];
 /** The pods, as the shader takes them: x, y, radius each, in canvas pixels. */
 const rings = new Float32Array(RINGS * 3);
+/** The footer, as the shader takes it: its top edge from the canvas's bottom and the fade under
+ * that edge, in canvas pixels; 0 with no footer. */
+const foot = new Float32Array(2);
+/** How far under the footer's top edge its words begin, in CSS pixels: the specks have faded by there. */
+const FOOT_FADE = 5;
+/** The footer whose size is followed: it grows when the limits are listed. */
+let footer: HTMLElement | null = null;
 let lastMeasured = 0;
 
-/** A colour token as 0–1 RGB; the tokens are `#rrggbb`. Read where the canvas stands: the stage
- * keeps the dark set in the light theme (styles/tokens.css: `.night`), the page's root doesn't. */
+/** A colour token as 0–1 RGB; the tokens are `#rrggbb`. Read where the canvas stands: the set of
+ * the theme in use. */
 function token(name: string): [number, number, number] {
   const hex = getComputedStyle(canvas.value ?? document.documentElement).getPropertyValue(name).trim().replace("#", "");
   const value = Number.parseInt(hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex, 16);
@@ -246,46 +287,72 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
   return null;
 }
 
+/** The program of a theme: the source as it is for the dark one, with `DAY` for the light one.
+ * Null when it can't be made: nothing of the attempt is left in the context. */
+function build(gl: WebGLRenderingContext, theme: "dark" | "light"): Program | null {
+  const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX);
+  const fragment = compile(gl, gl.FRAGMENT_SHADER, theme === "light" ? `#define DAY\n${FRAGMENT}` : FRAGMENT);
+  const program = gl.createProgram();
+  const drop = (): null => {
+    gl.deleteProgram(program);
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    return null;
+  };
+  if (!vertex || !fragment || !program) return drop();
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  // The one attribute, at the same place in both programs: the triangle is handed over once.
+  gl.bindAttribLocation(program, 0, "aPos");
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return drop();
+  const at = (name: string) => gl.getUniformLocation(program, name);
+  return { program, uniforms: { res: at("uRes"), time: at("uTime"), base: at("uBase"), tint: at("uTint"), level: at("uLevel"), heat: at("uHeat"), rings: at("uRings"), foot: at("uFoot") } };
+}
+
 function setUp(target: HTMLCanvasElement): Scene | null {
   const gl = target.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: "low-power" });
   if (!gl) return null;
-  const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX);
-  const fragment = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT);
-  const program = gl.createProgram();
-  if (!vertex || !fragment || !program) return null;
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
-  gl.useProgram(program);
+  const theme = resolvedTheme.value;
+  const first = build(gl, theme);
+  if (first) gl.useProgram(first.program);
 
   // One triangle over the whole canvas.
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const position = gl.getAttribLocation(program, "aPos");
-  gl.enableVertexAttribArray(position);
-  gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-  const at = (name: string) => gl.getUniformLocation(program, name);
-  return {
-    gl,
-    program,
-    uniforms: { res: at("uRes"), time: at("uTime"), base: at("uBase"), tint: at("uTint"), level: at("uLevel"), heat: at("uHeat"), rings: at("uRings") },
-  };
+  return { gl, programs: { [theme]: first }, uniforms: first?.uniforms ?? null };
 }
 
+/** The colours of the theme in use, and its program. */
 function colour(): void {
   base = token("--bg-detail");
   tint = token(props.stale ? "--idle-ring" : low.value ? "--crash" : "--claude");
+  if (!scene) return;
+  const theme = resolvedTheme.value;
+  if (!(theme in scene.programs)) scene.programs[theme] = build(scene.gl, theme);
+  const made = scene.programs[theme] ?? null;
+  scene.uniforms = made?.uniforms ?? null;
+  if (made) scene.gl.useProgram(made.program);
 }
 
 /** Where the pods sit on the canvas; they move with the window and when dials come or go. */
 function measure(): void {
   rings.fill(0);
+  foot.fill(0);
   const target = canvas.value;
   const box = target?.getBoundingClientRect();
   if (!target || !box?.width) return;
   const ratio = target.width / box.width;
+  const found = target.parentElement?.querySelector<HTMLElement>("[data-foot]") ?? null;
+  if (found) foot.set([Math.max(0, box.bottom - found.getBoundingClientRect().top) * ratio, FOOT_FADE * ratio]);
+  if (found !== footer) {
+    if (footer) observer?.unobserve(footer);
+    if (found) observer?.observe(found);
+    footer = found;
+  }
   const pods = target.parentElement?.querySelectorAll<HTMLElement>("[data-ring]") ?? [];
   [...pods].slice(0, RINGS).forEach((pod, index) => {
     const at = pod.getBoundingClientRect();
@@ -297,6 +364,11 @@ function draw(): void {
   const target = canvas.value;
   if (!scene || !target) return;
   const { gl, uniforms } = scene;
+  if (!uniforms) {
+    // Out of sight: the plain panel, never the other theme's smoke on it.
+    ready.value = false;
+    return;
+  }
   gl.viewport(0, 0, target.width, target.height);
   gl.uniform2f(uniforms.res, target.width, target.height);
   gl.uniform1f(uniforms.time, time);
@@ -305,6 +377,7 @@ function draw(): void {
   gl.uniform1f(uniforms.level, level.value / 100);
   gl.uniform1f(uniforms.heat, heat.value);
   gl.uniform3fv(uniforms.rings, rings);
+  gl.uniform2fv(uniforms.foot, foot);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   ready.value = true;
 }
@@ -326,7 +399,7 @@ function tick(at: number): void {
 function play(): void {
   stop();
   if (!scene) return;
-  if (!running.value) {
+  if (!running.value || !scene.uniforms) {
     draw();
     return;
   }
@@ -374,7 +447,9 @@ onMounted(() => {
     ready.value = false;
   });
   colour();
-  observer = new ResizeObserver(fit);
+  // The canvas takes another size: its buffer follows. The footer alone does (the limits listed,
+  // or folded away): only where it stands is read again.
+  observer = new ResizeObserver((entries) => (entries.some((entry) => entry.target === target) ? fit() : onScroll()));
   observer.observe(target);
   // The pods move when the page scrolls; scroll events don't bubble, a capturing listener sees them.
   target.parentElement?.addEventListener("scroll", onScroll, { capture: true, passive: true });
@@ -390,6 +465,20 @@ watch(
     colour();
     measure();
     if (!frame) draw();
+  },
+  { flush: "post" },
+);
+// The theme changed with the page open: its colours are read once the page has them (the root's
+// `data-theme`), and the frame is drawn in that same turn, running or not, so none shows one
+// theme's smoke on the other's ground.
+watch(
+  resolvedTheme,
+  () => {
+    const had = !!scene?.uniforms;
+    colour();
+    draw();
+    // Into a theme whose smoke can't be made, or out of one: the frames stop, or start again.
+    if (had !== !!scene?.uniforms) play();
   },
   { flush: "post" },
 );

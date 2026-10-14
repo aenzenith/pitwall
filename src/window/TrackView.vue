@@ -199,7 +199,7 @@ const inset = computed<Inset>(() => ({
       </button>
     </header>
 
-    <div ref="stage" class="stage night" :style="{ marginBottom: selected ? `${ROOM}px` : undefined }" @pointerdown="foldTerminals">
+    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${ROOM}px` : undefined }" @pointerdown="foldTerminals">
       <div class="sky" aria-hidden="true"></div>
 
       <TrackCanvas
@@ -235,7 +235,7 @@ const inset = computed<Inset>(() => ({
     </div>
 
     <!-- The selected project's terminals, over the page's bottom: its tab row's height (`ROOM`) is theirs. -->
-    <TerminalPanel v-if="selected" ref="terminals" class="night" :project="selected" track />
+    <TerminalPanel v-if="selected" ref="terminals" :project="selected" track />
   </div>
 </template>
 
@@ -331,22 +331,23 @@ const inset = computed<Inset>(() => ({
   color: var(--text-strong);
 }
 
-/* The night the circuit lies in: darker than the window, as the output panel is. It is drawn for
-   a dark ground, so it and the terminals laid over it keep the dark tokens in the light theme
-   (`night`, styles/tokens.css); the bar above follows the theme. */
+/* The ground the circuit lies in, a shade under the window's: the night in the dark theme, a
+   pale day in the light one (--bg-stage, styles/tokens.css). The circuit takes the look that goes
+   with it (lib/circuit: `Look`), and what is laid over the stage, the terminals too, follows the
+   theme as the bar above does. */
 .stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  background: var(--bg-log);
+  background: var(--bg-stage);
 }
 
-/* A little light behind the circuit, as on the website: the night's own, in both themes. */
+/* A little light behind the circuit, as on the website: a lighter patch of the stage's ground. */
 .sky {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 52% 60% at 64% 44%, #171b22 0%, transparent 100%);
+  background: radial-gradient(ellipse 52% 60% at 64% 44%, var(--stage-sky) 0%, transparent 100%);
 }
 
 /* The tower, and the selected project's card under it: the tower gives way and scrolls. */

@@ -159,8 +159,9 @@ onBeforeUnmount(() => shadeObserver.disconnect());
     </header>
 
     <!-- Between the bars, the page's body on its own ground: the smoke, lit round the dials. An
-         instrument panel, drawn for a dark ground: it keeps the dark tokens in the light theme. -->
-    <div class="stage night">
+         instrument panel, drawn for both themes: smoked glass over embers in the dark one, frosted
+         glass over a warm haze in the light one (the cluster's own roles in styles/tokens.css). -->
+    <div class="stage">
       <FuelBackdrop :window="session" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
       <!-- The ground's own colour rising from the bottom, gone by the trip computer's top. -->
       <div v-if="shade" class="shade" :style="{ height: `${shade}px` }" aria-hidden="true"></div>
@@ -196,10 +197,12 @@ onBeforeUnmount(() => shadeObserver.disconnect());
         </div>
       </div>
 
-      <!-- Held at the bottom, on the same ground: it never scrolls away. -->
+      <!-- Held at the bottom, on the same ground: it never scrolls away. The backdrop reads where
+           it stands (`data-foot`). -->
       <FuelFooter
         v-if="windows.length || today"
         class="footer"
+        data-foot
         :rest="rest"
         :extra="windows.length ? extra : null"
         :extra-on-gauge="extraOnGauge"
@@ -367,9 +370,9 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 </style>
 
 <!--
-  The cards' common look, for the parts in ./fuel: the dials' pods made square. Smoked glass over
-  the backdrop, lit faintly from below, a bezel catching the light at two corners; labels in
-  capitals, as on the dials.
+  The cards' common look, for the parts in ./fuel: the dials' pods made square. Glass over the
+  backdrop (smoked in the dark theme, frosted in the light one), lit faintly from below, a bezel
+  catching the light at two corners; labels in capitals, as on the dials.
 -->
 <style>
 /* A length, worked out where it is set: the dials read it as the big one's size, not their own. */
@@ -379,7 +382,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   initial-value: 300px;
 }
 
-/* Set on the stage, the night the cards stand in: its colours are the dark set's there. */
+/* Set on the stage the cards stand in. */
 .fuel .stage {
   --glow: var(--claude);
 }
@@ -392,14 +395,14 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 .fuel .card {
   position: relative;
   border-radius: calc(var(--radius-panel) + 4px);
-  background: linear-gradient(180deg, rgba(30, 32, 38, 0.72), rgba(8, 9, 11, 0.88));
+  background: linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   /* No shadow cast below: the ground round the cards stays one ground. */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -14px 28px -16px color-mix(in srgb, var(--glow) 32%, transparent),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
+    inset 0 1px 0 var(--glass-shine),
+    inset 0 -14px 28px -16px color-mix(in srgb, var(--glow) var(--glass-glow), transparent),
+    0 0 0 1px var(--glass-edge);
 }
 
 .fuel .glass::before,
@@ -409,14 +412,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   inset: 0;
   padding: 1.5px;
   border-radius: inherit;
-  background: linear-gradient(
-    115deg,
-    rgba(255, 255, 255, 0.3),
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.16) 55%,
-    rgba(255, 255, 255, 0.03) 80%,
-    rgba(255, 255, 255, 0.26)
-  );
+  background: linear-gradient(115deg, var(--bezel-lit), var(--bezel-dim) 25%, var(--bezel-half) 55%, var(--bezel-dim) 80%, var(--bezel-far));
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);

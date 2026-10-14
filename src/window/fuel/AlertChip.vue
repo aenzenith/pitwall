@@ -81,8 +81,8 @@ async function toggle(): Promise<void> {
   height: 16px;
   flex-shrink: 0;
   border-radius: 8px;
-  background: var(--line-strong);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  background: var(--alert-trough);
+  box-shadow: inset 0 1px 2px var(--alert-trough-shade);
   transition: background 0.18s ease;
 }
 
@@ -93,8 +93,8 @@ async function toggle(): Promise<void> {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--text-strong);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  background: var(--alert-knob);
+  box-shadow: 0 1px 2px var(--alert-knob-shade);
   transition: transform 0.18s ease;
 }
 

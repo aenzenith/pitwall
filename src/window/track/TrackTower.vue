@@ -70,7 +70,7 @@ function onKey(event: KeyboardEvent): void {
         @mouseenter="emit('hover', project.path)"
       >
         <span class="place" role="gridcell">{{ index + 1 }}</span>
-        <span role="gridcell" class="mark"><StatusIcon :project="project" :ring="project.path === selected ? 'var(--bg-selected)' : '#13151a'" /></span>
+        <span role="gridcell" class="mark"><StatusIcon :project="project" :ring="project.path === selected ? 'var(--bg-selected)' : 'var(--bg-stage-tower-whole)'" /></span>
         <span class="who" role="gridcell">
           <span class="who-line">
             <span class="who-name">{{ project.name }}</span>
@@ -91,8 +91,8 @@ function onKey(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
-/* On the stage, which is night in both themes: its own ground, the circuit showing through a
-   little (the same colour, whole, rings a row's corner dot). */
+/* On the stage: its own ground there, the circuit showing through a little (the same colour,
+   whole, rings a row's corner dot). */
 .tower {
   flex: 0 1 auto;
   min-height: 118px;
@@ -101,7 +101,7 @@ function onKey(event: KeyboardEvent): void {
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(19, 21, 26, 0.9);
+  background: var(--bg-stage-tower);
 }
 
 .tower-head {
@@ -143,7 +143,7 @@ function onKey(event: KeyboardEvent): void {
 }
 
 .tower-row:hover {
-  background: var(--bg-row-hover);
+  background: var(--bg-stage-row-hover);
 }
 
 .tower-row.on {

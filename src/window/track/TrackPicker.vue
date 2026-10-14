@@ -380,7 +380,8 @@ onBeforeUnmount(hide);
   justify-content: center;
   aspect-ratio: 160 / 88;
   border-radius: 7px;
-  background: var(--bg-log);
+  /* The stage's own ground, in small. */
+  background: var(--bg-stage);
   color: var(--text-subtle);
 }
 

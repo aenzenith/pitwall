@@ -105,6 +105,27 @@
         "ja": "ボードのカードを Claude に渡すとき、モデル（Opus、Sonnet、Haiku）とモード（まず計画、編集を許可）を選べます。今すぐ渡すか、5 時間セッションが回復したら渡すかも選べます。カードは「次に」で待機し、その時刻に Pitwall が渡します。同じ回復を待つカードが複数あればボードの順に 1 枚ずつ渡され、Claude が前のカードを終えると次のカードが渡されます。各カードには何番目かが表示されます。ターミナルの「新規Claude」でも同じモデルを選べ、既定はプロジェクトごとの設定にあります。",
         "zh-Hans": "把看板上的卡片交给 Claude 时，可以选择模型（Opus、Sonnet、Haiku）和模式（先做计划、允许编辑），现在交出，或等 5 小时会话恢复后再交出：卡片在“待办”中等待，到时由 Pitwall 交出。等待同一次恢复的多张卡片会按看板顺序逐张交出：Claude 完成上一张后，再交出下一张；每张卡片都会显示它排在第几位。终端里的“新建 Claude”列出同样的模型；每个项目的默认值保存在它自己的设置里。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Track and Fuel in the light theme",
+        "tr": "Açık temada Pist ve Yakıt",
+        "de": "Strecke und Tank im hellen Design",
+        "es": "Pista y Combustible en el tema claro",
+        "ru": "Трасса и Топливо в светлой теме",
+        "ja": "ライトテーマのコースと燃料",
+        "zh-Hans": "浅色主题下的赛道与燃料"
+      },
+      "body": {
+        "en": "With the light theme, the circuit and the dials are light too: the road in ink, the lights in green and orange, the gauges on white glass. The dark theme keeps its night.",
+        "tr": "Açık temada pist ve göstergeler de açık: yol mürekkeple, ışıklar yeşil ve turuncu, kadranlar beyaz camda. Koyu temada gece aynen duruyor.",
+        "de": "Im hellen Design sind auch die Strecke und die Anzeigen hell: die Straße in Tinte, die Lichter in Grün und Orange, die Instrumente auf weißem Glas. Das dunkle Design behält seine Nacht.",
+        "es": "Con el tema claro, el circuito y los indicadores también son claros: la pista en tinta, las luces en verde y naranja, los relojes sobre cristal blanco. El tema oscuro conserva su noche.",
+        "ru": "В светлой теме трасса и приборы тоже светлые: дорога нарисована тушью, огни зелёные и оранжевые, шкалы на белом стекле. В тёмной теме ночь осталась как была.",
+        "ja": "ライトテーマでは、コースとメーターも明るくなります。路面はインクの線、ライトは緑とオレンジ、メーターは白いガラスの上に。ダークテーマの夜はそのままです。",
+        "zh-Hans": "浅色主题下，赛道和仪表也变为浅色：路面用墨线勾勒，灯光是绿色与橙色，仪表落在白色玻璃上。深色主题仍是原来的夜色。"
+      }
     }
   ]
 }

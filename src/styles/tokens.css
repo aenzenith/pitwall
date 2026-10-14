@@ -3,9 +3,9 @@
    (`:root[data-theme="light"]`, set by lib/theme from Settings › General or the system).
 
    `.night` puts the dark set back on whatever is drawn for a dark ground and stays so in the
-   light theme: the Track page's stage, the Fuel page's cluster, a picture shown large, a badge
-   laid on a picture. Everything in it keeps reading the same tokens. A dialog opened from inside
-   one (a tab's rename on the Track page) is the app's own again: the light set names it too. */
+   light theme: a picture shown large, a badge laid on a picture. Everything in it keeps reading
+   the same tokens. The Track page's stage and the Fuel page's cluster are not among them: each
+   has its own roles below, drawn for the night in the dark set and for the day in the light one. */
 :root,
 .night {
   /* Grounds. */
@@ -187,6 +187,58 @@
   --find-on-bg: #7a6a1c;
   --find-on-text: #fff6c9;
 
+  /* The Track page's stage: the ground the circuit lies in, a shade under the window's as the
+     output panel's is, and the patch of light behind the circuit. What the circuit itself is
+     drawn with (the road, the lights and their trails) is the canvas's own: lib/circuit, `LOOKS`. */
+  --bg-stage: #0b0c0f;
+  --stage-sky: #171b22;
+  /* What is laid over the stage, the circuit showing through a little: a tag, the tower (and the
+     same colour whole, which rings a row's corner dot), the selected project's card. */
+  --bg-stage-tag: rgba(17, 19, 23, 0.88);
+  --bg-stage-tower: rgba(19, 21, 26, 0.9);
+  --bg-stage-tower-whole: #13151a;
+  --bg-stage-card: rgba(22, 24, 29, 0.94);
+  /* A tower row under the pointer: told from the tower's own ground, not the window's. */
+  --bg-stage-row-hover: #1b1e24;
+  /* A tag's edge by its state: a crashed server's, and under the pointer or selected, Claude's
+     and a crashed server's. */
+  --tag-crash-line: #4a2626;
+  --tag-claude-line-on: #6b4a30;
+  --tag-crash-line-on: #7a3434;
+
+  /* The Fuel page's cluster. A pod's and a card's glass over the backdrop, from its top to its
+     bottom (a pod's is a shade deeper there), the light along its top edge, the hairline round
+     it and the shadow a pod casts. */
+  --glass-top: rgba(30, 32, 38, 0.72);
+  --glass-bottom: rgba(8, 9, 11, 0.88);
+  --glass-bottom-pod: rgba(8, 9, 11, 0.9);
+  --glass-shine: rgba(255, 255, 255, 0.08);
+  --glass-edge: rgba(255, 255, 255, 0.05);
+  --glass-shade: rgba(0, 0, 0, 0.55);
+  /* How much of the glow's colour the glass takes from below: a card, a pod. */
+  --glass-glow: 32%;
+  --glass-glow-pod: 18%;
+  /* The bezel round the glass, where it catches the light: its lit corner, the far one of a
+     card, half way round, and where it catches none. */
+  --bezel-lit: rgba(255, 255, 255, 0.3);
+  --bezel-far: rgba(255, 255, 255, 0.26);
+  --bezel-half: rgba(255, 255, 255, 0.16);
+  --bezel-dim: rgba(255, 255, 255, 0.03);
+  /* A dial's marks, in the glass's own warmth: the bezel's minutes, every fifth one, the arc's
+     quarters. Then how much of the arc's unlit part shows, and how strong the blurred copy
+     under its lit part is (a light on a dark ground, a tint on a pale one). */
+  --dial-minute: rgba(255, 238, 222, 0.08);
+  --dial-major: rgba(255, 238, 222, 0.22);
+  --dial-tick: rgba(255, 238, 222, 0.18);
+  --dial-track: 14%;
+  --dial-glow: 0.7;
+  /* The alert chip's own switch: its trough while off and the shadow inside it, its knob and
+     the shadow under that. */
+  --alert-trough: #2a2e36;
+  --alert-trough-shade: rgba(0, 0, 0, 0.35);
+  --alert-knob: #f2f3f5;
+  --alert-knob-shade: rgba(0, 0, 0, 0.45);
+
   color-scheme: dark;
 }
 
@@ -197,8 +249,7 @@
 
 /* The light set: the same roles on a light ground, a neutral grey turned over. Text is 4.5:1 or
    better on the ground it sits on; a state keeps its hue and is told by its lightness too. */
-:root[data-theme="light"],
-:root[data-theme="light"] .night dialog:not(.night) {
+:root[data-theme="light"] {
   --bg-app: #f7f8f9;
   --bg-panel: #f4f5f6;
   --bg-sidebar: #eef0f2;
@@ -263,10 +314,12 @@
 
   --focus-ring: #5b626d;
 
-  /* A state's mark is text too (a count, a match): 4.58:1 on a lit row (--bg-lit), the darkest
-     ground there is; --claude 4.57:1. */
-  --run: #17733d;
-  --run-text: #176b3a;
+  /* The states' colours are told from the ink beside them before anything else, and a mark (a
+     dot, a count, a light) is lively rather than deep: 5:1 against --text, 3.3:1 or more on
+     white (the amber 2.9:1: a yellow can't be both). A state's words (--*-text) keep 4.5:1 or
+     more on the app's ground and on its own pale ground (--run-bg, --claude-bg, --warn-bg). */
+  --run: #16a34a;
+  --run-text: #15803d;
   --run-bg: #e5f3ea;
   --run-line: #b3d9c2;
   --run-glow: transparent;
@@ -274,14 +327,14 @@
   --crash-text: #b42a2a;
   --crash-bg: #fbecec;
   --crash-line: #efc6c6;
-  --warn: #7a6300;
-  --warn-text: #6b5600;
+  --warn: #c98a00;
+  --warn-text: #9a6700;
   --warn-bg: #fbf6e3;
   --warn-line: #e6d9a3;
   /* 3.18:1 on a lit row, as --claude-idle. */
   --idle-ring: #777e88;
-  --claude: #a5490d;
-  --claude-text: #954509;
+  --claude: #ea580c;
+  --claude-text: #c2410c;
   /* 4.70:1 on the hatch of a wait on the day's timeline, in the lane picked. */
   --claude-soft: #733608;
   --claude-muted: #7b5a40;
@@ -295,9 +348,9 @@
 
   --btn-primary-bg: #dff0e6;
   --btn-primary-line: #a5d1b7;
-  --btn-primary-text: #14562f;
+  --btn-primary-text: #166534;
   --btn-primary-hover: #d0e9da;
-  --btn-start-text: #17643a;
+  --btn-start-text: #16733a;
   --btn-stop-text: #a32626;
   --btn-claude-bg: #fbeee1;
   --btn-claude-line: #e8c7a8;
@@ -333,6 +386,44 @@
   --find-bg: #fbeeb0;
   --find-on-bg: #f2c200;
   --find-on-text: #1b1e24;
+
+  /* The stage by day: a shade under the window's ground, the patch behind the circuit lighter
+     than it. --text-faint (the pit wall's name) is 4.55:1 on it, --text-subtle 5.05:1. */
+  --bg-stage: #e6e9ed;
+  --stage-sky: #f4f6f8;
+  --bg-stage-tag: rgba(247, 248, 249, 0.9);
+  --bg-stage-tower: rgba(244, 245, 246, 0.92);
+  --bg-stage-tower-whole: #f3f4f5;
+  --bg-stage-card: rgba(244, 245, 246, 0.94);
+  /* Half way to a selected row (--bg-selected); --text-faint is 4.76:1 on it. */
+  --bg-stage-row-hover: #ebeef1;
+  --tag-crash-line: #efc6c6;
+  --tag-claude-line-on: #d9b08a;
+  --tag-crash-line-on: #de9c9c;
+
+  /* Frosted glass by day: white, the backdrop's warmth seen through it; its edge and its bezel
+     in ink, the shadow a pod casts a light one. */
+  --glass-top: rgba(255, 255, 255, 0.86);
+  --glass-bottom: rgba(255, 255, 255, 0.7);
+  --glass-bottom-pod: rgba(255, 255, 255, 0.72);
+  --glass-shine: rgba(255, 255, 255, 0.9);
+  --glass-edge: rgba(15, 17, 20, 0.07);
+  --glass-shade: rgba(15, 17, 20, 0.1);
+  --glass-glow: 16%;
+  --glass-glow-pod: 12%;
+  --bezel-lit: rgba(15, 17, 20, 0.26);
+  --bezel-far: rgba(15, 17, 20, 0.22);
+  --bezel-half: rgba(15, 17, 20, 0.14);
+  --bezel-dim: rgba(15, 17, 20, 0.05);
+  --dial-minute: rgba(58, 42, 28, 0.16);
+  --dial-major: rgba(58, 42, 28, 0.4);
+  --dial-tick: rgba(58, 42, 28, 0.32);
+  --dial-track: 16%;
+  --dial-glow: 0.28;
+  --alert-trough: #b9bfc7;
+  --alert-trough-shade: rgba(15, 17, 20, 0.14);
+  --alert-knob: #ffffff;
+  --alert-knob-shade: rgba(15, 17, 20, 0.3);
 
   color-scheme: light;
 }

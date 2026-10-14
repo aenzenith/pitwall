@@ -2,10 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 
 import ClaudeLogo from "../../components/ClaudeLogo.vue";
-import { SLIDE_MS, startCircuit, type Inset, type Light, type Renderer } from "../../lib/circuit";
+import { LIGHTS, SLIDE_MS, startCircuit, type Inset, type Light, type Look, type Renderer } from "../../lib/circuit";
 import { phase as phaseText } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { visible } from "../../lib/store";
+import { resolvedTheme } from "../../lib/theme";
 import { dash, dashTime, grid, gridPlace, laneOffsets, leaveTime, PIT_LANE, sessionsIn, smooth, type Circuit, type Mover, type Stander, type TrackSettings } from "../../lib/track";
 import type { Project, Turn } from "../../lib/types";
 
@@ -46,9 +47,8 @@ const FROM_AFAR = 6;
  * slides to a new place. */
 const SETTLE = 250;
 
-const GREEN = [0.45, 0.79, 0.57] as const;
-const ORANGE = [0.94, 0.53, 0.24] as const;
-const AMBER = [0.8, 0.65, 0.0] as const;
+/** The circuit's look: the night's in the dark theme, the day's in the light one. */
+const look = computed<Look>(() => (resolvedTheme.value === "light" ? "day" : "night"));
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 const supported = ref(true);
@@ -278,8 +278,9 @@ function setRider(key: string, el: unknown): void {
 }
 
 function colour(car: Car): readonly [number, number, number] {
-  if (car.kind === "claude") return ORANGE;
-  return car.warn ? AMBER : GREEN;
+  const lights = LIGHTS[look.value];
+  if (car.kind === "claude") return lights.claude;
+  return car.warn ? lights.warn : lights.run;
 }
 
 /** A place as a light drives to it (0–1 of the line). An open line: its lane's start is reached
@@ -584,8 +585,9 @@ function arrive(): void {
 function start(): void {
   const target = canvas.value;
   if (!target) return;
-  renderer = startCircuit(target);
-  supported.value = renderer !== null;
+  renderer = startCircuit(target, look.value);
+  // No WebGL, or the look the theme asks for can't be made: the page says so, the lists work.
+  supported.value = renderer?.drawable() ?? false;
   marked = null;
   if (!renderer) return;
   setCircuit();
@@ -653,6 +655,27 @@ watch(running, play);
 watch(motion, (now) => {
   if (now === "still") arrive();
 });
+// The theme changed with the page open (Settings, or the system's while it is followed): the
+// circuit takes the other look and is drawn in it at once, in the turn the page's own colours
+// change in, so no frame shows one look on the other's ground. Nothing else moves: the clock and
+// every light's place are as they were. A look that can't be made is not drawn in the other's
+// place: the page says the circuit can't be drawn, until the theme asks for one that can.
+watch(
+  look,
+  async (next) => {
+    if (!renderer) return;
+    const had = supported.value;
+    supported.value = renderer.setLook(next);
+    if (!supported.value) return;
+    if (!had) {
+      // Back in the page: the canvas has its size again first, and the circuit is fitted to it.
+      await nextTick();
+      layout();
+    }
+    render();
+  },
+  { flush: "post" },
+);
 
 /** The circuit the lights were last followed on. */
 let followed = props.circuit;
@@ -881,9 +904,8 @@ canvas {
   padding: 0 6px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  /* The window's ground, the circuit showing through: on the stage, night in both themes, and so
-     are the lines of a tag's states below. */
-  background: rgba(17, 19, 23, 0.88);
+  /* The window's ground, the circuit showing through: the stage's own, by night and by day. */
+  background: var(--bg-stage-tag);
   color: var(--text-soft);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -929,7 +951,7 @@ canvas {
 }
 
 .tag.crashed {
-  border-color: #4a2626;
+  border-color: var(--tag-crash-line);
   color: var(--crash-text);
 }
 
@@ -941,12 +963,12 @@ canvas {
 .tag.waiting.on,
 .tag.claude:hover,
 .tag.claude.on {
-  border-color: #6b4a30;
+  border-color: var(--tag-claude-line-on);
 }
 
 .tag.crashed:hover,
 .tag.crashed.on {
-  border-color: #7a3434;
+  border-color: var(--tag-crash-line-on);
 }
 
 /* A light standing still, centred on its place. */

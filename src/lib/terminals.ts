@@ -111,9 +111,9 @@ void listen<{ id: number; seq: number; data: string }>("terminal", (event) => {
 void listen<number>("terminal-exit", (event) => dispose(event.payload));
 
 /**
- * Draws `view` in the theme of where it stands: the app's, or the dark one inside a night (the
- * Track page's stage, which stays dark in the light theme). Set only when it changes: xterm
- * draws everything anew.
+ * Draws `view` in the theme of where it stands: the app's, or the dark one inside a night
+ * (lib/theme: `themeAt`; no terminal stands in one today, the Track page's follow the theme).
+ * Set only when it changes: xterm draws everything anew.
  */
 function paint(view: View): void {
   const theme = themeAt(view.element);

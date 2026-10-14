@@ -32,7 +32,7 @@ defineProps<{ tag: string; title: string }>();
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--bg-control);
+  background: var(--bg-well);
   color: var(--text-nav);
 }
 
@@ -57,7 +57,7 @@ defineProps<{ tag: string; title: string }>();
 .body :deep(code) {
   padding: 0 4px;
   border-radius: 4px;
-  background: var(--bg-control);
+  background: var(--bg-well);
   font-family: var(--font-mono);
   font-size: 11.5px;
 }
