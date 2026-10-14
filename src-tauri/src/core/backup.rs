@@ -148,6 +148,8 @@ impl General {
             notifications: _,
             // This Mac's own too: Claude Code's configuration here is what names this app.
             radio: _,
+            // This Mac's own as well: where its small window stands.
+            tower: _,
         } = settings.clone();
 
         Self {

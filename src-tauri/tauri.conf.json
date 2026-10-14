@@ -55,6 +55,25 @@
         "shadow": false,
         "center": true,
         "acceptFirstMouse": true
+      },
+      {
+        "label": "tower",
+        "create": false,
+        "title": "Pitwall",
+        "width": 248,
+        "height": 96,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "focus": false,
+        "focusable": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

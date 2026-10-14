@@ -11,6 +11,7 @@ import { connect, visible } from "./lib/store";
 import { followTheme } from "./lib/theme";
 import Popover from "./popover/Popover.vue";
 import Switcher from "./switcher/Switcher.vue";
+import Tower from "./tower/Tower.vue";
 import WindowApp from "./window/WindowApp.vue";
 
 // Both windows load the same page; the window label picks the surface.
@@ -55,7 +56,7 @@ document.addEventListener("contextmenu", (event) => {
     event.preventDefault();
   }
 });
-const surfaces = { popover: Popover, switcher: Switcher } as const;
+const surfaces = { popover: Popover, switcher: Switcher, tower: Tower } as const;
 
 createApp(surfaces[label as keyof typeof surfaces] ?? WindowApp).mount("#app");
 void connect();

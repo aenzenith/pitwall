@@ -25,6 +25,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Mini tower",
+        "tr": "Mini kule",
+        "de": "Mini-Turm",
+        "es": "Minitorre",
+        "ru": "Мини-башня",
+        "ja": "ミニタワー",
+        "zh-Hans": "迷你塔"
+      },
+      "body": {
+        "en": "For a glance at a second screen: which projects run, where Claude works and where it waits on you, as a list or as one row of three-letter codes. Point at a project to bring Claude's session up, open it in the browser, or start and stop it. It never takes the keyboard, stays where you drag it, and can have a shortcut of its own to show or hide it. Turn it on in Settings › General.",
+        "tr": "İkinci ekranda göz ucuyla bakmak için: hangi projeler çalışıyor, Claude nerede çalışıyor, nerede seni bekliyor; liste olarak ya da üç harfli kodlardan tek satır olarak. Bir projenin üstüne gelince Claude'un oturumunu öne getirebilir, projeyi tarayıcıda açabilir, başlatıp durdurabilirsin. Klavyeyi hiç almaz, sürükleyip bıraktığın yerde kalır; istersen kendi kısayoluyla gösterip gizlersin. Ayarlar › Genel'den açılır.",
+        "de": "Für einen Blick auf den zweiten Bildschirm: welche Projekte laufen, wo Claude arbeitet und wo es auf dich wartet, als Liste oder als eine Zeile aus dreibuchstabigen Kürzeln. Zeig auf ein Projekt, um Claudes Sitzung nach vorn zu holen, es im Browser zu öffnen oder es zu starten und zu stoppen. Es nimmt nie die Tastatur, bleibt, wo du es hinziehst, und lässt sich auf Wunsch mit einem eigenen Tastaturkurzbefehl ein- und ausblenden. Einschalten unter Einstellungen › Allgemein.",
+        "es": "Para echar un vistazo en una segunda pantalla: qué proyectos están en ejecución, dónde trabaja Claude y dónde te espera, como lista o como una sola fila de códigos de tres letras. Apunta a un proyecto para traer al frente la sesión de Claude, abrirlo en el navegador o iniciarlo y detenerlo. Nunca toma el teclado, se queda donde la arrastras, y, si quieres, un atajo propio la muestra o la oculta. Actívala en Ajustes › General.",
+        "ru": "Чтобы взглянуть на второй экран: какие проекты запущены, где Claude работает и где ждёт вас — списком или одной строкой трёхбуквенных кодов. Наведите указатель на проект, чтобы показать сессию Claude, открыть проект в браузере, запустить или остановить его. Окно никогда не забирает клавиатуру, остаётся там, куда вы его перетащили, а при желании его показывает и скрывает собственное сочетание клавиш. Включается в Настройках › Основные.",
+        "ja": "2 台目の画面でひと目で確認：どのプロジェクトが実行中か、Claude がどこで作業し、どこであなたを待っているかを、リストまたは 3 文字コードの 1 行で表示します。プロジェクトにポインタを合わせると、Claude のセッションを前面に表示したり、ブラウザで開いたり、起動・停止したりできます。キーボードを奪うことはなく、ドラッグした場所にとどまり、必要なら専用のショートカットで表示と非表示を切り替えられます。設定 › 一般でオンにできます。",
+        "zh-Hans": "在第二块屏幕上扫一眼：哪些项目在运行，Claude 在哪里工作、在哪里等你，以列表或一行三字母代号显示。把指针移到某个项目上，可以把 Claude 的会话调到前台、在浏览器中打开它，或启动和停止它。它从不抢占键盘，停在你拖到的位置，还可以为它设置专用快捷键来显示或隐藏。在设置 › 通用中开启。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Model, mode and timing for Claude",
         "tr": "Claude'a verirken model, kip ve zaman",
         "de": "Modell, Modus und Zeitpunkt für Claude",

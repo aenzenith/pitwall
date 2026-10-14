@@ -1,7 +1,7 @@
 //! The Fuel page's data: Claude's plan limits (`usage.rs`) and today's tokens with their API price
-//! (`spend.rs`). Both are read off the main thread, sent to the main window and the popover as
-//! `fuel` when they change, and a limit passing 90 % brings one notification per window. The
-//! session's share left also goes beside the icon in the menu bar (`bar`).
+//! (`spend.rs`). Both are read off the main thread, sent to the main window, the popover and the
+//! mini tower as `fuel` when they change, and a limit passing 90 % brings one notification per
+//! window. The session's share left also goes beside the icon in the menu bar (`bar`).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -187,10 +187,11 @@ impl Fuel {
         u64::try_from(session.resets_at?).ok().filter(|at| *at > now_ms())
     }
 
-    /// To the Fuel page and the popover's dials.
+    /// To the Fuel page, the popover's dials and the mini tower's share.
     fn send(&self, app: &AppHandle) {
         let view = self.view();
         let _ = app.emit_to(POPOVER, "fuel", view.clone());
+        let _ = app.emit_to(crate::tower::LABEL, "fuel", view.clone());
         let _ = app.emit_to(MAIN, "fuel", view);
     }
 

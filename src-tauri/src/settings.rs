@@ -230,6 +230,35 @@ impl Default for FlagSettings {
     }
 }
 
+/// The mini tower (`tower.rs`): a small window over every other, the projects that run or wait.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TowerSettings {
+    /// It is shown.
+    pub on: bool,
+    /// `list` (a row per project) or `strip` (one row of codes).
+    pub form: String,
+    /// Projects that neither run nor wait on you are left out.
+    pub hide_stopped: bool,
+    /// It shows on every desktop (Space).
+    pub all_spaces: bool,
+    /// A global shortcut of its own shows and hides it.
+    pub shortcut: bool,
+    /// That shortcut's keys, in global-hotkey form.
+    pub shortcut_keys: String,
+    /// Where it was left and how large it was there: left, top, width, height, the top counted
+    /// downwards from the main screen's (`tower.rs`: points on macOS, pixels elsewhere). None
+    /// until it was shown once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub place: Option<[i32; 4]>,
+}
+
+impl Default for TowerSettings {
+    fn default() -> Self {
+        Self { on: false, form: "list".into(), hide_stopped: true, all_spaces: true, shortcut: false, shortcut_keys: "Ctrl+Alt+KeyK".into(), place: None }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -310,6 +339,9 @@ pub struct Settings {
     /// The chequered flag; changed through its own command only.
     #[serde(default)]
     pub flag: FlagSettings,
+    /// The mini tower; changed through its own commands only.
+    #[serde(default)]
+    pub tower: TowerSettings,
 }
 
 impl Default for Settings {
@@ -348,6 +380,7 @@ impl Default for Settings {
             notifications: Notifications::default(),
             radio: RadioSettings::default(),
             flag: FlagSettings::default(),
+            tower: TowerSettings::default(),
         }
     }
 }

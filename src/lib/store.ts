@@ -92,13 +92,13 @@ export async function connect(): Promise<void> {
   runClock(visible.value);
 }
 
-/** Claude's plan limits and today's tokens: the Fuel page's, its sidebar badge's, and the
- * popover's strip's. */
+/** Claude's plan limits and today's tokens: the Fuel page's, its sidebar badge's, the popover's
+ * strip's and the mini tower's share. */
 export const fuel = ref<Fuel | null>(null);
 
 /**
- * The main window's and the popover's: hears `fuel` (sent to those two only) and asks for the
- * current state. A core that doesn't answer leaves it null, which shows as loading (in the
+ * The main window's, the popover's and the mini tower's: hears `fuel` (sent to those only) and
+ * asks for the current state. A core that doesn't answer leaves it null, which shows as loading (in the
  * popover: no strip).
  */
 export async function connectFuel(): Promise<UnlistenFn> {
@@ -466,6 +466,17 @@ export const api = {
   /** The window's Board page. */
   flagBoard: () => invoke("flag_board"),
 
+  /* The mini tower (tower.rs). Every change comes back in the next snapshot's `settings.tower`. */
+  /** Shows or hides it. */
+  towerShow: (on: boolean) => invoke("tower_show", { on }),
+  /** `hideStopped`: without the projects that neither run nor have Claude in them; `allSpaces`:
+   * on every desktop; `shortcut`: its global shortcut (rejects when its keys are taken). */
+  towerOption: (option: "hideStopped" | "allSpaces" | "shortcut", on: boolean) => invoke("tower_option", { option, on }),
+  towerForm: (form: "list" | "strip") => invoke("tower_form", { form }),
+  /** New keys for its shortcut, which is on from then; rejects when they can't be registered. */
+  towerShortcut: (keys: string) => invoke("tower_shortcut", { keys }),
+  /** The tower's own page: how large its content is. Its window takes that size and comes up. */
+  towerFit: (width: number, height: number) => invoke("tower_fit", { width, height }),
   /** Tells a card up next to wait until the 5-hour session refills (the core's own reading of
    * that moment): the core gives it then, with `start`. */
   boardSchedule: (id: string, start: StartChoice) => invoke("board_schedule", { id, start }),

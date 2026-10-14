@@ -83,8 +83,12 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     // while they are made, too.
     #[cfg(target_os = "macos")]
     let panel = label == SWITCHER || label == crate::POPOVER;
+    // The mini tower is one too, of its own kind: it never takes the keyboard, and which
+    // desktops it shows on is Settings' to say (`tower.rs`).
     #[cfg(target_os = "macos")]
-    let built = if panel { tray::without_activating(build) } else { build() };
+    let quiet = label == crate::tower::LABEL;
+    #[cfg(target_os = "macos")]
+    let built = if panel || quiet { tray::without_activating(build) } else { build() };
     #[cfg(not(target_os = "macos"))]
     let built = build();
 
@@ -102,6 +106,10 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     if panel {
         tray::make_panel(&window);
         tray::float_over_spaces(&window);
+    }
+    #[cfg(target_os = "macos")]
+    if quiet {
+        tray::make_panel(&window);
     }
 
     Some(window)

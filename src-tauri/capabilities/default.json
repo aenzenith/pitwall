@@ -5,7 +5,8 @@
   "windows": [
     "popover",
     "main",
-    "switcher"
+    "switcher",
+    "tower"
   ],
   "permissions": [
     "core:default",

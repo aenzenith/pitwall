@@ -12,6 +12,7 @@ import { useBackdropClose } from "../lib/dialog";
 import { ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { keys, shortcutModifiers } from "../lib/platform";
+import { recordingEnded, recordingStarts } from "../lib/shortcutRecording";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, Settings, Theme } from "../lib/types";
@@ -19,6 +20,7 @@ import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
 import FlagSection from "./settings/FlagSection.vue";
 import RadioSection from "./settings/RadioSection.vue";
+import TowerSection from "./settings/TowerSection.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
 import TrackOptions from "./track/TrackOptions.vue";
 
@@ -167,6 +169,8 @@ function modifiers(event: KeyboardEvent): string[] {
 }
 
 function startRecording(): void {
+  // One recording at a time: the mini tower's (settings/TowerSection), if under way, ends here.
+  recordingStarts(stopRecording);
   shortcutError.value = "";
   held.value = "";
   recording.value = true;
@@ -177,6 +181,7 @@ function startRecording(): void {
 }
 
 function stopRecording(): void {
+  recordingEnded(stopRecording);
   recording.value = false;
   held.value = "";
   window.removeEventListener("keydown", onRecordKey, true);
@@ -698,6 +703,7 @@ function setTheme(theme: Theme): void {
           <!-- Each its own part, label and rows, saved by its own commands (`@change.stop`). -->
           <div @change.stop>
             <FlagSection />
+            <TowerSection />
           </div>
 
           <!-- The backup's own: its dialogs' boxes are no settings for the form to save (`@change.stop`). -->
@@ -1080,32 +1086,6 @@ code {
 .shortcut small {
   font-size: 12px;
   color: var(--text-subtle);
-}
-
-.recorder {
-  min-width: 120px;
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--bg-input);
-  font-family: var(--font-mono);
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  color: var(--text-strong);
-}
-
-/* Windows and Linux spell the keys out (Ctrl+Alt+P): no tracking between their letters. */
-:root:not([data-platform="mac"]) .recorder {
-  letter-spacing: 0;
-}
-
-.recorder.live {
-  border-color: var(--run);
-  color: var(--run);
-  font-family: var(--font);
-  font-size: 12px;
-  letter-spacing: 0;
 }
 
 .control.primary {

@@ -161,6 +161,40 @@
   margin: auto;
 }
 
+/* A shortcut's keys, in the field they are recorded in (the quick switcher's in SettingsView,
+   the mini tower's in TowerSection): lit while it listens for new ones. */
+.recorder {
+  min-width: 120px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-input);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--text-strong);
+}
+
+/* On a line of settings it is as tall as that line's other boxed control (`.seg`): the line
+   stays 40 px. */
+.row .recorder {
+  height: 30px;
+}
+
+/* Windows and Linux spell the keys out (Ctrl+Alt+P): no tracking between their letters. */
+:root:not([data-platform="mac"]) .recorder {
+  letter-spacing: 0;
+}
+
+.recorder.live {
+  border-color: var(--run);
+  color: var(--run);
+  font-family: var(--font);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
 /* What went wrong, on a line of its own. */
 .error {
   margin: 0;

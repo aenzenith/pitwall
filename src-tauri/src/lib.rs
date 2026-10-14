@@ -30,6 +30,8 @@ mod windows;
 mod presence;
 mod mcp;
 mod flag;
+mod shortcuts;
+mod tower;
 mod start;
 
 use std::path::PathBuf;
@@ -39,11 +41,10 @@ use std::time::Duration;
 
 use tauri::{AppHandle, DragDropEvent, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::core::{Core, CoreConfig, CoreEvent};
-use crate::i18n::t;
 
 pub use crate::hooks::hook_mode;
 pub use crate::mcp::mcp_mode;
@@ -207,30 +208,10 @@ pub fn apply_theme(app: &AppHandle, theme: &str) {
 }
 
 /// Registers the quick-switcher shortcut (or none when off). An error means the keys are
-/// invalid or another app already owns them.
+/// invalid or another app already owns them. The mini tower's own shortcut stays as it is
+/// (`shortcuts.rs`).
 pub fn apply_shortcut(app: &AppHandle, on: bool, keys: &str) -> Result<(), String> {
-    let shortcuts = app.global_shortcut();
-    let _ = shortcuts.unregister_all();
-
-    if !on {
-        return Ok(());
-    }
-
-    let shortcut = keys.parse::<Shortcut>().map_err(|error| t!("core.error.invalidShortcut", keys = keys, error = error))?;
-
-    // Global shortcuts on Linux go through X11 (XWayland under Wayland). Without a display the
-    // registration would "succeed" and never fire.
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("DISPLAY").is_none_or(|display| display.is_empty()) {
-        return Err(t!("core.error.shortcutNoDisplay", keys = keys));
-    }
-
-    let result = shortcuts.register(shortcut).map_err(|error| t!("core.error.shortcutTaken", keys = keys, error = error));
-
-    #[cfg(debug_assertions)]
-    eprintln!("[pitwall] register {keys}: {result:?}");
-
-    result
+    shortcuts::apply(app, shortcuts::Which::Switcher, on, keys)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -251,11 +232,12 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![AUTOSTART_ARG])))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
+                .with_handler(|app, shortcut, event| {
                     #[cfg(debug_assertions)]
                     eprintln!("[pitwall] shortcut {:?}", event.state());
+                    // The switcher's or the mini tower's: `shortcuts` tells which.
                     if event.state() == ShortcutState::Pressed {
-                        tray::toggle_switcher(app);
+                        shortcuts::fired(app, shortcut);
                     }
                 })
                 .build(),
@@ -325,7 +307,8 @@ pub fn run() {
                 let _ = app.autolaunch().enable();
             }
             let settings = core.settings();
-            let _ = apply_shortcut(app.handle(), settings.shortcut, &settings.shortcut_keys);
+            // The quick switcher's and the mini tower's, each on its own.
+            shortcuts::resume(app.handle(), &core);
             apply_theme(app.handle(), &settings.theme);
             // The popover and the switcher never bring Pitwall to the front, not even while they
             // are made (`tray::without_activating`).
@@ -343,6 +326,8 @@ pub fn run() {
             tray::hide_popover_on_outside_click(app.handle());
             // The main window and the switcher are made on first use (`windows`).
             windows::setup(app.handle());
+            // The mini tower comes back as it was left: shown or not, and where.
+            tower::sync(app.handle());
 
             // One loop for everything periodic: commands and peers every second, heartbeat and
             // Claude every 5 s, health every 30 s.
@@ -396,8 +381,11 @@ pub fn run() {
                 windows::tell(window.app_handle(), MAIN, false);
                 tray::set_dock_visible(window.app_handle(), false);
             }
-            // Folders dropped on the window become projects.
-            WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => {
+            // Where the mini tower is left is where it comes back (`tower.rs`).
+            WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == tower::LABEL => tower::frame_changed(window.app_handle()),
+            // Folders dropped on the window become projects. On the window only: the mini tower
+            // stands over everything else, where a folder on its way somewhere may be let go.
+            WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) if window.label() == MAIN => {
                 if let Some(state) = window.app_handle().try_state::<AppState>() {
                     for path in paths.iter().filter(|p| p.is_dir()) {
                         let _ = state.core.add_project(&path.to_string_lossy());
@@ -530,6 +518,11 @@ pub fn run() {
             commands::flag_stop_all,
             commands::flag_terminal,
             commands::flag_board,
+            commands::tower_show,
+            commands::tower_option,
+            commands::tower_form,
+            commands::tower_shortcut,
+            commands::tower_fit,
             commands::board_schedule,
             commands::board_unschedule,
             commands::board_give_now
@@ -540,6 +533,8 @@ pub fn run() {
     app.run(|app, event| match event {
         RunEvent::Exit => {
             if let Some(state) = app.try_state::<AppState>() {
+                // Where the mini tower was left, should that not be written yet.
+                tower::flush(&state.core);
                 // What is open, for the next start; then every server goes.
                 state.core.save_last_session();
                 state.core.dispose();

@@ -159,10 +159,26 @@ export type Settings = {
   radio?: RadioSettings;
   /** The chequered flag; changed through its own command only. */
   flag?: FlagSettings;
+  /** The mini tower; changed through its own commands only. */
+  tower?: TowerSettings;
 };
 
 /** The chequered flag: a quit from Pitwall's own menus shows what is still open first. */
 export type FlagSettings = { atQuit: boolean };
+
+/** The mini tower: shown or not, a row per project or one row of codes, without the projects
+ * that neither run nor wait, on every desktop; its own global shortcut and that shortcut's keys;
+ * and where it was left (the core's own). */
+export type TowerSettings = {
+  on: boolean;
+  form: "list" | "strip";
+  hideStopped: boolean;
+  allSpaces: boolean;
+  shortcut: boolean;
+  /** Global-hotkey form: `Ctrl+Alt+KeyK`. */
+  shortcutKeys: string;
+  place?: [number, number, number, number];
+};
 
 /** An open project terminal. */
 export type TerminalView = {

@@ -57,6 +57,7 @@ mod radio;
 mod reference;
 mod flag;
 pub use flag::FlagState;
+mod tower;
 pub use activity::DaySummary;
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};

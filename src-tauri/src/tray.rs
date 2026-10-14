@@ -321,6 +321,9 @@ fn fade<R: Runtime>(window: &WebviewWindow<R>, alpha: f64, time: Duration) {
 /// The window's class becomes a subclass of NSPanel. NSPanel adds no fields to NSWindow, and the
 /// one field of tao's window class, `focusable`, is declared again in the same place, so tao's
 /// window object stays valid as it is.
+///
+/// The mini tower (`tower.rs`) is such a panel too, of a class that never takes the keyboard: a
+/// click in it leaves the keyboard, and the front, with the app you are in.
 #[cfg(target_os = "macos")]
 pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
     let Ok(ns_window) = window.ns_window() else {
@@ -328,6 +331,7 @@ pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
     };
     let ns_window = ns_window as usize;
     let popover = window.label() == POPOVER;
+    let quiet = window.label() == crate::tower::LABEL;
 
     let _ = window.run_on_main_thread(move || {
         use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, NSObjectProtocol, Sel};
@@ -341,12 +345,14 @@ pub fn make_panel<R: Runtime>(window: &WebviewWindow<R>) {
             Bool::NO
         }
 
-        let class = AnyClass::get(c"PitwallPanel").or_else(|| {
-            let mut builder = ClassBuilder::new(c"PitwallPanel", NSPanel::class())?;
+        let name = if quiet { c"PitwallQuietPanel" } else { c"PitwallPanel" };
+        let keyed = if quiet { no as extern "C-unwind" fn(_, _) -> _ } else { yes as extern "C-unwind" fn(_, _) -> _ };
+        let class = AnyClass::get(name).or_else(|| {
+            let mut builder = ClassBuilder::new(name, NSPanel::class())?;
             builder.add_ivar::<Bool>(c"focusable");
             // SAFETY: both methods match their selectors' signatures (no arguments, BOOL).
             unsafe {
-                builder.add_method(sel!(canBecomeKeyWindow), yes as extern "C-unwind" fn(_, _) -> _);
+                builder.add_method(sel!(canBecomeKeyWindow), keyed);
                 builder.add_method(sel!(canBecomeMainWindow), no as extern "C-unwind" fn(_, _) -> _);
             }
             Some(builder.register())

@@ -365,17 +365,17 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
     Ok(())
 }
 
-/// New quick-switcher keys. If they can't be registered the old ones come back.
+/// New quick-switcher keys. If they can't be registered (another app holds them, or the mini
+/// tower's shortcut does) the old ones come back. Either way the mini tower's shortcut, dropped
+/// while the keys were recorded, is registered again.
 #[tauri::command]
 pub fn set_shortcut(app: AppHandle, state: State<'_, AppState>, keys: String) -> Result<(), String> {
-    if let Err(error) = apply_shortcut(&app, true, &keys) {
-        let settings = state.core.settings();
-        let _ = apply_shortcut(&app, settings.shortcut, &settings.shortcut_keys);
-        return Err(error);
+    let taken = crate::shortcuts::take(&app, crate::shortcuts::Which::Switcher, &keys, &state.core.settings());
+    if taken.is_ok() {
+        state.core.set_shortcut_keys(keys);
     }
-
-    state.core.set_shortcut_keys(keys);
-    Ok(())
+    crate::shortcuts::resume(&app, &state.core);
+    taken
 }
 
 /// The quick switcher, from the popover's search button. Async, as is every command that can make
@@ -385,16 +385,16 @@ pub async fn show_switcher(app: AppHandle) {
     tray::toggle_switcher(&app);
 }
 
-/// While a new shortcut is being recorded, the current one must not fire.
+/// While a new shortcut is being recorded, the current ones must not fire: neither the quick
+/// switcher's nor the mini tower's, whichever is being recorded.
 #[tauri::command]
 pub fn suspend_shortcut(app: AppHandle) {
-    let _ = apply_shortcut(&app, false, "");
+    crate::shortcuts::suspend(&app);
 }
 
 #[tauri::command]
 pub fn resume_shortcut(app: AppHandle, state: State<'_, AppState>) {
-    let settings = state.core.settings();
-    let _ = apply_shortcut(&app, settings.shortcut, &settings.shortcut_keys);
+    crate::shortcuts::resume(&app, &state.core);
 }
 
 #[tauri::command]
@@ -673,8 +673,9 @@ pub async fn backup_import(app: AppHandle, parts: crate::core::BackupParts) -> R
         if report.settings {
             let settings = state.core.settings();
             // Keys another machine could register may be taken here: the switcher then has none
-            // until new ones are recorded in Settings.
-            let _ = apply_shortcut(&app, settings.shortcut, &settings.shortcut_keys);
+            // until new ones are recorded in Settings. Should they be the mini tower's keys here,
+            // the switcher has them and the tower's shortcut is switched off (`shortcuts::resume`).
+            crate::shortcuts::resume(&app, &state.core);
             crate::apply_theme(&app, &settings.theme);
             // The projects folder may be another one now.
             state.core.projects_dir_changed();
@@ -1008,6 +1009,60 @@ pub async fn flag_terminal(app: AppHandle, path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn flag_board(app: AppHandle) {
     app.state::<AppState>().core.flag_board();
+}
+
+/* ---------- the mini tower (tower.rs) ---------- */
+
+/// Shows or hides the mini tower. Async, as is every command that can make a window.
+#[tauri::command]
+pub async fn tower_show(app: AppHandle, on: bool) -> Result<(), String> {
+    app.state::<AppState>().core.set_tower_option("on", on)?;
+    crate::tower::sync(&app);
+    Ok(())
+}
+
+/// One of the tower's other switches: `hideStopped` (projects that neither run nor have Claude
+/// in them are left out), `allSpaces` (it shows on every desktop) or `shortcut` (its global
+/// shortcut; an error when the keys can't be registered, and the switch stays off).
+#[tauri::command]
+pub fn tower_option(app: AppHandle, state: State<'_, AppState>, option: String, on: bool) -> Result<(), String> {
+    match option.as_str() {
+        "shortcut" => crate::shortcuts::apply(&app, crate::shortcuts::Which::Tower, on, &state.core.settings().tower.shortcut_keys)?,
+        "hideStopped" | "allSpaces" => {}
+        _ => return Err(format!("unknown option: {option}")),
+    }
+
+    state.core.set_tower_option(&option, on)?;
+    crate::tower::sync(&app);
+    Ok(())
+}
+
+/// How the tower is drawn: `list` (a row per project) or `strip` (one row of codes).
+#[tauri::command]
+pub fn tower_form(state: State<'_, AppState>, form: String) -> Result<(), String> {
+    state.core.set_tower_form(&form)
+}
+
+/// New keys for the tower's shortcut, which is on from then. If they can't be registered
+/// (another app holds them, or the quick switcher's shortcut does) the old ones come back.
+/// Either way the quick switcher's, dropped while the keys were recorded, is registered again.
+#[tauri::command]
+pub fn tower_shortcut(app: AppHandle, state: State<'_, AppState>, keys: String) -> Result<(), String> {
+    let taken = crate::shortcuts::take(&app, crate::shortcuts::Which::Tower, &keys, &state.core.settings());
+    if taken.is_ok() {
+        state.core.set_tower_shortcut_keys(keys);
+    }
+    crate::shortcuts::resume(&app, &state.core);
+    taken
+}
+
+/// The tower's page has drawn: how large its content is. Its window takes that size and, when
+/// it is to be shown and isn't yet, comes up. Only the tower's own page may say so.
+#[tauri::command]
+pub fn tower_fit(window: tauri::WebviewWindow, width: f64, height: f64) {
+    if window.label() == crate::tower::LABEL {
+        crate::tower::fit(&window, width, height);
+    }
 }
 
 /// The model and the mode the window chose for a Claude session, as it names them. Neither is
