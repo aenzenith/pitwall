@@ -10,9 +10,10 @@ import ImageLightbox from "./ImageLightbox.vue";
 /**
  * The images of a card's note, small, each with its number (the `n` of `[Image #n]`). A click on
  * one shows it large, over the window. `removable`: each has a button that takes it out of the
- * note (the dialog's).
+ * note (the dialog's). `flat`: none opens large (the quick switcher's note, in a window too small
+ * for it).
  */
-defineProps<{ images: Shot[]; removable?: boolean }>();
+defineProps<{ images: Shot[]; removable?: boolean; flat?: boolean }>();
 const emit = defineEmits<{ remove: [n: number] }>();
 
 const strip = ref<HTMLElement | null>(null);
@@ -28,7 +29,8 @@ function thumb(n: number): HTMLElement | null {
 <template>
   <ul ref="strip" class="shots" :aria-label="t('board.images')">
     <li v-for="image in images" :key="image.n" class="shot" :data-n="image.n" :title="t('board.image', { n: image.n })">
-      <button v-if="image.src" type="button" class="shot-open" :aria-label="t('board.image', { n: image.n })" @click="opened = image.n">
+      <img v-if="image.src && flat" class="shot-flat" :src="image.src" :alt="t('board.image', { n: image.n })" draggable="false" />
+      <button v-else-if="image.src" type="button" class="shot-open" :aria-label="t('board.image', { n: image.n })" @click="opened = image.n">
         <img :src="image.src" alt="" draggable="false" />
       </button>
       <Spinner v-else :size="11" />
@@ -77,6 +79,12 @@ function thumb(n: number): HTMLElement | null {
   padding: 0;
   border: 0;
   background: none;
+}
+
+/* One that doesn't open: the picture alone fills the tile. */
+.shot-flat {
+  position: absolute;
+  inset: 0;
 }
 
 /* Inside the tile, which cuts what is past its edge. */

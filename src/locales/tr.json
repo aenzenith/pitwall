@@ -1288,6 +1288,18 @@
   "core.radio.noEndpoint": "Radyo hattı açılamadı: {error}",
   "core.radio.cliFailed": "Claude Code'un yanıtı: {error}",
   "core.radio.cliSilent": "Claude Code yanıt vermedi.",
+  "capture.chip": "Kart",
+  "capture.where": "Hangi projeye",
+  "capture.queued": {
+    "one": "Sıradaki'nde {count} kart",
+    "other": "Sıradaki'nde {count} kart"
+  },
+  "capture.queuedNone": "Sıradaki boş",
+  "capture.lastLooked": "son bakılan",
+  "capture.add": "Sıradaki'ne ekle",
+  "capture.addGive": "Ekle ve Claude'a ver",
+  "capture.note": "Not yaz",
+  "capture.pasteImage": "Görsel yapıştır",
   "tower.title": "Mini kule",
   "tower.options": "Mini kule seçenekleri",
   "tower.show": "Mini kuleyi göster",

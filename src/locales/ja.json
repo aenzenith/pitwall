@@ -1253,6 +1253,17 @@
   "core.radio.noEndpoint": "無線の回線を開けませんでした: {error}",
   "core.radio.cliFailed": "Claude Code の応答: {error}",
   "core.radio.cliSilent": "Claude Code から応答がありません。",
+  "capture.chip": "カード",
+  "capture.where": "どのプロジェクトに",
+  "capture.queued": {
+    "other": "「次に」に{count}枚"
+  },
+  "capture.queuedNone": "「次に」は空",
+  "capture.lastLooked": "最後に見た",
+  "capture.add": "「次に」に追加",
+  "capture.addGive": "追加して Claude に渡す",
+  "capture.note": "メモを書く",
+  "capture.pasteImage": "画像を貼り付け",
   "tower.title": "ミニタワー",
   "tower.options": "ミニタワーのオプション",
   "tower.show": "ミニタワーを表示",

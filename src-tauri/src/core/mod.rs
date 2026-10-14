@@ -60,6 +60,7 @@ pub use flag::FlagState;
 mod tower;
 mod cli;
 pub use cli::CliState;
+mod capture;
 pub use activity::DaySummary;
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};

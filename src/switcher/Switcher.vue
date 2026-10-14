@@ -10,6 +10,7 @@ import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Marquee from "../components/Marquee.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
+import { composing, draft } from "../lib/capture";
 import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
 import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
@@ -17,6 +18,8 @@ import { pages, type Page, type PageEntry } from "../lib/pages";
 import { keys, primary } from "../lib/platform";
 import { api, now, snapshot } from "../lib/store";
 import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
+import { useCapture } from "./capture";
+import CaptureNote from "./CaptureNote.vue";
 
 const WIDTH = 640;
 const MAX_HEIGHT = 540;
@@ -26,14 +29,18 @@ type CommandMatch = { project: Project; command: CommandView; score: number; hit
 type LinkMatch = { project: Project; link: ProjectLink; score: number; hits: Set<number> };
 type PageMatch = { page: PageEntry; score: number; hits: Set<number> };
 
-/** One row of the list: a project, a project's command or link, a page of the window, or a folder
- * from the projects folder. */
+/** One row of the list: a project, a project's command or link, a page of the window, a folder
+ * from the projects folder, or (while a card is written, `+`) a project the card can go to. */
 type Item =
   | { kind: "project"; key: string; project: Project; hits: Set<number> }
+  | { kind: "card"; key: string; project: Project; hits: Set<number> }
   | { kind: "command"; key: string; project: Project; command: CommandView; hits: Set<number> }
   | { kind: "link"; key: string; project: Project; link: ProjectLink; hits: Set<number> }
   | { kind: "page"; key: string; page: PageEntry; hits: Set<number> }
   | { kind: "folder"; key: string; folder: Folder; hits: Set<number> };
+
+/** A row whose name isn't searched has no letters to mark. */
+const NO_HITS = new Set<number>();
 
 /** Commands shown under the projects while typing; `>` lists them all. */
 const MIXED_COMMANDS = 6;
@@ -64,6 +71,37 @@ function reveal(): void {
 function conceal(): void {
   shown.value = false;
 }
+
+/** The note under the field, while a card's is open. */
+const noteView = ref<InstanceType<typeof CaptureNote> | null>(null);
+
+/** `+`: a board card written here (./capture). The field holds its title then, and the list the
+ * projects it can go to; the highlight is the project chosen. */
+const capture = useCapture({
+  query,
+  field: () => input.value,
+  note: () => noteView.value,
+  chosen: () => (current.value?.kind === "card" ? current.value.project.path : null),
+  choose: chooseProject,
+});
+const { on: capturing, noteOpen, looked, counts, error: captureError, busy: captureBusy, waiting: cardWaiting, shots } = capture;
+/** The note shows under the field (its project still among those listed). */
+const noting = computed(() => capturing.value && noteOpen.value && current.value?.kind === "card");
+
+/** The highlight on the row of the project at `path`, among those a card can go to. */
+function chooseProject(path: string | null): void {
+  const at = items.value.findIndex((item) => item.kind === "card" && item.project.path === path);
+  if (at >= 0) select(at);
+}
+
+/** What the field holds: the search, or the title of the card being written. */
+const field = computed({
+  get: () => (capturing.value ? draft.title : query.value),
+  set: (text: string) => {
+    if (capturing.value) draft.title = text;
+    else query.value = text;
+  },
+});
 
 const matches = computed<ProjectMatch[]>(() => {
   const projects = snapshot.value?.projects ?? [];
@@ -102,6 +140,7 @@ const pageMode = computed(() => query.value.trimStart().startsWith("/"));
 const needle = computed(() => (commandMode.value || linkMode.value || pageMode.value ? query.value.trimStart().slice(1) : query.value).trim().toLowerCase());
 const anyCommands = computed(() => (snapshot.value?.projects ?? []).some((p) => p.commands.length));
 const anyLinks = computed(() => (snapshot.value?.projects ?? []).some((p) => p.settings.links?.length));
+const anyProjects = computed(() => (snapshot.value?.projects ?? []).length > 0);
 
 /**
  * Every project's commands that match: by the command's name, by project and name together
@@ -187,6 +226,7 @@ const pageMatches = computed<PageMatch[]>(() => {
 /** What the list shows: with `/` pages only, with `>` commands only, with `@` links only; else
  * projects, then matching commands and links; else folders. */
 const items = computed<Item[]>(() => {
+  if (capturing.value) return capture.projects.value.map((project) => ({ kind: "card", key: `k:${project.path}`, project, hits: NO_HITS }));
   if (pageMode.value) return pageMatches.value.map(({ page, hits }) => ({ kind: "page", key: `g:${page.id}`, page, hits }));
 
   const commands: Item[] = commandMatches.value.map(({ project, command, hits }) => ({ kind: "command", key: `c:${project.path}:${command.id}`, project, command, hits }));
@@ -219,6 +259,10 @@ function select(at: number): void {
 // The list changed (a state event, a query): the highlight stays on its row, or takes the row
 // that fell into its place.
 watch(items, () => select(index.value));
+
+// The project a card would go to is another one: the card's note closes when its project left
+// the list (./capture: chosenChanged), so the row that took its place is seen before any Return.
+watch(() => (current.value?.kind === "card" ? current.value.project.path : null), capture.chosenChanged);
 
 /** The id the input's `aria-activedescendant` points at. */
 function optionId(item: Item): string {
@@ -318,9 +362,10 @@ function pageCount(page: PageEntry): number {
   return (snapshot.value?.projects ?? []).filter(page.test ?? (() => true)).length;
 }
 
-/** A click does what ↵ does. */
-function pick(item: Item): void {
-  if (item.kind === "project") open(item.project);
+/** A click does what ↵ does; on a project a card can go to, with ⌘ (Ctrl) what ⌘↵ does. */
+function pick(item: Item, event: MouseEvent): void {
+  if (item.kind === "card") capture.addTo(item.project.path, primary(event));
+  else if (item.kind === "project") open(item.project);
   else if (item.kind === "command") runCommand(item, false);
   else if (item.kind === "link") openLink(item, false);
   else if (item.kind === "page") openPage(item.page.id);
@@ -328,6 +373,11 @@ function pick(item: Item): void {
 }
 
 function onKey(event: KeyboardEvent): void {
+  // A key of an input method's (the Return that ends a composition) is none of the switcher's.
+  if (composing(event)) return;
+  // While a card is written, its own keys.
+  if (capture.onKey(event)) return;
+
   const total = count.value;
 
   if (event.key === "Escape") {
@@ -350,6 +400,7 @@ function onKey(event: KeyboardEvent): void {
     else if (item.kind === "command") runCommand(item, mod);
     else if (item.kind === "link") openLink(item, mod);
     else if (item.kind === "page") openPage(item.page.id);
+    else if (item.kind === "card") return;
     else if (mod) toggle(item.project);
     else open(item.project);
   } else if (primary(event) && event.code === "KeyC" && current.value?.kind === "link" && !hasSelection()) {
@@ -379,11 +430,16 @@ async function fitWindow(): Promise<void> {
   const el = panel.value;
   if (!el) return;
   const parts = Array.from(el.children) as HTMLElement[];
-  const natural = Math.ceil(parts.reduce((sum, part) => sum + (part === list.value ? part.scrollHeight : part.offsetHeight), 2));
-  await getCurrentWindow().setSize(new LogicalSize(WIDTH, Math.min(natural, MAX_HEIGHT)));
+  // What scrolls inside (the list, a card's note) counts with all it holds.
+  const natural = Math.ceil(parts.reduce((sum, part) => sum + (part === list.value || part.dataset.scrolls !== undefined ? part.scrollHeight : part.offsetHeight), 2));
+  // The note's open project list hangs over what is under it, and may need more.
+  const wanted = Math.max(natural, noteView.value?.reach() ?? 0);
+  await getCurrentWindow().setSize(new LogicalSize(WIDTH, Math.min(wanted, MAX_HEIGHT)));
 }
 
-watch(query, () => {
+watch(query, (text) => {
+  // `+` first: what follows is a card's title, not a search.
+  if (capture.take(text)) return;
   select(0);
   confirming.value = null;
 });
@@ -392,8 +448,30 @@ watch(selectedKey, () => (confirming.value = null));
 watch(index, async () => {
   await nextTick();
   list.value?.querySelector(".row.on")?.scrollIntoView({ block: "nearest" });
+  // A card's first project: the label over it comes into sight with it.
+  if (capturing.value && index.value === 0 && list.value) list.value.scrollTop = 0;
 });
 watch(count, () => void fitWindow());
+// A card's parts come and go under the field: its projects, its note, an image, a refusal.
+watch([capturing, noting, () => shots.value.length, captureError], () => void fitWindow());
+// The `+` was deleted: the search starts at its first row again.
+watch(capturing, (on) => {
+  if (!on) select(0);
+});
+
+/** While a card is written, a press on anything but a field leaves the keyboard where it is. */
+function onPress(event: MouseEvent): void {
+  if (capturing.value && !(event.target instanceof Element && event.target.closest("input, textarea"))) event.preventDefault();
+}
+
+/** How many cards wait in a project's "Up next"; a space until the board has answered, so the row
+ * keeps its two lines. */
+function queuedLine(path: string): string {
+  const known = counts.value;
+  if (!known) return "\u00a0";
+  const waiting = known.get(path) ?? 0;
+  return waiting ? t("capture.queued", { count: waiting }) : t("capture.queuedNone");
+}
 
 let unlisten: UnlistenFn | null = null;
 
@@ -401,6 +479,7 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey);
   window.addEventListener("blur", conceal);
   unlisten = await listen("switcher-opened", async () => {
+    capture.reset();
     query.value = "";
     select(0);
     void loadFolders();
@@ -423,40 +502,64 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="panel" :class="['panel', { shown }]">
+  <div ref="panel" :class="['panel', { shown }]" @mousedown="onPress">
     <div class="search">
       <PitwallGlyph :size="20" lamps="var(--run)" class="glyph" />
-      <label class="sr" for="q">{{ t("switcher.label") }}</label>
+      <!-- A card is written: the `+` that began it, before its title. -->
+      <span v-if="capturing" class="plus" aria-hidden="true">+</span>
+      <label class="sr" for="q">{{ t(capturing ? "board.dialog.title" : "switcher.label") }}</label>
       <input
         id="q"
         ref="input"
-        v-model="query"
-        :placeholder="t('switcher.placeholder')"
+        v-model="field"
+        :placeholder="t(capturing ? 'board.dialog.titlePlaceholder' : 'switcher.placeholder')"
+        :maxlength="capturing ? 200 : undefined"
         autocomplete="off"
         spellcheck="false"
         role="combobox"
         aria-controls="results"
         aria-autocomplete="list"
-        :aria-expanded="count > 0"
-        :aria-activedescendant="current ? optionId(current) : undefined"
+        :aria-expanded="count > 0 && !noting"
+        :aria-activedescendant="current && !noting ? optionId(current) : undefined"
+        @focus="capture.titleFocused"
       />
       <!-- Nothing typed: what a first character narrows the list to, here where it is typed. A
            click types it; the keyboard stays in the field. -->
-      <div v-if="!query" class="modes">
+      <div v-if="!query && !capturing" class="modes">
         <button v-if="anyCommands" type="button" tabindex="-1" @mousedown.prevent @click="query = '>'"><kbd>&gt;</kbd> {{ t("common.commands") }}</button>
         <button v-if="anyLinks" type="button" tabindex="-1" @mousedown.prevent @click="query = '@'"><kbd>@</kbd> {{ t("common.links") }}</button>
         <button type="button" tabindex="-1" @mousedown.prevent @click="query = '/'"><kbd>/</kbd> {{ t("switcher.pages") }}</button>
+        <!-- `+` writes a board card; lit while one was begun and left. -->
+        <button v-if="anyProjects" type="button" tabindex="-1" :class="{ kept: cardWaiting }" @mousedown.prevent @click="query = '+'"><kbd>+</kbd> {{ t("capture.chip") }}</button>
       </div>
-      <kbd class="esc">{{ keys("Escape") }}</kbd>
+      <span v-if="capturing" class="card-tag">
+        <span class="card-mark"><Spinner v-if="captureBusy" :size="10" /><template v-else>+</template></span>
+        {{ t("capture.chip") }}
+      </span>
+      <kbd v-else class="esc">{{ keys("Escape") }}</kbd>
     </div>
 
+    <CaptureNote
+      v-if="noting && current?.kind === 'card'"
+      ref="noteView"
+      v-model:note="draft.note"
+      :projects="capture.projects.value"
+      :path="current.project.path"
+      :shots="shots"
+      :room="MAX_HEIGHT"
+      @pick="chooseProject"
+      @paste="capture.onPaste"
+      @remove="capture.removeImage"
+      @resized="fitWindow"
+    />
+
     <ul
-      v-if="items.length"
+      v-else-if="items.length"
       id="results"
       ref="list"
       class="list"
       role="listbox"
-      :aria-label="t(commandMode ? 'common.commands' : linkMode ? 'common.links' : pageMode ? 'switcher.pages' : 'common.projects')"
+      :aria-label="t(capturing ? 'capture.where' : commandMode ? 'common.commands' : linkMode ? 'common.links' : pageMode ? 'switcher.pages' : 'common.projects')"
     >
       <template v-for="(item, i) in items" :key="item.key">
         <!-- Under the projects, the commands that match get their own heading. -->
@@ -466,13 +569,14 @@ onBeforeUnmount(() => {
         <li v-if="item.kind === 'link' && !linkMode && i > 0 && items[i - 1].kind !== 'link'" class="group" role="presentation">
           {{ t("common.links") }}
         </li>
+        <li v-if="item.kind === 'card' && i === 0" class="group" role="presentation">{{ t("capture.where") }}</li>
         <li
           :id="optionId(item)"
           :class="['row', { on: i === index, compact: item.kind === 'page' }]"
           role="option"
           :aria-selected="i === index"
           @mousemove="i !== index && select(i)"
-          @click="pick(item)"
+          @click="pick(item, $event)"
         >
           <template v-if="item.kind === 'project'">
             <StatusIcon :project="item.project" :ring="i === index ? 'var(--bg-lit)' : 'var(--bg-panel)'" />
@@ -486,6 +590,16 @@ onBeforeUnmount(() => {
               {{ claudeState(item.project, now) }}
             </span>
             <span v-if="item.project.status === 'busy'" class="busy"><Spinner :size="12" /></span>
+          </template>
+
+          <!-- A project a card can go to: how full its "Up next" is, and which one was looked at last. -->
+          <template v-else-if="item.kind === 'card'">
+            <StatusIcon :project="item.project" :ring="i === index ? 'var(--bg-lit)' : 'var(--bg-panel)'" />
+            <div class="text">
+              <div class="name">{{ item.project.name }}</div>
+              <div class="meta">{{ queuedLine(item.project.path) }}</div>
+            </div>
+            <span v-if="item.project.path === looked" class="looked">{{ t("capture.lastLooked") }}</span>
           </template>
 
           <template v-else-if="item.kind === 'command'">
@@ -553,7 +667,26 @@ onBeforeUnmount(() => {
       <template v-else>{{ t("switcher.noProjects") }}</template>
     </div>
 
-    <footer v-if="current?.kind === 'folder'" class="foot">
+    <p v-if="capturing && captureError" class="refusal" role="alert">{{ captureError }}</p>
+
+    <!-- A card's keys: in its note, and in its title over the projects. -->
+    <footer v-if="noting" class="foot foot-note">
+      <span><kbd>{{ keys("Shift+Enter") }}</kbd> {{ t("capture.add") }}</span>
+      <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("capture.addGive") }}</span>
+      <span><kbd>{{ keys("mod+V") }}</kbd> {{ t("capture.pasteImage") }}</span>
+      <span class="grow"></span>
+      <span><kbd>{{ keys("Escape") }}</kbd> {{ t("common.back") }}</span>
+    </footer>
+    <footer v-else-if="capturing" class="foot">
+      <template v-if="current">
+        <span><kbd>{{ keys("Enter") }}</kbd> {{ t("capture.add") }}</span>
+        <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("capture.addGive") }}</span>
+        <span><kbd>{{ keys("Tab") }}</kbd> {{ t("capture.note") }}</span>
+      </template>
+      <span class="grow"></span>
+      <span><kbd>{{ keys("Escape") }}</kbd> {{ t("common.close") }}</span>
+    </footer>
+    <footer v-else-if="current?.kind === 'folder'" class="foot">
       <span><kbd>{{ keys("Enter") }}</kbd> {{ t("common.openInEditor") }}</span>
       <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("switcher.addToPitwall") }}</span>
       <span class="grow"></span>
@@ -674,6 +807,39 @@ kbd {
   flex-shrink: 0;
 }
 
+/* The `+` a card began with, before its title: the field's own size, close to its text. */
+.plus {
+  flex-shrink: 0;
+  margin-right: -5px;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--run);
+}
+
+/* What the field holds while a card is written, where the prefixes were. */
+.card-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--run-bg);
+  font-size: 12px;
+  color: var(--run-text);
+  white-space: nowrap;
+}
+
+/* Its `+`, and the spinner in its place while the card is added. */
+.card-mark {
+  width: 10px;
+  display: inline-flex;
+  justify-content: center;
+  font-family: var(--font-mono);
+  color: var(--run);
+}
+
 .modes {
   flex-shrink: 0;
   display: flex;
@@ -695,6 +861,23 @@ kbd {
 
 .modes button:hover {
   color: var(--text);
+}
+
+/* Russian's names for the four are the longest: a little closer, so the field keeps its
+   placeholder whole beside them. */
+:lang(ru) .modes {
+  gap: 10px;
+}
+
+/* A card was begun and left: its prefix says so. */
+.modes button.kept {
+  color: var(--run-text);
+}
+
+.modes button.kept kbd {
+  border-color: var(--run-line);
+  background: var(--run-bg);
+  color: var(--run);
 }
 
 .list {
@@ -775,6 +958,25 @@ kbd {
 .busy {
   color: var(--text-muted);
   display: inline-flex;
+}
+
+/* The project looked at last, said quietly at its row's end. */
+.looked {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+/* Why a card wasn't added or given, or an image not taken. */
+.refusal {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 16px 10px;
+  font-size: 12px;
+  color: var(--crash-text);
+  overflow-wrap: anywhere;
 }
 
 .enter {
@@ -893,6 +1095,12 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Under a card's note it stays at the window's foot while the note's open project list makes the
+   window taller than the note. */
+.foot-note {
+  margin-top: auto;
 }
 
 /* Windows and Linux spell the keys out (Ctrl+Enter), which takes room: each hint stays on one

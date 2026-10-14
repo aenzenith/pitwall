@@ -67,6 +67,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Quick card",
+        "tr": "Hızlı kart",
+        "de": "Schnelle Karte",
+        "es": "Tarjeta rápida",
+        "ru": "Быстрая карточка",
+        "ja": "クイックカード",
+        "zh-Hans": "快速卡片"
+      },
+      "body": {
+        "en": "Type + and a title in the quick switcher: Return adds the card to Up next in the project you pick, ⌘Return (Ctrl+Enter) also gives it to Claude, and Tab opens a note that takes pasted images too.",
+        "tr": "Hızlı geçişte + ve bir başlık yaz: Return kartı seçtiğin projenin Sıradaki sütununa ekler, ⌘Return (Ctrl+Enter) ayrıca Claude'a verir, Tab ise görsel de yapıştırılabilen notu açar.",
+        "de": "Im Projektumschalter + und einen Titel tippen: Return legt die Karte im gewählten Projekt unter „Als Nächstes“ ab, ⌘Return (Strg+Eingabe) gibt sie zusätzlich an Claude, und Tab öffnet eine Notiz, in die sich auch Bilder einfügen lassen.",
+        "es": "Escribe + y un título en el selector rápido: Retorno agrega la tarjeta a Siguiente en el proyecto que elijas, ⌘Retorno (Ctrl+Intro) además se la da a Claude, y Tab abre una nota en la que también se pegan imágenes.",
+        "ru": "Введите + и заголовок в быстром переходе: Return добавит карточку в «Далее» выбранного проекта, ⌘Return (Ctrl+Enter) ещё и отдаст её Claude, а Tab откроет заметку, куда можно вставлять и изображения.",
+        "ja": "クイックスイッチャーで + とタイトルを入力します。Return で選んだプロジェクトの「次に」に追加、⌘Return（Ctrl+Enter）で Claude にも渡し、Tab で画像も貼り付けられるメモを開きます。",
+        "zh-Hans": "在快速切换器中输入 + 和标题：按 Return 把卡片添加到所选项目的“待办”，按 ⌘Return（Ctrl+Enter）同时交给 Claude，按 Tab 打开还能粘贴图片的备注。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Model, mode and timing for Claude",
         "tr": "Claude'a verirken model, kip ve zaman",
         "de": "Modell, Modus und Zeitpunkt für Claude",

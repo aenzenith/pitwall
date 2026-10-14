@@ -2,10 +2,11 @@
 // and the picture itself, pasted from the clipboard. The core keeps the files; the window holds a
 // picture only as a `data:` URL, to draw it and to hand a new one over.
 
-import { computed, ref, watch, type ComputedRef } from "vue";
+import { computed, ref, watch, type ComputedRef, type Ref } from "vue";
 
+import { t } from "./i18n";
 import { api } from "./store";
-import type { Card } from "./types";
+import type { Card, NewImage } from "./types";
 
 /** A card holds this many images at most, each this large at most: the core's limits. */
 export const IMAGES_MAX = 12;
@@ -83,6 +84,101 @@ export async function imageData(file: Blob): Promise<string> {
   const bytes = (url.length - url.indexOf(",") - 1) * 0.75;
   if (bytes > IMAGE_MB_MAX * 1024 * 1024) throw new Error("too large");
   return url;
+}
+
+/**
+ * The images pasted into a note being written (the card dialog's, the quick switcher's): a paste
+ * that carries one puts `[Image #n]` at the caret of `field()` at once, as Claude Code's prompt
+ * does, and the picture once it is read. An image stays while the note names it. `say`: told why
+ * one was refused (too many, too large, not a picture), and "" when the next one is taken.
+ * `saved`: the images the card holds already (an edit), which the note's strip draws with them.
+ */
+export function useNoteImages(note: Ref<string>, field: () => HTMLTextAreaElement | null, say: (message: string) => void, saved: () => Shot[] = () => []) {
+  /** Those pasted here (not saved yet; `src` null while one is read). */
+  const pasted = ref<Shot[]>([]);
+  /** Each pasted image being read: saving waits for them. */
+  const reading: Promise<void>[] = [];
+  /** The images the note names, in its order: what the card holds once saved. */
+  const shots = computed(() =>
+    imageNumbers(note.value)
+      .map((n) => pasted.value.find((shot) => shot.n === n) ?? saved().find((shot) => shot.n === n))
+      .filter((shot): shot is Shot => !!shot),
+  );
+
+  function refused(): void {
+    say(t("board.dialog.imageRefused", { count: IMAGES_MAX, size: IMAGE_MB_MAX }));
+  }
+
+  /** Puts `file` into the note: its token at the caret at once, the picture once it is read. */
+  function attach(file: File): void {
+    say("");
+    if (shots.value.length >= IMAGES_MAX) {
+      refused();
+      return;
+    }
+
+    const n = nextImageNumber(note.value, [...saved(), ...pasted.value].map((image) => image.n));
+    pasted.value.push({ n, src: null });
+    const target = field();
+    if (target) {
+      target.setRangeText(spaced(target.value, target.selectionStart, imageToken(n)), target.selectionStart, target.selectionEnd, "end");
+      note.value = target.value;
+    } else {
+      note.value += spaced(note.value, note.value.length, imageToken(n));
+    }
+
+    reading.push(
+      imageData(file)
+        .then((src) => {
+          const shot = pasted.value.find((shot) => shot.n === n);
+          if (shot) shot.src = src;
+        })
+        .catch(() => {
+          remove(n);
+          refused();
+        }),
+    );
+  }
+
+  /** A paste that carries an image puts the image in; any other is the text it always was. */
+  function onPaste(event: ClipboardEvent): void {
+    const files = pastedImages(event.clipboardData);
+    if (!files.length) return;
+    event.preventDefault();
+    for (const file of files) attach(file);
+  }
+
+  /** Takes image `n` out of the note; a saved one leaves the card when the card is saved. */
+  function remove(n: number): void {
+    note.value = withoutImage(note.value, n);
+    pasted.value = pasted.value.filter((shot) => shot.n !== n);
+  }
+
+  /** Every pasted image is read, or was refused and is out of the note. */
+  function settled(): Promise<unknown> {
+    return Promise.all(reading);
+  }
+
+  /** The pasted images `text` still names, as the core takes them with the card. */
+  function taken(text: string): NewImage[] {
+    const named = imageNumbers(text);
+    return pasted.value.flatMap((shot) => (shot.src && named.includes(shot.n) ? [{ n: shot.n, data: shot.src }] : []));
+  }
+
+  /** The note was saved or dropped: none of them is held any longer. */
+  function clear(): void {
+    pasted.value = [];
+    reading.length = 0;
+  }
+
+  /** Lets go of each pasted image the note no longer names (its token deleted, the note emptied). */
+  function forget(): void {
+    const named = imageNumbers(note.value);
+    pasted.value = pasted.value.filter((shot) => named.includes(shot.n));
+    if (!pasted.value.length) reading.length = 0;
+  }
+
+  return { shots, onPaste, remove, settled, taken, clear, forget };
 }
 
 /**

@@ -1103,6 +1103,14 @@ pub fn cli_copy_link(app: AppHandle, state: State<'_, AppState>, path: String, a
     Ok(())
 }
 
+/// The quick switcher's `+`: the listed project looked at last, which a new card is offered
+/// for first; none when no listed project was ever looked at.
+#[tauri::command]
+pub async fn last_looked(app: AppHandle) -> Option<String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.last_looked()).await.ok().flatten()
+}
+
 /// The model and the mode the window chose for a Claude session, as it names them. Neither is
 /// used as it comes: `gated` keeps only the values of the two fixed lists (`start.rs`).
 #[derive(serde::Deserialize)]

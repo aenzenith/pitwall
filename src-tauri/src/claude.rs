@@ -808,6 +808,21 @@ impl ClaudeWatch {
         self.write_seen(SeenBook { since: self.read_seen().since, paths });
     }
 
+    /// Of `folder_paths`, the one looked at last, as the seen book has it; none when the book
+    /// names none of them. Two looked at in the same millisecond: the earlier in `folder_paths`.
+    pub fn last_seen(&self, folder_paths: &[String]) -> Option<String> {
+        let book = self.read_seen_everywhere();
+        let mut last: Option<(u64, &String)> = None;
+        for path in folder_paths {
+            if let Some(at) = book.seen(path) {
+                if last.is_none_or(|(latest, _)| at > latest) {
+                    last = Some((at, path));
+                }
+            }
+        }
+        last.map(|(_, path)| path.clone())
+    }
+
     /// A full pass: every log of the listed projects, the hook's events, then the verdict.
     #[cfg(test)]
     pub fn scan(&mut self, folder_paths: &[String]) -> ScanResult {

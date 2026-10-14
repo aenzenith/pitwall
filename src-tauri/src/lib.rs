@@ -555,6 +555,7 @@ pub fn run() {
             commands::cli_remove,
             commands::cli_links,
             commands::cli_copy_link,
+            commands::last_looked,
             commands::board_schedule,
             commands::board_unschedule,
             commands::board_give_now

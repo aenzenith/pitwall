@@ -1301,6 +1301,18 @@
   "core.radio.noEndpoint": "The radio couldn't open its line: {error}",
   "core.radio.cliFailed": "Claude Code answered: {error}",
   "core.radio.cliSilent": "Claude Code didn't answer.",
+  "capture.chip": "Card",
+  "capture.where": "Which project",
+  "capture.queued": {
+    "one": "{count} card in Up next",
+    "other": "{count} cards in Up next"
+  },
+  "capture.queuedNone": "Up next is empty",
+  "capture.lastLooked": "last looked at",
+  "capture.add": "Add to Up next",
+  "capture.addGive": "Add and give to Claude",
+  "capture.note": "Write a note",
+  "capture.pasteImage": "Paste image",
   "tower.title": "Mini tower",
   "tower.options": "Mini tower options",
   "tower.show": "Show the mini tower",

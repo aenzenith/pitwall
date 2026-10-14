@@ -1253,6 +1253,17 @@
   "core.radio.noEndpoint": "无线电无法打开线路：{error}",
   "core.radio.cliFailed": "Claude Code 的回答：{error}",
   "core.radio.cliSilent": "Claude Code 没有回答。",
+  "capture.chip": "卡片",
+  "capture.where": "添加到哪个项目",
+  "capture.queued": {
+    "other": "“待办”中有 {count} 张卡片"
+  },
+  "capture.queuedNone": "“待办”为空",
+  "capture.lastLooked": "上次查看",
+  "capture.add": "添加到“待办”",
+  "capture.addGive": "添加并交给 Claude",
+  "capture.note": "写备注",
+  "capture.pasteImage": "粘贴图片",
   "tower.title": "迷你塔",
   "tower.options": "迷你塔选项",
   "tower.show": "显示迷你塔",

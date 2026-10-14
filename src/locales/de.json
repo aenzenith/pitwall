@@ -1301,6 +1301,18 @@
   "core.radio.noEndpoint": "Der Funk konnte seine Leitung nicht öffnen: {error}",
   "core.radio.cliFailed": "Claude Code antwortete: {error}",
   "core.radio.cliSilent": "Claude Code hat nicht geantwortet.",
+  "capture.chip": "Karte",
+  "capture.where": "In welches Projekt",
+  "capture.queued": {
+    "one": "{count} Karte in „Als Nächstes“",
+    "other": "{count} Karten in „Als Nächstes“"
+  },
+  "capture.queuedNone": "„Als Nächstes“ ist leer",
+  "capture.lastLooked": "zuletzt angesehen",
+  "capture.add": "Zu „Als Nächstes“",
+  "capture.addGive": "Hinzufügen und an Claude geben",
+  "capture.note": "Notiz schreiben",
+  "capture.pasteImage": "Bild einfügen",
   "tower.title": "Mini-Turm",
   "tower.options": "Optionen des Mini-Turms",
   "tower.show": "Mini-Turm anzeigen",

@@ -488,6 +488,9 @@ export const api = {
   cliLinks: (on: boolean) => invoke("cli_links", { on }),
   /** Puts the link that does `action` to the project at `path` on the clipboard. */
   cliCopyLink: (path: string, action: import("./types").LinkAction) => invoke("cli_copy_link", { path, action }),
+  /** The listed project looked at last (the seen book's latest look), or null: where the quick
+   * switcher's `+` offers a new card first. */
+  lastLooked: () => invoke<string | null>("last_looked"),
   /** Tells a card up next to wait until the 5-hour session refills (the core's own reading of
    * that moment): the core gives it then, with `start`. */
   boardSchedule: (id: string, start: StartChoice) => invoke("board_schedule", { id, start }),
