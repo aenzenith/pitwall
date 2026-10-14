@@ -549,7 +549,25 @@ static TITLE: Mutex<Option<Title>> = Mutex::new(None);
 /// sessions at work in orange. An orange dot says Claude waits on you; a crash shows a red one
 /// until the popover is opened. With Claude's fuel shown, the session's share left follows the
 /// counts. Windows shows no text beside a tray icon, so there the tooltip carries all of it.
+///
+/// On the main thread, and never waited for. The tray's handle taken there may be its last one
+/// when the app quits, and AppKit's status item goes with it, which macOS allows on the main
+/// thread alone (anywhere else it stops the app). And whoever asks goes on at once: the state
+/// it sends next isn't held back while the main thread is busy (a menu is open) and then sent
+/// after a newer one.
 pub fn refresh<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
+    let (handle, snapshot) = (app.clone(), snapshot.clone());
+    let _ = app.run_on_main_thread(move || draw(&handle, &snapshot));
+}
+
+/// The latest `Snapshot::seq` drawn: refreshes asked for on two threads can reach the main thread
+/// in either order, and one taken before the state in the bar is not drawn over it.
+static DRAWN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn draw<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
+    if DRAWN.fetch_max(snapshot.seq, std::sync::atomic::Ordering::SeqCst) > snapshot.seq {
+        return;
+    }
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
     };

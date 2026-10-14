@@ -67,10 +67,15 @@ function runClock(on: boolean): void {
 
 watch(visible, runClock);
 
+/** Snapshots sent from different threads of the core may come in either order: one taken before
+ * the one shown is dropped, or the page would go back to an older state (`seq`, snapshot.rs). */
+function take(next: Snapshot): void {
+  if (snapshot.value && next.seq < snapshot.value.seq) return;
+  snapshot.value = next;
+}
+
 export async function connect(): Promise<void> {
-  await listen<Snapshot>("state", (event) => {
-    snapshot.value = event.payload;
-  });
+  await listen<Snapshot>("state", (event) => take(event.payload));
   // This window's own: a plain listen() would also hear what the core sends the other windows.
   const win = getCurrentWindow();
   let told = 0;
@@ -88,7 +93,7 @@ export async function connect(): Promise<void> {
   } catch {
     // Kept as shown: better a clock that ticks unseen than one that stands still on screen.
   }
-  snapshot.value = await invoke<Snapshot>("get_state");
+  take(await invoke<Snapshot>("get_state"));
   runClock(visible.value);
 }
 

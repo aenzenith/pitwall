@@ -210,6 +210,8 @@ export type TerminalView = {
 export type Folder = { name: string; path: string };
 
 export type Snapshot = {
+  /** Its place among the snapshots the core took: a window keeps the latest it has seen. */
+  seq: number;
   projects: Project[];
   running: number;
   waiting: number;

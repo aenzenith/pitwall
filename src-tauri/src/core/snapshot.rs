@@ -100,12 +100,22 @@ pub struct Snapshot {
     /// How many calls came over the team radio: when it moves, a session's calls are asked for
     /// again (`radio`). The calls themselves are no part of the snapshot.
     pub radio_calls: u64,
+    /// Its place among the snapshots taken for the windows (`Core::snapshot`), counted under the
+    /// core's lock: two sent from different threads can reach a window in either order, and a
+    /// window keeps the one taken last. 0 in the one `notify` compares, so it never counts as a
+    /// change.
+    pub seq: u64,
 }
+
+/// The last `Snapshot::seq` given.
+static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl Core {
     pub fn snapshot(&self) -> Snapshot {
         let inner = self.lock();
-        build_snapshot(&inner)
+        // Under the lock: a later number is a later state.
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        Snapshot { seq, ..build_snapshot(&inner) }
     }
 
     /// Emits `State` only when the snapshot actually changed.
@@ -306,5 +316,6 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         missed: super::signals::listed(&inner.missed, &projects),
         projects,
         radio_calls: inner.radio.noted,
+        seq: 0,
     }
 }

@@ -168,6 +168,27 @@
         "ja": "セットアップ手順で、これまで設定にあった項目も選べるようになりました。表示と専用ショートカットを含むミニタワー、そして最後の手順で通知（システムが Pitwall の通知を許可しているか、テスト付き）、pitwall コマンド（macOS のみ）、複数ある場合はプロジェクトを開くエディタ、スマホ。手順は 設定 › 一般 からもう一度開けます。",
         "zh-Hans": "初始设置步骤现在也提供以前只在设置中才有的选项：迷你塔及其视图和专用快捷键；最后一步还有通知（系统是否允许 Pitwall 发送通知，可发送测试）、pitwall 命令（仅限 macOS）、装有多个编辑器时用来打开项目的编辑器，以及手机。可在 设置 › 通用 中再次打开这些步骤。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Quitting without a crash",
+        "tr": "Çıkarken çökme yok",
+        "de": "Beenden ohne Absturz",
+        "es": "Salir sin cierre inesperado",
+        "ru": "Выход без сбоя",
+        "ja": "終了時にクラッシュしない",
+        "zh-Hans": "退出时不再崩溃"
+      },
+      "body": {
+        "en": "Pitwall could crash as it quit, while it was updating its menu bar item. It now quits cleanly.",
+        "tr": "Pitwall, menü çubuğundaki simgesini güncellerken çıkılırsa çökebiliyordu. Artık temiz kapanıyor.",
+        "de": "Pitwall konnte beim Beenden abstürzen, während es sein Symbol in der Menüleiste aktualisierte. Jetzt beendet es sich sauber.",
+        "es": "Pitwall podía cerrarse inesperadamente al salir mientras actualizaba su icono de la barra de menús. Ahora sale sin problemas.",
+        "ru": "Pitwall мог аварийно завершиться при выходе, если в этот момент обновлял свой значок в строке меню. Теперь он закрывается без сбоев.",
+        "ja": "メニューバーのアイコンを更新している最中に終了すると、Pitwall がクラッシュすることがありました。今はきれいに終了します。",
+        "zh-Hans": "Pitwall 在更新菜单栏图标时退出可能会崩溃。现在可以正常退出。"
+      }
     }
   ]
 }
