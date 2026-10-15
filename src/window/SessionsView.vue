@@ -326,7 +326,7 @@ onMounted(() => void loadSessions());
           >
             <span v-if="f.id !== 'all'" :class="['tab-mark', f.id]" aria-hidden="true"></span>
             <span :class="['tab-label', { markable: f.id !== 'all' }]">{{ filterLabel(f) }}</span>
-            <span v-if="view" :class="['tab-count', { hot: f.id === 'waiting' && counts.waiting > 0 }]">{{ counts[f.id] }}</span>
+            <span v-if="view" :class="['tab-count', { hot: f.id === 'waiting' && counts.waiting > 0, total: f.id === 'all' }]">{{ counts[f.id] }}</span>
           </button>
         </div>
         <ProjectPicker class="picker" :projects="projects" :scope="scope" :waits="waits" label="sessions.pickerLabel" @pick="scope = $event" />
@@ -498,7 +498,7 @@ input[type="search"]::placeholder {
   gap: 4px;
 }
 
-/* In a narrow list a tab's name gives way; its count never does. */
+/* In a narrow list a tab's name gives way; a state's count never does. */
 .tabs button {
   height: 28px;
   min-width: 0;
@@ -555,7 +555,7 @@ input[type="search"]::placeholder {
   border: 1.5px solid var(--idle-ring);
 }
 
-@container (max-width: 500px) {
+@container (max-width: 584px) {
   .tab-mark {
     display: inline-block;
   }
@@ -598,15 +598,16 @@ input[type="search"]::placeholder {
   font-weight: 600;
 }
 
-/* The project picker, at the row's end: a long project name gives way before a tab's does. */
+/* The project picker, at the row's end: a long project name gives way before a tab's does, so
+   much sooner that the tabs lose no part of a pixel (which would already cut a name short). */
 .filters > .picker {
   margin-left: auto;
-  flex-shrink: 1000;
+  flex-shrink: 100000;
 }
 
-/* The window at its narrowest: the picker is its icon alone (its name stays as its tooltip, and
-   read out), so the tabs keep their room. */
-@container (max-width: 350px) {
+/* Narrower: the picker is its icon alone (its name stays as its tooltip, and read out), so the
+   tabs keep their room. */
+@container (max-width: 388px) {
   .filters > .picker {
     min-width: 0;
     flex-shrink: 0;
@@ -623,6 +624,23 @@ input[type="search"]::placeholder {
 
   .filters :deep(.ppick-button) {
     padding: 0 8px;
+  }
+}
+
+/* The window at its narrowest: the tabs close up, and "All" lets its count go so that its name
+   stays whole (the list shows them all anyway); the states keep their marks and counts. */
+@container (max-width: 350px) {
+  .tabs {
+    gap: 2px;
+  }
+
+  .tabs button {
+    padding: 0 6px;
+    gap: 4px;
+  }
+
+  .tab-count.total {
+    display: none;
   }
 }
 

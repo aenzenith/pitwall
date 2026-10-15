@@ -790,8 +790,12 @@ function server(project: Project): string {
           <label class="sr" for="search">{{ t("common.searchProjects") }}</label>
           <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" @keydown.down.prevent="focusSelected" />
           <Spinner v-if="acting" class="busy-spin" />
-          <button type="button" class="control" :disabled="!(shownState ? shownState.total : projects.length) || acting" @click="startAll">{{ t("common.startAll") }}</button>
-          <button type="button" class="control" :disabled="!(shownState ? shownState.running : snapshot?.running) || acting" @click="stopAll">{{ t("common.stopAll") }}</button>
+          <button type="button" class="control all" :title="t('common.startAll')" :disabled="!(shownState ? shownState.total : projects.length) || acting" @click="startAll">
+            <Icon name="play" :size="13" class="all-icon" /><span class="all-text">{{ t("common.startAll") }}</span>
+          </button>
+          <button type="button" class="control all" :title="t('common.stopAll')" :disabled="!(shownState ? shownState.running : snapshot?.running) || acting" @click="stopAll">
+            <Icon name="stop" :size="13" class="all-icon" /><span class="all-text">{{ t("common.stopAll") }}</span>
+          </button>
         </div>
 
         <span id="rows-keys" class="sr-only">
@@ -854,9 +858,9 @@ function server(project: Project): string {
                         <span class="name-text">{{ project.name }}</span>
                         <MutedMark v-if="project.muted" />
                         <span v-if="heldCount(project)" class="held-badge" role="img" :aria-label="t('detail.held.count', { count: heldCount(project) })" :title="t('detail.held.count', { count: heldCount(project) })">
-                          <Icon name="clock" :size="10" />{{ heldCount(project) }}
+                          <Icon name="clock" :size="10" /><span class="badge-count">{{ heldCount(project) }}</span>
                         </span>
-                        <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
+                        <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ <span class="badge-count">{{ project.terminals.length }}</span></span>
                       </span>
                       <span class="path">{{ project.path }}</span>
                     </span>
@@ -1251,6 +1255,7 @@ function server(project: Project): string {
 }
 
 .toolbar {
+  container-type: inline-size;
   height: 56px;
   flex-shrink: 0;
   display: flex;
@@ -1260,10 +1265,16 @@ function server(project: Project): string {
   border-bottom: 1px solid var(--line);
 }
 
+/* A narrow list gives the heading's room and then the search box's to the buttons, whose labels
+   are never cut. */
 .heading {
   font-size: 15px;
   font-weight: 600;
   flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .busy-spin {
@@ -1277,6 +1288,7 @@ function server(project: Project): string {
 
 input[type="search"] {
   width: 220px;
+  min-width: 64px;
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line-strong);
@@ -1310,6 +1322,39 @@ input[type="search"]::placeholder {
   cursor: default;
 }
 
+/* Without room for their names once the heading and the search box have given theirs, Start all
+   and Stop all are their icons alone (still their tooltips, and read out). */
+.control.all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.all-icon {
+  display: none;
+}
+
+@container (max-width: 409px) {
+  .control.all {
+    flex-shrink: 0;
+    width: 30px;
+    padding: 0;
+  }
+
+  .all-icon {
+    display: block;
+  }
+
+  .all-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 .table {
   display: flex;
   flex-direction: column;
@@ -1323,6 +1368,14 @@ input[type="search"]::placeholder {
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr) 76px;
   gap: 12px;
   align-items: center;
+}
+
+/* A head as narrow as its column cuts its name, as the rows do. */
+.thead > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Fixed height: the details header (toolbar 56 + 38 = 94px) lines up with this line. */
@@ -1347,6 +1400,7 @@ input[type="search"]::placeholder {
    empty space it slides up to the last place) and its shadow is never cut. The same room on
    every side; a dragged row keeps it from the edges too (lib/groupReorder). */
 .tbody {
+  container: project-rows / inline-size;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -1494,6 +1548,14 @@ input[type="search"]::placeholder {
   font-weight: 400;
   white-space: nowrap;
   color: var(--claude-soft);
+}
+
+/* A narrow list: the badges are their icons alone (their counts stay in their tooltips, and read
+   out) before they leave a name beside both of them less than 48 px. */
+@container project-rows (max-width: 651px) {
+  .badge-count {
+    display: none;
+  }
 }
 
 .path {

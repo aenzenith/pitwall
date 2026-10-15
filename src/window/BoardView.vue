@@ -1124,8 +1124,9 @@ const ghostStyle = computed(() =>
   }
 }
 
-/* Narrowest: "Add card" is its plus alone (still its tooltip, and read out). */
-@container (max-width: 520px) {
+/* Narrower: "Add card" is its plus alone (still its tooltip, and read out), before its name would
+   be cut in any language. */
+@container (max-width: 625px) {
   .board-add-text {
     position: absolute;
     width: 1px;
@@ -1136,15 +1137,46 @@ const ghostStyle = computed(() =>
   }
 }
 
+/* Narrower still: the project picker is its folder alone (its name stays as its tooltip, and read
+   out). */
+@container (max-width: 495px) {
+  .board-bar :deep(.ppick) {
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .board-bar :deep(.ppick-text),
+  .board-bar :deep(.ppick-more) {
+    display: none;
+  }
+
+  .board-bar :deep(.ppick-every) {
+    display: block;
+  }
+
+  .board-bar :deep(.ppick-button) {
+    padding: 0 8px;
+  }
+}
+
 /* The window at its narrowest: the bar has never had room for all of it, and the days' button
-   takes none from the rest (the title and the search box give it up). */
-@container (max-width: 340px) {
+   takes none from the rest (the title and the search box give it up). From a little wider on
+   already, or the plus would be pushed out of the bar. */
+@container (max-width: 460px) {
   .board-bar > .board-heading {
     min-width: 0;
   }
 
   .board-bar > .board-search {
     min-width: 64px;
+  }
+}
+
+/* Narrowest, on a project's board (the one with views): the bar's plus steps aside; Up next's own
+   plus adds the same card, and so does the shortcut. */
+@container (max-width: 285px) {
+  .board-bar:has(> .board-views) > .board-add {
+    display: none;
   }
 }
 
@@ -1295,7 +1327,7 @@ const ghostStyle = computed(() =>
 }
 
 .board-add {
-  flex-shrink: 1;
+  flex-shrink: 0;
   min-width: 0;
   gap: 8px;
   padding: 0 12px;

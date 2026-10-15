@@ -256,6 +256,27 @@
     {
       "kind": "fix",
       "title": {
+        "en": "Buttons stay in reach",
+        "tr": "Butonlar erişimde kalıyor",
+        "de": "Schaltflächen bleiben erreichbar",
+        "es": "Los botones siguen a mano",
+        "ru": "Кнопки остаются под рукой",
+        "ja": "ボタンが押せる位置に",
+        "zh-Hans": "按钮始终可点"
+      },
+      "body": {
+        "en": "With many terminal tabs, New tab and New Claude stay in the panel, and the tab you are on stays in view. In a narrower window Start all, Stop all, Add card, New tab and New Claude show their icons alone instead of slipping out of reach or being cut short, and the Sessions tabs and Up next keep their names whole.",
+        "tr": "Çok sayıda terminal sekmesi açıkken Yeni sekme ve Yeni Claude panelde kalıyor, açık olan sekme de görünür kalıyor. Daha dar bir pencerede Hepsini başlat, Hepsini durdur, Kart ekle, Yeni sekme ve Yeni Claude erişim dışına kaymak ya da yarıda kesilmek yerine yalnız ikonlarıyla görünüyor; Oturumlar sekmeleri ve Sıradaki adlarını bütün gösteriyor.",
+        "de": "Bei vielen Terminal-Tabs bleiben Neuer Tab und Claude starten im Bereich, und der aktive Tab bleibt sichtbar. In einem schmaleren Fenster zeigen Alle starten, Alle stoppen, Karte hinzufügen, Neuer Tab und Claude starten nur ihr Symbol, statt aus der Reichweite zu rutschen oder abgeschnitten zu werden, und die Tabs unter Sitzungen und Als Nächstes zeigen ihren Namen ganz.",
+        "es": "Con muchas pestañas de terminal, Nueva pestaña y Nuevo Claude se quedan en el panel, y la pestaña abierta sigue a la vista. En una ventana más estrecha, Iniciar todos, Detener todos, Agregar tarjeta, Nueva pestaña y Nuevo Claude muestran solo su icono en lugar de quedar fuera de alcance o cortarse, y las pestañas de Sesiones y Siguiente muestran su nombre completo.",
+        "ru": "При множестве вкладок терминала «Новая вкладка» и «Новый Claude» остаются на панели, а открытая вкладка — на виду. В узком окне «Запустить все», «Остановить все», «Добавить карточку», «Новая вкладка» и «Новый Claude» показывают только значок вместо того, чтобы уходить из зоны досягаемости или обрезаться; вкладки на странице «Сессии» и колонка «Далее» показывают названия целиком.",
+        "ja": "ターミナルのタブが多くても「新規タブ」と「新規Claude」はパネル内に残り、開いているタブも見えたままです。狭いウィンドウでは「すべて起動」「すべて停止」「カードを追加」「新規タブ」「新規Claude」が押せなくなったり途中で切れたりせず、アイコンだけで表示されます。「セッション」のタブと「次に」の名前も欠けずに表示されます。",
+        "zh-Hans": "终端标签页很多时，“新标签页”和“新建 Claude”仍留在面板中，当前标签页也保持可见。在较窄的窗口中，“全部启动”“全部停止”“添加卡片”“新标签页”和“新建 Claude”只显示图标，不再被挤出可点范围或被截断；“会话”的标签和“待办”的名称也完整显示。"
+      }
+    },
+    {
+      "kind": "fix",
+      "title": {
         "en": "Server errors in your language",
         "tr": "Sunucu hataları senin dilinde",
         "de": "Serverfehler in deiner Sprache",

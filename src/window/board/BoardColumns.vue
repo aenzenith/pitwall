@@ -180,6 +180,7 @@ useSlide(root, order);
 }
 
 .bcol-top {
+  container-type: inline-size;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -356,5 +357,25 @@ useSlide(root, order);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A head without room for the column's name, its count and "Add" whole in every language (a
+   column as narrow as at the window's first size): "Add" is its plus alone (still its tooltip, and
+   read out), and the column's name never gives way to it. */
+@container (max-width: 239px) {
+  .badd {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .badd-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 </style>

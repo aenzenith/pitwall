@@ -292,6 +292,11 @@ function focusTab(id: number | undefined): void {
   if (id !== undefined) tablist.value?.querySelector<HTMLElement>(`[data-tab="${id}"]`)?.focus();
 }
 
+/** More tabs than the row holds even narrowed: the one shown comes into sight. */
+function showTab(id: number | undefined): void {
+  if (id !== undefined) tablist.value?.querySelector(`[data-tab="${id}"]`)?.closest(".tab")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
 /**
  * The tabs are one Tab stop: ←/→ (Home, End) pick the next tab and keep the focus on the tabs;
  * ↵ and Space go into the shown terminal; Delete closes the tab, F2 renames it.
@@ -353,6 +358,7 @@ watch(
     await nextTick();
     // A tab that came by itself is shown without the keyboard.
     const quiet = id !== undefined && unasked.delete(id);
+    showTab(id);
     if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value && !quiet);
     if (onTabs) focusTab(id);
   },
@@ -417,16 +423,25 @@ watch(
 // No terminal opens on its own: a project starts with "No terminal in …" until you open one.
 
 let observer: ResizeObserver | null = null;
+/** A row that narrows (the window, the panel) keeps the shown tab in sight too. */
+let tabsObserver: ResizeObserver | null = null;
+watch(tablist, (list, old) => {
+  if (old) tabsObserver?.unobserve(old);
+  if (list) tabsObserver?.observe(list);
+});
 
 onMounted(() => {
   observer = new ResizeObserver(() => {
     if (active.value && !collapsed.value && !animating.value) fitView(active.value.id);
   });
   if (viewport.value) observer.observe(viewport.value);
+  tabsObserver = new ResizeObserver(() => showTab(active.value?.id));
+  if (tablist.value) tabsObserver.observe(tablist.value);
 });
 
 onBeforeUnmount(() => {
   observer?.disconnect();
+  tabsObserver?.disconnect();
   clearTimeout(settle);
   hideClaudeMenu();
 });
@@ -482,7 +497,7 @@ defineExpose({ openTerminal, collapse });
           >
             <ClaudeLogo v-if="term.kind === 'claude'" :size="11" />
             <Icon v-else name="terminal" :size="11" />
-            <span>{{ term.name }}</span>
+            <span class="tab-name">{{ term.name }}</span>
             <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
           <button
@@ -498,13 +513,13 @@ defineExpose({ openTerminal, collapse });
       </div>
       <!-- Left: the project and its tabs. Right: new tab buttons and collapse. -->
       <span class="grow"></span>
-      <button type="button" class="action" :title="t('terminal.newTabTitle', { shortcut: keys(`${TERMINAL_MOD}+T`) })" :disabled="opening" @click="openTerminal()">
-        <Icon name="plus" :size="13" /> {{ t("terminal.newTab") }}
+      <button type="button" class="action new-tab" :title="t('terminal.newTabTitle', { shortcut: keys(`${TERMINAL_MOD}+T`) })" :disabled="opening" @click="openTerminal()">
+        <Icon name="plus" :size="13" /> <span class="action-text">{{ t("terminal.newTab") }}</span>
       </button>
       <!-- One button in two parts: a session as the project starts them, and the list of others. -->
       <span ref="claudeSplit" class="split">
-        <button type="button" class="action" :title="t('terminal.newClaudeTitle')" :disabled="opening" @click="openTerminal(true)">
-          <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
+        <button type="button" class="action new-claude" :title="t('terminal.newClaudeTitle')" :disabled="opening" @click="openTerminal(true)">
+          <ClaudeLogo :size="12" /> <span class="action-text">{{ t("terminal.newClaude") }}</span>
         </button>
         <button
           ref="claudeMore"
@@ -642,6 +657,7 @@ defineExpose({ openTerminal, collapse });
 
 /* A fixed height: renaming a tab (its input) never pushes the terminal down. */
 .tabs {
+  container-type: inline-size;
   flex-shrink: 0;
   height: 24px;
   display: flex;
@@ -651,14 +667,21 @@ defineExpose({ openTerminal, collapse });
   min-width: 0;
 }
 
+/* More tabs than the row holds: they narrow, their names cut (well before the project's is), and
+   the buttons on the right stay where they are; the one shown keeps in sight (one tab's room at
+   least). */
 .tablist {
+  flex: 0 100000 auto;
+  min-width: 56px;
   display: flex;
   align-items: center;
   gap: 2px;
+  overflow: hidden;
 }
 
 /* The tab and its close button read as one: the hover, the colour and the hand are the pair's. */
 .tab {
+  min-width: 56px;
   height: 22px;
   display: inline-flex;
   align-items: center;
@@ -672,9 +695,20 @@ defineExpose({ openTerminal, collapse });
 }
 
 .tab-label {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-label > :not(.tab-name),
+.x {
+  flex-shrink: 0;
 }
 
 /* The keyboard's tab: the ring goes round the pair, as the tab looks like one piece. */
@@ -783,6 +817,43 @@ defineExpose({ openTerminal, collapse });
   color: var(--text-strong);
 }
 
+/* A narrow row: "New tab" is its plus alone, and narrower still "New Claude" its mark (still their
+   tooltips, and read out). */
+@container (max-width: 455px) {
+  .action.new-tab {
+    flex-shrink: 0;
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .new-tab .action-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@container (max-width: 359px) {
+  .split > .action.new-claude {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .new-claude .action-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 /* Its list, over the page wherever the panel's edges are. */
 .claude-menu {
   position: fixed;
@@ -836,9 +907,11 @@ defineExpose({ openTerminal, collapse });
   background: var(--line);
 }
 
-/* The project, first in the row, set off from its tabs. */
+/* The project, first in the row, set off from its tabs; its name is cut only once they have no
+   more room to give. */
 .where {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 48px;
   max-width: 180px;
   margin-right: 6px;
   padding: 0 10px 0 6px;
