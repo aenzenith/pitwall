@@ -210,6 +210,27 @@
         "ja": "作業中の Claude セッションは、最後の書き込みがいつであっても、Pitwall の起動直後から作業中と表示されます。別のプロジェクトの中にあるプロジェクトでのターンは、二度ではなく一度だけ通知されます。",
         "zh-Hans": "正在工作的 Claude 会话，无论上次写入是多久以前，Pitwall 启动后都会立即显示为工作中。位于另一个已列出项目之内的项目，其轮次只提醒一次，而不是两次。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "One server per project",
+        "tr": "Her projeye bir sunucu",
+        "de": "Ein Server pro Projekt",
+        "es": "Un servidor por proyecto",
+        "ru": "Один сервер на проект",
+        "ja": "1 プロジェクトに 1 サーバー",
+        "zh-Hans": "每个项目一个服务器"
+      },
+      "body": {
+        "en": "VS Code no longer starts a second server for a project Pitwall has just started. Stop all also stops a Start all that is still under way, and a package.json saved with a byte-order mark is read. On Windows, starting a project from Pitwall while it is open in VS Code no longer gives it a second server.",
+        "tr": "VS Code, Pitwall'ın az önce başlattığı bir proje için artık ikinci bir sunucu başlatmıyor. Hepsini durdur, hâlâ süren bir Hepsini başlat'ı da durduruyor; bayt sırası işaretiyle (BOM) kaydedilmiş package.json da okunuyor. Windows'ta, VS Code'da açık bir projeyi Pitwall'dan başlatmak artık ona ikinci bir sunucu açmıyor.",
+        "de": "VS Code startet für ein Projekt, das Pitwall gerade gestartet hat, keinen zweiten Server mehr. Alle stoppen stoppt auch ein noch laufendes Alle starten, und eine mit Byte-Order-Mark gespeicherte package.json wird gelesen. Unter Windows bekommt ein in VS Code geöffnetes Projekt keinen zweiten Server mehr, wenn du es in Pitwall startest.",
+        "es": "VS Code ya no inicia un segundo servidor para un proyecto que Pitwall acaba de iniciar. Detener todos también detiene un Iniciar todos que sigue en curso, y se lee un package.json guardado con marca de orden de bytes. En Windows, iniciar desde Pitwall un proyecto abierto en VS Code ya no le da un segundo servidor.",
+        "ru": "VS Code больше не запускает второй сервер для проекта, который Pitwall только что запустил. «Остановить все» останавливает и ещё идущее «Запустить все», а package.json, сохранённый с меткой порядка байтов, читается. В Windows запуск из Pitwall проекта, открытого в VS Code, больше не даёт ему второй сервер.",
+        "ja": "Pitwall が起動したばかりのプロジェクトに、VS Code が 2 つ目のサーバーを起動することはなくなりました。「すべて停止」は進行中の「すべて起動」も止め、バイトオーダーマーク付きで保存された package.json も読み込まれます。Windows では、VS Code で開いているプロジェクトを Pitwall から起動しても、2 つ目のサーバーが立ち上がらなくなりました。",
+        "zh-Hans": "VS Code 不再为 Pitwall 刚启动的项目再启动第二个服务器。“全部停止”也会停止仍在进行的“全部启动”，带字节顺序标记保存的 package.json 也能读取。在 Windows 上，从 Pitwall 启动在 VS Code 中打开的项目，不会再多出第二个服务器。"
+      }
     }
   ]
 }

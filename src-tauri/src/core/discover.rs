@@ -118,7 +118,9 @@ fn candidate(name: &str, dir: &Path, script: &str, listed: bool) -> Option<Candi
     if fs::metadata(&file).ok()?.len() > MANIFEST_BYTES {
         return None;
     }
-    let manifest: serde_json::Value = serde_json::from_slice(&fs::read(&file).ok()?).ok()?;
+    let bytes = fs::read(&file).ok()?;
+    // A byte-order mark before it is no part of it (`resolve::has_script`).
+    let manifest: serde_json::Value = serde_json::from_slice(bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes)).ok()?;
     manifest.get("scripts")?.get(script)?.as_str()?;
 
     Some(Candidate { path: dir.to_string_lossy().into_owned(), name: name.to_string(), kind: kind(dir, &manifest), changed_at: changed_at(dir), listed })

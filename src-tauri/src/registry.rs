@@ -73,6 +73,16 @@ impl WindowRecord {
         self.roots.as_ref().is_some_and(|roots| roots.iter().any(|root| same_path(root, folder_path)))
     }
 
+    /// The folder as this participant writes it (what it runs, else its roots), for a command
+    /// to it: on Windows a VS Code window writes `c:\…` where the app writes `C:\…`, and the
+    /// extension up to 1.0.0 compares paths exactly, so a start in our spelling would be a
+    /// second server there and a stop would stop nothing. A folder it doesn't name stays as given.
+    pub fn spelling<'a>(&'a self, folder_path: &'a str) -> &'a str {
+        let running = self.projects.iter().filter(|project| project.running).map(|project| project.folder_path.as_str());
+        let roots = self.roots.iter().flatten().map(String::as_str);
+        running.chain(roots).find(|own| same_path(own, folder_path)).unwrap_or(folder_path)
+    }
+
     pub fn takes(&self, feature: &str) -> bool {
         self.features.as_ref().is_some_and(|features| features.iter().any(|f| f == feature))
     }
@@ -496,20 +506,23 @@ impl Registry {
         read_json(&self.dir.join("favorites.json")).unwrap_or_default()
     }
 
-    /// Adds or removes a favourite; returns whether it is a favourite now.
+    /// Adds or removes a favourite; returns whether it is a favourite now. The other entries are
+    /// written back as they were read: fields another participant added stay (rule 4 of
+    /// PROTOCOL.md).
     pub fn set_favourite(&self, favourite: Favourite, on: bool) -> bool {
-        let mut list = self.read_favourites();
-        let exists = list.iter().any(|item| same_path(&item.path, &favourite.path));
+        let mut list: Vec<serde_json::Value> = read_json(&self.dir.join("favorites.json")).unwrap_or_default();
+        let text = |item: &serde_json::Value, key: &str| item.get(key).and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+        let exists = list.iter().any(|item| same_path(&text(item, "path"), &favourite.path));
 
         if exists == on {
             return on;
         }
 
         if on {
-            list.push(favourite);
-            list.sort_by_key(|item| item.name.to_lowercase());
+            list.extend(serde_json::to_value(&favourite).ok());
+            list.sort_by_key(|item| text(item, "name").to_lowercase());
         } else {
-            list.retain(|item| !same_path(&item.path, &favourite.path));
+            list.retain(|item| !same_path(&text(item, "path"), &favourite.path));
         }
 
         if let Ok(json) = serde_json::to_string_pretty(&list) {
@@ -571,6 +584,19 @@ mod tests {
         assert_eq!(key(r"C:\"), r"c:\");
         assert_ne!(key(r"C:\Users\me\paddock"), key(r"C:\Users\me\paddock-docs"));
         assert_eq!(fold_path("/Users/Me", false), "/Users/Me");
+    }
+
+    /// A command to a VS Code window names the folder as that window writes it: the extension
+    /// up to 1.0.0 compares exactly, and the app's `C:\…` would be a second server there, or a
+    /// stop of nothing. What it runs before its roots; elsewhere a path stays as it is.
+    #[test]
+    fn a_command_names_the_folder_as_the_window_writes_it() {
+        let window = record("w", 0, vec![project(r"c:\work\paddock", false), project(r"C:\Work\Pit", true)], Some(vec![r"c:\work\paddock".into(), r"c:\work\pit".into()]));
+        let windows = cfg!(windows);
+
+        assert_eq!(window.spelling(r"C:\work\paddock"), if windows { r"c:\work\paddock" } else { r"C:\work\paddock" });
+        assert_eq!(window.spelling(r"c:\WORK\pit"), if windows { r"C:\Work\Pit" } else { r"c:\WORK\pit" });
+        assert_eq!(window.spelling(r"C:\work\garage"), r"C:\work\garage");
     }
 
     #[test]
@@ -721,6 +747,21 @@ mod tests {
 
         assert!(dir.path().join("output/live/a.log").exists());
         assert!(!dir.path().join("output/dead").exists());
+    }
+
+    /// Rule 4 of PROTOCOL.md: a field the extension keeps in a favourite survives a star or an
+    /// unstar here.
+    #[test]
+    fn starring_keeps_the_fields_another_participant_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = Registry::with_id(dir.path().to_path_buf(), "Pitwall", "app");
+        fs::write(dir.path().join("favorites.json"), r#"[{"path":"/p/b","name":"b","group":"x"},{"path":"/p/c","name":"c"}]"#).unwrap();
+
+        registry.set_favourite(Favourite { path: "/p/a".into(), name: "a".into() }, true);
+        registry.set_favourite(Favourite { path: "/p/c".into(), name: "c".into() }, false);
+
+        let written: serde_json::Value = serde_json::from_str(&fs::read_to_string(dir.path().join("favorites.json")).unwrap()).unwrap();
+        assert_eq!(written, serde_json::json!([{"path":"/p/a","name":"a"},{"path":"/p/b","name":"b","group":"x"}]));
     }
 
     #[test]

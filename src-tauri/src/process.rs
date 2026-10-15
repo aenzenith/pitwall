@@ -588,6 +588,22 @@ pub fn wait_until(limit: Duration, mut done: impl FnMut() -> bool) -> bool {
     done()
 }
 
+/// How many bytes at the end of `bytes` begin a UTF-8 character that isn't whole yet (0 to 3).
+fn unfinished(bytes: &[u8]) -> usize {
+    let tail = &bytes[bytes.len().saturating_sub(3)..];
+    let Some(lead) = tail.iter().rposition(|byte| byte & 0xC0 != 0x80) else {
+        return 0;
+    };
+    let wanted = match tail[lead] {
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF7 => 4,
+        _ => 1,
+    };
+    let have = tail.len() - lead;
+    if have < wanted { have } else { 0 }
+}
+
 /// Reads `stream` to its end on a thread of its own, handing over each line. A line ends at
 /// `\n` (a `\r` before it is dropped). Text after a lone `\r` replaces the line so far, as on a
 /// terminal, so a progress bar that redraws one line never makes it grow; and a line that
@@ -622,8 +638,11 @@ pub fn read_lines(stream: impl Read + Send + 'static, mut line: impl FnMut(Strin
                         }
                         current.push(byte);
                         if current.len() >= LINE_MAX {
+                            // A character cut in two would come out as two broken halves: its
+                            // first bytes begin the next line instead.
+                            let rest = current.split_off(current.len() - unfinished(&current));
                             line(String::from_utf8_lossy(&current).into_owned());
-                            current.clear();
+                            current = rest;
                         }
                     }
                 }

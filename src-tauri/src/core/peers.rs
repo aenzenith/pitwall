@@ -22,27 +22,49 @@ pub(super) struct Tail {
 }
 
 impl Core {
+    /// Our servers as our registry record shows them, in a fixed order.
+    fn own_projects(&self) -> Vec<ProjectState> {
+        let inner = self.lock();
+        let mut own: Vec<ProjectState> = inner
+            .runs
+            .iter()
+            .map(|(path, run)| ProjectState {
+                folder_path: path.clone(),
+                name: run.name.clone(),
+                running: true,
+                port: run.port,
+                url: run.url.clone(),
+                started_at: Some(run.started_at),
+                issue: inner.issues.get(path).cloned(),
+                output: None,
+            })
+            .collect();
+        own.sort_by(|a, b| a.folder_path.cmp(&b.folder_path));
+        own
+    }
+
+    /// Writes our record; `always` on the heartbeat, else only when what it says changed. A
+    /// VS Code window checks every record before it starts a server (rule 1 of PROTOCOL.md):
+    /// one started here has to show there now, not at the next heartbeat, or a start there in
+    /// between is a second server.
+    fn publish_own(&self, always: bool) {
+        let mut published = self.published.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let own = self.own_projects();
+
+        if always || *published != own {
+            self.registry.publish(own.clone());
+            *published = own;
+        }
+    }
+
+    /// Our record, now, if our servers changed since it was written.
+    pub(super) fn publish_changed(&self) {
+        self.publish_own(false);
+    }
+
     /// Publish our state, read everybody else's, see where Claude stands.
     pub fn heartbeat(self: &Arc<Self>) {
-        let own: Vec<ProjectState> = {
-            let inner = self.lock();
-            inner
-                .runs
-                .iter()
-                .map(|(path, run)| ProjectState {
-                    folder_path: path.clone(),
-                    name: run.name.clone(),
-                    running: true,
-                    port: run.port,
-                    url: run.url.clone(),
-                    started_at: Some(run.started_at),
-                    issue: inner.issues.get(path).cloned(),
-                    output: None,
-                })
-                .collect()
-        };
-
-        self.registry.publish(own);
+        self.publish_own(true);
 
         let peers = self.registry.read_peers();
         let favourites = self.registry.read_favourites();
@@ -186,7 +208,9 @@ fn read_range(file: &Path, from: u64, to: u64) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
-/// Complete lines out of `rest`, cleaned like our own output; the unfinished end stays.
+/// Complete lines out of `rest`, cleaned like our own output (`process::read_lines`): text
+/// after a lone `\r` replaces the line so far, as a progress bar redraws it; the unfinished end
+/// stays.
 fn take_lines(rest: &mut Vec<u8>) -> Vec<String> {
     let end = match rest.iter().rposition(|&b| b == b'\n') {
         Some(at) => at + 1,
@@ -197,6 +221,6 @@ fn take_lines(rest: &mut Vec<u8>) -> Vec<String> {
     let complete: Vec<u8> = rest.drain(..end).collect();
     String::from_utf8_lossy(&complete)
         .split_terminator('\n')
-        .map(|line| crate::resolve::strip_ansi(line.trim_end_matches('\r')))
+        .map(|line| crate::resolve::strip_ansi(line.trim_end_matches('\r').rsplit('\r').next().unwrap_or_default()))
         .collect()
 }

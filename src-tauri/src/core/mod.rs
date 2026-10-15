@@ -232,6 +232,8 @@ pub struct Core {
     git_busy: AtomicBool,
     /// Held while the pids file is built and written, so it is never stale or torn.
     pids_lock: Mutex<()>,
+    /// Our servers as our registry record last said; held while it is written (`peers.rs`).
+    published: Mutex<Vec<crate::registry::ProjectState>>,
     outbox: Arc<Mutex<Outbox>>,
     /// Projects whose Git state is to be read again.
     git_queue: Mutex<HashSet<String>>,
@@ -304,6 +306,7 @@ impl Core {
             watch: Mutex::new(None),
             git_busy: AtomicBool::new(false),
             pids_lock: Mutex::new(()),
+            published: Mutex::new(Vec::new()),
             outbox: Arc::new(Mutex::new(Outbox::default())),
             git_queue: Mutex::new(HashSet::new()),
             board: Mutex::new(board),
@@ -354,6 +357,7 @@ impl Core {
             self.handle_command(command);
         }
 
+        self.publish_changed();
         self.follow_peer_output();
 
         // The other participants' state is read every second, not only with the heartbeat: a

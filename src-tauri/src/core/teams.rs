@@ -53,7 +53,7 @@ pub(super) fn places(teams: &[Team]) -> HashMap<&str, (usize, usize)> {
 
 /// Calls off the team's start under way: it starts nothing more, and the projects whose turn
 /// hadn't come are no longer on their way.
-fn call_off(inner: &mut Inner, id: &str) {
+pub(super) fn call_off(inner: &mut Inner, id: &str) {
     if let Some(run) = inner.team_runs.remove(id) {
         inner.pending.retain(|_, pending| pending.queued != Some(run));
     }
@@ -66,7 +66,7 @@ pub(super) fn call_off_all(inner: &mut Inner) {
 }
 
 /// Whether start `run` of the team still stands: no stop of it, no newer start and no quit since.
-fn stands(inner: &Inner, id: &str, run: u64) -> bool {
+pub(super) fn stands(inner: &Inner, id: &str, run: u64) -> bool {
     !inner.disposed && inner.team_runs.get(id) == Some(&run)
 }
 

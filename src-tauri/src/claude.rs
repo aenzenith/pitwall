@@ -806,12 +806,16 @@ impl ClaudeWatch {
         fresh
     }
 
-    /// Merged with what is on disk, so a write from the extension in between isn't lost.
+    /// Merged with what is on disk, so a write from the extension in between isn't lost; fields
+    /// another participant added stay as they are (rule 4 of PROTOCOL.md).
     fn write_seen(&self, book: SeenBook) {
-        let merged = merge_seen(self.read_seen_file(), book);
+        let disk = fs::read_to_string(&self.seen_file).ok().and_then(|raw| serde_json::from_str::<Value>(&raw).ok()).filter(Value::is_object);
+        let merged = merge_seen(disk.clone().and_then(|raw| serde_json::from_value(raw).ok()), book);
+        let mut out = disk.unwrap_or_else(|| Value::Object(serde_json::Map::new()));
 
-        if let Ok(json) = serde_json::to_string(&merged) {
-            let _ = write_atomic(&self.seen_file, &json);
+        if let (Value::Object(fields), Ok(Value::Object(ours))) = (&mut out, serde_json::to_value(&merged)) {
+            fields.extend(ours);
+            let _ = write_atomic(&self.seen_file, &out.to_string());
         }
     }
 
@@ -1216,6 +1220,20 @@ mod tests {
         let long = format!(r"C:\Users\me\{}proj", "çok-uzun-klasör-".repeat(14));
         let expected = format!("C--Users-me-{}-ok-uzun-kla-yvlsze", "-ok-uzun-klas-r-".repeat(11));
         assert_eq!(encode_project_path(&long), expected);
+    }
+
+    /// Rule 4 of PROTOCOL.md: what the extension adds to the shared book survives our write.
+    #[test]
+    fn a_look_written_here_keeps_the_books_other_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("claude-seen.json"), r#"{"since":1,"paths":{"/a":5},"future":{"x":1}}"#).unwrap();
+
+        ClaudeWatch::new(tmp.path().join("claude"), tmp.path()).mark_seen("/b");
+
+        let book: Value = serde_json::from_str(&fs::read_to_string(tmp.path().join("claude-seen.json")).unwrap()).unwrap();
+        assert_eq!(book["future"], serde_json::json!({"x": 1}));
+        assert_eq!(book["paths"]["/a"], 5);
+        assert!(book["paths"]["/b"].as_u64().is_some_and(|at| at > 5));
     }
 
     #[test]

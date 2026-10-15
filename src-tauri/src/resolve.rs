@@ -113,8 +113,10 @@ pub fn is_forbidden_command(command: &str) -> bool {
     BUILD.is_match(command)
 }
 
+/// Whether `package.json` has `script`. A byte-order mark before it is no part of it: npm reads
+/// past one too.
 pub fn has_script(package_json: &str, script: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(package_json)
+    serde_json::from_str::<serde_json::Value>(package_json.trim_start_matches('\u{feff}'))
         .ok()
         .and_then(|value| value.get("scripts")?.get(script.trim())?.as_str().map(|_| ()))
         .is_some()

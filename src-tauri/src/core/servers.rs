@@ -139,6 +139,7 @@ impl Core {
         self.push_line(path, format!("$ {command}"));
         self.push_line(path, format!("  {path}"));
         self.record_pids();
+        self.publish_changed();
         self.notify();
         self.watch(Unit::Server(path.to_string()), run_id, child);
     }

@@ -3,7 +3,8 @@
 //! orders from them run here. The spinner shows each action until it is visibly done.
 
 use super::*;
-use super::snapshot::listed_path;
+use super::snapshot::{build_snapshot, listed_path};
+use super::teams::{call_off, stands};
 use crate::registry::RemoteCommand;
 
 /// A start counts as done once the server printed its address, or after this long.
@@ -11,6 +12,8 @@ const SETTLE_LIMIT: Duration = Duration::from_secs(15);
 /// The spinner never outlives this, whatever happens (for a project that waits for its turn in
 /// a team's start, counted from that turn).
 const PENDING_LIMIT: Duration = Duration::from_secs(30);
+/// Start all's run among the teams' starts (`Inner::team_runs`): no team's id is empty.
+const START_ALL: &str = "";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -87,14 +90,15 @@ impl Core {
     /// anything came of it: not of a start of what runs already or that was refused (no such
     /// script), nor of a stop of what doesn't run.
     pub(super) fn route(self: &Arc<Self>, path: &str, action: Action, open_url: bool) -> bool {
+        // A participant is sent the folder as it writes it (`WindowRecord::spelling`).
         let (running_here, stoppable, runner, root_owner) = {
             let inner = self.lock();
             let runner = inner
                 .peers
                 .iter()
                 .find(|peer| peer.projects.iter().any(|p| same_path(&p.folder_path, path) && p.running))
-                .map(|peer| peer.window_id.clone());
-            let root_owner = inner.peers.iter().find(|peer| peer.has_root(path)).map(|peer| peer.window_id.clone());
+                .map(|peer| (peer.window_id.clone(), peer.spelling(path).to_string()));
+            let root_owner = inner.peers.iter().find(|peer| peer.has_root(path)).map(|peer| (peer.window_id.clone(), peer.spelling(path).to_string()));
 
             // A start under way or a crash restart waiting is ours to stop as well.
             let running_here = inner.runs.contains_key(path);
@@ -104,7 +108,7 @@ impl Core {
         match action {
             Action::Start if running_here || runner.is_some() => return false,
             Action::Start => match root_owner {
-                Some(owner) => self.registry.send(&owner, "start", path),
+                Some((owner, folder)) => self.registry.send(&owner, "start", &folder),
                 None => {
                     self.start(path, open_url);
                     return self.lock().runs.contains_key(path);
@@ -113,8 +117,8 @@ impl Core {
             Action::Stop if stoppable => self.stop(path),
             Action::Restart if stoppable => self.restart(path),
             Action::Stop | Action::Restart => {
-                if let Some(owner) = runner {
-                    self.registry.send(&owner, action.as_str(), path);
+                if let Some((owner, folder)) = runner {
+                    self.registry.send(&owner, action.as_str(), &folder);
                 } else {
                     return action == Action::Restart && self.route(path, Action::Start, open_url);
                 }
@@ -123,12 +127,24 @@ impl Core {
         true
     }
 
+    /// Every project that isn't running, one a second. Kept as a team's start is (`teams.rs`,
+    /// under a key no team has), so that Stop all calls off what it hasn't begun.
     pub fn start_all(self: &Arc<Self>) {
-        let idle: Vec<String> =
-            self.snapshot().projects.into_iter().filter(|p| p.status != "running" && p.status != "busy").map(|p| p.path).collect();
-        for path in &idle {
-            self.mark_pending(path, Action::Start);
-        }
+        let (idle, run) = {
+            let mut inner = self.lock();
+            // A Start all still under way ends here; what it hadn't begun is this one's.
+            call_off(&mut inner, START_ALL);
+            let idle: Vec<String> =
+                build_snapshot(&inner).projects.into_iter().filter(|p| p.status != "running" && p.status != "busy").map(|p| p.path).collect();
+            inner.next_run += 1;
+            let run = inner.next_run;
+            inner.team_runs.insert(START_ALL.to_string(), run);
+            for path in &idle {
+                inner.pending.insert(path.clone(), Pending::start(Some(run)));
+            }
+            (idle, run)
+        };
+        self.notify();
 
         let core = Arc::clone(self);
 
@@ -137,7 +153,20 @@ impl Core {
                 if index > 0 {
                     thread::sleep(Duration::from_secs(1));
                 }
+                // Its turn, unless a Stop all came meanwhile.
+                {
+                    let mut inner = core.lock();
+                    if !stands(&inner, START_ALL, run) {
+                        return;
+                    }
+                    inner.pending.insert(path.clone(), Pending::start(None));
+                }
                 core.act_now(path, Action::Start);
+            }
+
+            let mut inner = core.lock();
+            if stands(&inner, START_ALL, run) {
+                inner.team_runs.remove(START_ALL);
             }
         });
     }
