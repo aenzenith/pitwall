@@ -93,7 +93,11 @@ fn say(port: u16, lines: &[String]) -> String {
     let Ok(mut stream) = TcpStream::connect((Ipv4Addr::LOCALHOST, port)) else {
         return String::new();
     };
-    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    // One the closing listener had queued is reset at once, and macOS then refuses the
+    // timeout (`EINVAL`): it says nothing either.
+    if stream.set_read_timeout(Some(Duration::from_secs(10))).is_err() {
+        return String::new();
+    }
     for line in lines {
         // A caller the line has closed on already can't be written to; what it said counts.
         let _ = stream.write_all(format!("{line}\n").as_bytes());

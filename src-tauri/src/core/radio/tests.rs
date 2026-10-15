@@ -151,7 +151,11 @@ fn say(port: u16, lines: &[String]) -> String {
     let Ok(mut stream) = TcpStream::connect((Ipv4Addr::LOCALHOST, port)) else {
         return String::new();
     };
-    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    // One the closing listener had queued is reset at once, and macOS then refuses the
+    // timeout (`EINVAL`): it says nothing either.
+    if stream.set_read_timeout(Some(Duration::from_secs(10))).is_err() {
+        return String::new();
+    }
     for line in lines {
         // A caller the endpoint has closed on already can't be written to; what it said counts.
         let _ = stream.write_all(format!("{line}\n").as_bytes());
@@ -234,7 +238,8 @@ fn silent_strangers_keep_no_caller_out() {
 
     // Every one of them is hung up on in a moment, well before a caller's time is up.
     for mut stranger in held {
-        stranger.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+        // Hung up on with a reset already, macOS refuses the timeout: the read says so at once.
+        let _ = stranger.set_read_timeout(Some(Duration::from_secs(3)));
         let read = stranger.read(&mut [0u8; 1]);
         assert!(matches!(read, Ok(0)) || read.as_ref().is_err_and(|error| error.kind() == std::io::ErrorKind::ConnectionReset), "{read:?}");
     }
