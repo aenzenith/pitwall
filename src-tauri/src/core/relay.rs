@@ -359,16 +359,22 @@ fn send(target: &Target, message: &Message) -> Result<(), Failure> {
     if answer.status().is_success() {
         return Ok(());
     }
-    let why = answer.body_mut().with_config().limit(REPLY_BYTES).read_to_string().ok().and_then(|reply| reason(&reply));
+    let secret = target.secret();
+    let why = answer.body_mut().with_config().limit(REPLY_BYTES).read_to_string().ok().and_then(|reply| reason(&reply, secret));
     // A reply that says the address back would put its secret into Settings: the status alone then.
-    let why = why.filter(|why| target.secret().is_none_or(|secret| !why.contains(secret)));
+    let why = why.filter(|why| secret.is_none_or(|secret| !why.contains(secret)));
     Err(Failure::Refused(answer.status().as_u16(), why))
 }
 
-/// Why the channel refused, as its reply says: Telegram's `description`, ntfy's `error`.
-fn reason(reply: &str) -> Option<String> {
+/// Why the channel refused, as its reply says: Telegram's `description`, ntfy's `error`. None
+/// when it says the address's `secret` back, looked for before the reason is cut to a line's
+/// length: cut, it could still hold the most of the secret.
+fn reason(reply: &str, secret: Option<&str>) -> Option<String> {
     let reply: Value = serde_json::from_str(reply).ok()?;
     let why = ["description", "error"].iter().find_map(|field| reply.get(field)?.as_str())?;
+    if secret.is_some_and(|secret| why.contains(secret)) {
+        return None;
+    }
     Some(plain(why)).filter(|why| !why.is_empty())
 }
 
@@ -816,6 +822,12 @@ mod tests {
         core.with_phone(|phone| phone.telegram = address);
         let refused = core.phone_test().unwrap_err();
         assert!(!refused.contains(TOKEN) && !serde_json::to_string(&core.phone_view()).unwrap().contains(TOKEN), "{refused}");
+        // Said back further on, where the reason is cut to a line: no part of it either.
+        let (address, _requests) =
+            listener(404, "{\"ok\":false,\"description\":\"Not Found: this method is not one the server knows of: /bot123456789:AAH-pit_wall-TOKEN/sendMessage\"}");
+        core.with_phone(|phone| phone.telegram = address);
+        let refused = core.phone_test().unwrap_err();
+        assert!(!refused.contains(&TOKEN[..13]) && !serde_json::to_string(&core.phone_view()).unwrap().contains(&TOKEN[..13]), "{refused}");
 
         // The form comes back without a token, as the UI has none to send: the stored one stays.
         let view = core.phone_set(PhoneConfig { telegram_token: String::new(), telegram_chat: "43".into(), ..form }).unwrap();
