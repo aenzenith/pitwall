@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.12.0](https://github.com/aenzenith/pitwall/compare/v1.11.0...v1.12.0) (2026-10-15)
+
+
+### Features
+
+* **commands:** commands that ask first wait for you ([3b45c75](https://github.com/aenzenith/pitwall/commit/3b45c75743e5e22d52636fc4b67ec526f4a188aa))
+
+
+### Bug Fixes
+
+* **board:** cards and backups keep what they should ([ff508ab](https://github.com/aenzenith/pitwall/commit/ff508ab381cdbc0d646f84f9bb41f423bb1c22ac))
+* **claude:** a turn stopped with Esc ends at once, quietly ([fb3b04e](https://github.com/aenzenith/pitwall/commit/fb3b04ee90721ffe7e1d3000dea90e71edfa67a9))
+* **claude:** a working session shows at once, and a nested project's turn is told once ([5df5367](https://github.com/aenzenith/pitwall/commit/5df5367496e03e83c9b4d4a16a85898f3a905a33))
+* **cli:** the command line and links, steadier ([9f06a82](https://github.com/aenzenith/pitwall/commit/9f06a828dd54dac207756411cfc07300d934305f))
+* **commands:** a production build is refused however it is started ([44788e7](https://github.com/aenzenith/pitwall/commit/44788e7632e0a96a781ef1617a578dea4b962576))
+* **fuel:** Claude Haiku 5.5 is priced ([9771d92](https://github.com/aenzenith/pitwall/commit/9771d928a75cb41a26d7d40e5a847f21a9468a72))
+* **phone:** a refused message never shows part of the token ([202c275](https://github.com/aenzenith/pitwall/commit/202c275dc0fb2aca9038d02fee9f4bf20124afe5))
+* **servers:** a server starts on its own port, and a missing folder says so ([83ea40f](https://github.com/aenzenith/pitwall/commit/83ea40f083ff32a8fc9f26d644ec2ab8ece947e7))
+* **servers:** an error line follows the app's language ([a25aa46](https://github.com/aenzenith/pitwall/commit/a25aa46c79dec5baeb0447c0b1f560f594674cc9))
+* **servers:** one server per project, wherever it is started ([55ce8d2](https://github.com/aenzenith/pitwall/commit/55ce8d278b9ccae0dc00b79d8bbc35b0e06e8bfb))
+* **ui:** buttons stay in reach in a narrow window and with many tabs ([206b3fd](https://github.com/aenzenith/pitwall/commit/206b3fdafedd5fd93237ed27766d0f5fcf2a0e6f))
+
 ## [1.11.0](https://github.com/aenzenith/pitwall/compare/v1.10.0...v1.11.0) (2026-10-14)
 
 
