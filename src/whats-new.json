@@ -336,6 +336,27 @@
         "ja": "Claude Haiku 5.5 のトークンにも API 換算のコストが付くようになりました。10 万トークンを超えるプロンプトには高いほうの料金が適用されます。",
         "zh-Hans": "Claude Haiku 5.5 的 token 现在也有 API 等价费用，超过 100K token 的提示按更高的费率计算。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Claude stopped with Esc rests at once",
+        "tr": "Esc ile durdurulan Claude hemen durur",
+        "de": "Mit Esc gestoppt, ruht Claude sofort",
+        "es": "Claude detenido con Esc queda en pausa al instante",
+        "ru": "Claude, остановленный Esc, сразу затихает",
+        "ja": "Esc で止めた Claude はすぐにアイドルに",
+        "zh-Hans": "用 Esc 停下的 Claude 立即空闲"
+      },
+      "body": {
+        "en": "When you stop Claude with Esc, Pitwall no longer shows it working for up to five more minutes, and tells you nothing of it: a board card it was working on goes to To review without a word to your phone. Your next prompt starts its own time, and the 20-minute alert counts from it.",
+        "tr": "Claude'u Esc ile durdurduğunda Pitwall onu beş dakikaya kadar çalışıyor göstermez, bunun için bir şey de haber vermez: üzerinde çalıştığı pano kartı telefonuna bir şey gitmeden İncelenecek'e geçer. Sonraki istemin süresi kendinden başlar; 20 dakika uyarısı da ondan sayılır.",
+        "de": "Hältst du Claude mit Esc an, zeigt Pitwall es nicht mehr bis zu fünf Minuten lang als arbeitend und meldet dazu nichts: Eine Karte, an der es arbeitete, geht ohne Nachricht an dein Telefon nach Zu prüfen. Deine nächste Eingabe startet ihre eigene Zeit, und der 20-Minuten-Hinweis zählt ab ihr.",
+        "es": "Cuando detienes a Claude con Esc, Pitwall ya no lo muestra trabajando hasta cinco minutos más ni te avisa de nada: la tarjeta en la que trabajaba pasa a Por revisar sin avisar a tu teléfono. Tu siguiente mensaje empieza su propio tiempo, y el aviso de 20 minutos cuenta desde él.",
+        "ru": "Если остановить Claude клавишей Esc, Pitwall больше не показывает его работающим ещё до пяти минут и ничего об этом не сообщает: карточка, над которой он работал, уходит «На проверку» без сообщения на телефон. Следующий запрос начинает своё время, и предупреждение о 20 минутах считается от него.",
+        "ja": "Esc で Claude を止めると、Pitwall は最大 5 分間作業中と表示し続けることがなくなり、通知もしません。作業中だったボードのカードは、電話に知らせずに「レビュー待ち」へ移ります。次のプロンプトから時間を数え直し、20 分の通知もそこから数えます。",
+        "zh-Hans": "用 Esc 停下 Claude 后，Pitwall 不再在之后最多五分钟里显示它在工作，也不会为此通知你：它正在处理的看板卡片会移到“待审查”，不会通知你的手机。下一条提示重新计时，20 分钟提醒也从它开始计算。"
+      }
     }
   ]
 }

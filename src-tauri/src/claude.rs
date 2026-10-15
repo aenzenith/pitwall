@@ -6,8 +6,9 @@
 //! instead: a prompt sent, the turn over, a permission prompt or question open, the session
 //! gone. Logs stay the fallback for sessions the hook hasn't reported. Either way a turn that
 //! ended isn't over while Claude Code itself still calls the session busy (`set_busy`): the
-//! subagents it left running in the background are at work. "Seen" state lives in the shared
-//! `claude-seen.json`.
+//! subagents it left running in the background are at work. And a turn under way is over once
+//! Claude Code calls the session idle from that turn's start on (`set_idle`): the user
+//! interrupted it, and no `Stop` comes. "Seen" state lives in the shared `claude-seen.json`.
 
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
@@ -49,6 +50,9 @@ pub struct Verdict {
     /// The session's name, as Claude Code shows it in `/resume`: a title set by hand, else the
     /// one Claude Code wrote itself. Only these title lines are read, never message text.
     pub title: Option<String>,
+    /// The time on the deciding line. Of a turn under way: that turn began no later
+    /// (`log_state`).
+    pub at: Option<u64>,
 }
 
 /// Where one session stands, for the day's timeline.
@@ -72,7 +76,8 @@ pub struct SessionState {
     pub phase: SessionPhase,
     /// While it waits on you: the turn it waits with.
     pub turn: Option<Turn>,
-    /// When its phase began: the hook's event, else the turn it waits with.
+    /// When its phase began: the hook's event (for a turn the user interrupted, when Claude Code
+    /// called it idle), else the turn it waits with.
     pub since: Option<u64>,
     /// Its hook events decide where it stands (else its log does).
     pub hooked: bool,
@@ -82,6 +87,9 @@ pub struct SessionState {
     pub tool: Option<String>,
     /// Subagents that ran tools in its current turn, as the hook heard them.
     pub subagents: u32,
+    /// Idle from a turn the user interrupted: Claude Code called it idle with no `Stop`
+    /// (`set_idle`).
+    pub interrupted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -159,13 +167,14 @@ pub fn read_tail(lines: &[&str]) -> Option<Verdict> {
         }
 
         let cwd = entry.get("cwd").and_then(Value::as_str).map(str::to_string);
+        let stamped = entry.get("timestamp").and_then(Value::as_str).and_then(parse_iso_ms);
 
         if kind == Some("user") {
-            return Some(Verdict { turn: None, cwd, title: None });
+            return Some(Verdict { turn: None, cwd, title: None, at: stamped });
         }
 
         let message = entry.get("message");
-        let at = entry.get("timestamp").and_then(Value::as_str).and_then(parse_iso_ms).unwrap_or(0);
+        let at = stamped.unwrap_or(0);
         let asking = message
             .and_then(|m| m.get("content"))
             .and_then(Value::as_array)
@@ -177,16 +186,16 @@ pub fn read_tail(lines: &[&str]) -> Option<Verdict> {
             });
 
         if asking {
-            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Asking, at }), cwd, title: None });
+            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Asking, at }), cwd, title: None, at: stamped });
         }
 
         let stop = message.and_then(|m| m.get("stop_reason")).and_then(Value::as_str);
 
         if stop.is_some_and(|reason| reason != "tool_use") {
-            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Finished, at }), cwd, title: None });
+            return Some(Verdict { turn: Some(Turn { kind: TurnKind::Finished, at }), cwd, title: None, at: stamped });
         }
 
-        return Some(Verdict { turn: None, cwd, title: None });
+        return Some(Verdict { turn: None, cwd, title: None, at: stamped });
     }
 
     None
@@ -472,6 +481,10 @@ enum HookPhase {
     Working,
     /// Its turn ended, or it waits on a permission prompt or a question.
     Waiting(TurnKind),
+    /// Back at the prompt from a turn under way, with no `Stop`: Claude Code called it idle
+    /// (the user interrupted the turn). At work again only while Claude Code calls it busy, or
+    /// with the next prompt.
+    Interrupted,
     /// Nothing decisive heard yet, or a prompt answered without an event saying so (a denied
     /// tool ends the turn silently): the log decides until the next event.
     Log,
@@ -485,6 +498,8 @@ struct HookSession {
     phase: HookPhase,
     /// When the phase began.
     since: u64,
+    /// When the latest prompt was sent (`UserPromptSubmit`); 0 before one was heard.
+    prompt: u64,
     /// The latest event.
     last: u64,
     /// Each thread's latest finished tool call: `""` for the session's own, else the subagent.
@@ -505,6 +520,7 @@ impl HookSession {
             transcript: None,
             phase: HookPhase::Log,
             since: at,
+            prompt: 0,
             last: at,
             threads: HashMap::new(),
             busy: HashSet::new(),
@@ -533,7 +549,10 @@ impl HookSession {
         let next = match event.event.as_str() {
             "SessionStart" if event.source.as_deref() == Some("compact") => None,
             "SessionStart" => Some(HookPhase::Idle),
-            "UserPromptSubmit" => Some(HookPhase::Working),
+            "UserPromptSubmit" => {
+                self.prompt = event.at;
+                Some(HookPhase::Working)
+            }
             // Installed only for the tools that ask: AskUserQuestion, ExitPlanMode.
             "PreToolUse" => Some(HookPhase::Waiting(TurnKind::Asking)),
             // The dialog opened this moment, for this thread.
@@ -558,7 +577,8 @@ impl HookSession {
                     // Another tool's Stop hook can keep the turn going; a subagent left running
                     // in the background doesn't: Claude Code's `busy` tells of that one (`state`).
                     HookPhase::Waiting(TurnKind::Finished) => thread.is_empty().then_some(HookPhase::Working),
-                    HookPhase::Ended => None,
+                    // A late tool call of the interrupted turn begins nothing.
+                    HookPhase::Ended | HookPhase::Interrupted => None,
                     _ => Some(HookPhase::Working),
                 }
             }
@@ -606,13 +626,34 @@ impl HookSession {
     /// Claude Code itself calls the session busy, so a turn that ended isn't over: subagents it
     /// left running in the background are at work, and it takes their results up without a
     /// prompt. Nor is a turn under way idle while it is silent: one tool call can run longer
-    /// than the working window, with no event and no log line until it ends.
-    fn state(&mut self, logged: u64, baseline: u64, recent: u64, busy: bool) -> Option<(SessionPhase, Option<Turn>)> {
+    /// than the working window, with no event and no log line until it ends. `idle`: Claude Code
+    /// itself calls the session idle, since then. A turn under way (at work, or with a prompt
+    /// open) that began no later was interrupted (Esc: no `Stop` comes): it is over there, with
+    /// nothing to tell, and a prompt sent after that began a new one.
+    fn state(&mut self, logged: u64, baseline: u64, recent: u64, busy: bool, idle: Option<u64>) -> Option<(SessionPhase, Option<Turn>)> {
+        let under_way = matches!(self.phase, HookPhase::Working | HookPhase::Waiting(TurnKind::Permission | TurnKind::Asking));
+        if let (true, false, Some(idle)) = (under_way, busy, idle) {
+            if idle >= self.since.max(self.prompt) {
+                self.phase = HookPhase::Interrupted;
+                self.since = idle;
+                self.threads.clear();
+                self.busy.clear();
+                self.asker = None;
+                self.tool = None;
+            } else if idle >= self.since {
+                self.since = self.prompt;
+            }
+        }
+
         let alive = if busy || self.last.max(logged) > recent { SessionPhase::Working } else { SessionPhase::Idle };
 
         match self.phase {
             HookPhase::Log => None,
             HookPhase::Idle | HookPhase::Ended => Some((SessionPhase::Idle, None)),
+            // At work with no prompt heard: a background task's result taken up, or a prompt sent
+            // just before Claude Code wrote it busy.
+            HookPhase::Interrupted if busy => Some((SessionPhase::Working, None)),
+            HookPhase::Interrupted => Some((SessionPhase::Idle, None)),
             HookPhase::Working => Some((alive, None)),
             HookPhase::Waiting(TurnKind::Finished) if busy => Some((SessionPhase::Working, None)),
             HookPhase::Waiting(TurnKind::Finished) if self.since > baseline => {
@@ -662,6 +703,7 @@ pub(crate) fn inside(cwd: &str, folder_path: &str) -> bool {
 fn owner<'a>(listed: &'a [String], cwd: &str) -> Option<&'a String> {
     listed.iter().filter(|folder| inside(cwd, folder)).max_by_key(|folder| folder.len())
 }
+
 /// Whether a folder under `~/.claude/projects` holds a project's sessions: `Some(true)` for its
 /// own folder, `Some(false)` for a subfolder's (`<project>-sub`, which a neighbour such as
 /// `pitwall-docs` also looks like; the session's cwd tells them apart).
@@ -678,16 +720,23 @@ fn dir_match(dir: &str, encoded: &str) -> Option<bool> {
 }
 
 /// A session decided by its log's last lines. `busy`: Claude Code itself calls it busy, which
-/// keeps a finished turn at work, and a silent one under way (`HookSession::state`).
-fn log_state(verdict: &Verdict, modified: u64, baseline: u64, recent: u64, busy: bool) -> (SessionPhase, Option<Turn>) {
+/// keeps a finished turn at work, and a silent one under way (`HookSession::state`). `idle`: it
+/// calls the session idle, since then (`cut_short`).
+fn log_state(verdict: &Verdict, modified: u64, baseline: u64, recent: u64, busy: bool, idle: Option<u64>) -> (SessionPhase, Option<Turn>) {
     let phase = match verdict.turn {
         Some(turn) if busy && turn.kind == TurnKind::Finished => SessionPhase::Working,
         Some(turn) if turn.at > baseline => SessionPhase::Waiting,
-        None if busy || modified > recent => SessionPhase::Working,
+        None if busy || (modified > recent && !cut_short(verdict, idle)) => SessionPhase::Working,
         _ => SessionPhase::Idle,
     };
 
     (phase, verdict.turn.filter(|_| phase == SessionPhase::Waiting))
+}
+
+/// The log's last lines tell of a turn under way, and Claude Code called the session idle from
+/// the time on the last of them on (`idle`): that turn was interrupted, and is over.
+fn cut_short(verdict: &Verdict, idle: Option<u64>) -> bool {
+    verdict.turn.is_none() && idle.zip(verdict.at).is_some_and(|(idle, at)| idle >= at)
 }
 
 pub struct ClaudeWatch {
@@ -708,6 +757,8 @@ pub struct ClaudeWatch {
     listed: Vec<String>,
     /// The sessions Claude Code itself calls busy now, by session id (`set_busy`).
     busy: HashSet<String>,
+    /// The sessions it calls idle now, and since when (`set_idle`).
+    idle: HashMap<String, u64>,
     /// A full scan ran; nothing is known before.
     ready: bool,
 }
@@ -724,6 +775,7 @@ impl ClaudeWatch {
             extra: HashMap::new(),
             listed: Vec::new(),
             busy: HashSet::new(),
+            idle: HashMap::new(),
             ready: false,
         }
     }
@@ -771,6 +823,15 @@ impl ClaudeWatch {
         if unread && self.ready {
             self.rescan();
         }
+    }
+
+    /// The sessions Claude Code itself calls idle now (`idle`, or `shell`: a background command
+    /// of theirs still runs), each with when it said so (`statusUpdatedAt`), of processes that
+    /// still run (read by the core). A turn under way since no later was interrupted: it is over
+    /// (`HookSession::state`, `log_state`). Said before the turn began, it changes nothing: the
+    /// file isn't written yet for a prompt just sent.
+    pub fn set_idle(&mut self, sessions: HashMap<String, u64>) {
+        self.idle = sessions;
     }
 
     /// The shared book plus every "I looked" from the legacy books (latest wins). The start
@@ -1005,7 +1066,7 @@ impl ClaudeWatch {
 
         self.hooked.retain(|_, session| now.saturating_sub(session.last) < EVENT_MAX_AGE_MS);
         self.extra.retain(|_, (asked, _)| now.saturating_sub(*asked) < EXTRA_MAX_AGE_MS);
-        let Self { logs, hooked, listed, extra, busy: busy_ids, .. } = self;
+        let Self { logs, hooked, listed, extra, busy: busy_ids, idle: idle_at, .. } = self;
 
         for folder_path in listed.iter() {
             let baseline = book.seen(folder_path).unwrap_or(book.since);
@@ -1029,18 +1090,19 @@ impl ClaudeWatch {
                     // A busy session is followed however long ago it last wrote: its subagents
                     // log elsewhere.
                     let busy = busy_ids.contains(id);
+                    let idle = idle_at.get(id).copied();
                     if !busy && hooked.get(id).map_or(0, |h| h.last).max(log.modified_ms) <= since {
                         continue;
                     }
 
-                    let (phase, turn) = match hooked.get_mut(id).and_then(|h| h.state(log.modified_ms, baseline, recent, busy)) {
+                    let (phase, turn) = match hooked.get_mut(id).and_then(|h| h.state(log.modified_ms, baseline, recent, busy, idle)) {
                         Some(state) => state,
                         None => match &log.verdict {
-                            Some(verdict) if busy || log.modified_ms > since => log_state(verdict, log.modified_ms, baseline, recent, busy),
+                            Some(verdict) if busy || log.modified_ms > since => log_state(verdict, log.modified_ms, baseline, recent, busy, idle),
                             _ => continue,
                         },
                     };
-                    states.push(session_state(id, folder_path, Some(log), hooked.get(id), phase, turn));
+                    states.push(session_state(id, folder_path, Some(log), hooked.get(id), phase, turn, idle));
                 }
             }
 
@@ -1059,8 +1121,9 @@ impl ClaudeWatch {
 
                 let log = log_dir.as_deref().and_then(|dir| logs.get(dir)).and_then(|sessions| sessions.get(id));
 
-                if let Some((phase, turn)) = session.state(log.map_or(0, |log| log.modified_ms), baseline, recent, busy) {
-                    states.push(session_state(id, folder_path, log, Some(&*session), phase, turn));
+                let idle = idle_at.get(id).copied();
+                if let Some((phase, turn)) = session.state(log.map_or(0, |log| log.modified_ms), baseline, recent, busy, idle) {
+                    states.push(session_state(id, folder_path, log, Some(&*session), phase, turn, idle));
                 }
             }
 
@@ -1099,14 +1162,15 @@ impl ClaudeWatch {
             let log = extra.get(id).map(|(_, log)| log);
             let logged = session.transcript.as_deref().and_then(modified_ms).unwrap_or(0);
             let busy = busy_ids.contains(id);
-            let (phase, turn) = match session.state(logged, baseline, recent, busy) {
+            let idle = idle_at.get(id).copied();
+            let (phase, turn) = match session.state(logged, baseline, recent, busy, idle) {
                 Some(state) => state,
                 None => match log.and_then(|log| log.verdict.as_ref()) {
-                    Some(verdict) => log_state(verdict, logged, baseline, recent, busy),
+                    Some(verdict) => log_state(verdict, logged, baseline, recent, busy, idle),
                     None => (SessionPhase::Idle, None),
                 },
             };
-            result.others.push(session_state(id, "", log, Some(&*session), phase, turn));
+            result.others.push(session_state(id, "", log, Some(&*session), phase, turn, idle));
         }
         result.others.sort_by(|a, b| a.id.cmp(&b.id));
 
@@ -1175,11 +1239,14 @@ fn peek_file<'a>(extra: &'a mut HashMap<String, (u64, Log)>, id: &str, file: &Pa
     Some(&entry.1)
 }
 
-/// A session as the scan reports it, from its log and its hook events.
-fn session_state(id: &str, path: &str, log: Option<&Log>, hook: Option<&HookSession>, phase: SessionPhase, turn: Option<Turn>) -> SessionState {
+/// A session as the scan reports it, from its log and its hook events (`idle`: Claude Code calls
+/// it idle, since then).
+fn session_state(id: &str, path: &str, log: Option<&Log>, hook: Option<&HookSession>, phase: SessionPhase, turn: Option<Turn>, idle: Option<u64>) -> SessionState {
     let verdict = log.and_then(|log| log.verdict.as_ref());
     let decided = hook.filter(|hook| hook.phase != HookPhase::Log);
     let permission = turn.is_some_and(|turn| turn.kind == TurnKind::Permission);
+    // At work again after an interrupted turn with no prompt heard: no event tells since when.
+    let unheard = phase == SessionPhase::Working && decided.is_some_and(|hook| hook.phase == HookPhase::Interrupted);
 
     SessionState {
         id: id.to_string(),
@@ -1188,11 +1255,16 @@ fn session_state(id: &str, path: &str, log: Option<&Log>, hook: Option<&HookSess
         title: verdict.and_then(|v| v.title.clone()),
         phase,
         turn,
-        since: decided.map(|hook| hook.since).or(turn.map(|turn| turn.at)),
+        since: decided.filter(|_| !unheard).map(|hook| hook.since).or(turn.map(|turn| turn.at)),
         hooked: decided.is_some(),
         ended: hook.is_some_and(|hook| hook.phase == HookPhase::Ended),
         tool: hook.filter(|_| permission).and_then(|hook| hook.tool.clone()),
         subagents: hook.map_or(0, HookSession::subagents),
+        interrupted: phase == SessionPhase::Idle
+            && match decided {
+                Some(hook) => hook.phase == HookPhase::Interrupted,
+                None => verdict.is_some_and(|verdict| cut_short(verdict, idle)),
+            },
     }
 }
 

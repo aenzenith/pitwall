@@ -4,11 +4,11 @@
 //! today's token counts (`spend.rs`), and Claude Code's running sessions.
 //!
 //! Claude Code keeps `~/.claude/sessions/<pid>.json` while a session runs. Only `pid`,
-//! `sessionId`, `entrypoint`, `cwd`, `startedAt` and `status` are read from it: `SessionFile`
-//! declares nothing else, so every other field (`name`, which Claude Code derives from the
-//! conversation, the socket and key fields) is skipped unread. The process table tells which of
-//! them still run and in what; a process's arguments are only tested, never kept or shown, and a
-//! terminal app is named only from a fixed list.
+//! `sessionId`, `entrypoint`, `cwd`, `startedAt`, `status` and `statusUpdatedAt` are read from
+//! it: `SessionFile` declares nothing else, so every other field (`name`, which Claude Code
+//! derives from the conversation, the socket and key fields) is skipped unread. The process table
+//! tells which of them still run and in what; a process's arguments are only tested, never kept
+//! or shown, and a terminal app is named only from a fixed list.
 
 use serde::Deserialize;
 
@@ -82,6 +82,9 @@ struct SessionFile {
     /// `busy` | `idle` | `waiting` | `shell`
     #[serde(default)]
     status: Option<String>,
+    /// When `status` was last written, in ms.
+    #[serde(default)]
+    status_updated_at: Option<f64>,
 }
 
 /// A session whose process runs.
@@ -95,6 +98,8 @@ pub(super) struct Running {
     /// Claude Code's own word for where it stands: `busy` (at work, its background subagents
     /// included) | `idle` | `waiting` | `shell` (idle, a background command still runs).
     pub status: Option<String>,
+    /// When it last said so (`statusUpdatedAt`).
+    pub status_at: Option<u64>,
     /// The process and its parents, nearest first.
     pub lineage: Vec<u32>,
     /// The terminal app among its parents, from `TERMINAL_APPS`.
@@ -266,6 +271,7 @@ fn read_running(dir: &Path, table: &HashMap<u32, ProcessInfo>) -> HashMap<String
             cwd: record.cwd.filter(|cwd| !cwd.is_empty()),
             started_at: record.started_at.filter(|at| at.is_finite() && *at > 0.0).map(|at| at as u64),
             status: record.status.filter(|status| is_word(status)),
+            status_at: record.status_updated_at.filter(|at| at.is_finite() && *at > 0.0).map(|at| at as u64),
             app: terminal_app(table, &lineage),
             lineage,
         };
@@ -390,6 +396,15 @@ impl Core {
     pub(super) fn busy_sessions(&self) -> HashSet<String> {
         let running = self.running_cached().unwrap_or_default();
         running.into_iter().filter(|(_, run)| run.status.as_deref() == Some("busy")).map(|(id, _)| id).collect()
+    }
+
+    /// The sessions Claude Code itself calls idle now (`idle`, or `shell`), by session id, with
+    /// when it said so: a turn of theirs under way since no later was interrupted
+    /// (`ClaudeWatch::set_idle`). Without `statusUpdatedAt` (an older Claude Code) none is.
+    pub(super) fn idle_sessions(&self) -> HashMap<String, u64> {
+        let running = self.running_cached().unwrap_or_default();
+        let idle = |run: &Running| matches!(run.status.as_deref(), Some("idle" | "shell"));
+        running.into_iter().filter(|(_, run)| idle(run)).filter_map(|(id, run)| Some((id, run.status_at?))).collect()
     }
 
     /// The running sessions as last read; again when the folder changed, or 30 s on.

@@ -46,6 +46,7 @@ impl Core {
     pub(super) fn refresh_claude(&self) -> bool {
         // Before the watch is locked: it may read the process table.
         let busy = self.busy_sessions();
+        let idle = self.idle_sessions();
         let announce = {
             let Ok(mut watch) = self.claude.lock() else {
                 return false;
@@ -55,6 +56,7 @@ impl Core {
             }
 
             watch.set_busy(busy);
+            watch.set_idle(idle);
             let scan = watch.evaluate();
             let (announce, projects) = {
                 let mut inner = self.lock();

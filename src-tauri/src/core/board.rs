@@ -529,6 +529,8 @@ enum Stand {
     Busy,
     /// Its turn is over: waiting with a finished turn (when it finished), or idle.
     Over(Option<u64>),
+    /// Its turn under way was interrupted (Esc): over, with nothing to tell.
+    Interrupted,
     /// Its process is gone, or the hook heard it end.
     Ended,
     /// Nothing tells.
@@ -560,6 +562,7 @@ fn stand(id: &str, scanned: Option<&SessionState>, running: Option<&HashMap<Stri
         Some((RowPhase::Working, _)) => Stand::Busy,
         Some((RowPhase::Waiting, Some(turn))) if turn.kind == TurnKind::Finished => Stand::Over(Some(turn.at)),
         Some((RowPhase::Waiting, _)) => Stand::Busy,
+        Some((RowPhase::Idle, _)) if scanned.is_some_and(|s| s.interrupted) => Stand::Interrupted,
         Some((RowPhase::Idle, _)) => Stand::Over(None),
         Some((RowPhase::Ended, _)) => Stand::Ended,
         None => Stand::Unknown,
@@ -1289,7 +1292,8 @@ impl Core {
     /// Follows the cards given to Claude: a card started in a Pitwall terminal takes the session
     /// that starts in it, a card whose session took a new id in its process (`/clear`) takes that
     /// one, and a card goes to `review` once its session's turn is over (after it was seen at
-    /// work) or the session ended. A card in `review` goes back to `claude` when its session,
+    /// work) or the session ended; one whose turn the user interrupted goes there without a
+    /// word. A card in `review` goes back to `claude` when its session,
     /// seen at rest since the card got there, is at work again; a session several cards hold
     /// works for the one given last, and only that one follows it back. Runs after every refresh
     /// of Claude's state (`refresh_claude`: each heartbeat and each change to Claude's files),
@@ -1387,6 +1391,8 @@ impl Core {
         }
 
         let mut over: Vec<String> = Vec::new();
+        // Its turn interrupted by the user (Esc): to `review` as well, with nothing to tell.
+        let mut hushed: Vec<String> = Vec::new();
         let mut again: Vec<String> = Vec::new();
         for card in cards.iter_mut().filter(|card| matches!(card.column, Column::Claude | Column::Review)) {
             if let Some(next) = card.session.as_ref().and_then(|session| renamed.get(session)) {
@@ -1412,7 +1418,7 @@ impl Core {
                 match state {
                     // At work again after the rest that left the card here: its session went on.
                     Stand::Busy if card.rested && latest.get(session).is_some_and(|(_, id)| *id == card.id) => again.push(card.id.clone()),
-                    Stand::Over(_) | Stand::Ended if !card.rested => {
+                    Stand::Over(_) | Stand::Interrupted | Stand::Ended if !card.rested => {
                         card.rested = true;
                         changed = true;
                     }
@@ -1451,6 +1457,8 @@ impl Core {
                         over.push(card.id.clone());
                     }
                 }
+                Stand::Interrupted if card.worked => hushed.push(card.id.clone()),
+                Stand::Interrupted => {}
                 // Opened again a moment ago: its old end says nothing until it is seen running.
                 Stand::Ended if resumed.contains_key(session) => {}
                 Stand::Ended => over.push(card.id.clone()),
@@ -1463,10 +1471,12 @@ impl Core {
 
         // Its turn was over, or its session had ended: at rest, as far as `review` goes.
         let mut reviewed: Vec<String> = Vec::new();
-        for id in &over {
+        for (id, told) in over.iter().map(|id| (id, true)).chain(hushed.iter().map(|id| (id, false))) {
             if let Some(card) = board.place(id, Column::Review, usize::MAX, now) {
                 card.rested = true;
-                reviewed.push(card.path.clone());
+                if told {
+                    reviewed.push(card.path.clone());
+                }
             }
             changed = true;
         }
@@ -2085,7 +2095,7 @@ mod tests {
             let mut inner = core.lock();
             inner.scanned.retain(|state| state.id != session);
             let turn = turn.map(|(kind, at)| crate::claude::Turn { kind, at });
-            inner.scanned.push(SessionState { id: session, path: String::new(), folder: None, title: None, phase, turn, since: Some(now_ms()), hooked: true, ended, tool: None, subagents: 0 });
+            inner.scanned.push(SessionState { id: session, path: String::new(), folder: None, title: None, phase, turn, since: Some(now_ms()), hooked: true, ended, tool: None, subagents: 0, interrupted: false });
         }
         core.follow_board();
     }
