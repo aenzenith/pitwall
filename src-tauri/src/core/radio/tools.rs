@@ -99,7 +99,8 @@ pub(in crate::core) fn last_lines(lines: &[String], count: usize) -> Vec<&str> {
 }
 
 /// `lines` as one answer, and how many of them are in it: each cut to `LINE_CHARS`, and of the
-/// lot the last that fit `ANSWER_BYTES`. What was cut is said where it was.
+/// lot the last that fit `ANSWER_BYTES` as they are sent (a control character goes as six,
+/// `\u0001`). What was cut is said where it was.
 fn fitted(lines: &[&str]) -> (String, usize) {
     let mut kept: Vec<String> = Vec::new();
     let mut bytes = 0;
@@ -108,7 +109,8 @@ fn fitted(lines: &[&str]) -> (String, usize) {
             Some((end, _)) => format!("{} [cut here: {} more characters]", &line[..end], line[end..].chars().count()),
             None => line.to_string(),
         };
-        bytes += line.len() + 1;
+        // As it is sent: its quotes count for the `\n` it ends with.
+        bytes += serde_json::to_string(&line).map_or(line.len() + 2, |sent| sent.len());
         if bytes > ANSWER_BYTES {
             break;
         }

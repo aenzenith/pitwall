@@ -169,7 +169,7 @@ enum Parsed {
 fn synopsis(word: &str) -> String {
     let (project, name) = (t!("core.cli.arg.project"), t!("core.cli.arg.name"));
     match word {
-        "status" => "pitwall [status] [--json]".into(),
+        "status" | "--json" => "pitwall [status] [--json]".into(),
         "start" | "stop" | "restart" => format!("pitwall start | stop | restart [{project}]"),
         "logs" => format!("pitwall logs [-f] [{project}] [--command <{name}>]"),
         "run" => format!("pitwall run <{name}> [{project}]"),

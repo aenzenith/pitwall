@@ -14,7 +14,7 @@
 //! once the user said yes at a terminal (`cli.rs`: `agreed`). A run is the terminal's as a
 //! command in its foreground is: its caller leaving (^C, the terminal closed) stops it.
 
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
@@ -154,6 +154,13 @@ impl Followed<'_> {
         }
         Ok(lines)
     }
+
+    /// Let go as one who doesn't keep up is (`Cli::heard`): no more lines are kept for it, and
+    /// what still waited is not said.
+    fn let_go(&self) {
+        self.core.lock().cli.followers.retain(|follower| follower.id != self.id);
+        self.waiting.store(usize::MAX, Ordering::SeqCst);
+    }
 }
 
 impl Drop for Followed<'_> {
@@ -282,6 +289,24 @@ fn line_follows(found: bool, read: bool, on: bool) -> Option<bool> {
         (false, true) if read => Some(false),
         _ => None,
     }
+}
+
+/// `name` with its letters composed: a folder named in Finder has them in two parts (`u` and
+/// `¨`), a name typed at a terminal or written into a link whole (`ü`). The same name either way.
+#[cfg(target_os = "macos")]
+fn composed(name: &str) -> String {
+    objc2::rc::autoreleasepool(|_| objc2_foundation::NSString::from_str(name).precomposedStringWithCanonicalMapping().to_string())
+}
+
+/// Elsewhere there is neither the command line nor a link yet (`SUPPORTED`).
+#[cfg(not(target_os = "macos"))]
+fn composed(name: &str) -> String {
+    name.to_string()
+}
+
+/// `name` in any letter case, Turkish's too: `İstanbul` is `istanbul`, and `ILIK` is `ılık`.
+fn folded(name: &str) -> String {
+    composed(name).to_lowercase().replace("i\u{307}", "i").replace('ı', "i")
 }
 
 impl Core {
@@ -435,7 +460,25 @@ impl Core {
 
         reader.get_mut().extend(SAY_LIMIT);
         let call: Call = receive(&mut reader)?;
-        let mut say = |said: Said| send(&mut writer, &said);
+        // What of the answer hasn't gone out yet. A caller that doesn't keep up (its terminal
+        // paused, a pager) takes a line only in part before the time runs out: the rest goes
+        // first the next time, so no line is ever cut short (`cli_run` lets it fall behind).
+        let mut unsent: Vec<u8> = Vec::new();
+        let mut say = |said: Said| {
+            unsent.extend(serde_json::to_vec(&said)?);
+            unsent.push(b'\n');
+            while !unsent.is_empty() {
+                match writer.write(&unsent) {
+                    Ok(0) => return Err(std::io::ErrorKind::WriteZero.into()),
+                    Ok(wrote) => {
+                        unsent.drain(..wrote);
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            writer.flush()
+        };
         // The command is as old as its link's app, the app as old as its last start: another
         // version is told so, and nothing is done for it.
         if hello.v != LINE_VERSION {
@@ -509,9 +552,9 @@ impl Core {
             return self.radio_project(cwd).ok_or_else(|| t!("core.cli.project.none", names = names(&all)));
         };
         // Its whole name as it is written, else in any letter case, else how it begins.
-        let lower = named.to_lowercase();
+        let (whole, lower) = (composed(named), folded(named));
         let tests: [&dyn Fn(&ProjectView) -> bool; 3] =
-            [&|project| project.name == named, &|project| project.name.to_lowercase() == lower, &|project| project.name.to_lowercase().starts_with(&lower)];
+            [&|project| composed(&project.name) == whole, &|project| folded(&project.name) == lower, &|project| folded(&project.name).starts_with(&lower)];
         let found = tests.iter().map(|test| all.iter().copied().filter(|project| test(project)).collect::<Vec<_>>()).find(|found| !found.is_empty()).unwrap_or_default();
 
         match found.as_slice() {
@@ -779,6 +822,13 @@ impl Core {
                     lines.retain(|line| !own(line));
                     if let Some(said) = lines_said(lines) {
                         if let Err(error) = say(said) {
+                            // Not taken in time (its terminal paused, a pager): it is behind,
+                            // and the run is still its own.
+                            if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) {
+                                followed.let_go();
+                                behind = true;
+                                continue;
+                            }
                             // Gone while it was told: the run goes with it all the same.
                             if stopped.is_none() && caller() == Presence::Left {
                                 stop();
@@ -991,11 +1041,12 @@ impl Core {
             return false;
         };
 
-        // The project's name as it is listed, whole, and of one project only.
+        // The project's name as it is listed, whole (its letters composed or not), and of one
+        // project only.
         let project = match &link.project {
             Some(name) => {
-                let projects = self.snapshot().projects;
-                let mut named = projects.into_iter().filter(|project| &project.name == name);
+                let (projects, name) = (self.snapshot().projects, composed(name));
+                let mut named = projects.into_iter().filter(|project| composed(&project.name) == name);
                 match (named.next(), named.next()) {
                     (Some(project), None) => Some(project),
                     _ => return false,
@@ -1039,7 +1090,7 @@ impl Core {
         let verb = scheme::Verb::parse(action)?;
         let projects = self.snapshot().projects;
         let project = projects.iter().find(|project| project.path == path)?;
-        if projects.iter().filter(|other| other.name == project.name).count() > 1 {
+        if projects.iter().filter(|other| composed(&other.name) == composed(&project.name)).count() > 1 {
             return None;
         }
         Some(scheme::text(verb, Some(&project.name)))

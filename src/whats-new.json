@@ -294,6 +294,27 @@
         "ja": "Pitwall を終了するちょうどその時に時刻が来たカードは、失われずに次の起動を待ちます。バックアップを読み込んでも、この Mac の通知スイッチはそのままです。",
         "zh-Hans": "恰好在退出 Pitwall 时到点的卡片不会丢失，而是等到下次启动。导入备份不会改动这台 Mac 的通知开关。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "pitwall in the terminal, steadier",
+        "tr": "Terminaldeki pitwall daha sağlam",
+        "de": "pitwall im Terminal, verlässlicher",
+        "es": "pitwall en la terminal, más fiable",
+        "ru": "pitwall в терминале надёжнее",
+        "ja": "ターミナルの pitwall がより確実に",
+        "zh-Hans": "终端里的 pitwall 更可靠"
+      },
+      "body": {
+        "en": "^C stops a command run with pitwall run even after its output was paused. pitwall and pitwall:// links find projects whose names have accented or Turkish letters, however they are typed.",
+        "tr": "^C, pitwall run ile çalıştırılan bir komutu, çıktısı duraklatılmış olsa bile durduruyor. pitwall ve pitwall:// linkleri, adında aksanlı ya da Türkçe harf olan projeleri nasıl yazılırsa yazılsın buluyor.",
+        "de": "^C stoppt einen mit pitwall run gestarteten Befehl auch dann, wenn seine Ausgabe angehalten wurde. pitwall und pitwall://-Links finden Projekte mit Akzenten oder türkischen Buchstaben im Namen, egal wie sie getippt werden.",
+        "es": "^C detiene un comando lanzado con pitwall run aunque su salida se haya pausado. pitwall y los enlaces pitwall:// encuentran proyectos con letras acentuadas o turcas en el nombre, se escriban como se escriban.",
+        "ru": "^C останавливает команду, запущенную через pitwall run, даже если её вывод был приостановлен. pitwall и ссылки pitwall:// находят проекты с диакритикой или турецкими буквами в названии, как бы их ни набрали.",
+        "ja": "pitwall run で実行したコマンドは、出力が一時停止していても ^C で止まります。pitwall と pitwall:// リンクは、アクセント付きやトルコ語の文字を含む名前のプロジェクトを、どう入力しても見つけます。",
+        "zh-Hans": "即使输出已暂停，^C 也能停止用 pitwall run 运行的命令。pitwall 和 pitwall:// 链接能找到名称中含重音或土耳其语字母的项目，无论怎样输入。"
+      }
     }
   ]
 }

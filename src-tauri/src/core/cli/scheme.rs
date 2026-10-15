@@ -9,8 +9,9 @@
 use super::*;
 
 const SCHEME: &str = "pitwall://";
-/// A project's name in a link is no longer than this, once it is read back.
-const NAME_MAX: usize = 200;
+/// A project's name in a link is no longer than this, once it is read back: as long as a
+/// folder's name may be, so that every listed project's link is one.
+const NAME_MAX: usize = 255;
 
 /// What a link asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
