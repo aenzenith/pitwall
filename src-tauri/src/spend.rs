@@ -112,13 +112,15 @@ impl Tokens {
 }
 
 /// USD per million tokens. Cache writes cost 1.25× input for five minutes and 2× for an hour;
-/// `fast` multiplies everything in fast mode.
+/// `fast` multiplies everything in fast mode, `long` everything of a request whose prompt
+/// (input, cache writes and reads) is longer than its first number of tokens.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Price {
     input: f64,
     output: f64,
     read: f64,
     fast: f64,
+    long: Option<(u64, f64)>,
 }
 
 impl Price {
@@ -130,17 +132,28 @@ impl Price {
             + n(tokens.write_1h) * self.input * 2.0
             + n(tokens.read) * self.read;
 
-        per_million * if fast { self.fast } else { 1.0 } / 1_000_000.0
+        let prompt = [tokens.input, tokens.write_5m, tokens.write_1h, tokens.read].iter().fold(0u64, |sum, n| sum.saturating_add(*n));
+        let long = match self.long {
+            Some((from, times)) if prompt > from => times,
+            _ => 1.0,
+        };
+        per_million * if fast { self.fast } else { 1.0 } * long / 1_000_000.0
+    }
+
+    /// The same prices times `times` for a request whose prompt is longer than `from` tokens.
+    const fn long(self, from: u64, times: f64) -> Price {
+        Price { long: Some((from, times)), ..self }
     }
 }
 
 const fn price(input: f64, output: f64, read: f64, fast: f64) -> Price {
-    Price { input, output, read, fast }
+    Price { input, output, read, fast, long: None }
 }
 
 /// API prices from platform.claude.com/docs/en/about-claude/pricing, by family and version.
 /// Cache reads are 0.1× input except on Fable 5.1 and Mythos 5.1 (0.025×) and Opus 5.5
 /// (0.05×). Fast mode costs double on Opus 5.5, 5 and 4.8; Opus 4.6 bills it at standard rates.
+/// Haiku 5.5 has two rate cards: a prompt over 100K tokens costs five times as much.
 const PRICES: &[(&str, (u32, u32), Price)] = &[
     ("fable", (5, 1), price(10.0, 50.0, 0.25, 1.0)),
     ("mythos", (5, 1), price(10.0, 50.0, 0.25, 1.0)),
@@ -159,6 +172,7 @@ const PRICES: &[(&str, (u32, u32), Price)] = &[
     ("sonnet", (4, 6), price(3.0, 15.0, 0.30, 1.0)),
     ("sonnet", (4, 5), price(3.0, 15.0, 0.30, 1.0)),
     ("sonnet", (4, 0), price(3.0, 15.0, 0.30, 1.0)),
+    ("haiku", (5, 5), price(0.10, 0.50, 0.01, 1.0).long(100_000, 5.0)),
     ("haiku", (4, 5), price(1.0, 5.0, 0.10, 1.0)),
     ("haiku", (3, 5), price(0.80, 4.0, 0.08, 1.0)),
 ];
@@ -975,6 +989,11 @@ mod tests {
         assert!(close(cost("claude-fable-5-1", million(0, 0, 0, 0, m), false), 0.25));
         assert!(close(cost("claude-fable-5", million(0, 0, 0, 0, m), false), 1.0));
         assert!(close(cost("claude-sonnet-4-6", million(0, 0, 0, 0, m), false), 0.30));
+
+        // Haiku 5.5: 0.10 in and 0.50 out up to a 100K-token prompt, five times that beyond.
+        let k = 1_000;
+        assert!(close(cost("claude-haiku-5-5", million(60 * k, 10 * k, 0, 0, 40 * k), false), 0.006 + 0.005 + 0.0004));
+        assert!(close(cost("claude-haiku-5-5", million(60 * k, 10 * k, 0, 0, 41 * k), false), (0.006 + 0.005 + 0.00041) * 5.0));
 
         // A bare cache-write total is priced as five-minute writes.
         let bare: Usage = serde_json::from_value(json!({ "input_tokens": 0, "output_tokens": 0, "cache_creation_input_tokens": m })).unwrap();

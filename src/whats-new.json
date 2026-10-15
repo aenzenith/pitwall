@@ -315,6 +315,27 @@
         "ja": "pitwall run で実行したコマンドは、出力が一時停止していても ^C で止まります。pitwall と pitwall:// リンクは、アクセント付きやトルコ語の文字を含む名前のプロジェクトを、どう入力しても見つけます。",
         "zh-Hans": "即使输出已暂停，^C 也能停止用 pitwall run 运行的命令。pitwall 和 pitwall:// 链接能找到名称中含重音或土耳其语字母的项目，无论怎样输入。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Haiku 5.5 on the Fuel page",
+        "tr": "Yakıt sayfasında Haiku 5.5",
+        "de": "Haiku 5.5 auf der Tank-Seite",
+        "es": "Haiku 5.5 en la página Combustible",
+        "ru": "Haiku 5.5 на странице «Топливо»",
+        "ja": "燃料ページに Haiku 5.5",
+        "zh-Hans": "燃料页面中的 Haiku 5.5"
+      },
+      "body": {
+        "en": "Claude Haiku 5.5's tokens now have their API-equivalent cost, with its higher rate for prompts over 100K tokens.",
+        "tr": "Claude Haiku 5.5'in token'ları artık API karşılığı maliyetiyle görünüyor; 100K token'ı aşan istemlerde daha yüksek fiyatıyla.",
+        "de": "Die Tokens von Claude Haiku 5.5 haben jetzt ihre API-äquivalenten Kosten, mit dem höheren Satz für Prompts über 100K Tokens.",
+        "es": "Los tokens de Claude Haiku 5.5 ya tienen su coste equivalente en API, con la tarifa más alta para prompts de más de 100K tokens.",
+        "ru": "У токенов Claude Haiku 5.5 теперь есть стоимость по ценам API — с более высокой ставкой для запросов длиннее 100K токенов.",
+        "ja": "Claude Haiku 5.5 のトークンにも API 換算のコストが付くようになりました。10 万トークンを超えるプロンプトには高いほうの料金が適用されます。",
+        "zh-Hans": "Claude Haiku 5.5 的 token 现在也有 API 等价费用，超过 100K token 的提示按更高的费率计算。"
+      }
     }
   ]
 }
