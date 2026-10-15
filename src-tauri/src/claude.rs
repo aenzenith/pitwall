@@ -656,6 +656,12 @@ pub(crate) fn inside(cwd: &str, folder_path: &str) -> bool {
     *cwd == *folder || cwd.starts_with(&format!("{folder}{MAIN_SEPARATOR}"))
 }
 
+/// The listed project a session in `cwd` belongs to: of those that hold the folder, the
+/// innermost. With two listed one inside the other, a session of the inner one is that one's
+/// alone: one session is one wait, told once.
+fn owner<'a>(listed: &'a [String], cwd: &str) -> Option<&'a String> {
+    listed.iter().filter(|folder| inside(cwd, folder)).max_by_key(|folder| folder.len())
+}
 /// Whether a folder under `~/.claude/projects` holds a project's sessions: `Some(true)` for its
 /// own folder, `Some(false)` for a subfolder's (`<project>-sub`, which a neighbour such as
 /// `pitwall-docs` also looks like; the session's cwd tells them apart).
@@ -755,9 +761,16 @@ impl ClaudeWatch {
     }
 
     /// The sessions Claude Code itself calls busy now: its own `status` in
-    /// `~/.claude/sessions/<pid>.json`, of processes that still run (read by the core).
+    /// `~/.claude/sessions/<pid>.json`, of processes that still run (read by the core). A busy
+    /// session is followed however long ago its log was written (`evaluate`): one that has just
+    /// become busy and whose log the scan left unread, as older than its project's last look, is
+    /// looked for at once.
     pub fn set_busy(&mut self, sessions: HashSet<String>) {
+        let unread = sessions.iter().any(|id| !self.busy.contains(id) && !self.logs.values().any(|logs| logs.contains_key(id)));
         self.busy = sessions;
+        if unread && self.ready {
+            self.rescan();
+        }
     }
 
     /// The shared book plus every "I looked" from the legacy books (latest wins). The start
@@ -833,7 +846,9 @@ impl ClaudeWatch {
     }
 
     /// Reads the session logs of the listed projects changed since their turns were last seen
-    /// (or lately), and forgets those of projects no longer listed.
+    /// (or lately), and those of sessions Claude Code calls busy however old (one tool call can
+    /// outlast the working window without a line), and forgets those of projects no longer
+    /// listed.
     pub fn rescan(&mut self) {
         let book = self.read_seen_everywhere();
         let recent = now_ms().saturating_sub(WORKING_WINDOW_MS);
@@ -883,7 +898,7 @@ impl ClaudeWatch {
 
             present.insert(id.clone());
 
-            if meta.modified().map(system_ms).unwrap_or(0) > since {
+            if self.busy.contains(&id) || meta.modified().map(system_ms).unwrap_or(0) > since {
                 self.read_log(dir, id, &file, &meta);
             }
         }
@@ -1002,7 +1017,7 @@ impl ClaudeWatch {
                 for (id, log) in sessions {
                     if !exact {
                         let cwd = log.verdict.as_ref().and_then(|v| v.cwd.clone()).or_else(|| hooked.get(id).and_then(|h| h.cwd.clone()));
-                        if !cwd.is_some_and(|cwd| inside(&cwd, folder_path)) {
+                        if !cwd.is_some_and(|cwd| owner(listed, &cwd) == Some(folder_path)) {
                             continue;
                         }
                     }
@@ -1033,7 +1048,7 @@ impl ClaudeWatch {
                 }
 
                 let log_dir = log_folder(session);
-                let by_cwd = session.cwd.as_deref().is_some_and(|cwd| inside(cwd, folder_path));
+                let by_cwd = session.cwd.as_deref().is_some_and(|cwd| owner(listed, cwd) == Some(folder_path));
                 if !by_cwd && log_dir.as_deref().is_none_or(|dir| dir_match(dir, &encoded) != Some(true)) {
                     continue;
                 }

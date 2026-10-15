@@ -189,6 +189,27 @@
         "ja": "メニューバーのアイコンを更新している最中に終了すると、Pitwall がクラッシュすることがありました。今はきれいに終了します。",
         "zh-Hans": "Pitwall 在更新菜单栏图标时退出可能会崩溃。现在可以正常退出。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Claude's turns, told right",
+        "tr": "Claude'un turları doğru söyleniyor",
+        "de": "Claudes Züge richtig gemeldet",
+        "es": "Los turnos de Claude, bien avisados",
+        "ru": "Ходы Claude — без ошибок",
+        "ja": "Claude のターンを正しく通知",
+        "zh-Hans": "Claude 的轮次如实提醒"
+      },
+      "body": {
+        "en": "A Claude session that is at work shows as working right after Pitwall starts, however long ago it last wrote. A turn in a project listed inside another one is told once, not twice.",
+        "tr": "Çalışmakta olan bir Claude oturumu, en son ne zaman yazmış olursa olsun, Pitwall açılır açılmaz çalışıyor görünüyor. Başka bir projenin içinde listelenen bir projedeki tur iki kez değil, bir kez söyleniyor.",
+        "de": "Eine Claude-Sitzung, die gerade arbeitet, wird direkt nach dem Start von Pitwall als arbeitend angezeigt, egal wann sie zuletzt geschrieben hat. Ein Zug in einem Projekt, das in einem anderen aufgeführt ist, wird einmal gemeldet, nicht zweimal.",
+        "es": "Una sesión de Claude que está trabajando aparece como tal en cuanto Pitwall se inicia, sin importar cuándo escribió por última vez. Un turno en un proyecto listado dentro de otro se avisa una vez, no dos.",
+        "ru": "Работающая сессия Claude показывается как работающая сразу после запуска Pitwall, как бы давно она ни писала в последний раз. О ходе в проекте, который лежит внутри другого проекта из списка, сообщается один раз, а не два.",
+        "ja": "作業中の Claude セッションは、最後の書き込みがいつであっても、Pitwall の起動直後から作業中と表示されます。別のプロジェクトの中にあるプロジェクトでのターンは、二度ではなく一度だけ通知されます。",
+        "zh-Hans": "正在工作的 Claude 会话，无论上次写入是多久以前，Pitwall 启动后都会立即显示为工作中。位于另一个已列出项目之内的项目，其轮次只提醒一次，而不是两次。"
+      }
     }
   ]
 }

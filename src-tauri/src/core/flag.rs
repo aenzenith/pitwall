@@ -159,8 +159,8 @@ pub(super) fn gather(projects: &[ProjectView], sessions: &[SessionState], cards:
             })
         })
         .collect();
-    // One session is one wait. With two listed projects one inside the other, the scan has a
-    // session of the inner one once for each: the inner project's is kept.
+    // One session is one wait. With two listed projects one inside the other, a session of the
+    // inner one that comes up under both is the inner project's alone.
     claude.sort_by(|a, b| a.session.cmp(&b.session).then_with(|| b.path.len().cmp(&a.path.len())));
     claude.dedup_by(|next, kept| next.session == kept.session);
     claude.sort_by(|a, b| a.since.cmp(&b.since).then_with(|| a.session.cmp(&b.session)));
