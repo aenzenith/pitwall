@@ -15,6 +15,13 @@ import { measure } from "../lib/terminals";
 /** A title is this long at most, as in the board's card dialog. */
 const TITLE_MAX = 200;
 
+/** `text` cut to a title's length, never between the two halves of an emoji: half of one is no
+ * text, and the core refuses a card that holds it. */
+function titleOf(text: string): string {
+  const part = text.slice(0, TITLE_MAX);
+  return /[\uD800-\uDBFF]$/.test(part) ? part.slice(0, -1) : part;
+}
+
 /** What the switcher lends to it. */
 export type CaptureHost = {
   /** The switcher's search text. */
@@ -107,7 +114,7 @@ export function useCapture(host: CaptureHost) {
     const kept = hasDraft();
     on.value = true;
     error.value = "";
-    if (typed) draft.title = typed.slice(0, TITLE_MAX);
+    if (typed) draft.title = titleOf(typed);
     host.query.value = "";
     if (!kept || !listed(draft.path)) draft.path = null;
     const fresh = draft.path === null;

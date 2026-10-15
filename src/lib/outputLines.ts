@@ -399,17 +399,24 @@ const TITLE_MAX = 120;
 const NOTE_LINES_MAX = 60;
 const NOTE_MAX = 6000;
 
+/** `text` cut to `max` code units, never between the two halves of a character outside the basic
+ * plane (an emoji): half of one is no text, and the core refuses a card that holds it. */
+function cutText(text: string, max: number): string {
+  const part = text.slice(0, max);
+  return /[\uD800-\uDBFF]$/.test(part) ? part.slice(0, -1) : part;
+}
+
 /** A card for an error: the title its first line (the last one of a Python traceback, where the
  * error is named), without the clock a server puts before it; the note its lines as a code block. */
 export function cardDraft(block: OutputLine[]): { title: string; note: string } {
   if (!block.length) return { title: "", note: "" };
   const named = TRACEBACK.test(block[0].text) ? block[block.length - 1] : block[0];
   const said = named.text.replace(/^\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?\s+/i, "").replace(/\s+/g, " ").trim();
-  const title = said.length > TITLE_MAX ? `${said.slice(0, TITLE_MAX - 1)}…` : said;
+  const title = said.length > TITLE_MAX ? `${cutText(said, TITLE_MAX - 1)}…` : said;
 
   const whole = block.slice(0, NOTE_LINES_MAX).map((line) => line.text.trimEnd()).join("\n");
   const cut = block.length > NOTE_LINES_MAX || whole.length > NOTE_MAX;
-  const text = cut ? `${whole.slice(0, NOTE_MAX)}\n…` : whole;
+  const text = cut ? `${cutText(whole, NOTE_MAX)}\n…` : whole;
   const fence = text.includes("```") ? "````" : "```";
   return { title, note: `${fence}\n${text}\n${fence}` };
 }

@@ -111,12 +111,10 @@ struct General {
     package_manager: String,
     editor: String,
     open_url_on_start: bool,
-    notify: bool,
     sounds: Sounds,
     shortcut: bool,
     shortcut_keys: String,
     projects_dir: Option<String>,
-    fuel_alert: bool,
     fuel_in_bar: bool,
     fuel_in_popover: bool,
     fuel_every: u32,
@@ -136,16 +134,17 @@ impl General {
         // Every setting is named here, so a new one doesn't compile until it is put into
         // backups or kept out of them on purpose.
         let Settings {
-            language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
             theme, resume, suggest_projects, flag,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
             projects: _, order: _, teams: _,
-            // Kept out: with its switches it holds this Mac's own (the quiet period under way,
-            // the muted projects' paths).
-            notifications: _,
+            // Kept out: what is told and when is this Mac's own, every event's switch with the
+            // quiet period under way and the muted projects' paths (Settings › Notifications:
+            // Claude waiting and the fuel alert are two of its switches).
+            notifications: _, notify: _, fuel_alert: _,
             // This Mac's own too: Claude Code's configuration here is what names this app.
             radio: _,
             // This Mac's own as well: where its small window stands, the command installed here.
@@ -153,8 +152,8 @@ impl General {
         } = settings.clone();
 
         Self {
-            language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
             theme, resume, suggest_projects, flag,
         }
     }
@@ -178,14 +177,14 @@ impl General {
         }
 
         let Self {
-            language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
             theme, resume, suggest_projects, flag,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
-            language, script, package_manager, editor, open_url_on_start, notify, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_alert, fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
             theme, resume, suggest_projects, flag,
             ..settings.clone()
         })
@@ -1131,7 +1130,7 @@ mod tests {
 
         let file = tmp.path().join("backup.json");
         let parts = json!({
-            "settings": { "script": "dev", "launchAtLogin": true, "onboarded": false, "seenVersion": "0.0.1" },
+            "settings": { "script": "dev", "launchAtLogin": true, "onboarded": false, "seenVersion": "0.0.1", "notify": false, "fuelAlert": false },
             "projects": {
                 "favourites": [{ "path": theirs, "name": "theirs" }],
                 "order": [theirs],
@@ -1150,6 +1149,8 @@ mod tests {
         let settings = core.settings();
         let seen = Some(crate::whatsnew::CURRENT.to_string());
         assert_eq!((settings.script.as_str(), settings.launch_at_login, settings.onboarded, &settings.seen_version), ("dev", false, true, &seen));
+        // What is told is this Mac's own too, Claude waiting and the fuel alert as every other event.
+        assert_eq!((settings.notify, settings.fuel_alert), (true, true));
         // Projects, their settings and teams: the file's beside those that were here, and the
         // project both teams named is in the file's alone.
         assert_eq!(listed(&core), [here, theirs]);

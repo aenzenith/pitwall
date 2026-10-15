@@ -245,7 +245,8 @@ impl Core {
     }
 
     /// At start: puts back what the record names, once. Only listed projects whose folder is
-    /// still there take part, and only a session id reaches Claude's command line.
+    /// still there take part, only commands they still have that keep running, and only a
+    /// session id reaches Claude's command line.
     pub fn restore(self: &Arc<Self>) -> Option<Restored> {
         let file = self.restore_file();
         let raw = fs::read(&file).ok()?;
@@ -285,7 +286,10 @@ impl Core {
         }
 
         let servers: Vec<String> = record.servers.into_iter().filter(|path| known(path)).collect();
-        let commands: Vec<Rerun> = record.commands.into_iter().filter(|command| known(&command.path)).collect();
+        // Only commands the project still has and that keep running: the record names no other.
+        let settings = self.settings();
+        let keeps_running = |command: &Rerun| settings.project(&command.path).commands.iter().any(|own| own.id == command.id && own.keep_running);
+        let commands: Vec<Rerun> = record.commands.into_iter().filter(|command| known(&command.path) && keeps_running(command)).collect();
         restored.servers = servers.len();
 
         // Off the caller's thread: a start resolves the project and waits for a free port.
@@ -391,6 +395,38 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
         false
+    }
+
+    /// The record names the commands that keep running, and nothing else starts one: a one-off
+    /// command marked "ask first" that a record written by hand names would run unasked, a
+    /// migration with nobody there.
+    #[cfg(unix)]
+    #[test]
+    fn only_commands_that_keep_running_come_back() {
+        use crate::settings::{CustomCommand, ProjectSettings};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        let (worked, migrated) = (tmp.path().join("worked"), tmp.path().join("migrated"));
+
+        let core = core_in(tmp.path());
+        core.add_project(&project).unwrap();
+        let command = |id: &str, line: String, keep_running: bool, confirm: bool| CustomCommand { id: id.into(), name: id.into(), command: line, keep_running, confirm, with_server: false };
+        let commands = vec![command("migrate", format!("touch '{}'", migrated.display()), false, true), command("worker", format!("touch '{}'; sleep 30", worked.display()), true, false)];
+        core.set_project_settings(&project, ProjectSettings { commands, ..Default::default() });
+
+        let rerun = |id: &str| Rerun { path: project.clone(), id: id.into() };
+        let record = Record { v: 1, at: now_ms(), version: "9.9.9".into(), window: false, servers: Vec::new(), commands: vec![rerun("migrate"), rerun("worker")], tabs: Vec::new() };
+        write_private(&core.restore_file(), &serde_json::to_string(&record).unwrap()).unwrap();
+        core.restore().expect("a fresh record");
+
+        assert!(wait_for(|| worked.exists()), "the worker came back");
+        thread::sleep(Duration::from_millis(500));
+        assert!(!migrated.exists(), "an ask-first command was run");
+
+        core.dispose();
     }
 
     /// A restart ends whatever runs in a tab, and nothing starts it again: the plan must name a

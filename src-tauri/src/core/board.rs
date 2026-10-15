@@ -302,6 +302,9 @@ pub(super) struct Board {
     /// hand), while Claude may still be at work on them: the next in line waits for them all
     /// (`line_held`). This run's own: the Claude a card was given to ends with the run.
     line: HashMap<String, Lined>,
+    /// Pitwall quits (`board_quit`): no card is given at its moment from then on, while the
+    /// loop that looks at them still runs.
+    quit: bool,
 }
 
 /// A card given from the line, as `Board::line` keeps it.
@@ -327,7 +330,7 @@ impl Board {
         let (cards, writable, changed, dropped) = read_cards(&file, now);
         let images = file.with_file_name(IMAGES_DIR);
         let filed_waiting = waiting_ids(&cards);
-        let mut board = Self { file, images, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new(), followed: false, giving: HashSet::new(), filed_waiting, line: HashMap::new() };
+        let mut board = Self { file, images, cards, writable, resumed: HashMap::new(), pids: HashMap::new(), linked_busy: HashSet::new(), followed: false, giving: HashSet::new(), filed_waiting, line: HashMap::new(), quit: false };
         if changed && board.save() {
             // Gone from the board's file for good: their images go with them.
             for card in &dropped {
@@ -1002,10 +1005,12 @@ impl Core {
     }
 
     /// Pitwall quits, and with it the Claude of a card given from the line: the line stands still
-    /// from now. Its cards say so, for the next start (`read_cards`).
+    /// from now, and no card is given at its moment any more (`board_due_at`). Its cards say so,
+    /// for the next start (`read_cards`).
     pub(super) fn board_quit(&self) {
         let now = now_ms();
         let mut board = self.board();
+        board.quit = true;
         let mut lined = false;
         for schedule in board.cards.iter_mut().filter_map(|card| card.schedule.as_mut()).filter(|schedule| schedule.line) {
             schedule.at = now;
@@ -1053,6 +1058,10 @@ impl Core {
         let place = |path: &str| listed.iter().position(|listed| listed == path).unwrap_or(usize::MAX);
 
         let mut board = self.board();
+        // Quitting: what waits goes on waiting, for the next start.
+        if board.quit {
+            return;
+        }
         let mut free = !board.line_held(now);
         let mut changed = false;
         let mut due: Vec<(Card, Start)> = Vec::new();
@@ -1813,6 +1822,22 @@ mod tests {
         fs::create_dir_all(file.join("in the way")).unwrap();
         assert_eq!(look(&restarted, at), []);
         assert_eq!(schedule_of(&restarted, &unwritten), None);
+    }
+
+    /// Pitwall quits while the loop that gives the cards still runs: a moment that comes then
+    /// is not given. Its Claude would start as everything is being stopped, and the card would
+    /// be off the file and in `claude`, its wait gone with nothing done.
+    #[test]
+    fn nothing_is_given_once_pitwall_quits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_project(&core, tmp.path());
+        let at = now_ms() + 3_600_000;
+        let id = waiting(&core, &project, "At its hour", at);
+
+        core.dispose();
+        assert_eq!(look(&core, at), []);
+        assert!(waits_on_disk(&tmp.path().join("config").join("board.json"), &id), "it waits for the next start");
     }
 
     /// What takes a card's schedule away before its moment: it is edited, moved to another

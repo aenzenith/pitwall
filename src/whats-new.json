@@ -273,6 +273,27 @@
         "ja": "npm、pnpm、yarn、bun のオプション（フォルダー、ワークスペース、フィルター）経由の本番ビルドは、ほかと同じく拒否されます。",
         "zh-Hans": "通过 npm、pnpm、yarn 或 bun 的选项（文件夹、workspace、过滤器）启动的生产构建也会像其他构建一样被拒绝。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Cards and backups keep what they should",
+        "tr": "Kartlar ve yedekler korunması gerekeni koruyor",
+        "de": "Karten und Backups behalten, was sie sollen",
+        "es": "Tarjetas y copias guardan lo que deben",
+        "ru": "Карточки и резервные копии хранят что нужно",
+        "ja": "カードとバックアップが正しく保たれる",
+        "zh-Hans": "卡片与备份保留应保留的内容"
+      },
+      "body": {
+        "en": "A card whose moment comes just as you quit Pitwall waits for the next start instead of being lost. Importing a backup leaves this Mac's notification switches as they are.",
+        "tr": "Anı tam Pitwall'dan çıkarken gelen bir kart kaybolmuyor, bir sonraki açılışı bekliyor. Bir yedeği içe aktarmak bu Mac'in bildirim anahtarlarına dokunmuyor.",
+        "de": "Eine Karte, deren Zeitpunkt genau beim Beenden von Pitwall kommt, wartet auf den nächsten Start, statt verloren zu gehen. Das Importieren eines Backups lässt die Mitteilungsschalter dieses Macs, wie sie sind.",
+        "es": "Una tarjeta cuyo momento llega justo al salir de Pitwall espera al siguiente inicio en lugar de perderse. Importar una copia de seguridad deja los interruptores de notificaciones de este Mac como están.",
+        "ru": "Карточка, чей момент наступает ровно при выходе из Pitwall, ждёт следующего запуска, а не теряется. Импорт резервной копии оставляет переключатели уведомлений этого Mac как есть.",
+        "ja": "Pitwall を終了するちょうどその時に時刻が来たカードは、失われずに次の起動を待ちます。バックアップを読み込んでも、この Mac の通知スイッチはそのままです。",
+        "zh-Hans": "恰好在退出 Pitwall 时到点的卡片不会丢失，而是等到下次启动。导入备份不会改动这台 Mac 的通知开关。"
+      }
     }
   ]
 }
