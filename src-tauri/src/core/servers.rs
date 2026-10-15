@@ -88,6 +88,12 @@ impl Core {
             return self.set_issue(path, "error", move || t!("core.error.forbiddenScript", script = script), IssueEnd::Final);
         }
 
+        // A folder that was moved or deleted reads as a package.json with no scripts: said as
+        // it is, without its path (the command line and the radio print an issue's text).
+        if !Path::new(path).is_dir() {
+            return self.set_issue(path, "error", || t!("core.issue.folderGone"), IssueEnd::Final);
+        }
+
         let package_json = fs::read_to_string(Path::new(path).join("package.json")).unwrap_or_default();
 
         if !has_script(&package_json, &script) {
@@ -100,8 +106,13 @@ impl Core {
             detected
         });
 
-        let (args, port) = if extra_args.is_empty() {
-            let base = project.port.filter(|p| *p > 0).unwrap_or_else(|| vite_port(path));
+        // `--port` only for a project that asks for a port: its own in the settings, or its Vite
+        // config's. Any other script keeps the port it picks itself (Next, Nuxt and Astro move
+        // on by themselves), and some refuse the flag; its port is known once it prints its address.
+        let (args, port) = if !extra_args.is_empty() {
+            let port = extra_args.iter().skip_while(|a| *a != "--port").nth(1).and_then(|p| p.parse().ok());
+            (extra_args, port)
+        } else if let Some(base) = project.port.filter(|p| *p > 0).or_else(|| vite_port(path)) {
             let free = self.reservations.lock().ok().and_then(|mut r| r.reserve_free(base, path));
 
             match free {
@@ -109,8 +120,7 @@ impl Core {
                 _ => (Vec::new(), Some(base)),
             }
         } else {
-            let port = extra_args.iter().skip_while(|a| *a != "--port").nth(1).and_then(|p| p.parse().ok());
-            (extra_args, port)
+            (Vec::new(), None)
         };
 
         let command = match build_command(manager, &script, &args) {
@@ -390,11 +400,13 @@ pub(super) fn run_command(inner: &Inner, path: &str) -> String {
     build_command(manager, &script, &[]).unwrap_or_else(|_| format!("{manager} run {}", script.trim()))
 }
 
-/// The port a project wants: `server.port` in its Vite config, else 5173.
-fn vite_port(path: &str) -> u16 {
-    ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs"]
+/// The port a Vite project wants: `server.port` in its Vite config, else Vite's own 5173. None
+/// for a project without a Vite config.
+fn vite_port(path: &str) -> Option<u16> {
+    let sources: Vec<String> = ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs"]
         .iter()
         .filter_map(|name| fs::read_to_string(Path::new(path).join(name)).ok())
-        .find_map(|source| parse_vite_port(&source))
-        .unwrap_or(5173)
+        .collect();
+
+    (!sources.is_empty()).then(|| sources.iter().find_map(|source| parse_vite_port(source)).unwrap_or(5173))
 }

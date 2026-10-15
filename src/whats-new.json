@@ -357,6 +357,27 @@
         "ja": "Esc で Claude を止めると、Pitwall は最大 5 分間作業中と表示し続けることがなくなり、通知もしません。作業中だったボードのカードは、電話に知らせずに「レビュー待ち」へ移ります。次のプロンプトから時間を数え直し、20 分の通知もそこから数えます。",
         "zh-Hans": "用 Esc 停下 Claude 后，Pitwall 不再在之后最多五分钟里显示它在工作，也不会为此通知你：它正在处理的看板卡片会移到“待审查”，不会通知你的手机。下一条提示重新计时，20 分钟提醒也从它开始计算。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Servers start where they should",
+        "tr": "Sunucular olması gereken yerde başlıyor",
+        "de": "Server starten, wo sie sollen",
+        "es": "Los servidores arrancan donde deben",
+        "ru": "Серверы запускаются где надо",
+        "ja": "サーバーは本来の場所で起動",
+        "zh-Hans": "服务器在该在的地方启动"
+      },
+      "body": {
+        "en": "A project with no port of its own and no Vite config starts on the port its script picks, so Next, Nuxt and Astro keep theirs. A project whose folder moved or was deleted says so when you start it, and points to where you choose its new place.",
+        "tr": "Kendi portu ve Vite yapılandırması olmayan bir proje, script'inin seçtiği portta başlıyor; Next, Nuxt ve Astro kendi portlarını koruyor. Klasörü taşınmış ya da silinmiş bir proje, başlatınca bunu söylüyor ve yeni yerini nereden seçeceğini gösteriyor.",
+        "de": "Ein Projekt ohne eigenen Port und ohne Vite-Konfiguration startet auf dem Port, den sein Skript wählt, sodass Next, Nuxt und Astro ihren behalten. Ein Projekt, dessen Ordner verschoben oder gelöscht wurde, sagt das beim Start und zeigt, wo du seinen neuen Ort wählst.",
+        "es": "Un proyecto sin puerto propio ni configuración de Vite se inicia en el puerto que elige su script, así que Next, Nuxt y Astro conservan el suyo. Un proyecto cuya carpeta se movió o se borró lo dice al iniciarlo y te indica dónde elegir su nueva ubicación.",
+        "ru": "Проект без своего порта и без конфигурации Vite запускается на порту, который выбирает его скрипт, так что Next, Nuxt и Astro сохраняют свой. Проект, чья папка перемещена или удалена, сообщает об этом при запуске и подсказывает, где выбрать её новое место.",
+        "ja": "独自のポートも Vite 設定もないプロジェクトは、スクリプトが選ぶポートで起動するため、Next、Nuxt、Astro は自分のポートを保ちます。フォルダーが移動または削除されたプロジェクトは、起動時にそのことを伝え、新しい場所を選ぶ場所を案内します。",
+        "zh-Hans": "没有自己的端口、也没有 Vite 配置的项目，会在其脚本选择的端口上启动，因此 Next、Nuxt 和 Astro 保留各自的端口。文件夹被移动或删除的项目在启动时会说明这一点，并指出在哪里为它选择新位置。"
+      }
     }
   ]
 }
