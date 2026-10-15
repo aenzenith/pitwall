@@ -5,7 +5,7 @@ import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
 import Marquee from "../../components/Marquee.vue";
 import Spinner from "../../components/Spinner.vue";
-import { editorName, gitLine, phase, turnLine } from "../../lib/format";
+import { editorName, gitLine, heldLine, phase, turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { sessionTitle } from "../../lib/sessions";
 import { api, now, sessions, snapshot } from "../../lib/store";
@@ -25,6 +25,9 @@ const server = computed(() => {
   if (p.issue && p.status !== "running") return { title, sub: p.issue.text };
   return { title, sub: [p.runCommand, p.status === "running" && p.port ? `:${p.port}` : ""].filter(Boolean).join(" · ") };
 });
+
+/** The commands that started with the server and wait for the user: a box each, under it. */
+const held = computed(() => props.project.commands.flatMap((command) => (command.held ? [{ ...command, why: heldLine(command.held) }] : [])));
 
 /** The sessions that wait on you, each to bring up where it runs; and those at work. One list,
  * under the card's buttons. */
@@ -58,6 +61,21 @@ function toggle(): void {
       <button v-if="project.status === 'busy'" type="button" class="control busy" :aria-label="server.title" disabled><Spinner :size="12" /></button>
       <button v-else-if="project.status === 'running'" type="button" class="control stop" @click="toggle"><Icon name="stop" :size="11" /> {{ t("common.stop") }}</button>
       <button v-else type="button" class="control start" @click="toggle"><Icon name="play" :size="11" /> {{ t("common.start") }}</button>
+    </div>
+
+    <!-- A command that started with the server and waits: what it is and why in its tooltip, the
+         way to run it or let it be. -->
+    <div v-for="command in held" :key="command.id" class="card-held" role="group" :aria-label="t('detail.held.name', { name: command.name })" :title="`${command.command} · ${command.why}`">
+      <span class="held-head">
+        <Icon name="clock" :size="12" />
+        <span class="held-name">{{ t("detail.held.name", { name: command.name }) }}</span>
+      </span>
+      <div class="card-actions">
+        <button type="button" class="control half" @click="api.skipHeld(project.path, command.id)"><span class="control-text">{{ t("detail.skip") }}</span></button>
+        <button type="button" :class="['control', 'half', { run: command.held === 'user' }]" @click="api.runCommand(project.path, command.id)">
+          <span class="control-text">{{ t("common.run") }}</span>
+        </button>
+      </div>
     </div>
 
     <div class="card-actions">
@@ -269,6 +287,55 @@ function toggle(): void {
 
 .control.go {
   justify-content: space-between;
+}
+
+/* A command that waits beside the server: its name in Claude's soft colour over its two buttons,
+   in a box of its own; a name longer than the box wraps, and the box grows. */
+.card-held {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-tile);
+}
+
+.held-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  color: var(--claude-soft);
+}
+
+/* Level with the name's first line. */
+.held-head svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.held-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+/* The box's room goes to the two by what their labels need: Skip is the longer one in German. */
+/* Skip and Run share the row, neither narrower than its name. */
+.control.half {
+  flex: 1 0 auto;
+}
+
+.control.run {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-line);
+  color: var(--btn-primary-text);
+}
+
+.control.run:hover {
+  background: var(--btn-primary-hover);
 }
 
 kbd {

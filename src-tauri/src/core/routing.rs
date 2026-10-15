@@ -41,6 +41,30 @@ impl Action {
     }
 }
 
+/// Who started a server. It says what becomes of the commands marked "ask first" that start
+/// with it (`jobs.rs`: `hold_companions`): none of them is run by a start, whoever asked for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Origin {
+    /// A click: the list's row, the details, the Track page, Start all, a team's start, the
+    /// popover, the mini tower, the quick switcher; a VS Code window's work order.
+    User,
+    /// A team that starts with Pitwall.
+    Launch,
+    /// What was open at the last quit, or before an update's restart, put back.
+    Restore,
+    /// A `pitwall://` link.
+    Link,
+    /// Claude, over the team radio.
+    Claude,
+    /// The supervisor, after a crash or a hang.
+    Crash,
+    /// `pitwall start | restart` at a terminal, which asks there itself (`cli.rs`).
+    Terminal,
+    /// `pitwall start | restart` with no terminal to ask in.
+    NoTerminal,
+}
+
 /// A start/stop/restart the user asked for and hasn't seen finish yet; drives the spinner.
 pub(super) struct Pending {
     pub(super) action: Action,
@@ -61,13 +85,14 @@ impl Pending {
 impl Core {
     /// Start, stop or restart a project wherever it belongs. A server another participant runs
     /// is handled by that participant; a project open in a VS Code window is started there.
-    pub fn act(self: &Arc<Self>, path: &str, action: Action) {
+    /// `by`: who asks (a click, a link).
+    pub fn act(self: &Arc<Self>, path: &str, action: Action, by: Origin) {
         self.mark_pending(path, action);
 
         let core = Arc::clone(self);
         let path = path.to_string();
 
-        thread::spawn(move || core.act_now(&path, action));
+        thread::spawn(move || core.act_now(&path, action, by));
     }
 
     pub(super) fn mark_pending(&self, path: &str, action: Action) {
@@ -75,21 +100,20 @@ impl Core {
         self.notify();
     }
 
-    pub(super) fn act_now(self: &Arc<Self>, path: &str, action: Action) {
-        self.route(path, action, true);
+    pub(super) fn act_now(self: &Arc<Self>, path: &str, action: Action, by: Origin) {
+        self.route(path, action, true, by);
     }
 
-    /// A start nobody clicked (what was open at the last quit, a team that starts with
-    /// Pitwall), wherever it belongs like any other: nothing while it runs here or a participant
-    /// runs it. No browser opens for it.
-    pub(super) fn start_quietly(self: &Arc<Self>, path: &str) {
-        self.route(path, Action::Start, false);
+    /// A start nobody clicked (what was open at the last quit), wherever it belongs like any
+    /// other: nothing while it runs here or a participant runs it. No browser opens for it.
+    pub(super) fn start_quietly(self: &Arc<Self>, path: &str, by: Origin) {
+        self.route(path, Action::Start, false, by);
     }
 
-    /// `open_url`: a server started here opens its address, when Settings says so. Whether
-    /// anything came of it: not of a start of what runs already or that was refused (no such
-    /// script), nor of a stop of what doesn't run.
-    pub(super) fn route(self: &Arc<Self>, path: &str, action: Action, open_url: bool) -> bool {
+    /// `open_url`: a server started here opens its address, when Settings says so. `by`: who
+    /// starts it. Whether anything came of it: not of a start of what runs already or that was
+    /// refused (no such script), nor of a stop of what doesn't run.
+    pub(super) fn route(self: &Arc<Self>, path: &str, action: Action, open_url: bool, by: Origin) -> bool {
         // A participant is sent the folder as it writes it (`WindowRecord::spelling`).
         let (running_here, stoppable, runner, root_owner) = {
             let inner = self.lock();
@@ -110,17 +134,17 @@ impl Core {
             Action::Start => match root_owner {
                 Some((owner, folder)) => self.registry.send(&owner, "start", &folder),
                 None => {
-                    self.start(path, open_url);
+                    self.start(path, open_url, by);
                     return self.lock().runs.contains_key(path);
                 }
             },
             Action::Stop if stoppable => self.stop(path),
-            Action::Restart if stoppable => self.restart(path),
+            Action::Restart if stoppable => self.restart(path, by),
             Action::Stop | Action::Restart => {
                 if let Some((owner, folder)) = runner {
                     self.registry.send(&owner, action.as_str(), &folder);
                 } else {
-                    return action == Action::Restart && self.route(path, Action::Start, open_url);
+                    return action == Action::Restart && self.route(path, Action::Start, open_url, by);
                 }
             }
         }
@@ -161,7 +185,7 @@ impl Core {
                     }
                     inner.pending.insert(path.clone(), Pending::start(None));
                 }
-                core.act_now(path, Action::Start);
+                core.act_now(path, Action::Start, Origin::User);
             }
 
             let mut inner = core.lock();
@@ -189,11 +213,11 @@ impl Core {
 
         self.notify();
         for path in paths {
-            self.act(&path, Action::Stop);
+            self.act(&path, Action::Stop, Origin::User);
         }
     }
 
-    /// Work orders from other participants addressed to us.
+    /// Work orders from other participants addressed to us: a click in a VS Code window.
     pub fn handle_command(self: &Arc<Self>, command: RemoteCommand) {
         let Some(action) = Action::parse(&command.action) else {
             return;
@@ -203,9 +227,9 @@ impl Core {
         let path = listed_path(&self.lock(), &command.folder_path);
 
         thread::spawn(move || match action {
-            Action::Start => core.start(&path, false),
+            Action::Start => core.start(&path, false, Origin::User),
             Action::Stop => core.stop(&path),
-            Action::Restart => core.restart(&path),
+            Action::Restart => core.restart(&path, Origin::User),
         });
     }
 }

@@ -53,10 +53,16 @@ export type ProjectSettings = {
 
 export type JobResult = { ok: boolean; code: number | null; stopped: boolean; finishedAt: number };
 
+/** Who started a server whose command marked "ask first" didn't run with it: `user` (a click)
+ * waits for the go-ahead; the others skipped it, each saying when. */
+export type HeldBy = "user" | "launch" | "restore" | "link" | "claude" | "crash" | "noTerminal";
+
 export type CommandView = CustomCommand & {
   status: "running" | "busy" | "ok" | "failed" | "idle";
   startedAt: number | null;
   result: JobResult | null;
+  /** Marked "ask first", it started with the server and wasn't run: it waits for the user. */
+  held: HeldBy | null;
 };
 
 export type Status = "running" | "stopped" | "crashed" | "busy";

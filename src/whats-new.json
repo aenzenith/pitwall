@@ -170,6 +170,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "Commands that ask first wait for you",
+        "tr": "Önce soran komutlar seni bekliyor",
+        "de": "Befehle mit Rückfrage warten auf dich",
+        "es": "Los comandos que preguntan antes te esperan",
+        "ru": "Команды с вопросом ждут вас",
+        "ja": "確認付きコマンドはあなたを待ちます",
+        "zh-Hans": "需先询问的命令会等你"
+      },
+      "body": {
+        "en": "A command marked Ask before running that starts with the dev server no longer runs by itself, however the server starts. It waits in the project's Commands with Skip and Run, and the project's row shows how many wait. pitwall start and restart ask at the terminal instead.",
+        "tr": "Dev sunucusuyla birlikte başlayan ve Çalıştırmadan önce sor işaretli bir komut, sunucu nasıl başlarsa başlasın artık kendiliğinden çalışmıyor. Projenin Komutlar bölümünde Atla ve Çalıştır ile bekliyor; projenin satırı kaç tanesinin beklediğini gösteriyor. pitwall start ve restart ise terminalde soruyor.",
+        "de": "Ein Befehl mit „Vor dem Ausführen fragen“, der mit dem Dev-Server startet, läuft nicht mehr von selbst, wie auch immer der Server startet. Er wartet in den Befehlen des Projekts mit Überspringen und Ausführen, und die Zeile des Projekts zeigt, wie viele warten. pitwall start und restart fragen stattdessen im Terminal.",
+        "es": "Un comando marcado con Preguntar antes de ejecutar que se inicia con el servidor de desarrollo ya no se ejecuta solo, se inicie como se inicie el servidor. Espera en los Comandos del proyecto con Omitir y Ejecutar, y la fila del proyecto muestra cuántos esperan. pitwall start y restart preguntan en la terminal.",
+        "ru": "Команда с отметкой «Спрашивать перед запуском», которая запускается вместе с dev-сервером, больше не выполняется сама, как бы ни был запущен сервер. Она ждёт в «Командах» проекта с кнопками «Пропустить» и «Выполнить», а строка проекта показывает, сколько команд ждут. pitwall start и restart спрашивают в терминале.",
+        "ja": "開発サーバーと連動する「実行前に確認」付きのコマンドは、サーバーがどう起動されても自動では実行されなくなりました。プロジェクトのコマンド欄で「スキップ」と「実行」を添えて待ち、プロジェクトの行には待っている数が表示されます。pitwall start と restart はターミナルで確認します。",
+        "zh-Hans": "标记为“运行前询问”且随开发服务器启动的命令，无论服务器如何启动，都不再自行运行。它会在项目的命令中等待，附有“跳过”和“运行”，项目所在行会显示等待的数量。pitwall start 和 restart 则在终端中询问。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Quitting without a crash",

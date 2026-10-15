@@ -29,7 +29,8 @@ use crate::process;
 pub(crate) const SUPPORTED: bool = cfg!(target_os = "macos");
 /// How the two ends talk, as the line's file and a hello say it (`v`). 2: `stop --command`, and
 /// a run's caller that shuts its side of the line has left (^C), which stops what it started.
-pub(crate) const LINE_VERSION: u32 = 2;
+/// 3: a start's commands marked "ask first" are asked about at the terminal.
+pub(crate) const LINE_VERSION: u32 = 3;
 /// The line's file, in `~/.pitwall/`.
 const LINE_FILE: &str = "cli.json";
 /// An answer may take as long as what was asked for does: a command that runs, an output that
@@ -75,8 +76,13 @@ pub(crate) fn line_file(dir: &Path) -> PathBuf {
 #[serde(tag = "do", rename_all = "camelCase")]
 pub(crate) enum Ask {
     Status,
-    /// `start` | `stop` | `restart`
-    Act { action: String },
+    /// `start` | `stop` | `restart`. `terminal`: the caller can be asked at a terminal, about
+    /// the commands marked "ask first" that start with the server.
+    Act {
+        action: String,
+        #[serde(default)]
+        terminal: bool,
+    },
     /// The dev server's output, or a saved command's by its name.
     Logs { command: Option<String>, follow: bool },
     /// A saved command, by its name. `confirmed`: the command line the user said yes to at a
@@ -84,6 +90,9 @@ pub(crate) enum Ask {
     Run { name: String, confirmed: Option<String> },
     /// A saved command stopped, by its name.
     StopCommand { name: String },
+    /// The commands a start asked about (`Said::Companions`) that the user said yes to, each
+    /// with the command line the yes was for.
+    Companions { agreed: Vec<Agreed> },
     Card { title: String, note: String },
     Open,
     Edit,
@@ -137,7 +146,22 @@ pub(crate) struct Row {
     pub claude_text: String,
 }
 
-/// A line of the app's answer. `Done`, `Failed` and `Confirm` end it.
+/// A saved command, as a start asks about it: by its id, its name and its command line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Companion {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+}
+
+/// A yes to a command a start asked about: its id, and the command line that was shown.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Agreed {
+    pub id: String,
+    pub command: String,
+}
+
+/// A line of the app's answer. `Done`, `Failed`, `Confirm` and `Companions` end it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum Said {
@@ -150,6 +174,9 @@ pub(crate) enum Said {
     Lines { lines: Vec<String> },
     /// The command is marked "ask first" and nobody said yes: nothing ran.
     Confirm { name: String, command: String },
+    /// The server started, and these commands that start with it are marked "ask first": none
+    /// of them ran.
+    Companions { commands: Vec<Companion> },
     Done,
     /// Refused, or it failed: why, unless that was said already.
     Failed { text: String },
@@ -234,12 +261,12 @@ fn parse(words: &[String]) -> Result<Parsed, String> {
             let project = sorted.alone.pop();
             match sorted.flags.pop() {
                 Some((_, Some(name))) => call(project, Ask::StopCommand { name }),
-                _ => call(project, Ask::Act { action: first.to_string() }),
+                _ => call(project, Ask::Act { action: first.to_string(), terminal: false }),
             }
         }
         "start" | "restart" => {
             let mut sorted = sorted(&[], &[], 1)?;
-            call(sorted.alone.pop(), Ask::Act { action: first.to_string() })
+            call(sorted.alone.pop(), Ask::Act { action: first.to_string(), terminal: false })
         }
         "logs" => {
             let mut sorted = sorted(&["-f", "--follow"], &["--command", "-c"], 1)?;
@@ -419,7 +446,7 @@ fn talk(file: Option<&LineFile>, call: &Call, mut each: impl FnMut(&Said) -> boo
     loop {
         let line = read_line(&mut reader).ok().flatten().ok_or(Lost::Quiet)?;
         let said: Said = serde_json::from_str(&line).map_err(|_| Lost::Quiet)?;
-        if matches!(said, Said::Done | Said::Failed { .. } | Said::Confirm { .. }) {
+        if matches!(said, Said::Done | Said::Failed { .. } | Said::Confirm { .. } | Said::Companions { .. }) {
             return Ok(said);
         }
         if !each(&said) {
@@ -605,6 +632,10 @@ fn run(file: Option<&LineFile>, project: Option<String>, ask: Ask, json: bool) -
     // An output that is followed has no end of its own: it ends with whoever reads it.
     let follows = matches!(ask, Ask::Logs { follow: true, .. });
     let mut call = Call { cwd, project, ask };
+    // A start asks here about what asks first, when there is a terminal to ask at.
+    if let Ask::Act { terminal, .. } = &mut call.ask {
+        *terminal = std::io::stdin().is_terminal();
+    }
 
     loop {
         // A pipe that closed (`| head`) ends the printing, not the command: a run still goes to
@@ -663,6 +694,28 @@ fn run(file: Option<&LineFile>, project: Option<String>, ask: Ask, json: bool) -
                 if let Ask::Run { confirmed, .. } = &mut call.ask {
                     *confirmed = Some(command);
                 }
+                continue;
+            }
+            // The server is up: each command that starts with it and asks first is asked about,
+            // and runs on a yes, to the line that was shown.
+            Ok(Said::Companions { commands }) => {
+                let terminal = std::io::stdin().is_terminal();
+                let yes: Vec<Agreed> = commands
+                    .into_iter()
+                    .filter(|companion| {
+                        agreed(terminal, || {
+                            eprint!("{}\n{} ", t!("core.cli.run.confirm", name = clean(&companion.name), command = clean(&companion.command)), t!("core.cli.act.withServer"));
+                            let mut answer = String::new();
+                            let _ = std::io::stdin().read_line(&mut answer);
+                            answer
+                        })
+                    })
+                    .map(|companion| Agreed { id: companion.id, command: companion.command })
+                    .collect();
+                if yes.is_empty() {
+                    return DONE;
+                }
+                call.ask = Ask::Companions { agreed: yes };
                 continue;
             }
             Ok(_) => DONE,

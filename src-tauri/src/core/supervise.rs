@@ -283,7 +283,10 @@ impl Core {
 
         if wanted {
             match unit {
-                Unit::Server(path) => self.launch(path, false, Vec::new()),
+                Unit::Server(path) => {
+                    self.launch(path, false, Vec::new());
+                    self.hold_companions(path, Origin::Crash);
+                }
                 Unit::Command(path, id) => {
                     self.spawn_job(path, id);
                 }

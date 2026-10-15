@@ -656,6 +656,11 @@ onBeforeUnmount(() => {
   unlistenResize?.();
 });
 
+/** How many of the project's commands started with its server and wait for the user. */
+function heldCount(project: Project): number {
+  return project.commands.filter((command) => command.held).length;
+}
+
 function server(project: Project): string {
   return meta(project, now.value);
 }
@@ -848,6 +853,9 @@ function server(project: Project): string {
                       <span class="name">
                         <span class="name-text">{{ project.name }}</span>
                         <MutedMark v-if="project.muted" />
+                        <span v-if="heldCount(project)" class="held-badge" role="img" :aria-label="t('detail.held.count', { count: heldCount(project) })" :title="t('detail.held.count', { count: heldCount(project) })">
+                          <Icon name="clock" :size="10" />{{ heldCount(project) }}
+                        </span>
                         <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ {{ project.terminals.length }}</span>
                       </span>
                       <span class="path">{{ project.path }}</span>
@@ -1469,6 +1477,23 @@ input[type="search"]::placeholder {
   font-size: 11px;
   font-weight: 400;
   color: var(--text-muted);
+}
+
+/* Commands that started with the server and wait for the user: a clock and how many, in the
+   colours of an "asks first" tag. */
+.held-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--btn-claude-bg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--claude-soft);
 }
 
 .path {

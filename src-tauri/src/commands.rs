@@ -5,7 +5,7 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
-use crate::core::{Action, Snapshot};
+use crate::core::{Action, Origin, Snapshot};
 use crate::i18n::t;
 use crate::settings::{ProjectSettings, Settings, TrackSettings};
 use crate::{apply_shortcut, tray, AppState, POPOVER, SWITCHER};
@@ -35,6 +35,12 @@ pub fn run_command(state: State<'_, AppState>, path: String, id: String) {
 pub fn stop_command(state: State<'_, AppState>, path: String, id: String) {
     let core = state.core.clone();
     std::thread::spawn(move || core.stop_command(&path, &id));
+}
+
+/// A command that started with its server and waits for the user, skipped: nothing runs.
+#[tauri::command]
+pub fn skip_held(state: State<'_, AppState>, path: String, id: String) {
+    state.core.skip_held(&path, &id);
 }
 
 /// The address "Open in browser" would open, to show it on the dev server row.
@@ -319,7 +325,7 @@ pub fn set_favourite(state: State<'_, AppState>, path: String, on: bool) {
 #[tauri::command]
 pub fn act(state: State<'_, AppState>, path: String, action: String) -> Result<(), String> {
     let action = Action::parse(&action).ok_or_else(|| format!("unknown action: {action}"))?;
-    state.core.act(&path, action);
+    state.core.act(&path, action, Origin::User);
     Ok(())
 }
 

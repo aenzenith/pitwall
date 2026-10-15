@@ -175,7 +175,7 @@ fn a_settings_form_leaves_what_has_a_command_of_its_own() {
 fn a_server_starts_and_stopping_frees_the_port_of_the_whole_tree() {
     let (fx, port) = server_fixture();
 
-    fx.core.act(&fx.project, Action::Start);
+    fx.core.act(&fx.project, Action::Start, Origin::User);
 
     assert!(wait_for(Duration::from_secs(30), || view(&fx.core, &fx.project).url.is_some()), "server never printed its URL");
     assert!(is_port_served(port));
@@ -196,7 +196,7 @@ fn a_server_starts_and_stopping_frees_the_port_of_the_whole_tree() {
 fn quitting_leaves_no_server_behind() {
     let (fx, port) = server_fixture();
 
-    fx.core.start(&fx.project, false);
+    fx.core.start(&fx.project, false, Origin::User);
     assert!(wait_for(Duration::from_secs(30), || is_port_served(port)));
 
     fx.core.dispose();
@@ -209,7 +209,7 @@ fn a_crashing_server_is_restarted_three_times_then_given_up() {
     let fx = fixture("node crash.js", &[("crash.js", CRASH_JS)]);
     fx.core.add_project(&fx.project).unwrap();
 
-    fx.core.start(&fx.project, false);
+    fx.core.start(&fx.project, false, Origin::User);
 
     let gave_up = wait_for(Duration::from_secs(40), || {
         view(&fx.core, &fx.project).issue.is_some_and(|issue| issue.text.contains("gave up after 3 restarts"))
@@ -235,7 +235,7 @@ fn build_scripts_are_refused_and_nothing_runs() {
     settings.script = "build".into();
     fx.core.set_settings(settings);
 
-    fx.core.start(&fx.project, false);
+    fx.core.start(&fx.project, false, Origin::User);
 
     let project = view(&fx.core, &fx.project);
     assert_eq!(project.status, "stopped");
@@ -254,10 +254,10 @@ fn a_server_running_in_vs_code_is_stopped_there_not_here() {
     assert_eq!(project.status, "running");
     assert_eq!(project.owner.as_ref().map(|o| o.id.as_str()), Some("vscode1"));
 
-    fx.core.act_now(&fx.project, Action::Start);
+    fx.core.act_now(&fx.project, Action::Start, Origin::User);
     assert!(commands_for(&fx.registry_dir, "vscode1").is_empty(), "a running server is not started twice");
 
-    fx.core.act_now(&fx.project, Action::Stop);
+    fx.core.act_now(&fx.project, Action::Stop, Origin::User);
     let sent = commands_for(&fx.registry_dir, "vscode1");
     assert_eq!(sent.len(), 1);
     assert_eq!(sent[0].action, "stop");
@@ -272,7 +272,7 @@ fn a_project_open_in_vs_code_is_started_by_that_window() {
     fx.core.heartbeat();
     assert_eq!(view(&fx.core, &fx.project).open_in.as_deref(), Some("paddock — VS Code"));
 
-    fx.core.act_now(&fx.project, Action::Start);
+    fx.core.act_now(&fx.project, Action::Start, Origin::User);
 
     let sent = commands_for(&fx.registry_dir, "vscode2");
     assert_eq!(sent.len(), 1);
@@ -371,7 +371,7 @@ fn a_companion_command_starts_and_stops_with_the_dev_server() {
     settings.commands = vec![command("queue", "node worker.js", true, true)];
     fx.core.set_project_settings(&fx.project, settings);
 
-    fx.core.start(&fx.project, false);
+    fx.core.start(&fx.project, false, Origin::User);
     assert!(wait_for(Duration::from_secs(30), || is_port_served(port) && is_port_served(worker_port)), "server and companion both up");
 
     fx.core.stop(&fx.project);
@@ -473,7 +473,7 @@ fn two_starts_at_once_run_one_server() {
             let (core, project, barrier) = (Arc::clone(&fx.core), fx.project.clone(), Arc::clone(&barrier));
             std::thread::spawn(move || {
                 barrier.wait();
-                core.start(&project, false);
+                core.start(&project, false, Origin::User);
             })
         })
         .collect();

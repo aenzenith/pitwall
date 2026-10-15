@@ -1,6 +1,6 @@
 import { language, t, type Key } from "./i18n";
 import { keys } from "./platform";
-import type { GitInfo, Project, Turn } from "./types";
+import type { GitInfo, HeldBy, Project, Turn } from "./types";
 
 export function uptime(startedAt: number | null, now: number): string {
   if (!startedAt) {
@@ -64,6 +64,12 @@ export function meta(project: Project, now: number): string {
 
 export function claudeLine(project: Project, now: number): string {
   return project.claude ? turnLine(project.claude, now) : "";
+}
+
+/** Why a command marked "ask first" waits beside its server: it waits for the go-ahead after a
+ * click, and was skipped when anything else started the server. */
+export function heldLine(held: HeldBy): string {
+  return held === "user" ? t("detail.held.user") : `${t(`detail.held.${held}`)} · ${t("detail.tagAsksFirst")}`;
 }
 
 /** An address without its scheme and trailing slash, as a link row shows it. */

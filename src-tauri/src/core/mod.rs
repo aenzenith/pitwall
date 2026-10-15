@@ -70,7 +70,7 @@ pub use terminal::{TerminalBuffer, TerminalView};
 pub use jobs::CommandView;
 pub use projects::Folder;
 pub use restore::{RestartPlan, Restored};
-pub use routing::Action;
+pub use routing::{Action, Origin};
 pub use sessions::SessionsView;
 pub use snapshot::Snapshot;
 pub use relay::{PhoneConfig, PhoneView};
@@ -214,6 +214,10 @@ struct Inner {
     /// A start or restart Claude asked for over the radio whose run hasn't begun, by project:
     /// the marker that run is told by, written where it begins (`output.rs`: `mark_run`).
     asked_by_claude: HashMap<String, &'static str>,
+    /// Commands marked "ask first" that started with their server and weren't run, by project:
+    /// each one's id and who started the server (`jobs.rs`: `hold_companions`). Never written
+    /// down.
+    held: HashMap<String, Vec<(String, Origin)>>,
     /// A quit was held for the chequered flag's dialog and waits on its answer (`flag.rs`).
     flag_asked: bool,
 }

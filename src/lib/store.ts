@@ -323,6 +323,8 @@ export const api = {
   output: (path: string, job: string | null = null) => invoke<string[]>("get_output", { path, job }),
   runCommand: (path: string, id: string) => invoke("run_command", { path, id }),
   stopCommand: (path: string, id: string) => invoke("stop_command", { path, id }),
+  /** A command that started with its server and waits for the user, skipped: nothing runs. */
+  skipHeld: (path: string, id: string) => invoke("skip_held", { path, id }),
   resolveAddress: (path: string) => invoke<string | null>("resolve_address", { path }),
   openWindow: () => invoke("open_window"),
   hidePopover: () => invoke("hide_popover"),

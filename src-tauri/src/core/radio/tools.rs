@@ -271,7 +271,7 @@ impl Core {
         if action != Action::Stop {
             self.lock().asked_by_claude.insert(path.to_string(), kind);
         }
-        if self.route(path, action, false) && action == Action::Stop {
+        if self.route(path, action, false, Origin::Claude) && action == Action::Stop {
             self.push_marker(path, kind, None);
         }
         self.radio_wait(ACT_LIMIT, |inner| start_done(inner, path));

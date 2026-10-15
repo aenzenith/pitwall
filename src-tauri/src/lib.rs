@@ -479,6 +479,7 @@ pub fn run() {
             commands::show_switcher,
             commands::run_command,
             commands::stop_command,
+            commands::skip_held,
             commands::resolve_address,
             commands::open_window,
             commands::hide_popover,

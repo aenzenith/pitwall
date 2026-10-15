@@ -3,7 +3,7 @@ import { computed } from "vue";
 
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
-import { uptime } from "../../lib/format";
+import { heldLine, uptime } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
 import { api, now } from "../../lib/store";
@@ -33,6 +33,14 @@ function run(c: CommandView): void {
   emit("show", c.id);
 }
 
+/** A command that started with the server and waits: the button is the go-ahead, no second
+ * question. */
+function runHeld(c: CommandView): void {
+  confirming.value = null;
+  void api.runCommand(props.project.path, c.id);
+  emit("show", c.id);
+}
+
 function stop(c: CommandView): void {
   void api.stopCommand(props.project.path, c.id);
 }
@@ -56,8 +64,28 @@ function commandMenu(c: CommandView, event: MouseEvent): void {
       <button type="button" class="text-button" @click="emit('edit', null)">{{ t("detail.add") }}</button>
     </div>
     <p v-if="!commands.length" class="empty-commands">{{ t("detail.noCommands") }}</p>
-    <div v-for="c in commands" :key="c.id" :class="['cmd-row', { focused: tab === c.id }]" @contextmenu="commandMenu(c, $event)">
-      <template v-if="confirming === c.id">
+    <div
+      v-for="c in commands"
+      :key="c.id"
+      :class="['cmd-row', { focused: tab === c.id, held: c.held && confirming !== c.id }]"
+      @contextmenu="commandMenu(c, $event)"
+    >
+      <!-- Started with the server and not run: its name, its line and why it waits, with the way
+           to run it or let it be. -->
+      <template v-if="c.held && confirming !== c.id">
+        <span :class="['mark', 'held-mark', { asked: c.held === 'user' }]">
+          <Icon :name="c.held === 'user' ? 'clock' : 'skip'" :size="12" />
+        </span>
+        <span class="cmd-name held-name">{{ c.name }}</span>
+        <span class="held-actions">
+          <button type="button" class="control small-btn" @click="api.skipHeld(project.path, c.id)">{{ t("detail.skip") }}</button>
+          <button v-if="c.held === 'user'" type="button" class="control primary small-btn" @click="runHeld(c)">{{ t("common.run") }}</button>
+          <button v-else type="button" class="control small-btn" @click="runHeld(c)">{{ t("detail.runNow") }}</button>
+        </span>
+        <span class="cmd-line held-line">{{ c.command }}</span>
+        <span :class="['held-why', { asked: c.held === 'user' }]">{{ heldLine(c.held) }}</span>
+      </template>
+      <template v-else-if="confirming === c.id">
         <span class="confirm-text">{{ t("detail.confirmRun", { name: c.name }) }}</span>
         <button type="button" class="control small-btn" @click="confirming = null">{{ t("common.cancel") }}</button>
         <button type="button" class="control primary small-btn" @click="run(c)">{{ t("common.run") }}</button>
@@ -196,5 +224,48 @@ function commandMenu(c: CommandView, event: MouseEvent): void {
   height: 26px;
   padding: 0 10px;
   font-size: 12px;
+}
+
+/* A command that waits beside its server: its mark, name and buttons on the first line, its
+   command line and why it waits under them. */
+.cmd-row.held {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 1px 10px;
+  padding: 6px 8px 8px;
+}
+
+.held-why {
+  color: var(--text-subtle);
+}
+
+.held-mark.asked,
+.held-why.asked {
+  color: var(--claude-soft);
+}
+
+.held-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.held-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.held-line,
+.held-why {
+  grid-column: 2 / 4;
+}
+
+.held-why {
+  margin-top: 3px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

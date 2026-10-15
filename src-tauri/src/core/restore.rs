@@ -296,7 +296,7 @@ impl Core {
         let core = Arc::clone(self);
         thread::spawn(move || {
             for path in &servers {
-                core.start(path, false);
+                core.start(path, false, Origin::Restore);
             }
             for command in &commands {
                 core.run_command(&command.path, &command.id);

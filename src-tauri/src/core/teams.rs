@@ -154,11 +154,12 @@ impl Core {
     /// (`routing.rs`). A stop of the team, a stop of everything and quitting call off what
     /// hasn't begun.
     pub fn team_start(self: &Arc<Self>, id: &str) {
-        self.start_team(id, true);
+        self.start_team(id, Origin::User);
     }
 
-    /// `open_url`: the servers open their address, when Settings says so.
-    fn start_team(self: &Arc<Self>, id: &str, open_url: bool) {
+    /// `by`: who starts it. The servers a click starts open their address, when Settings says so.
+    fn start_team(self: &Arc<Self>, id: &str, by: Origin) {
+        let open_url = by == Origin::User;
         let Some(team) = self.team(id) else {
             return;
         };
@@ -197,7 +198,7 @@ impl Core {
                     }
                     inner.pending.insert(path.clone(), Pending::start(None));
                 }
-                core.route(path, Action::Start, open_url);
+                core.route(path, Action::Start, open_url, by);
                 core.wait_started(path, &id, run);
             }
 
@@ -222,7 +223,7 @@ impl Core {
 
         self.notify();
         for path in paths {
-            self.act(&path, Action::Stop);
+            self.act(&path, Action::Stop, Origin::User);
         }
     }
 
@@ -230,7 +231,7 @@ impl Core {
     pub fn start_launch_teams(self: &Arc<Self>) {
         let ids: Vec<String> = self.lock().settings.teams.iter().filter(|team| team.start_at_launch).map(|team| team.id.clone()).collect();
         for id in ids {
-            self.start_team(&id, false);
+            self.start_team(&id, Origin::Launch);
         }
     }
 

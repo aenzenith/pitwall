@@ -931,6 +931,7 @@ impl Core {
                 team.projects.retain(|known| !same_path(known, path));
             }
             inner.settings.notifications.muted.retain(|known| !same_path(known, path));
+            inner.held.remove(path);
         }
         self.save_settings();
 

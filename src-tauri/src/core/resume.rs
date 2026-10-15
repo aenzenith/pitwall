@@ -264,7 +264,7 @@ impl Core {
         thread::spawn(move || {
             for project in &kept.projects {
                 if project.server {
-                    core.start_quietly(&project.path);
+                    core.start_quietly(&project.path, Origin::Restore);
                 }
                 for id in &project.commands {
                     core.run_command(&project.path, id);

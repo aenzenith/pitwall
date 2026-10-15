@@ -23,7 +23,7 @@ use super::radio::{last_lines, saved, secret, Stranger, Strangers, HELLO_LIMIT};
 use super::routing::{start_done, to_stop};
 use super::*;
 use crate::claude::{SessionState, TurnKind};
-use crate::cli::{line_file, Ask, Call, ClaudeAt, LineFile, Row, Said, Tone, LINE_VERSION, SUPPORTED};
+use crate::cli::{line_file, Agreed, Ask, Call, ClaudeAt, Companion, LineFile, Row, Said, Tone, LINE_VERSION, SUPPORTED};
 use crate::mcp::{receive, same_secret, send, Hello, Timed, Welcome};
 use crate::resolve::is_forbidden_command;
 
@@ -522,7 +522,8 @@ impl Core {
             Err(why) => return say(failed(why)),
         };
         match &call.ask {
-            Ask::Act { action } => self.cli_act(&project, action, say),
+            Ask::Act { action, terminal } => self.cli_act(&project, action, *terminal, say),
+            Ask::Companions { agreed } => self.cli_companions(&project, agreed, say),
             Ask::Logs { command, follow } => self.cli_logs(&project, command.as_deref(), *follow, say, caller),
             Ask::Run { name, confirmed } => self.cli_run(&project, name, confirmed.as_deref(), say, caller),
             Ask::StopCommand { name } => self.cli_stop_command(&project, name, say),
@@ -612,8 +613,10 @@ impl Core {
     }
 
     /// Start, stop or restart, routed as a click on the project's button is, and answered once
-    /// its spinner would stop.
-    fn cli_act(self: &Arc<Self>, project: &ProjectView, action: &str, say: Say) -> std::io::Result<()> {
+    /// its spinner would stop. The commands marked "ask first" that start with the server run
+    /// with none of it: with a `terminal` to ask at they are asked about there (`cli.rs`), and
+    /// without one they wait in the window, and it is said so.
+    fn cli_act(self: &Arc<Self>, project: &ProjectView, action: &str, terminal: bool, say: Say) -> std::io::Result<()> {
         let Some(action) = Action::parse(action) else {
             return say(failed(t!("core.cli.unknown", word = action)));
         };
@@ -638,8 +641,10 @@ impl Core {
         say(Said::Text { text: said, tone: Tone::Plain, open: true })?;
 
         self.mark_pending(path, action);
-        self.route(path, action, true);
+        self.route(path, action, true, if terminal { Origin::Terminal } else { Origin::NoTerminal });
         self.cli_wait(ACT_LIMIT, |inner| start_done(inner, path));
+        // The terminal's to ask about, whatever came of the start.
+        let asked = self.take_held(path, Origin::Terminal);
         // Its spinner goes with the next look at the state.
         self.notify();
 
@@ -654,7 +659,49 @@ impl Core {
         let done = if action == Action::Stop { status != "running" } else { matches!(status, "running" | "busy") };
 
         say(text(format!(" {stands}"), if done { Tone::Plain } else { Tone::Bad }))?;
-        say(if done { Said::Done } else { failed("") })
+        if !done {
+            return say(failed(""));
+        }
+        for command in after.iter().flat_map(|project| &project.commands).filter(|command| command.held == Some(Origin::NoTerminal)) {
+            say(text(t!("core.cli.act.skipped", name = command.name), Tone::Soft))?;
+        }
+        if asked.is_empty() {
+            return say(Said::Done);
+        }
+        say(Said::Companions { commands: asked.into_iter().map(|command| Companion { id: command.id, name: command.name, command: command.command }).collect() })
+    }
+
+    /// The commands a terminal said yes to after a start: each one runs as its button in the
+    /// window runs it, on its own, and only while the line it has is the line the yes was for;
+    /// one that changed since is asked about again. Only a command that starts with the server,
+    /// and never what the app itself won't run.
+    fn cli_companions(self: &Arc<Self>, project: &ProjectView, agreed: &[Agreed], say: Say) -> std::io::Result<()> {
+        let mut again = Vec::new();
+        for yes in agreed {
+            let Some(command) = project.commands.iter().find(|command| command.id == yes.id && command.with_server) else {
+                continue;
+            };
+            let name = command.name.as_str();
+            if command.command != yes.command {
+                again.push(Companion { id: command.id.clone(), name: command.name.clone(), command: command.command.clone() });
+                continue;
+            }
+            let said = if is_forbidden_command(&command.command) {
+                text(t!("core.cli.run.build", name = name), Tone::Bad)
+            } else if command.status == "running" || command.status == "busy" {
+                text(t!("core.cli.run.running", name = name), Tone::Plain)
+            } else if self.run_command(&project.path, &command.id) {
+                text(t!("core.cli.run.started", name = name, command = command.command), Tone::Soft)
+            } else {
+                text(t!("core.cli.run.notStarted", name = name), Tone::Bad)
+            };
+            say(said)?;
+        }
+        if again.is_empty() {
+            say(Said::Done)
+        } else {
+            say(Said::Companions { commands: again })
+        }
     }
 
     /// The saved command of that name, or what to say when the project has none.
@@ -1076,7 +1123,7 @@ impl Core {
                 false
             }
             (scheme::Verb::Act(action), Some(project)) => {
-                self.act(&project.path, action);
+                self.act(&project.path, action, Origin::Link);
                 false
             }
             (scheme::Verb::Act(_), None) => false,

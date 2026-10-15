@@ -32,20 +32,21 @@ pub(super) struct Run {
 }
 
 impl Core {
-    /// A start by hand resets the restart counter.
-    pub fn start(self: &Arc<Self>, path: &str, open_url: bool) {
+    /// A start by hand resets the restart counter. `by`: who starts it, for the commands that
+    /// start with it and ask first (`jobs.rs`: `start_server_companions`).
+    pub fn start(self: &Arc<Self>, path: &str, open_url: bool, by: Origin) {
         self.lock().supervisor.reset_attempts(path);
         let open = open_url && self.lock().settings.open_url_on_start;
         self.launch(path, open, Vec::new());
 
         if self.lock().runs.contains_key(path) {
-            self.start_server_companions(path);
+            self.start_server_companions(path, by);
         }
     }
 
-    pub fn restart(self: &Arc<Self>, path: &str) {
+    pub fn restart(self: &Arc<Self>, path: &str, by: Origin) {
         self.stop(path);
-        self.start(path, false);
+        self.start(path, false, by);
     }
 
     /// `end` says whether the spinner of a start the user waits on stops here.
@@ -283,6 +284,8 @@ impl Core {
 
         let unit = Unit::Server(path.to_string());
         let Some(attempt) = self.claim_restart(&unit, started) else {
+            // Down for good: nothing waits to run with it any more.
+            self.lock().held.remove(path);
             self.set_issue(path, "crashed", move || t!("core.issue.crashedGaveUp", detail = detail(), max = MAX_RESTARTS), IssueEnd::Final);
             self.push_line(path, format!("[pitwall] {}", t!("core.log.gaveUpServer", max = MAX_RESTARTS)));
             return;
@@ -293,8 +296,12 @@ impl Core {
         self.restart_later(&unit);
     }
 
-    /// Stops the dev server and the commands that run along with it.
+    /// Stops the dev server and the commands that run along with it; those held for the user
+    /// (`jobs.rs`) go too.
     pub fn stop(self: &Arc<Self>, path: &str) {
+        if self.lock().held.remove(path).is_some() {
+            self.notify();
+        }
         self.stop_server(path);
         self.stop_server_companions(path);
     }
@@ -361,6 +368,7 @@ impl Core {
         self.push_line(path, format!("[pitwall] {}", t!("core.log.notRespondingRestarting", port = port, attempt = attempt, max = MAX_RESTARTS)));
         self.stop_server(path);
         self.launch(path, false, Vec::new());
+        self.hold_companions(path, Origin::Crash);
     }
 }
 
