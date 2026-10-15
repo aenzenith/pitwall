@@ -104,10 +104,16 @@ pub fn build_command(manager: PackageManager, script: &str, args: &[String]) -> 
 }
 
 /// A custom command that would run a production build, which breaks the dev server you have
-/// open. Same rule as the refused `build*` scripts.
+/// open. Same rule as the refused `build*` scripts. The package manager's own options (a folder,
+/// a workspace, a filter) can stand before the script, and `run`'s after it (`npm run --silent
+/// build`, `npm run-script build`).
 pub fn is_forbidden_command(command: &str) -> bool {
     static BUILD: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?build\b|\b(?:vite|tauri|nuxt|next)\s+build\b|\bnpx\s+(?:vite|tauri)\s+build\b").unwrap()
+        Regex::new(concat!(
+            r"(?i)\b(?:npm|pnpm|yarn|bun)(?:\s+(?:-{1,2}[a-z][\w-]*(?:=\S+|\s+[^-\s;&|]\S*)?|run(?:-script)?|workspaces?\s+\S+))*\s+build\b",
+            r"|\b(?:vite|tauri|nuxt|next)\s+(?:--\s+)?build\b|\bnpx\s+(?:vite|tauri)\s+build\b",
+        ))
+        .unwrap()
     });
 
     BUILD.is_match(command)
@@ -292,7 +298,29 @@ mod tests {
         for command in ["npm run build", "pnpm build", "yarn build:ssr", "npx vite build", "vite build --mode x", "bun run build", "cd app && npm run build"] {
             assert!(is_forbidden_command(command), "{command} must be refused");
         }
-        for command in ["php artisan migrate", "npm run dev", "npm test", "php artisan queue:work", "npm run rebuild-index"] {
+        // The manager's options before the script, or `run`'s: a folder, a workspace, a filter.
+        for command in [
+            "npm --prefix web run build",
+            "npm --prefix app run build",
+            "npm -w web run build",
+            "npm run -w web build",
+            "npm run-script build",
+            "npm run --silent build",
+            "npm run -s build",
+            "pnpm --filter web build",
+            "pnpm --filter=web build",
+            "pnpm --filter=web run build",
+            "pnpm -C web build",
+            "pnpm -r build",
+            "yarn workspace web build",
+            "yarn workspaces foreach -A run build",
+            "yarn --cwd web build",
+            "bun --cwd web run build",
+            "npm run tauri -- build",
+        ] {
+            assert!(is_forbidden_command(command), "{command} must be refused");
+        }
+        for command in ["php artisan migrate", "npm run dev", "npm test", "php artisan queue:work", "npm run rebuild-index", "npm run dev -- --outDir build", "npm test -- build", "pnpm --filter web dev", "npm i -D build-tools", "yarn workspace web add build-info", "npm -w web run dev"] {
             assert!(!is_forbidden_command(command), "{command} must be allowed");
         }
     }

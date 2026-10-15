@@ -252,6 +252,27 @@
         "ja": "言語を切り替えると、サーバーのエラー行もアプリの言語に合わせて変わります。リスト、ミニタワー、ターミナルの pitwall のどれでも同じです。",
         "zh-Hans": "切换语言后，服务器的错误行会随应用语言一起变化：列表、迷你塔和终端里的 pitwall 都是如此。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Production builds, however they are started",
+        "tr": "Production build'ler, nasıl başlatılırsa başlatılsın",
+        "de": "Produktions-Builds, wie auch immer gestartet",
+        "es": "Builds de producción, se lancen como se lancen",
+        "ru": "Продакшн-сборки, как бы их ни запускали",
+        "ja": "本番ビルドは起動方法を問わず拒否",
+        "zh-Hans": "生产构建，无论如何启动"
+      },
+      "body": {
+        "en": "A production build started through npm, pnpm, yarn or bun options (a folder, a workspace, a filter) is refused like any other.",
+        "tr": "npm, pnpm, yarn ya da bun seçenekleriyle (bir klasör, bir workspace, bir filtre) başlatılan production build'ler, diğerleri gibi reddediliyor.",
+        "de": "Ein Produktions-Build, der über Optionen von npm, pnpm, yarn oder bun (ein Ordner, ein Workspace, ein Filter) gestartet wird, wird wie jeder andere abgelehnt.",
+        "es": "Un build de producción lanzado con opciones de npm, pnpm, yarn o bun (una carpeta, un workspace, un filtro) se rechaza como cualquier otro.",
+        "ru": "Продакшн-сборка, запущенная через параметры npm, pnpm, yarn или bun (папка, workspace, фильтр), отклоняется, как и любая другая.",
+        "ja": "npm、pnpm、yarn、bun のオプション（フォルダー、ワークスペース、フィルター）経由の本番ビルドは、ほかと同じく拒否されます。",
+        "zh-Hans": "通过 npm、pnpm、yarn 或 bun 的选项（文件夹、workspace、过滤器）启动的生产构建也会像其他构建一样被拒绝。"
+      }
     }
   ]
 }
