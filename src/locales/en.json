@@ -564,6 +564,7 @@
   "deps.showOutputName": "Show output: {name}",
   "deps.pkg.title": "installed → locked",
   "deps.pkg.missing": "missing · {version}",
+  "deps.pkg.missingUnlocked": "missing",
   "deps.pkg.extra": "{version} · not locked",
   "deps.pkg.more": {
     "one": "and {count} more package",

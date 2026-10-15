@@ -71,7 +71,8 @@ function morePackages(line: Install): number {
 
 /** What the install does to it: `13.32.0 → 13.34.0`, `missing · 2.1.0`, `5.0.1 · not locked`. */
 function change(pkg: DepPackage): string {
-  if (pkg.installed === null) return t("deps.pkg.missing", { version: pkg.locked ?? "" });
+  // Without a lock file there is no version to name: the word alone, not a separator with nothing after it.
+  if (pkg.installed === null) return pkg.locked === null ? t("deps.pkg.missingUnlocked") : t("deps.pkg.missing", { version: pkg.locked });
   if (pkg.locked === null) return t("deps.pkg.extra", { version: pkg.installed });
   return `${pkg.installed} → ${pkg.locked}`;
 }

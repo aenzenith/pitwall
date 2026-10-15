@@ -102,7 +102,8 @@ const cardSub = computed(() => {
   }
 });
 
-const seenHint = computed(() => (props.others > 0 ? t("sessions.seenOthers", { count: props.others, project: props.row.project }) : ""));
+/** What "Mark as seen" does to the project's other waiting sessions: said only beside that button. */
+const seenHint = computed(() => (waiting.value && props.others > 0 ? t("sessions.seenOthers", { count: props.others, project: props.row.project }) : ""));
 
 /** Why it can't be brought up: an editor window without the extension, or another app. */
 const elsewhereNotice = computed(() => {

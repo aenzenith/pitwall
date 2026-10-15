@@ -547,6 +547,7 @@
   "deps.showOutputName": "显示输出：{name}",
   "deps.pkg.title": "已安装 → 锁定",
   "deps.pkg.missing": "缺失 · {version}",
+  "deps.pkg.missingUnlocked": "缺失",
   "deps.pkg.extra": "{version} · 不在锁文件中",
   "deps.pkg.more": {
     "other": "还有 {count} 个包"

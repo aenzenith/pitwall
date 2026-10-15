@@ -557,6 +557,7 @@
   "deps.showOutputName": "Çıktıyı göster: {name}",
   "deps.pkg.title": "kurulu → kilitte",
   "deps.pkg.missing": "eksik · {version}",
+  "deps.pkg.missingUnlocked": "eksik",
   "deps.pkg.extra": "{version} · kilitte yok",
   "deps.pkg.more": {
     "other": "ve {count} paket daha"

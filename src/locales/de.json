@@ -564,6 +564,7 @@
   "deps.showOutputName": "Ausgabe zeigen: {name}",
   "deps.pkg.title": "installiert → Lockfile",
   "deps.pkg.missing": "fehlt · {version}",
+  "deps.pkg.missingUnlocked": "fehlt",
   "deps.pkg.extra": "{version} · nicht im Lockfile",
   "deps.pkg.more": {
     "one": "und {count} weiteres Paket",

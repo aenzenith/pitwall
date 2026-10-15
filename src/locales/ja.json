@@ -547,6 +547,7 @@
   "deps.showOutputName": "出力を表示: {name}",
   "deps.pkg.title": "インストール済み → ロック",
   "deps.pkg.missing": "未インストール · {version}",
+  "deps.pkg.missingUnlocked": "未インストール",
   "deps.pkg.extra": "{version} · ロックにない",
   "deps.pkg.more": {
     "other": "ほか {count} 個のパッケージ"

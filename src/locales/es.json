@@ -573,6 +573,7 @@
   "deps.showOutputName": "Ver salida: {name}",
   "deps.pkg.title": "instalado → lock",
   "deps.pkg.missing": "falta · {version}",
+  "deps.pkg.missingUnlocked": "falta",
   "deps.pkg.extra": "{version} · no está en el lock",
   "deps.pkg.more": {
     "one": "y {count} paquete más",

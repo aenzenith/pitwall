@@ -3,11 +3,11 @@ import { computed } from "vue";
 
 import Icon from "../../components/Icon.vue";
 import Marquee from "../../components/Marquee.vue";
-import Spinner from "../../components/Spinner.vue";
 import { editorName, phase, uptime } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { api, now, snapshot } from "../../lib/store";
 import type { Project } from "../../lib/types";
+import SwapLabel from "../team/SwapLabel.vue";
 
 /** `address`: where "Open in browser" goes, shown as its tooltip; `null` while unknown. */
 const props = defineProps<{ project: Project; address: string | null }>();
@@ -24,6 +24,12 @@ const server = computed(() => {
   return { title, sub: p.issue && p.status !== "running" ? p.issue.text : sub.filter(Boolean).join(" · ") };
 });
 
+/** The toggle's labels, all of them in its box: it keeps the widest one's width. */
+const toggleLabels = computed(() => [
+  { id: "start", text: t("common.start"), icon: "play" as const },
+  { id: "stop", text: t("common.stop"), icon: "stop" as const },
+]);
+
 function toggleServer(): void {
   void api.act(props.project.path, props.project.status === "running" ? "stop" : "start");
 }
@@ -37,14 +43,15 @@ function toggleServer(): void {
         <span class="server-title"><span :class="['state-dot', project.status]"></span>{{ server.title }}</span>
         <span :class="['server-sub', { bad: project.status === 'crashed' }]"><Marquee :text="server.sub" /></span>
       </div>
+      <!-- Start, its spinner and Stop in one width: the button doesn't move under the pointer. -->
       <button v-if="project.status === 'busy'" type="button" class="control busy" :aria-label="server.title" disabled>
-        <Spinner :size="12" />
+        <SwapLabel :labels="toggleLabels" :show="null" />
       </button>
       <button v-else-if="project.status === 'running'" type="button" class="control stop" @click="toggleServer">
-        <Icon name="stop" :size="11" /> {{ t("common.stop") }}
+        <SwapLabel :labels="toggleLabels" show="stop" />
       </button>
       <button v-else type="button" class="control start" @click="toggleServer">
-        <Icon name="play" :size="11" /> {{ t("common.start") }}
+        <SwapLabel :labels="toggleLabels" show="start" />
       </button>
     </div>
     <div class="server-links">

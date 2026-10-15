@@ -598,6 +598,7 @@
   "deps.showOutputName": "Показать вывод: {name}",
   "deps.pkg.title": "установлено → lock",
   "deps.pkg.missing": "нет · {version}",
+  "deps.pkg.missingUnlocked": "нет",
   "deps.pkg.extra": "{version} · нет в lock",
   "deps.pkg.more": {
     "one": "и ещё {count} пакет",

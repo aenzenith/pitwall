@@ -4,13 +4,13 @@ import { computed } from "vue";
 import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
 import Marquee from "../../components/Marquee.vue";
-import Spinner from "../../components/Spinner.vue";
 import { editorName, gitLine, heldLine, phase, turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { sessionTitle } from "../../lib/sessions";
 import { api, now, sessions, snapshot } from "../../lib/store";
 import { sessionsIn } from "../../lib/track";
 import type { Project } from "../../lib/types";
+import SwapLabel from "../team/SwapLabel.vue";
 
 /** The selected project, under the tower: its server, what Claude waits with, and the way to it.
  * Laid out as the project's details on the Projects page are (detail/ServerBlock). */
@@ -41,6 +41,12 @@ function nameOf(id: string): string {
   return row ? sessionTitle(row) : id.slice(0, 8);
 }
 
+/** The toggle's labels, all of them in its box: it keeps the widest one's width. */
+const toggleLabels = computed(() => [
+  { id: "start", text: t("common.start"), icon: "play" as const },
+  { id: "stop", text: t("common.stop"), icon: "stop" as const },
+]);
+
 function toggle(): void {
   void api.act(props.project.path, props.project.status === "running" ? "stop" : "start");
 }
@@ -58,9 +64,10 @@ function toggle(): void {
         <span class="server-title"><span :class="['state', project.status]" aria-hidden="true"></span>{{ server.title }}</span>
         <span :class="['server-sub', { bad: project.status === 'crashed' }]"><Marquee :text="server.sub" /></span>
       </div>
-      <button v-if="project.status === 'busy'" type="button" class="control busy" :aria-label="server.title" disabled><Spinner :size="12" /></button>
-      <button v-else-if="project.status === 'running'" type="button" class="control stop" @click="toggle"><Icon name="stop" :size="11" /> {{ t("common.stop") }}</button>
-      <button v-else type="button" class="control start" @click="toggle"><Icon name="play" :size="11" /> {{ t("common.start") }}</button>
+      <!-- Start, its spinner and Stop in one width, as in the project's details. -->
+      <button v-if="project.status === 'busy'" type="button" class="control busy" :aria-label="server.title" disabled><SwapLabel :labels="toggleLabels" :show="null" /></button>
+      <button v-else-if="project.status === 'running'" type="button" class="control stop" @click="toggle"><SwapLabel :labels="toggleLabels" show="stop" /></button>
+      <button v-else type="button" class="control start" @click="toggle"><SwapLabel :labels="toggleLabels" show="start" /></button>
     </div>
 
     <!-- A command that started with the server and waits: what it is and why in its tooltip, the
