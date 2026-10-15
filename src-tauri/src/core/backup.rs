@@ -707,6 +707,7 @@ impl Core {
             };
             self.save_settings();
             i18n::set(i18n::resolve(&language));
+            self.retell_issues();
         }
 
         // Listed whether or not its folder is here: one that isn't shows among the moved ones.

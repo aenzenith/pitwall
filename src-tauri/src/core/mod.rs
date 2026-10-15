@@ -125,6 +125,9 @@ pub enum CoreEvent {
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
 
+/// How an issue's text is said: once more whenever the language changes (`Core::retell_issues`).
+type IssueText = Arc<dyn Fn() -> String + Send + Sync>;
+
 pub struct CoreConfig {
     pub registry_dir: PathBuf,
     pub claude_dir: PathBuf,
@@ -141,6 +144,8 @@ struct Inner {
     settings: Settings,
     runs: HashMap<String, Run>,
     issues: HashMap<String, Issue>,
+    /// How each of `issues` is said, by path: in the language of the moment, not the one it came in.
+    issue_texts: HashMap<String, IssueText>,
     retried: HashSet<String>,
     busy: HashSet<String>,
     /// Servers and commands being stopped, by `Unit::key`: their exit is no crash.

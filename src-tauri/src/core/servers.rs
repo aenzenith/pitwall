@@ -49,15 +49,27 @@ impl Core {
     }
 
     /// `end` says whether the spinner of a start the user waits on stops here.
-    fn set_issue(&self, path: &str, kind: &str, text: String, end: IssueEnd) {
+    fn set_issue(&self, path: &str, kind: &str, text: impl Fn() -> String + Send + Sync + 'static, end: IssueEnd) {
         {
             let mut inner = self.lock();
-            inner.issues.insert(path.to_string(), Issue { kind: kind.into(), text });
+            inner.issues.insert(path.to_string(), Issue { kind: kind.into(), text: text() });
+            inner.issue_texts.insert(path.to_string(), Arc::new(text));
             if end == IssueEnd::Final {
                 inner.pending.remove(path);
             }
         }
         self.notify();
+    }
+
+    /// The language changed: each issue is said again in it (the caller tells the windows).
+    pub(super) fn retell_issues(&self) {
+        let mut inner = self.lock();
+        let Inner { issues, issue_texts, .. } = &mut *inner;
+        for (path, issue) in issues.iter_mut() {
+            if let Some(text) = issue_texts.get(path) {
+                issue.text = text();
+            }
+        }
     }
 
     pub(super) fn launch(self: &Arc<Self>, path: &str, open_url: bool, extra_args: Vec<String>) {
@@ -73,13 +85,13 @@ impl Core {
         let script = settings.script_for(path);
 
         if is_forbidden_script(&script) {
-            return self.set_issue(path, "error", t!("core.error.forbiddenScript", script = script), IssueEnd::Final);
+            return self.set_issue(path, "error", move || t!("core.error.forbiddenScript", script = script), IssueEnd::Final);
         }
 
         let package_json = fs::read_to_string(Path::new(path).join("package.json")).unwrap_or_default();
 
         if !has_script(&package_json, &script) {
-            return self.set_issue(path, "error", t!("core.error.noScript", script = script), IssueEnd::Final);
+            return self.set_issue(path, "error", move || t!("core.error.noScript", script = script), IssueEnd::Final);
         }
 
         let manager = PackageManager::parse(&settings.package_manager).unwrap_or_else(|| {
@@ -103,12 +115,15 @@ impl Core {
 
         let command = match build_command(manager, &script, &args) {
             Ok(command) => command,
-            Err(message) => return self.set_issue(path, "error", message, IssueEnd::Final),
+            Err(message) => return self.set_issue(path, "error", move || build_command(manager, &script, &args).err().unwrap_or_else(|| message.clone()), IssueEnd::Final),
         };
 
         let child = match process::spawn_shell(&command, path) {
             Ok(child) => child,
-            Err(error) => return self.set_issue(path, "crashed", t!("core.issue.couldNotStart", error = error), IssueEnd::Final),
+            Err(error) => {
+                let error = error.to_string();
+                return self.set_issue(path, "crashed", move || t!("core.issue.couldNotStart", error = error), IssueEnd::Final);
+            }
         };
 
         let adopted = self.adopt(start, child, |inner, id, pid| {
@@ -186,7 +201,8 @@ impl Core {
             if let Some(error) = detect_error_line(&clean, 90) {
                 let current = inner.issues.get(path).map(|i| i.kind.clone());
                 if current.as_deref() != Some("crashed") {
-                    inner.issues.insert(path.to_string(), Issue { kind: "error".into(), text: error });
+                    inner.issues.insert(path.to_string(), Issue { kind: "error".into(), text: error.clone() });
+                    inner.issue_texts.insert(path.to_string(), Arc::new(move || error.clone()));
                     changed = true;
                 }
             }
@@ -237,12 +253,18 @@ impl Core {
     }
 
     fn handle_crash(self: &Arc<Self>, path: &str, started: Instant, code: &str, signal: &str) {
-        let detail = {
+        let detail: IssueText = {
             let inner = self.lock();
-            match inner.issues.get(path) {
-                Some(issue) if issue.kind == "error" => issue.text.clone(),
-                _ if code != "-" => t!("core.issue.exitCode", code = code),
-                _ => t!("core.issue.exitSignal", signal = signal),
+            match (inner.issues.get(path), inner.issue_texts.get(path)) {
+                (Some(issue), Some(text)) if issue.kind == "error" => Arc::clone(text),
+                _ if code != "-" => {
+                    let code = code.to_string();
+                    Arc::new(move || t!("core.issue.exitCode", code = code))
+                }
+                _ => {
+                    let signal = signal.to_string();
+                    Arc::new(move || t!("core.issue.exitSignal", signal = signal))
+                }
             }
         };
 
@@ -251,13 +273,12 @@ impl Core {
 
         let unit = Unit::Server(path.to_string());
         let Some(attempt) = self.claim_restart(&unit, started) else {
-            self.set_issue(path, "crashed", t!("core.issue.crashedGaveUp", detail = detail, max = MAX_RESTARTS), IssueEnd::Final);
+            self.set_issue(path, "crashed", move || t!("core.issue.crashedGaveUp", detail = detail(), max = MAX_RESTARTS), IssueEnd::Final);
             self.push_line(path, format!("[pitwall] {}", t!("core.log.gaveUpServer", max = MAX_RESTARTS)));
             return;
         };
 
-        let text = t!("core.issue.crashedRestarting", detail = detail, attempt = attempt, max = MAX_RESTARTS);
-        self.set_issue(path, "crashed", text, IssueEnd::Retrying);
+        self.set_issue(path, "crashed", move || t!("core.issue.crashedRestarting", detail = detail(), attempt = attempt, max = MAX_RESTARTS), IssueEnd::Retrying);
         self.push_line(path, format!("[pitwall] {}", t!("core.log.crashedRestarting", attempt = attempt, max = MAX_RESTARTS)));
         self.restart_later(&unit);
     }
@@ -291,7 +312,7 @@ impl Core {
             let current = self.lock().issues.get(&path).map(|issue| issue.kind.clone());
 
             if !alive && current.as_deref() != Some("unresponsive") {
-                self.set_issue(&path, "unresponsive", t!("core.issue.notResponding", port = port), IssueEnd::Retrying);
+                self.set_issue(&path, "unresponsive", move || t!("core.issue.notResponding", port = port), IssueEnd::Retrying);
                 let core = Arc::clone(self);
                 thread::spawn(move || core.recover_unresponsive(&path, run_id, port));
             } else if alive && current.as_deref() == Some("unresponsive") {
@@ -323,7 +344,7 @@ impl Core {
         }
 
         let Some(attempt) = self.claim_restart(&Unit::Server(path.to_string()), started) else {
-            self.set_issue(path, "unresponsive", t!("core.issue.notRespondingGaveUp", port = port, max = MAX_RESTARTS), IssueEnd::Final);
+            self.set_issue(path, "unresponsive", move || t!("core.issue.notRespondingGaveUp", port = port, max = MAX_RESTARTS), IssueEnd::Final);
             return;
         };
 

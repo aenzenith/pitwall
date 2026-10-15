@@ -71,6 +71,7 @@ impl Core {
 
         self.save_settings();
         i18n::set(i18n::resolve(&language));
+        self.retell_issues();
         self.notify();
     }
 

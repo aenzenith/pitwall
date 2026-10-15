@@ -231,6 +231,27 @@
         "ja": "Pitwall が起動したばかりのプロジェクトに、VS Code が 2 つ目のサーバーを起動することはなくなりました。「すべて停止」は進行中の「すべて起動」も止め、バイトオーダーマーク付きで保存された package.json も読み込まれます。Windows では、VS Code で開いているプロジェクトを Pitwall から起動しても、2 つ目のサーバーが立ち上がらなくなりました。",
         "zh-Hans": "VS Code 不再为 Pitwall 刚启动的项目再启动第二个服务器。“全部停止”也会停止仍在进行的“全部启动”，带字节顺序标记保存的 package.json 也能读取。在 Windows 上，从 Pitwall 启动在 VS Code 中打开的项目，不会再多出第二个服务器。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Server errors in your language",
+        "tr": "Sunucu hataları senin dilinde",
+        "de": "Serverfehler in deiner Sprache",
+        "es": "Errores del servidor en tu idioma",
+        "ru": "Ошибки сервера на вашем языке",
+        "ja": "サーバーのエラーもあなたの言語で",
+        "zh-Hans": "服务器错误显示为你的语言"
+      },
+      "body": {
+        "en": "A server's error line follows the app's language when you change it, in the list, the mini tower and pitwall in the terminal.",
+        "tr": "Bir sunucunun hata satırı, dili değiştirdiğinde uygulamanın diline uyuyor: listede, mini kulede ve terminaldeki pitwall'da.",
+        "de": "Die Fehlerzeile eines Servers folgt der Sprache der App, wenn du sie änderst – in der Liste, im Mini-Turm und bei pitwall im Terminal.",
+        "es": "La línea de error de un servidor sigue el idioma de la app cuando lo cambias: en la lista, en la minitorre y en pitwall en la terminal.",
+        "ru": "Строка ошибки сервера следует за языком приложения, когда вы его меняете: в списке, в мини-башне и в pitwall в терминале.",
+        "ja": "言語を切り替えると、サーバーのエラー行もアプリの言語に合わせて変わります。リスト、ミニタワー、ターミナルの pitwall のどれでも同じです。",
+        "zh-Hans": "切换语言后，服务器的错误行会随应用语言一起变化：列表、迷你塔和终端里的 pitwall 都是如此。"
+      }
     }
   ]
 }
