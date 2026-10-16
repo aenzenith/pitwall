@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.1](https://github.com/aenzenith/pitwall/compare/v1.12.0...v1.12.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **deps:** a status read never makes a Python environment again ([eb37384](https://github.com/aenzenith/pitwall/commit/eb37384c7c9d115b659a38f0eb06464cbcee8ced))
+* **hooks:** a hook of the user's own stays, and a linked settings file stays linked ([38f04ee](https://github.com/aenzenith/pitwall/commit/38f04eee152889e24cff8ca01a5840a0a9f81e7d))
+* **terminal:** a long paste no longer freezes the app ([4af58f7](https://github.com/aenzenith/pitwall/commit/4af58f73cd712bc4afe37e01e428c74865908ee6))
+
 ## [1.12.0](https://github.com/aenzenith/pitwall/compare/v1.11.0...v1.12.0) (2026-10-15)
 
 
