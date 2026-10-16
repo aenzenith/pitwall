@@ -348,15 +348,38 @@ impl ClaudeHook {
         EVENTS.iter().map(|(event, matcher)| self.entry(event, *matcher).map(|entry| (*event, entry))).collect()
     }
 
-    /// An entry that runs Pitwall: one of our scripts, current or old, or the app in hook mode.
-    fn is_ours(&self, entry: &Value) -> bool {
+    /// A hook (one command of an entry) that runs Pitwall: one of our scripts, current or old, or
+    /// the app in hook mode.
+    fn is_our_hook(&self, hook: &Value) -> bool {
         let ours = [self.script_file.to_string_lossy(), self.legacy_script.to_string_lossy()];
-        entry.get("hooks").and_then(Value::as_array).is_some_and(|hooks| {
-            hooks.iter().any(|hook| {
-                let command = hook.get("command").and_then(Value::as_str).unwrap_or_default();
-                ours.iter().any(|script| command.contains(script.as_ref())) || runs_app(hook)
-            })
-        })
+        let command = hook.get("command").and_then(Value::as_str).unwrap_or_default();
+        ours.iter().any(|script| command.contains(script.as_ref())) || runs_app(hook)
+    }
+
+    /// An entry that runs Pitwall: one of its hooks is ours.
+    fn is_ours(&self, entry: &Value) -> bool {
+        entry.get("hooks").and_then(Value::as_array).is_some_and(|hooks| hooks.iter().any(|hook| self.is_our_hook(hook)))
+    }
+
+    /// Takes Pitwall's hooks out of `entries`, but for `keep` (the entry wanted, kept whole). An
+    /// entry that holds someone else's hooks too (the user added one to ours) keeps those; one
+    /// left with none goes. Whether anything changed.
+    fn strip_ours(&self, entries: &mut Vec<Value>, keep: Option<&Value>) -> bool {
+        let mut changed = false;
+        entries.retain_mut(|entry| {
+            if !self.is_ours(entry) || Some(&*entry) == keep {
+                return true;
+            }
+            changed = true;
+            match entry.get_mut("hooks").and_then(Value::as_array_mut) {
+                Some(hooks) => {
+                    hooks.retain(|hook| !self.is_our_hook(hook));
+                    !hooks.is_empty()
+                }
+                None => false,
+            }
+        });
+        changed
     }
 
     fn status_of(&self, settings: &Value) -> HookStatus {
@@ -425,10 +448,7 @@ impl ClaudeHook {
         for (event, entries) in hooks.iter_mut() {
             let wanted = wanted.iter().find(|(name, _)| name == event).map(|(_, entry)| entry);
             if let Some(entries) = entries.as_array_mut() {
-                let before = entries.len();
-                entries.retain(|entry| !self.is_ours(entry) || Some(entry) == wanted);
-
-                if entries.len() != before {
+                if self.strip_ours(entries, wanted) {
                     changed = true;
                     if entries.is_empty() && wanted.is_none() {
                         emptied.push(event.clone());
@@ -459,7 +479,7 @@ impl ClaudeHook {
         Ok(())
     }
 
-    /// Removes every Pitwall entry from every event, and nothing else.
+    /// Removes every Pitwall hook from every event, and nothing else.
     pub fn uninstall(&self) -> Result<(), String> {
         let mut settings = self.read_settings()?;
         let mut changed = false;
@@ -469,10 +489,7 @@ impl ClaudeHook {
 
             for (event, entries) in hooks.iter_mut() {
                 if let Some(entries) = entries.as_array_mut() {
-                    let before = entries.len();
-                    entries.retain(|entry| !self.is_ours(entry));
-
-                    if entries.len() != before {
+                    if self.strip_ours(entries, None) {
                         changed = true;
                         if entries.is_empty() {
                             emptied.push(event.clone());
@@ -510,13 +527,24 @@ impl ClaudeHook {
         Ok(())
     }
 
+    /// Where the settings are written. A link (to a dotfiles folder) is written through, as
+    /// Claude Code writes it, so it stays a link; one whose file isn't there yet makes it there.
+    fn settings_target(&self) -> PathBuf {
+        match fs::read_link(&self.settings_file) {
+            Ok(target) => fs::canonicalize(&self.settings_file)
+                .unwrap_or_else(|_| self.settings_file.parent().map_or_else(|| target.clone(), |dir| dir.join(&target))),
+            Err(_) => self.settings_file.clone(),
+        }
+    }
+
     fn write_settings(&self, settings: &Value) -> Result<(), String> {
-        if let Some(dir) = self.settings_file.parent() {
+        let file = self.settings_target();
+        if let Some(dir) = file.parent() {
             fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
 
         let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-        write_atomic(&self.settings_file, &format!("{json}\n")).map_err(|e| e.to_string())
+        write_atomic(&file, &format!("{json}\n")).map_err(|e| e.to_string())
     }
 }
 
@@ -733,6 +761,61 @@ mod tests {
             assert_eq!(hook.status(), HookStatus::default());
             assert!(!hook.script_file.exists());
         }
+    }
+
+    /// The user (or Claude, asked to) added a command of their own to the entry Pitwall made, as
+    /// Claude Code's docs show an entry with several hooks: no backup holds it.
+    #[test]
+    fn a_users_hook_in_our_entry_stays_through_an_update_and_a_removal() {
+        for (_tmp, hook) in every_runner(Some("{}")) {
+            hook.install().unwrap();
+            let mut settings = read(&hook);
+            settings["hooks"]["Stop"][0]["hooks"].as_array_mut().unwrap().push(json!({ "type": "command", "command": "say done" }));
+            hook.write_settings(&settings).unwrap();
+            let theirs = |hook: &ClaudeHook| {
+                read(hook)["hooks"]["Stop"].as_array().unwrap().iter().flat_map(|entry| entry["hooks"].as_array().unwrap().clone()).filter(|h| h["command"] == "say done").count()
+            };
+
+            // Pitwall calls such an entry outdated, and its update puts it right.
+            assert!(hook.status().outdated);
+            hook.install().unwrap();
+            assert_eq!(theirs(&hook), 1, "the update keeps the user's hook");
+            assert_eq!(ours(&read(&hook), "Stop"), 1);
+            assert_eq!(hook.status(), HookStatus { installed: true, outdated: false });
+
+            hook.uninstall().unwrap();
+            assert_eq!(theirs(&hook), 1, "and so does turning the hook off");
+            assert!(!fs::read_to_string(&hook.settings_file).unwrap().contains("pitwall"));
+        }
+    }
+
+    /// A dotfiles setup: settings.json is a link to the user's own file, which Claude Code writes
+    /// through.
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_settings_file_stays_a_link() {
+        let (tmp, hook) = setup(None);
+        let dotfiles = tmp.path().join("dotfiles").join("claude.json");
+        let linked = |hook: &ClaudeHook| fs::symlink_metadata(&hook.settings_file).unwrap().file_type().is_symlink();
+        let target = || serde_json::from_str::<Value>(&fs::read_to_string(&dotfiles).unwrap()).unwrap();
+        fs::create_dir_all(dotfiles.parent().unwrap()).unwrap();
+        fs::create_dir_all(hook.settings_file.parent().unwrap()).unwrap();
+        fs::write(&dotfiles, EXISTING).unwrap();
+        std::os::unix::fs::symlink(&dotfiles, &hook.settings_file).unwrap();
+
+        hook.install().unwrap();
+        assert!(linked(&hook), "still a link");
+        assert_eq!(ours(&target(), "Stop"), 1, "the hook is where the link leads");
+
+        hook.uninstall().unwrap();
+        assert!(linked(&hook));
+        assert_eq!(target()["hooks"], serde_json::from_str::<Value>(EXISTING).unwrap()["hooks"]);
+
+        // A link whose file isn't there yet: the file is made where it leads.
+        fs::remove_file(&dotfiles).unwrap();
+        hook.install().unwrap();
+        assert!(linked(&hook));
+        assert_eq!(ours(&target(), "Stop"), 1);
     }
 
     /// A path with a space and a quote, as Claude Code runs it on each system.

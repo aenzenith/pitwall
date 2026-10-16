@@ -21,6 +21,27 @@
         "ja": "Pitwall のターミナルに長いテキスト（スタック付きのエラーや Claude への長いプロンプトなど）を貼り付けると、強制終了するまでアプリ全体が固まることがありました。今は全文がそのまま入り、ほかのタブやサーバーも動き続けます。",
         "zh-Hans": "在 Pitwall 的终端中粘贴长文本（例如带堆栈的错误或给 Claude 的长提示）可能让整个应用卡死，只能强制退出。现在文本会完整输入，其他标签页和你的服务器也照常运行。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Your own Claude hooks stay as they are",
+        "tr": "Kendi Claude hook'ların olduğu gibi kalıyor",
+        "de": "Deine eigenen Claude-Hooks bleiben, wie sie sind",
+        "es": "Tus propios hooks de Claude se quedan como están",
+        "ru": "Ваши собственные хуки Claude остаются как есть",
+        "ja": "自分で追加した Claude のフックはそのまま残ります",
+        "zh-Hans": "你自己的 Claude Hook 保持原样"
+      },
+      "body": {
+        "en": "Update hook and Remove hook took out a command of your own that sat beside Pitwall's in Claude Code's settings, and a settings file linked from another folder (dotfiles) was replaced by a plain copy. Now only Pitwall's own commands change, and a linked file stays linked.",
+        "tr": "Hook'u güncelle ve Hook'u kaldır, Claude Code ayarlarında Pitwall'ınkinin yanına eklediğin kendi komutunu da siliyordu; başka bir klasörden (dotfiles) bağlanan bir ayar dosyası da düz bir kopyayla değiştiriliyordu. Artık yalnızca Pitwall'ın kendi komutları değişiyor, bağlı dosya bağlı kalıyor.",
+        "de": "Hook aktualisieren und Hook entfernen entfernten auch einen eigenen Befehl, der in den Einstellungen von Claude Code neben dem von Pitwall stand, und eine aus einem anderen Ordner verlinkte Einstellungsdatei (Dotfiles) wurde durch eine einfache Kopie ersetzt. Jetzt ändern sich nur die Befehle von Pitwall, und eine verlinkte Datei bleibt verlinkt.",
+        "es": "Actualizar hook y Quitar hook eliminaban también un comando tuyo que estaba junto al de Pitwall en los ajustes de Claude Code, y un archivo de ajustes enlazado desde otra carpeta (dotfiles) se sustituía por una copia simple. Ahora solo cambian los comandos de Pitwall, y un archivo enlazado sigue enlazado.",
+        "ru": "«Обновить хук» и «Удалить хук» удаляли и вашу собственную команду, стоявшую рядом с командой Pitwall в настройках Claude Code, а файл настроек, подключённый ссылкой из другой папки (dotfiles), заменялся обычной копией. Теперь меняются только команды самого Pitwall, а ссылка остаётся ссылкой.",
+        "ja": "「フックを更新」と「フックを削除」は、Claude Code の設定で Pitwall のコマンドの隣に置いた自分のコマンドまで消し、別のフォルダー（dotfiles）からリンクした設定ファイルを普通のコピーに置き換えていました。今は Pitwall 自身のコマンドだけが変わり、リンクされたファイルはリンクのまま残ります。",
+        "zh-Hans": "“更新 Hook”和“移除 Hook”会连同你在 Claude Code 设置中放在 Pitwall 命令旁边的自有命令一起删除，从其他文件夹（dotfiles）链接来的设置文件也会被替换为普通副本。现在只会更改 Pitwall 自己的命令，链接的文件仍保持为链接。"
+      }
     }
   ]
 }
