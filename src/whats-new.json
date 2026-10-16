@@ -1,235 +1,25 @@
 {
-  "since": "1.11.0",
+  "since": "1.12.0",
   "notes": [
     {
-      "kind": "new",
-      "title": {
-        "en": "Commands that ask first wait for you",
-        "tr": "Önce soran komutlar seni bekliyor",
-        "de": "Befehle mit Rückfrage warten auf dich",
-        "es": "Los comandos que preguntan antes te esperan",
-        "ru": "Команды с вопросом ждут вас",
-        "ja": "確認付きコマンドはあなたを待ちます",
-        "zh-Hans": "需先询问的命令会等你"
-      },
-      "body": {
-        "en": "A command marked Ask before running that starts with the dev server no longer runs by itself, however the server starts. It waits in the project's Commands with Skip and Run, and the project's row shows how many wait. pitwall start and restart ask at the terminal instead.",
-        "tr": "Dev sunucusuyla birlikte başlayan ve Çalıştırmadan önce sor işaretli bir komut, sunucu nasıl başlarsa başlasın artık kendiliğinden çalışmıyor. Projenin Komutlar bölümünde Atla ve Çalıştır ile bekliyor; projenin satırı kaç tanesinin beklediğini gösteriyor. pitwall start ve restart ise terminalde soruyor.",
-        "de": "Ein Befehl mit „Vor dem Ausführen fragen“, der mit dem Dev-Server startet, läuft nicht mehr von selbst, wie auch immer der Server startet. Er wartet in den Befehlen des Projekts mit Überspringen und Ausführen, und die Zeile des Projekts zeigt, wie viele warten. pitwall start und restart fragen stattdessen im Terminal.",
-        "es": "Un comando marcado con Preguntar antes de ejecutar que se inicia con el servidor de desarrollo ya no se ejecuta solo, se inicie como se inicie el servidor. Espera en los Comandos del proyecto con Omitir y Ejecutar, y la fila del proyecto muestra cuántos esperan. pitwall start y restart preguntan en la terminal.",
-        "ru": "Команда с отметкой «Спрашивать перед запуском», которая запускается вместе с dev-сервером, больше не выполняется сама, как бы ни был запущен сервер. Она ждёт в «Командах» проекта с кнопками «Пропустить» и «Выполнить», а строка проекта показывает, сколько команд ждут. pitwall start и restart спрашивают в терминале.",
-        "ja": "開発サーバーと連動する「実行前に確認」付きのコマンドは、サーバーがどう起動されても自動では実行されなくなりました。プロジェクトのコマンド欄で「スキップ」と「実行」を添えて待ち、プロジェクトの行には待っている数が表示されます。pitwall start と restart はターミナルで確認します。",
-        "zh-Hans": "标记为“运行前询问”且随开发服务器启动的命令，无论服务器如何启动，都不再自行运行。它会在项目的命令中等待，附有“跳过”和“运行”，项目所在行会显示等待的数量。pitwall start 和 restart 则在终端中询问。"
-      }
-    },
-    {
       "kind": "fix",
       "title": {
-        "en": "Claude's turns, told right",
-        "tr": "Claude'un turları doğru söyleniyor",
-        "de": "Claudes Züge richtig gemeldet",
-        "es": "Los turnos de Claude, bien avisados",
-        "ru": "Ходы Claude — без ошибок",
-        "ja": "Claude のターンを正しく通知",
-        "zh-Hans": "Claude 的轮次如实提醒"
+        "en": "A long paste no longer freezes Pitwall",
+        "tr": "Uzun bir yapıştırma Pitwall'ı artık dondurmuyor",
+        "de": "Langes Einfügen friert Pitwall nicht mehr ein",
+        "es": "Pegar un texto largo ya no congela Pitwall",
+        "ru": "Длинная вставка больше не замораживает Pitwall",
+        "ja": "長い貼り付けで Pitwall が固まらなくなりました",
+        "zh-Hans": "粘贴长文本不再让 Pitwall 卡死"
       },
       "body": {
-        "en": "A Claude session that is at work shows as working right after Pitwall starts, however long ago it last wrote. A turn in a project listed inside another one is told once, not twice.",
-        "tr": "Çalışmakta olan bir Claude oturumu, en son ne zaman yazmış olursa olsun, Pitwall açılır açılmaz çalışıyor görünüyor. Başka bir projenin içinde listelenen bir projedeki tur iki kez değil, bir kez söyleniyor.",
-        "de": "Eine Claude-Sitzung, die gerade arbeitet, wird direkt nach dem Start von Pitwall als arbeitend angezeigt, egal wann sie zuletzt geschrieben hat. Ein Zug in einem Projekt, das in einem anderen aufgeführt ist, wird einmal gemeldet, nicht zweimal.",
-        "es": "Una sesión de Claude que está trabajando aparece como tal en cuanto Pitwall se inicia, sin importar cuándo escribió por última vez. Un turno en un proyecto listado dentro de otro se avisa una vez, no dos.",
-        "ru": "Работающая сессия Claude показывается как работающая сразу после запуска Pitwall, как бы давно она ни писала в последний раз. О ходе в проекте, который лежит внутри другого проекта из списка, сообщается один раз, а не два.",
-        "ja": "作業中の Claude セッションは、最後の書き込みがいつであっても、Pitwall の起動直後から作業中と表示されます。別のプロジェクトの中にあるプロジェクトでのターンは、二度ではなく一度だけ通知されます。",
-        "zh-Hans": "正在工作的 Claude 会话，无论上次写入是多久以前，Pitwall 启动后都会立即显示为工作中。位于另一个已列出项目之内的项目，其轮次只提醒一次，而不是两次。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "One server per project",
-        "tr": "Her projeye bir sunucu",
-        "de": "Ein Server pro Projekt",
-        "es": "Un servidor por proyecto",
-        "ru": "Один сервер на проект",
-        "ja": "1 プロジェクトに 1 サーバー",
-        "zh-Hans": "每个项目一个服务器"
-      },
-      "body": {
-        "en": "VS Code no longer starts a second server for a project Pitwall has just started. Stop all also stops a Start all that is still under way, and a package.json saved with a byte-order mark is read. On Windows, starting a project from Pitwall while it is open in VS Code no longer gives it a second server.",
-        "tr": "VS Code, Pitwall'ın az önce başlattığı bir proje için artık ikinci bir sunucu başlatmıyor. Hepsini durdur, hâlâ süren bir Hepsini başlat'ı da durduruyor; bayt sırası işaretiyle (BOM) kaydedilmiş package.json da okunuyor. Windows'ta, VS Code'da açık bir projeyi Pitwall'dan başlatmak artık ona ikinci bir sunucu açmıyor.",
-        "de": "VS Code startet für ein Projekt, das Pitwall gerade gestartet hat, keinen zweiten Server mehr. Alle stoppen stoppt auch ein noch laufendes Alle starten, und eine mit Byte-Order-Mark gespeicherte package.json wird gelesen. Unter Windows bekommt ein in VS Code geöffnetes Projekt keinen zweiten Server mehr, wenn du es in Pitwall startest.",
-        "es": "VS Code ya no inicia un segundo servidor para un proyecto que Pitwall acaba de iniciar. Detener todos también detiene un Iniciar todos que sigue en curso, y se lee un package.json guardado con marca de orden de bytes. En Windows, iniciar desde Pitwall un proyecto abierto en VS Code ya no le da un segundo servidor.",
-        "ru": "VS Code больше не запускает второй сервер для проекта, который Pitwall только что запустил. «Остановить все» останавливает и ещё идущее «Запустить все», а package.json, сохранённый с меткой порядка байтов, читается. В Windows запуск из Pitwall проекта, открытого в VS Code, больше не даёт ему второй сервер.",
-        "ja": "Pitwall が起動したばかりのプロジェクトに、VS Code が 2 つ目のサーバーを起動することはなくなりました。「すべて停止」は進行中の「すべて起動」も止め、バイトオーダーマーク付きで保存された package.json も読み込まれます。Windows では、VS Code で開いているプロジェクトを Pitwall から起動しても、2 つ目のサーバーが立ち上がらなくなりました。",
-        "zh-Hans": "VS Code 不再为 Pitwall 刚启动的项目再启动第二个服务器。“全部停止”也会停止仍在进行的“全部启动”，带字节顺序标记保存的 package.json 也能读取。在 Windows 上，从 Pitwall 启动在 VS Code 中打开的项目，不会再多出第二个服务器。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Buttons stay in reach",
-        "tr": "Butonlar erişimde kalıyor",
-        "de": "Schaltflächen bleiben erreichbar",
-        "es": "Los botones siguen a mano",
-        "ru": "Кнопки остаются под рукой",
-        "ja": "ボタンが押せる位置に",
-        "zh-Hans": "按钮始终可点"
-      },
-      "body": {
-        "en": "With many terminal tabs, New tab and New Claude stay in the panel, and the tab you are on stays in view. In a narrower window Start all, Stop all, Add card, New tab and New Claude show their icons alone instead of slipping out of reach or being cut short, and the Sessions tabs and Up next keep their names whole.",
-        "tr": "Çok sayıda terminal sekmesi açıkken Yeni sekme ve Yeni Claude panelde kalıyor, açık olan sekme de görünür kalıyor. Daha dar bir pencerede Hepsini başlat, Hepsini durdur, Kart ekle, Yeni sekme ve Yeni Claude erişim dışına kaymak ya da yarıda kesilmek yerine yalnız ikonlarıyla görünüyor; Oturumlar sekmeleri ve Sıradaki adlarını bütün gösteriyor.",
-        "de": "Bei vielen Terminal-Tabs bleiben Neuer Tab und Claude starten im Bereich, und der aktive Tab bleibt sichtbar. In einem schmaleren Fenster zeigen Alle starten, Alle stoppen, Karte hinzufügen, Neuer Tab und Claude starten nur ihr Symbol, statt aus der Reichweite zu rutschen oder abgeschnitten zu werden, und die Tabs unter Sitzungen und Als Nächstes zeigen ihren Namen ganz.",
-        "es": "Con muchas pestañas de terminal, Nueva pestaña y Nuevo Claude se quedan en el panel, y la pestaña abierta sigue a la vista. En una ventana más estrecha, Iniciar todos, Detener todos, Agregar tarjeta, Nueva pestaña y Nuevo Claude muestran solo su icono en lugar de quedar fuera de alcance o cortarse, y las pestañas de Sesiones y Siguiente muestran su nombre completo.",
-        "ru": "При множестве вкладок терминала «Новая вкладка» и «Новый Claude» остаются на панели, а открытая вкладка — на виду. В узком окне «Запустить все», «Остановить все», «Добавить карточку», «Новая вкладка» и «Новый Claude» показывают только значок вместо того, чтобы уходить из зоны досягаемости или обрезаться; вкладки на странице «Сессии» и колонка «Далее» показывают названия целиком.",
-        "ja": "ターミナルのタブが多くても「新規タブ」と「新規Claude」はパネル内に残り、開いているタブも見えたままです。狭いウィンドウでは「すべて起動」「すべて停止」「カードを追加」「新規タブ」「新規Claude」が押せなくなったり途中で切れたりせず、アイコンだけで表示されます。「セッション」のタブと「次に」の名前も欠けずに表示されます。",
-        "zh-Hans": "终端标签页很多时，“新标签页”和“新建 Claude”仍留在面板中，当前标签页也保持可见。在较窄的窗口中，“全部启动”“全部停止”“添加卡片”“新标签页”和“新建 Claude”只显示图标，不再被挤出可点范围或被截断；“会话”的标签和“待办”的名称也完整显示。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Server errors in your language",
-        "tr": "Sunucu hataları senin dilinde",
-        "de": "Serverfehler in deiner Sprache",
-        "es": "Errores del servidor en tu idioma",
-        "ru": "Ошибки сервера на вашем языке",
-        "ja": "サーバーのエラーもあなたの言語で",
-        "zh-Hans": "服务器错误显示为你的语言"
-      },
-      "body": {
-        "en": "A server's error line follows the app's language when you change it, in the list, the mini tower and pitwall in the terminal.",
-        "tr": "Bir sunucunun hata satırı, dili değiştirdiğinde uygulamanın diline uyuyor: listede, mini kulede ve terminaldeki pitwall'da.",
-        "de": "Die Fehlerzeile eines Servers folgt der Sprache der App, wenn du sie änderst – in der Liste, im Mini-Turm und bei pitwall im Terminal.",
-        "es": "La línea de error de un servidor sigue el idioma de la app cuando lo cambias: en la lista, en la minitorre y en pitwall en la terminal.",
-        "ru": "Строка ошибки сервера следует за языком приложения, когда вы его меняете: в списке, в мини-башне и в pitwall в терминале.",
-        "ja": "言語を切り替えると、サーバーのエラー行もアプリの言語に合わせて変わります。リスト、ミニタワー、ターミナルの pitwall のどれでも同じです。",
-        "zh-Hans": "切换语言后，服务器的错误行会随应用语言一起变化：列表、迷你塔和终端里的 pitwall 都是如此。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Production builds, however they are started",
-        "tr": "Production build'ler, nasıl başlatılırsa başlatılsın",
-        "de": "Produktions-Builds, wie auch immer gestartet",
-        "es": "Builds de producción, se lancen como se lancen",
-        "ru": "Продакшн-сборки, как бы их ни запускали",
-        "ja": "本番ビルドは起動方法を問わず拒否",
-        "zh-Hans": "生产构建，无论如何启动"
-      },
-      "body": {
-        "en": "A production build started through npm, pnpm, yarn or bun options (a folder, a workspace, a filter) is refused like any other.",
-        "tr": "npm, pnpm, yarn ya da bun seçenekleriyle (bir klasör, bir workspace, bir filtre) başlatılan production build'ler, diğerleri gibi reddediliyor.",
-        "de": "Ein Produktions-Build, der über Optionen von npm, pnpm, yarn oder bun (ein Ordner, ein Workspace, ein Filter) gestartet wird, wird wie jeder andere abgelehnt.",
-        "es": "Un build de producción lanzado con opciones de npm, pnpm, yarn o bun (una carpeta, un workspace, un filtro) se rechaza como cualquier otro.",
-        "ru": "Продакшн-сборка, запущенная через параметры npm, pnpm, yarn или bun (папка, workspace, фильтр), отклоняется, как и любая другая.",
-        "ja": "npm、pnpm、yarn、bun のオプション（フォルダー、ワークスペース、フィルター）経由の本番ビルドは、ほかと同じく拒否されます。",
-        "zh-Hans": "通过 npm、pnpm、yarn 或 bun 的选项（文件夹、workspace、过滤器）启动的生产构建也会像其他构建一样被拒绝。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Cards and backups keep what they should",
-        "tr": "Kartlar ve yedekler korunması gerekeni koruyor",
-        "de": "Karten und Backups behalten, was sie sollen",
-        "es": "Tarjetas y copias guardan lo que deben",
-        "ru": "Карточки и резервные копии хранят что нужно",
-        "ja": "カードとバックアップが正しく保たれる",
-        "zh-Hans": "卡片与备份保留应保留的内容"
-      },
-      "body": {
-        "en": "A card whose moment comes just as you quit Pitwall waits for the next start instead of being lost. Importing a backup leaves this Mac's notification switches as they are.",
-        "tr": "Anı tam Pitwall'dan çıkarken gelen bir kart kaybolmuyor, bir sonraki açılışı bekliyor. Bir yedeği içe aktarmak bu Mac'in bildirim anahtarlarına dokunmuyor.",
-        "de": "Eine Karte, deren Zeitpunkt genau beim Beenden von Pitwall kommt, wartet auf den nächsten Start, statt verloren zu gehen. Das Importieren eines Backups lässt die Mitteilungsschalter dieses Macs, wie sie sind.",
-        "es": "Una tarjeta cuyo momento llega justo al salir de Pitwall espera al siguiente inicio en lugar de perderse. Importar una copia de seguridad deja los interruptores de notificaciones de este Mac como están.",
-        "ru": "Карточка, чей момент наступает ровно при выходе из Pitwall, ждёт следующего запуска, а не теряется. Импорт резервной копии оставляет переключатели уведомлений этого Mac как есть.",
-        "ja": "Pitwall を終了するちょうどその時に時刻が来たカードは、失われずに次の起動を待ちます。バックアップを読み込んでも、この Mac の通知スイッチはそのままです。",
-        "zh-Hans": "恰好在退出 Pitwall 时到点的卡片不会丢失，而是等到下次启动。导入备份不会改动这台 Mac 的通知开关。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "pitwall in the terminal, steadier",
-        "tr": "Terminaldeki pitwall daha sağlam",
-        "de": "pitwall im Terminal, verlässlicher",
-        "es": "pitwall en la terminal, más fiable",
-        "ru": "pitwall в терминале надёжнее",
-        "ja": "ターミナルの pitwall がより確実に",
-        "zh-Hans": "终端里的 pitwall 更可靠"
-      },
-      "body": {
-        "en": "^C stops a command run with pitwall run even after its output was paused. pitwall and pitwall:// links find projects whose names have accented or Turkish letters, however they are typed.",
-        "tr": "^C, pitwall run ile çalıştırılan bir komutu, çıktısı duraklatılmış olsa bile durduruyor. pitwall ve pitwall:// linkleri, adında aksanlı ya da Türkçe harf olan projeleri nasıl yazılırsa yazılsın buluyor.",
-        "de": "^C stoppt einen mit pitwall run gestarteten Befehl auch dann, wenn seine Ausgabe angehalten wurde. pitwall und pitwall://-Links finden Projekte mit Akzenten oder türkischen Buchstaben im Namen, egal wie sie getippt werden.",
-        "es": "^C detiene un comando lanzado con pitwall run aunque su salida se haya pausado. pitwall y los enlaces pitwall:// encuentran proyectos con letras acentuadas o turcas en el nombre, se escriban como se escriban.",
-        "ru": "^C останавливает команду, запущенную через pitwall run, даже если её вывод был приостановлен. pitwall и ссылки pitwall:// находят проекты с диакритикой или турецкими буквами в названии, как бы их ни набрали.",
-        "ja": "pitwall run で実行したコマンドは、出力が一時停止していても ^C で止まります。pitwall と pitwall:// リンクは、アクセント付きやトルコ語の文字を含む名前のプロジェクトを、どう入力しても見つけます。",
-        "zh-Hans": "即使输出已暂停，^C 也能停止用 pitwall run 运行的命令。pitwall 和 pitwall:// 链接能找到名称中含重音或土耳其语字母的项目，无论怎样输入。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Haiku 5.5 on the Fuel page",
-        "tr": "Yakıt sayfasında Haiku 5.5",
-        "de": "Haiku 5.5 auf der Tank-Seite",
-        "es": "Haiku 5.5 en la página Combustible",
-        "ru": "Haiku 5.5 на странице «Топливо»",
-        "ja": "燃料ページに Haiku 5.5",
-        "zh-Hans": "燃料页面中的 Haiku 5.5"
-      },
-      "body": {
-        "en": "Claude Haiku 5.5's tokens now have their API-equivalent cost, with its higher rate for prompts over 100K tokens.",
-        "tr": "Claude Haiku 5.5'in token'ları artık API karşılığı maliyetiyle görünüyor; 100K token'ı aşan istemlerde daha yüksek fiyatıyla.",
-        "de": "Die Tokens von Claude Haiku 5.5 haben jetzt ihre API-äquivalenten Kosten, mit dem höheren Satz für Prompts über 100K Tokens.",
-        "es": "Los tokens de Claude Haiku 5.5 ya tienen su coste equivalente en API, con la tarifa más alta para prompts de más de 100K tokens.",
-        "ru": "У токенов Claude Haiku 5.5 теперь есть стоимость по ценам API — с более высокой ставкой для запросов длиннее 100K токенов.",
-        "ja": "Claude Haiku 5.5 のトークンにも API 換算のコストが付くようになりました。10 万トークンを超えるプロンプトには高いほうの料金が適用されます。",
-        "zh-Hans": "Claude Haiku 5.5 的 token 现在也有 API 等价费用，超过 100K token 的提示按更高的费率计算。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Claude stopped with Esc rests at once",
-        "tr": "Esc ile durdurulan Claude hemen durur",
-        "de": "Mit Esc gestoppt, ruht Claude sofort",
-        "es": "Claude detenido con Esc queda en pausa al instante",
-        "ru": "Claude, остановленный Esc, сразу затихает",
-        "ja": "Esc で止めた Claude はすぐにアイドルに",
-        "zh-Hans": "用 Esc 停下的 Claude 立即空闲"
-      },
-      "body": {
-        "en": "When you stop Claude with Esc, Pitwall no longer shows it working for up to five more minutes, and tells you nothing of it: a board card it was working on goes to To review without a word to your phone. Your next prompt starts its own time, and the 20-minute alert counts from it.",
-        "tr": "Claude'u Esc ile durdurduğunda Pitwall onu beş dakikaya kadar çalışıyor göstermez, bunun için bir şey de haber vermez: üzerinde çalıştığı pano kartı telefonuna bir şey gitmeden İncelenecek'e geçer. Sonraki istemin süresi kendinden başlar; 20 dakika uyarısı da ondan sayılır.",
-        "de": "Hältst du Claude mit Esc an, zeigt Pitwall es nicht mehr bis zu fünf Minuten lang als arbeitend und meldet dazu nichts: Eine Karte, an der es arbeitete, geht ohne Nachricht an dein Telefon nach Zu prüfen. Deine nächste Eingabe startet ihre eigene Zeit, und der 20-Minuten-Hinweis zählt ab ihr.",
-        "es": "Cuando detienes a Claude con Esc, Pitwall ya no lo muestra trabajando hasta cinco minutos más ni te avisa de nada: la tarjeta en la que trabajaba pasa a Por revisar sin avisar a tu teléfono. Tu siguiente mensaje empieza su propio tiempo, y el aviso de 20 minutos cuenta desde él.",
-        "ru": "Если остановить Claude клавишей Esc, Pitwall больше не показывает его работающим ещё до пяти минут и ничего об этом не сообщает: карточка, над которой он работал, уходит «На проверку» без сообщения на телефон. Следующий запрос начинает своё время, и предупреждение о 20 минутах считается от него.",
-        "ja": "Esc で Claude を止めると、Pitwall は最大 5 分間作業中と表示し続けることがなくなり、通知もしません。作業中だったボードのカードは、電話に知らせずに「レビュー待ち」へ移ります。次のプロンプトから時間を数え直し、20 分の通知もそこから数えます。",
-        "zh-Hans": "用 Esc 停下 Claude 后，Pitwall 不再在之后最多五分钟里显示它在工作，也不会为此通知你：它正在处理的看板卡片会移到“待审查”，不会通知你的手机。下一条提示重新计时，20 分钟提醒也从它开始计算。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Servers start where they should",
-        "tr": "Sunucular olması gereken yerde başlıyor",
-        "de": "Server starten, wo sie sollen",
-        "es": "Los servidores arrancan donde deben",
-        "ru": "Серверы запускаются где надо",
-        "ja": "サーバーは本来の場所で起動",
-        "zh-Hans": "服务器在该在的地方启动"
-      },
-      "body": {
-        "en": "A project with no port of its own and no Vite config starts on the port its script picks, so Next, Nuxt and Astro keep theirs. A project whose folder moved or was deleted says so when you start it, and points to where you choose its new place.",
-        "tr": "Kendi portu ve Vite yapılandırması olmayan bir proje, script'inin seçtiği portta başlıyor; Next, Nuxt ve Astro kendi portlarını koruyor. Klasörü taşınmış ya da silinmiş bir proje, başlatınca bunu söylüyor ve yeni yerini nereden seçeceğini gösteriyor.",
-        "de": "Ein Projekt ohne eigenen Port und ohne Vite-Konfiguration startet auf dem Port, den sein Skript wählt, sodass Next, Nuxt und Astro ihren behalten. Ein Projekt, dessen Ordner verschoben oder gelöscht wurde, sagt das beim Start und zeigt, wo du seinen neuen Ort wählst.",
-        "es": "Un proyecto sin puerto propio ni configuración de Vite se inicia en el puerto que elige su script, así que Next, Nuxt y Astro conservan el suyo. Un proyecto cuya carpeta se movió o se borró lo dice al iniciarlo y te indica dónde elegir su nueva ubicación.",
-        "ru": "Проект без своего порта и без конфигурации Vite запускается на порту, который выбирает его скрипт, так что Next, Nuxt и Astro сохраняют свой. Проект, чья папка перемещена или удалена, сообщает об этом при запуске и подсказывает, где выбрать её новое место.",
-        "ja": "独自のポートも Vite 設定もないプロジェクトは、スクリプトが選ぶポートで起動するため、Next、Nuxt、Astro は自分のポートを保ちます。フォルダーが移動または削除されたプロジェクトは、起動時にそのことを伝え、新しい場所を選ぶ場所を案内します。",
-        "zh-Hans": "没有自己的端口、也没有 Vite 配置的项目，会在其脚本选择的端口上启动，因此 Next、Nuxt 和 Astro 保留各自的端口。文件夹被移动或删除的项目在启动时会说明这一点，并指出在哪里为它选择新位置。"
+        "en": "Pasting a long text into one of Pitwall's terminals, such as an error with its stack or a long prompt for Claude, could freeze the whole app until it was forced to quit. It now goes in whole, and the other tabs and your servers keep running.",
+        "tr": "Pitwall'ın terminallerinden birine uzun bir metin yapıştırmak (yığın iziyle bir hata ya da Claude için uzun bir istem) bütün uygulamayı, zorla kapatılana dek dondurabiliyordu. Artık metin bütün olarak gidiyor; öbür sekmeler ve sunucuların çalışmayı sürdürüyor.",
+        "de": "Ein langer Text, in eines der Terminals von Pitwall eingefügt, etwa ein Fehler mit Stacktrace oder ein langer Prompt für Claude, konnte die ganze App einfrieren, bis sie zwangsweise beendet wurde. Jetzt kommt er vollständig an, und die anderen Tabs und deine Server laufen weiter.",
+        "es": "Pegar un texto largo en una de las terminales de Pitwall, como un error con su traza o un prompt largo para Claude, podía congelar toda la app hasta forzar su cierre. Ahora entra completo, y las demás pestañas y tus servidores siguen funcionando.",
+        "ru": "Вставка длинного текста в один из терминалов Pitwall, например ошибки со стеком вызовов или длинного запроса для Claude, могла заморозить всё приложение до принудительного завершения. Теперь текст вставляется целиком, а остальные вкладки и ваши серверы продолжают работать.",
+        "ja": "Pitwall のターミナルに長いテキスト（スタック付きのエラーや Claude への長いプロンプトなど）を貼り付けると、強制終了するまでアプリ全体が固まることがありました。今は全文がそのまま入り、ほかのタブやサーバーも動き続けます。",
+        "zh-Hans": "在 Pitwall 的终端中粘贴长文本（例如带堆栈的错误或给 Claude 的长提示）可能让整个应用卡死，只能强制退出。现在文本会完整输入，其他标签页和你的服务器也照常运行。"
       }
     }
   ]

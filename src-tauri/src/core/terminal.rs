@@ -4,6 +4,7 @@
 //! the last part of their output is kept to draw them again.
 
 use std::io::Write;
+use std::sync::mpsc;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 
@@ -57,7 +58,11 @@ pub(super) enum Launch {
 
 pub(super) struct Session {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    /// What the user types, for the tab's own writer thread: a write to the terminal blocks
+    /// while its input queue is full (a long paste, a command that reads nothing), and must never
+    /// do so under the terminals' lock, which the thread reading its output waits for, or on the
+    /// caller's thread (the main one).
+    input: mpsc::Sender<String>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
     path: String,
@@ -183,7 +188,15 @@ impl Core {
         drop(pair.slave);
 
         let reader = pair.master.try_clone_reader().map_err(|error| error.to_string())?;
-        let writer = pair.master.take_writer().map_err(|error| error.to_string())?;
+        let mut writer = pair.master.take_writer().map_err(|error| error.to_string())?;
+        let (input, typed) = mpsc::channel::<String>();
+        thread::spawn(move || {
+            for data in typed {
+                if writer.write_all(data.as_bytes()).and_then(|_| writer.flush()).is_err() {
+                    break;
+                }
+            }
+        });
         let killer = child.clone_killer();
         let pid = child.process_id();
         // On Windows, where the shell leads no process group, it gets a job of its own instead.
@@ -206,7 +219,7 @@ impl Core {
             view
         };
 
-        self.terminal_sessions().insert(view.id, Session { master: pair.master, writer, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0 });
+        self.terminal_sessions().insert(view.id, Session { master: pair.master, input, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0 });
         self.record_pids();
         self.notify();
 
@@ -344,9 +357,8 @@ impl Core {
     }
 
     pub fn write_terminal(&self, id: u64, data: &str) {
-        if let Some(session) = self.terminal_sessions().get_mut(&id) {
-            let _ = session.writer.write_all(data.as_bytes());
-            let _ = session.writer.flush();
+        if let Some(session) = self.terminal_sessions().get(&id) {
+            let _ = session.input.send(data.to_string());
         }
     }
 
