@@ -49,7 +49,7 @@
 //!            Commands { status: concat!($python, " manage.py showmigrations --plan"), migrate: concat!($python, " manage.py migrate"), needs: $needs }
 //!        };
 //!    }
-//!    static VARIANTS: [Commands; 3] = [with!(".venv/bin/python", &[]), with!("uv run python", &["uv"]), with!("python3", &["python3"])];
+//!    static VARIANTS: [Commands; 3] = [with!(".venv/bin/python", &[]), with!("poetry run python", &["poetry"]), with!("python3", &["python3"])];
 //!    ```
 //! 2. Add `mod <name>;` below and one `&<name>::<Struct>,` line to [`MIGRATION_TOOLS`], each in
 //!    alphabetical order.

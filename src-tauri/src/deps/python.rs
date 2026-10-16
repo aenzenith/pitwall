@@ -702,19 +702,24 @@ fn clause_holds(clause: &str, version: &[u64]) -> Option<bool> {
 /* ---------- running a Python tool ---------- */
 
 /// How a project runs one of Python's tools, as the place of its spelling among the six a
-/// migration tool lists in this order: `.venv/bin/<tool>`, `venv/bin/<tool>`, `uv run <tool>`,
-/// `poetry run <tool>`, `pipenv run <tool>`, `<bare>`. The project environment's own comes
-/// first; else the manager's runner, which finds an environment kept elsewhere.
+/// migration tool lists in this order: `.venv/bin/<tool>`, `venv/bin/<tool>`,
+/// `.venv\Scripts\<tool>` (Windows' layout), `poetry run <tool>`, `pipenv run <tool>`, `<bare>`.
+/// The project environment's own comes first; else the manager's runner, which finds an
+/// environment kept elsewhere.
 ///
-/// `uv run` without an environment would make one, lock and install on its own, which a status
-/// read must not do: it is used only where there is an environment without `bin/` (Windows).
-/// Until the install, such a project falls to the bare spelling, which fails.
+/// Never `uv run`, though uv keeps its environment in the project: on one whose interpreter has
+/// gone (a Python that Homebrew or pyenv removed) it deletes the environment and makes a new one,
+/// on any other it installs what the lock has and the environment lacks, and without one it makes
+/// one: a status read, which runs on its own, must do none of that. A uv project without a
+/// working environment falls to the bare spelling, which fails until the install.
 pub(super) fn runner(dir: &Path, executable: &str) -> usize {
     if let Some(at) = ENVIRONMENTS[..2].iter().position(|environment| dir.join(environment.folder).join("bin").join(executable).exists()) {
         return at;
     }
+    if dir.join(".venv").join("Scripts").join(format!("{executable}.exe")).is_file() {
+        return 2;
+    }
     match Python.detect(dir) {
-        Some("uv") if environment(dir, "uv").is_some() => 2,
         Some("poetry") => 3,
         Some("pipenv") => 4,
         _ => 5,

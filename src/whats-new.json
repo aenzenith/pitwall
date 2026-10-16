@@ -42,6 +42,27 @@
         "ja": "「フックを更新」と「フックを削除」は、Claude Code の設定で Pitwall のコマンドの隣に置いた自分のコマンドまで消し、別のフォルダー（dotfiles）からリンクした設定ファイルを普通のコピーに置き換えていました。今は Pitwall 自身のコマンドだけが変わり、リンクされたファイルはリンクのまま残ります。",
         "zh-Hans": "“更新 Hook”和“移除 Hook”会连同你在 Claude Code 设置中放在 Pitwall 命令旁边的自有命令一起删除，从其他文件夹（dotfiles）链接来的设置文件也会被替换为普通副本。现在只会更改 Pitwall 自己的命令，链接的文件仍保持为链接。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Garage leaves a Python environment alone",
+        "tr": "Garaj Python ortamına dokunmuyor",
+        "de": "Die Garage lässt eine Python-Umgebung in Ruhe",
+        "es": "El Garaje no toca un entorno de Python",
+        "ru": "Гараж не трогает окружение Python",
+        "ja": "ガレージは Python 環境に手を出しません",
+        "zh-Hans": "车库不再改动 Python 环境"
+      },
+      "body": {
+        "en": "In a Django project managed by uv whose environment had lost its Python, checking for pending migrations deleted the environment and made a new one, with packages installed, on its own. Garage now only reads: such a project shows the check failing until you install again.",
+        "tr": "uv ile yönetilen ve ortamının Python'u silinmiş bir Django projesinde, bekleyen migration'lara bakmak ortamı kendiliğinden siliyor, yenisini kurup paketleri yüklüyordu. Garaj artık yalnızca okuyor: böyle bir projede, yeniden kurana dek denetim başarısız görünüyor.",
+        "de": "In einem mit uv verwalteten Django-Projekt, dessen Umgebung ihr Python verloren hatte, löschte die Prüfung auf ausstehende Migrationen die Umgebung von selbst und legte eine neue mit installierten Paketen an. Die Garage liest jetzt nur noch: In einem solchen Projekt schlägt die Prüfung fehl, bis du neu installierst.",
+        "es": "En un proyecto Django gestionado con uv cuyo entorno había perdido su Python, comprobar las migraciones pendientes borraba el entorno por su cuenta y creaba uno nuevo con paquetes instalados. Ahora el Garaje solo lee: en un proyecto así la comprobación falla hasta que vuelvas a instalar.",
+        "ru": "В проекте Django под управлением uv, окружение которого лишилось своего Python, проверка ожидающих миграций сама удаляла окружение и создавала новое с установленными пакетами. Теперь Гараж только читает: в таком проекте проверка завершается ошибкой, пока вы не установите всё заново.",
+        "ja": "uv で管理されている Django プロジェクトで環境の Python が消えていると、未適用のマイグレーションを確認するだけで、環境が勝手に削除され、パッケージ入りの新しい環境が作られていました。ガレージは読むだけになりました。そのようなプロジェクトでは、再インストールするまで確認が失敗と表示されます。",
+        "zh-Hans": "在由 uv 管理、环境中的 Python 已丢失的 Django 项目里，检查待执行的迁移会自行删除该环境，并新建一个装好包的环境。现在车库只做读取：这样的项目在你重新安装之前会显示检查失败。"
+      }
     }
   ]
 }

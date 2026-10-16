@@ -27,7 +27,7 @@ macro_rules! with {
 static VARIANTS: [Commands; 6] = [
     with!(".venv/bin/python", &[]),
     with!("venv/bin/python", &[]),
-    with!("uv run python", &["uv"]),
+    with!(".venv\\Scripts\\python", &[]),
     with!("poetry run python", &["poetry"]),
     with!("pipenv run python", &["pipenv"]),
     with!("python3", &["python3"]),

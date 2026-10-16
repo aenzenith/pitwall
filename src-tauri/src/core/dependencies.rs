@@ -803,7 +803,7 @@ mod tests {
             &[
                 (".venv/bin/python manage.py showmigrations --plan", ".venv/bin/python manage.py migrate --no-input"),
                 ("venv/bin/python manage.py showmigrations --plan", "venv/bin/python manage.py migrate --no-input"),
-                ("uv run python manage.py showmigrations --plan", "uv run python manage.py migrate --no-input"),
+                (".venv\\Scripts\\python manage.py showmigrations --plan", ".venv\\Scripts\\python manage.py migrate --no-input"),
                 ("poetry run python manage.py showmigrations --plan", "poetry run python manage.py migrate --no-input"),
                 ("pipenv run python manage.py showmigrations --plan", "pipenv run python manage.py migrate --no-input"),
                 ("python3 manage.py showmigrations --plan", "python3 manage.py migrate --no-input"),
@@ -936,5 +936,38 @@ mod tests {
 
         assert!(!core.lock().jobs.contains_key(&job_key(&path, &job)));
         assert!(core.command_output(&path, &job).is_empty());
+    }
+
+    /// A status read runs on its own (at start, after a pull, at the minute's look). In a uv
+    /// project whose environment lost its interpreter (a Python that Homebrew or pyenv removed)
+    /// it goes through no manager: `uv run` deletes such an environment, makes a new one and
+    /// installs into it.
+    #[cfg(unix)]
+    #[test]
+    fn a_status_read_never_makes_the_environment_again() {
+        let django = deps::migration_tool("django").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let write = |name: &str, content: &str| fs::write(dir.join(name), content).unwrap();
+        let status = || django.variants()[django.variant(dir)].status;
+        write("manage.py", "from django.core.management import execute_from_command_line\n");
+        write("pyproject.toml", "[project]\nname = \"shop\"\ndependencies = [\"django>=5\"]\n");
+        write("uv.lock", "version = 1\n");
+        fs::create_dir_all(dir.join(".venv").join("bin")).unwrap();
+        write(".venv/pyvenv.cfg", "home = /opt/homebrew/opt/python@3.11/bin\n");
+        std::os::unix::fs::symlink("/opt/homebrew/opt/python@3.11/bin/python3.11-gone", dir.join(".venv").join("bin").join("python")).unwrap();
+
+        assert!(django.detect(dir));
+        assert_eq!(status(), "python3 manage.py showmigrations --plan", "the bare spelling, which fails until the install");
+
+        // Windows' layout: the environment's own interpreter, as it is.
+        fs::create_dir_all(dir.join(".venv").join("Scripts")).unwrap();
+        write(".venv/Scripts/python.exe", "");
+        assert_eq!(status(), ".venv\\Scripts\\python manage.py showmigrations --plan");
+
+        // An environment that works: its interpreter.
+        fs::remove_file(dir.join(".venv").join("bin").join("python")).unwrap();
+        write(".venv/bin/python", "");
+        assert_eq!(status(), ".venv/bin/python manage.py showmigrations --plan");
     }
 }
