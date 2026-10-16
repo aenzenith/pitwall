@@ -293,6 +293,9 @@ fn no_start_runs_a_companion_marked_ask_first() {
     };
     let held = || pad.core.snapshot().projects.into_iter().find(|p| p.path == alpha).and_then(|p| p.commands.into_iter().find(|c| c.id == "ask")?.held);
     let run_id = || pad.core.lock().runs.get(&alpha).map(|run| run.id);
+    // The start is over, its spinner gone: a restart that hasn't settled leaves the row busy
+    // after a stop that went around the window (`Core::stop`), and a team skips a busy project.
+    let at_rest = || pad.core.snapshot().projects.into_iter().find(|p| p.path == alpha).is_some_and(|p| p.status != "busy");
     let until = |done: &dyn Fn() -> bool| {
         let deadline = Instant::now() + Duration::from_secs(20);
         while !done() && Instant::now() < deadline {
@@ -366,7 +369,7 @@ fn no_start_runs_a_companion_marked_ask_first() {
         let _ = fs::remove_file(file("plain"));
         let before = run_id();
         let said = start();
-        until(&|| run_id().is_some_and(|id| Some(id) != before) && (!plain || file("plain").exists()) && held() == *shown);
+        until(&|| run_id().is_some_and(|id| Some(id) != before) && (!plain || file("plain").exists()) && held() == *shown && at_rest());
         thread::sleep(Duration::from_millis(300));
         // The terminal is asked about it, and nothing else is; without one it is said so.
         let asked = matches!(said.last(), Some(Said::Companions { commands }) if commands.iter().map(|c| c.id.as_str()).eq(["ask"]));
