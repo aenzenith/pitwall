@@ -1471,7 +1471,6 @@
   "start.waitsTurnAt": "排队中 · 第 {place} 位",
   "start.giveNow": "现在交出",
   "start.link": "关联到已打开的会话…",
-  "start.newClaudeOptions": "新建 Claude：选项",
   "start.newClaudePlan": "以计划模式启动",
   "core.start.noRefill": "没有可等待的恢复时间。",
   "flag.scheduled": "燃料恢复后交出",

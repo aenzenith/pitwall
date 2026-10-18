@@ -1648,7 +1648,6 @@
   "start.waitsTurnAt": "{place}-я в очереди",
   "start.giveNow": "Отдать сейчас",
   "start.link": "Привязать к открытой сессии…",
-  "start.newClaudeOptions": "Новый Claude: варианты",
   "start.newClaudePlan": "Запустить в режиме плана",
   "core.start.noRefill": "Нет времени пополнения, которого можно ждать.",
   "flag.scheduled": "Отдать после пополнения",

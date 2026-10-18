@@ -63,6 +63,27 @@
         "ja": "uv で管理されている Django プロジェクトで環境の Python が消えていると、未適用のマイグレーションを確認するだけで、環境が勝手に削除され、パッケージ入りの新しい環境が作られていました。ガレージは読むだけになりました。そのようなプロジェクトでは、再インストールするまで確認が失敗と表示されます。",
         "zh-Hans": "在由 uv 管理、环境中的 Python 已丢失的 Django 项目里，检查待执行的迁移会自行删除该环境，并新建一个装好包的环境。现在车库只做读取：这样的项目在你重新安装之前会显示检查失败。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "New Claude's choices are on a right-click",
+        "tr": "Yeni Claude seçenekleri sağ tık menüsünde",
+        "de": "Die Optionen von Claude starten sind im Rechtsklick",
+        "es": "Las opciones de Nuevo Claude están en el clic derecho",
+        "ru": "Варианты «Новый Claude» теперь по правому щелчку",
+        "ja": "新規Claude の選択肢は右クリックに",
+        "zh-Hans": "新建 Claude 的选项改到右键菜单"
+      },
+      "body": {
+        "en": "The arrow beside New Claude in the terminals is gone. Right-click the button for the models and Start in plan mode; a click starts a session as before.",
+        "tr": "Terminallerde Yeni Claude'un yanındaki ok kaldırıldı. Modeli seçmek ya da plan kipinde başlatmak için düğmeye sağ tıkla; tıklayınca eskisi gibi yeni bir oturum açılıyor.",
+        "de": "Der Pfeil neben Claude starten in den Terminals ist weg. Ein Rechtsklick auf den Button zeigt die Modelle und Im Planmodus starten; ein Klick startet wie bisher eine Sitzung.",
+        "es": "La flecha junto a Nuevo Claude en las terminales ya no está. Haz clic derecho en el botón para ver los modelos e Iniciar en modo plan; un clic inicia una sesión como antes.",
+        "ru": "Стрелки рядом с «Новый Claude» в терминалах больше нет. Щёлкните кнопку правой кнопкой, чтобы выбрать модель или «Запустить в режиме плана»; обычный щелчок, как и раньше, запускает сессию.",
+        "ja": "ターミナルの 新規Claude の横にあった矢印はなくなりました。モデルや プランモードで開始 はボタンを右クリックして選びます。クリックすると、これまでどおりセッションが始まります。",
+        "zh-Hans": "终端里 新建 Claude 旁边的箭头已去掉。右键点击按钮即可选择模型或 以计划模式启动；单击仍和以前一样启动会话。"
+      }
     }
   ]
 }

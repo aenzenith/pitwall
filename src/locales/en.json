@@ -1530,7 +1530,6 @@
   "start.waitsTurnAt": "Waits its turn · {nth} in line",
   "start.giveNow": "Give now",
   "start.link": "Link to an open session…",
-  "start.newClaudeOptions": "New Claude: options",
   "start.newClaudePlan": "Start in plan mode",
   "core.start.noRefill": "There is no refill time to wait for.",
   "flag.scheduled": "To give when fuel refills",

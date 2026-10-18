@@ -1471,7 +1471,6 @@
   "start.waitsTurnAt": "順番待ち · {place} 番目",
   "start.giveNow": "今すぐ渡す",
   "start.link": "開いているセッションにつなぐ…",
-  "start.newClaudeOptions": "新規Claude: オプション",
   "start.newClaudePlan": "プランモードで開始",
   "core.start.noRefill": "待てる回復時刻がありません。",
   "flag.scheduled": "燃料が回復したら渡す",

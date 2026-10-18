@@ -1570,7 +1570,6 @@
   "start.waitsTurnAt": "Espera su turno · {place}.ª en la cola",
   "start.giveNow": "Dar ahora",
   "start.link": "Vincular a una sesión abierta…",
-  "start.newClaudeOptions": "Nuevo Claude: opciones",
   "start.newClaudePlan": "Iniciar en modo plan",
   "core.start.noRefill": "No hay hora de rellenado que esperar.",
   "flag.scheduled": "Por dar al rellenarse",

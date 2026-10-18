@@ -1517,7 +1517,6 @@
   "start.waitsTurnAt": "{place}. sırada bekliyor",
   "start.giveNow": "Şimdi ver",
   "start.link": "Açık oturuma bağla…",
-  "start.newClaudeOptions": "Yeni Claude: seçenekler",
   "start.newClaudePlan": "Plan kipinde başlat",
   "core.start.noRefill": "Beklenecek bir dolum saati yok.",
   "flag.scheduled": "Yakıt dolunca verilecek",

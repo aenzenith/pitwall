@@ -1530,7 +1530,6 @@
   "start.waitsTurnAt": "In der Warteschlange · Platz {place}",
   "start.giveNow": "Jetzt geben",
   "start.link": "Mit offener Sitzung verknüpfen…",
-  "start.newClaudeOptions": "Claude starten: Optionen",
   "start.newClaudePlan": "Im Planmodus starten",
   "core.start.noRefill": "Es gibt keine Füllzeit, auf die gewartet werden kann.",
   "flag.scheduled": "Bei vollem Tank zu geben",
