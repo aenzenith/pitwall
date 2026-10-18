@@ -72,7 +72,7 @@ lap a circuit and the ones that need you wait at the pit wall. The day's timelin
 what is left of Claude's limits and each project's dependencies are a click away.
 
 <img src=".github/readme/board.png" alt="The Board page: a project's cards in Up next, With Claude, To review and Done, and the selected card's session">
-<br><br>
+<br>
 <img src=".github/readme/track.png" alt="The Track page: projects lapping a circuit, servers in green, Claude in orange, the ones that need you at the pit wall">
 
 ### Claude and your shell can ask too
