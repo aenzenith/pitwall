@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.2](https://github.com/aenzenith/pitwall/compare/v1.12.1...v1.12.2) (2026-10-18)
+
+
+### Bug Fixes
+
+* **start:** Fable is one of the models a session starts with ([1215292](https://github.com/aenzenith/pitwall/commit/12152922111cd361da1b8230e5674cb2d8b83cb1))
+* **terminal:** going to a Claude tab counts its finished turn as seen ([36d2d6c](https://github.com/aenzenith/pitwall/commit/36d2d6c5ccf6c4f0d9dac4bbe3ab4261db02385d))
+* **terminal:** New Claude's choices open on a right-click ([98214fe](https://github.com/aenzenith/pitwall/commit/98214fe6fd57376cc7544b5f4fa8d0480c9cbe6e))
+
 ## [1.12.1](https://github.com/aenzenith/pitwall/compare/v1.12.0...v1.12.1) (2026-10-16)
 
 
