@@ -12,6 +12,7 @@ use serde_json::Value;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Model {
+    Fable,
     Opus,
     Sonnet,
     Haiku,
@@ -19,20 +20,22 @@ pub enum Model {
 
 impl Model {
     #[cfg(test)]
-    pub const ALL: [Self; 3] = [Self::Opus, Self::Sonnet, Self::Haiku];
+    pub const ALL: [Self; 4] = [Self::Fable, Self::Opus, Self::Sonnet, Self::Haiku];
 
     /// What `--model` is given.
     pub fn alias(self) -> &'static str {
         match self {
+            Self::Fable => "fable",
             Self::Opus => "opus",
             Self::Sonnet => "sonnet",
             Self::Haiku => "haiku",
         }
     }
 
-    /// One of the three, or nothing: no other text names a model.
+    /// One of the list, or nothing: no other text names a model.
     pub fn parse(text: &str) -> Option<Self> {
         match text {
+            "fable" => Some(Self::Fable),
             "opus" => Some(Self::Opus),
             "sonnet" => Some(Self::Sonnet),
             "haiku" => Some(Self::Haiku),
@@ -157,6 +160,8 @@ mod tests {
             "plan --model x",
             "claude-opus-5-5",
             "opus[1m]",
+            "Fable",
+            "claude-fable-5-1[1m]",
             "' || true #",
             "\"; rm -rf ~; \"",
         ];
@@ -176,7 +181,7 @@ mod tests {
         }
 
         // Every start there is, in both forms: the words of the two lists and nothing else.
-        let allowed = ["--model", "opus", "sonnet", "haiku", "--permission-mode", "plan", "acceptEdits"];
+        let allowed = ["--model", "fable", "opus", "sonnet", "haiku", "--permission-mode", "plan", "acceptEdits"];
         let mut seen = std::collections::HashSet::new();
         for model in std::iter::once(None).chain(Model::ALL.into_iter().map(Some)) {
             for mode in Mode::ALL {
@@ -195,7 +200,7 @@ mod tests {
                 assert!(seen.insert(line));
             }
         }
-        assert_eq!(seen.len(), 12);
+        assert_eq!(seen.len(), 15);
         assert_eq!(Start { model: Some(Model::Sonnet), mode: Mode::Plan }.line(), " --model sonnet --permission-mode plan");
         assert_eq!(Start { model: Some(Model::Haiku), mode: Mode::AcceptEdits }.args(), ["--model", "haiku", "--permission-mode", "acceptEdits"]);
     }

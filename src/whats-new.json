@@ -84,6 +84,27 @@
         "ja": "ターミナルの 新規Claude の横にあった矢印はなくなりました。モデルや プランモードで開始 はボタンを右クリックして選びます。クリックすると、これまでどおりセッションが始まります。",
         "zh-Hans": "终端里 新建 Claude 旁边的箭头已去掉。右键点击按钮即可选择模型或 以计划模式启动；单击仍和以前一样启动会话。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Fable among the models",
+        "tr": "Fable da model listesinde",
+        "de": "Fable unter den Modellen",
+        "es": "Fable entre los modelos",
+        "ru": "Fable среди моделей",
+        "ja": "モデルに Fable が加わりました",
+        "zh-Hans": "模型中加入了 Fable"
+      },
+      "body": {
+        "en": "Claude sessions Pitwall starts can now run on Fable, beside Opus, Sonnet and Haiku: in New Claude's right-click, in Give to Claude and as a project's own model in Project settings.",
+        "tr": "Pitwall'dan başlattığın Claude oturumlarında artık Opus, Sonnet ve Haiku'nun yanında Fable'ı da seçebilirsin: Yeni Claude'un sağ tık menüsünde, Claude'a ver panelinde ve Proje ayarları'nda.",
+        "de": "Claude-Sitzungen, die Pitwall startet, können jetzt neben Opus, Sonnet und Haiku auch mit Fable laufen: im Rechtsklick auf Claude starten, bei An Claude geben und als eigenes Modell eines Projekts in den Projekteinstellungen.",
+        "es": "Las sesiones de Claude que inicia Pitwall ahora pueden usar Fable, junto a Opus, Sonnet y Haiku: con clic derecho en Nuevo Claude, en Dar a Claude y como modelo propio de un proyecto en Ajustes del proyecto.",
+        "ru": "Сессии Claude, которые запускает Pitwall, теперь могут работать на Fable, рядом с Opus, Sonnet и Haiku: по правому щелчку на «Новый Claude», в «Отдать Claude» и как собственная модель проекта в «Настройки проекта».",
+        "ja": "Pitwall が始める Claude セッションで、Opus、Sonnet、Haiku に加えて Fable も使えるようになりました。新規Claude の右クリック、Claude に渡す、プロジェクト設定 のプロジェクト自身のモデルで選べます。",
+        "zh-Hans": "Pitwall 启动的 Claude 会话现在除了 Opus、Sonnet 和 Haiku，也可以用 Fable：右键点击 新建 Claude、在 交给 Claude 中，以及在 项目设置 里作为项目自己的模型。"
+      }
     }
   ]
 }

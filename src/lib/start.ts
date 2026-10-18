@@ -9,13 +9,14 @@ import { projectSettings } from "./projectSettings";
 import type { ClaudeMode, ClaudeModel, ClaudeStart, Fuel, Project, StartChoice, UsageWindow } from "./types";
 
 /** The models offered, by the alias Claude Code's `--model` takes. */
-export const MODELS: ClaudeModel[] = ["opus", "sonnet", "haiku"];
+export const MODELS: ClaudeModel[] = ["fable", "opus", "sonnet", "haiku"];
 
 export const MODES: ClaudeMode[] = ["normal", "plan", "acceptEdits"];
 
 /** A model's name. The alias stands for the newest model of that name, whichever it is: no
  * version is shown. */
 export const MODEL_LABELS: Record<ClaudeModel, Key> = {
+  fable: "start.model.fable",
   opus: "start.model.opus",
   sonnet: "start.model.sonnet",
   haiku: "start.model.haiku",

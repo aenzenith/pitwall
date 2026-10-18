@@ -1510,6 +1510,7 @@
   "flag.settings.atQuit": "Show the chequered flag when quitting",
   "start.model": "Model",
   "start.model.auto": "Claude Code's choice",
+  "start.model.fable": "Fable",
   "start.model.opus": "Opus",
   "start.model.sonnet": "Sonnet",
   "start.model.haiku": "Haiku",

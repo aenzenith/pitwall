@@ -590,10 +590,13 @@ mod tests {
 
     /// Every way a session starts, with what it must put on the command line, written out: on
     /// Unix as part of the shell's line, on Windows as arguments of `cmd.exe`.
-    const STARTS: [(Option<Model>, Mode, &str, &[&str]); 12] = [
+    const STARTS: [(Option<Model>, Mode, &str, &[&str]); 15] = [
         (None, Mode::Normal, "", &[]),
         (None, Mode::Plan, " --permission-mode plan", &["--permission-mode", "plan"]),
         (None, Mode::AcceptEdits, " --permission-mode acceptEdits", &["--permission-mode", "acceptEdits"]),
+        (Some(Model::Fable), Mode::Normal, " --model fable", &["--model", "fable"]),
+        (Some(Model::Fable), Mode::Plan, " --model fable --permission-mode plan", &["--model", "fable", "--permission-mode", "plan"]),
+        (Some(Model::Fable), Mode::AcceptEdits, " --model fable --permission-mode acceptEdits", &["--model", "fable", "--permission-mode", "acceptEdits"]),
         (Some(Model::Opus), Mode::Normal, " --model opus", &["--model", "opus"]),
         (Some(Model::Opus), Mode::Plan, " --model opus --permission-mode plan", &["--model", "opus", "--permission-mode", "plan"]),
         (Some(Model::Opus), Mode::AcceptEdits, " --model opus --permission-mode acceptEdits", &["--model", "opus", "--permission-mode", "acceptEdits"]),

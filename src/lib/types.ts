@@ -751,7 +751,7 @@ export type CliState = { status: "ready" | "unsupported"; path: string | null };
 export type LinkAction = "start" | "stop" | "restart" | "show";
 
 /** A model by the alias Claude Code's `--model` takes for the newest one of its name. */
-export type ClaudeModel = "opus" | "sonnet" | "haiku";
+export type ClaudeModel = "fable" | "opus" | "sonnet" | "haiku";
 
 /** The mode a Claude session starts in: Claude Code's own, plan first, or edits made without asking. */
 export type ClaudeMode = "normal" | "plan" | "acceptEdits";

@@ -1628,6 +1628,7 @@
   "flag.settings.atQuit": "Показывать клетчатый флаг при выходе",
   "start.model": "Модель",
   "start.model.auto": "По выбору Claude Code",
+  "start.model.fable": "Fable",
   "start.model.opus": "Opus",
   "start.model.sonnet": "Sonnet",
   "start.model.haiku": "Haiku",

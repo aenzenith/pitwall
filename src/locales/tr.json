@@ -1497,6 +1497,7 @@
   "flag.settings.atQuit": "Çıkarken damalı bayrağı göster",
   "start.model": "Model",
   "start.model.auto": "Claude Code'un seçtiği",
+  "start.model.fable": "Fable",
   "start.model.opus": "Opus",
   "start.model.sonnet": "Sonnet",
   "start.model.haiku": "Haiku",
