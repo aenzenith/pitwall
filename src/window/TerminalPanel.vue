@@ -134,6 +134,22 @@ function show(id: number): void {
 }
 
 /**
+ * What Claude finished in a tab counts as seen once the tab is looked at: picked (a click, the
+ * keyboard) or pressed in, the panel open. Every session of its project stops waiting on you, as
+ * on a board picked by hand. Not while one asks something there (a question, a permission
+ * prompt): seen, it would no longer say so.
+ */
+function seeFinished(id: number | undefined): void {
+  if (id === undefined || collapsed.value) return;
+  const rows = sessions.value?.sessions ?? [];
+  const finished = rows.find((row) => row.origin.kind === "pitwall" && row.origin.terminal === id && row.phase === "waiting" && row.turn?.kind === "finished");
+  if (!finished) return;
+  const path = finished.path ?? finished.folder;
+  const asks = rows.some((row) => (row.path ?? row.folder) === path && row.phase === "waiting" && !!row.turn && row.turn.kind !== "finished");
+  if (!asks) void api.markSeen(path).catch(() => undefined);
+}
+
+/**
  * A tab that came by itself while this panel was up: one the core opened at a board card's
  * moment (`unasked`). The tab in sight stays in sight and the keyboard stays where it is: whoever
  * is typing here goes on typing where they were. With no tab in sight, the one that came shows,
@@ -193,6 +209,7 @@ function claudeMenuBelow(event: KeyboardEvent): void {
 function open(id: number): void {
   show(id);
   if (collapsed.value) toggleCollapsed();
+  seeFinished(id);
 }
 
 function close(id: number): void {
@@ -272,6 +289,7 @@ function onTabKey(event: KeyboardEvent, id: number): void {
   if (to === undefined) return;
   if (to !== active.value?.id) stayOnTabs = true;
   show(to);
+  seeFinished(to);
   focusTab(to);
 }
 
@@ -468,7 +486,7 @@ defineExpose({ openTerminal, collapse });
       </button>
     </div>
     <div class="screen">
-      <div ref="viewport" class="viewport"></div>
+      <div ref="viewport" class="viewport" @pointerdown="seeFinished(active?.id)"></div>
       <div v-if="!active" class="empty">
         <span>{{ t("terminal.none", { name: project.name }) }}</span>
       </div>

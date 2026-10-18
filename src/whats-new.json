@@ -105,6 +105,27 @@
         "ja": "Pitwall が始める Claude セッションで、Opus、Sonnet、Haiku に加えて Fable も使えるようになりました。新規Claude の右クリック、Claude に渡す、プロジェクト設定 のプロジェクト自身のモデルで選べます。",
         "zh-Hans": "Pitwall 启动的 Claude 会话现在除了 Opus、Sonnet 和 Haiku，也可以用 Fable：右键点击 新建 Claude、在 交给 Claude 中，以及在 项目设置 里作为项目自己的模型。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Switching to a Claude tab counts its turn as seen",
+        "tr": "Claude sekmesine geçince tur görüldü sayılıyor",
+        "de": "Der Wechsel zu einem Claude-Tab zählt seine Runde als gesehen",
+        "es": "Cambiar a una pestaña de Claude cuenta su turno como visto",
+        "ru": "Переход на вкладку Claude отмечает её ход просмотренным",
+        "ja": "Claude のタブに切り替えると、そのターンが既読になります",
+        "zh-Hans": "切换到 Claude 标签页即算已读"
+      },
+      "body": {
+        "en": "A turn Claude finished in one of Pitwall's terminals kept its orange dot after you switched to its tab, until you marked it seen somewhere else. Now picking the tab, or clicking in its terminal, is enough. While a session of the project asks you a question or for a permission, the dot stays.",
+        "tr": "Pitwall terminalinde Claude'un bitirdiği turun turuncu noktası, sekmesine geçsen de sönmüyordu; başka bir yerden görüldü saymak gerekiyordu. Artık sekmeye geçmek ya da terminale tıklamak yetiyor. Projede soru soran ya da izin bekleyen bir oturum varken nokta yerinde kalıyor.",
+        "de": "Eine Runde, die Claude in einem der Terminals von Pitwall beendet hatte, behielt ihren orangen Punkt, auch nachdem du zu ihrem Tab gewechselt hattest, bis du sie anderswo als gesehen markiert hast. Jetzt genügt es, den Tab zu wählen oder in sein Terminal zu klicken. Solange eine Sitzung des Projekts dir eine Frage stellt oder auf eine Erlaubnis wartet, bleibt der Punkt.",
+        "es": "Un turno que Claude terminó en una de las terminales de Pitwall conservaba su punto naranja aunque cambiaras a su pestaña, hasta que lo marcabas como visto en otro sitio. Ahora basta con elegir la pestaña o hacer clic en su terminal. Mientras una sesión del proyecto te hace una pregunta o espera un permiso, el punto se queda.",
+        "ru": "Ход, который Claude завершил в одном из терминалов Pitwall, сохранял оранжевую точку и после перехода на его вкладку, пока вы не отмечали его просмотренным где-то ещё. Теперь достаточно выбрать вкладку или щёлкнуть в её терминале. Пока сессия проекта задаёт вам вопрос или ждёт разрешения, точка остаётся.",
+        "ja": "Pitwall のターミナルで Claude が終えたターンは、そのタブに切り替えてもオレンジの点が消えず、ほかの場所で既読にするまで残っていました。今はタブを選ぶか、そのターミナル内をクリックするだけで既読になります。プロジェクトのセッションが質問や許可を待っている間は、点は残ります。",
+        "zh-Hans": "Claude 在 Pitwall 终端中完成的一轮，切换到它的标签页后橙色圆点仍不消失，要到别处标为已读才行。现在选中该标签页，或在它的终端里点击即可。项目中有会话在提问或等待许可时，圆点会保留。"
+      }
     }
   ]
 }
