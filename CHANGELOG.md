@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.3](https://github.com/aenzenith/pitwall/compare/v1.12.2...v1.12.3) (2026-10-19)
+
+
+### Bug Fixes
+
+* **notify:** a Claude notification's click no longer covers the session ([616612a](https://github.com/aenzenith/pitwall/commit/616612a6402925c9729866c88b5bde9e5901c221))
+
 ## [1.12.2](https://github.com/aenzenith/pitwall/compare/v1.12.1...v1.12.2) (2026-10-18)
 
 
