@@ -1,130 +1,25 @@
 {
-  "since": "1.12.0",
+  "since": "1.12.2",
   "notes": [
     {
       "kind": "fix",
       "title": {
-        "en": "A long paste no longer freezes Pitwall",
-        "tr": "Uzun bir yapıştırma Pitwall'ı artık dondurmuyor",
-        "de": "Langes Einfügen friert Pitwall nicht mehr ein",
-        "es": "Pegar un texto largo ya no congela Pitwall",
-        "ru": "Длинная вставка больше не замораживает Pitwall",
-        "ja": "長い貼り付けで Pitwall が固まらなくなりました",
-        "zh-Hans": "粘贴长文本不再让 Pitwall 卡死"
+        "en": "Clicking a Claude notification opens the session, not Pitwall",
+        "tr": "Claude bildirimine tıklayınca Pitwall değil, oturum açılıyor",
+        "de": "Ein Klick auf eine Benachrichtigung von Claude öffnet die Sitzung, nicht Pitwall",
+        "es": "Al hacer clic en una notificación de Claude se abre la sesión, no Pitwall",
+        "ru": "Клик по уведомлению Claude открывает сессию, а не Pitwall",
+        "ja": "Claude の通知をクリックすると、Pitwall ではなくセッションが開きます",
+        "zh-Hans": "点击 Claude 的通知会打开会话，而不是 Pitwall"
       },
       "body": {
-        "en": "Pasting a long text into one of Pitwall's terminals, such as an error with its stack or a long prompt for Claude, could freeze the whole app until it was forced to quit. It now goes in whole, and the other tabs and your servers keep running.",
-        "tr": "Pitwall'ın terminallerinden birine uzun bir metin yapıştırmak (yığın iziyle bir hata ya da Claude için uzun bir istem) bütün uygulamayı, zorla kapatılana dek dondurabiliyordu. Artık metin bütün olarak gidiyor; öbür sekmeler ve sunucuların çalışmayı sürdürüyor.",
-        "de": "Ein langer Text, in eines der Terminals von Pitwall eingefügt, etwa ein Fehler mit Stacktrace oder ein langer Prompt für Claude, konnte die ganze App einfrieren, bis sie zwangsweise beendet wurde. Jetzt kommt er vollständig an, und die anderen Tabs und deine Server laufen weiter.",
-        "es": "Pegar un texto largo en una de las terminales de Pitwall, como un error con su traza o un prompt largo para Claude, podía congelar toda la app hasta forzar su cierre. Ahora entra completo, y las demás pestañas y tus servidores siguen funcionando.",
-        "ru": "Вставка длинного текста в один из терминалов Pitwall, например ошибки со стеком вызовов или длинного запроса для Claude, могла заморозить всё приложение до принудительного завершения. Теперь текст вставляется целиком, а остальные вкладки и ваши серверы продолжают работать.",
-        "ja": "Pitwall のターミナルに長いテキスト（スタック付きのエラーや Claude への長いプロンプトなど）を貼り付けると、強制終了するまでアプリ全体が固まることがありました。今は全文がそのまま入り、ほかのタブやサーバーも動き続けます。",
-        "zh-Hans": "在 Pitwall 的终端中粘贴长文本（例如带堆栈的错误或给 Claude 的长提示）可能让整个应用卡死，只能强制退出。现在文本会完整输入，其他标签页和你的服务器也照常运行。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Your own Claude hooks stay as they are",
-        "tr": "Kendi Claude hook'ların olduğu gibi kalıyor",
-        "de": "Deine eigenen Claude-Hooks bleiben, wie sie sind",
-        "es": "Tus propios hooks de Claude se quedan como están",
-        "ru": "Ваши собственные хуки Claude остаются как есть",
-        "ja": "自分で追加した Claude のフックはそのまま残ります",
-        "zh-Hans": "你自己的 Claude Hook 保持原样"
-      },
-      "body": {
-        "en": "Update hook and Remove hook took out a command of your own that sat beside Pitwall's in Claude Code's settings, and a settings file linked from another folder (dotfiles) was replaced by a plain copy. Now only Pitwall's own commands change, and a linked file stays linked.",
-        "tr": "Hook'u güncelle ve Hook'u kaldır, Claude Code ayarlarında Pitwall'ınkinin yanına eklediğin kendi komutunu da siliyordu; başka bir klasörden (dotfiles) bağlanan bir ayar dosyası da düz bir kopyayla değiştiriliyordu. Artık yalnızca Pitwall'ın kendi komutları değişiyor, bağlı dosya bağlı kalıyor.",
-        "de": "Hook aktualisieren und Hook entfernen entfernten auch einen eigenen Befehl, der in den Einstellungen von Claude Code neben dem von Pitwall stand, und eine aus einem anderen Ordner verlinkte Einstellungsdatei (Dotfiles) wurde durch eine einfache Kopie ersetzt. Jetzt ändern sich nur die Befehle von Pitwall, und eine verlinkte Datei bleibt verlinkt.",
-        "es": "Actualizar hook y Quitar hook eliminaban también un comando tuyo que estaba junto al de Pitwall en los ajustes de Claude Code, y un archivo de ajustes enlazado desde otra carpeta (dotfiles) se sustituía por una copia simple. Ahora solo cambian los comandos de Pitwall, y un archivo enlazado sigue enlazado.",
-        "ru": "«Обновить хук» и «Удалить хук» удаляли и вашу собственную команду, стоявшую рядом с командой Pitwall в настройках Claude Code, а файл настроек, подключённый ссылкой из другой папки (dotfiles), заменялся обычной копией. Теперь меняются только команды самого Pitwall, а ссылка остаётся ссылкой.",
-        "ja": "「フックを更新」と「フックを削除」は、Claude Code の設定で Pitwall のコマンドの隣に置いた自分のコマンドまで消し、別のフォルダー（dotfiles）からリンクした設定ファイルを普通のコピーに置き換えていました。今は Pitwall 自身のコマンドだけが変わり、リンクされたファイルはリンクのまま残ります。",
-        "zh-Hans": "“更新 Hook”和“移除 Hook”会连同你在 Claude Code 设置中放在 Pitwall 命令旁边的自有命令一起删除，从其他文件夹（dotfiles）链接来的设置文件也会被替换为普通副本。现在只会更改 Pitwall 自己的命令，链接的文件仍保持为链接。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Garage leaves a Python environment alone",
-        "tr": "Garaj Python ortamına dokunmuyor",
-        "de": "Die Garage lässt eine Python-Umgebung in Ruhe",
-        "es": "El Garaje no toca un entorno de Python",
-        "ru": "Гараж не трогает окружение Python",
-        "ja": "ガレージは Python 環境に手を出しません",
-        "zh-Hans": "车库不再改动 Python 环境"
-      },
-      "body": {
-        "en": "In a Django project managed by uv whose environment had lost its Python, checking for pending migrations deleted the environment and made a new one, with packages installed, on its own. Garage now only reads: such a project shows the check failing until you install again.",
-        "tr": "uv ile yönetilen ve ortamının Python'u silinmiş bir Django projesinde, bekleyen migration'lara bakmak ortamı kendiliğinden siliyor, yenisini kurup paketleri yüklüyordu. Garaj artık yalnızca okuyor: böyle bir projede, yeniden kurana dek denetim başarısız görünüyor.",
-        "de": "In einem mit uv verwalteten Django-Projekt, dessen Umgebung ihr Python verloren hatte, löschte die Prüfung auf ausstehende Migrationen die Umgebung von selbst und legte eine neue mit installierten Paketen an. Die Garage liest jetzt nur noch: In einem solchen Projekt schlägt die Prüfung fehl, bis du neu installierst.",
-        "es": "En un proyecto Django gestionado con uv cuyo entorno había perdido su Python, comprobar las migraciones pendientes borraba el entorno por su cuenta y creaba uno nuevo con paquetes instalados. Ahora el Garaje solo lee: en un proyecto así la comprobación falla hasta que vuelvas a instalar.",
-        "ru": "В проекте Django под управлением uv, окружение которого лишилось своего Python, проверка ожидающих миграций сама удаляла окружение и создавала новое с установленными пакетами. Теперь Гараж только читает: в таком проекте проверка завершается ошибкой, пока вы не установите всё заново.",
-        "ja": "uv で管理されている Django プロジェクトで環境の Python が消えていると、未適用のマイグレーションを確認するだけで、環境が勝手に削除され、パッケージ入りの新しい環境が作られていました。ガレージは読むだけになりました。そのようなプロジェクトでは、再インストールするまで確認が失敗と表示されます。",
-        "zh-Hans": "在由 uv 管理、环境中的 Python 已丢失的 Django 项目里，检查待执行的迁移会自行删除该环境，并新建一个装好包的环境。现在车库只做读取：这样的项目在你重新安装之前会显示检查失败。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "New Claude's choices are on a right-click",
-        "tr": "Yeni Claude seçenekleri sağ tık menüsünde",
-        "de": "Die Optionen von Claude starten sind im Rechtsklick",
-        "es": "Las opciones de Nuevo Claude están en el clic derecho",
-        "ru": "Варианты «Новый Claude» теперь по правому щелчку",
-        "ja": "新規Claude の選択肢は右クリックに",
-        "zh-Hans": "新建 Claude 的选项改到右键菜单"
-      },
-      "body": {
-        "en": "The arrow beside New Claude in the terminals is gone. Right-click the button for the models and Start in plan mode; a click starts a session as before.",
-        "tr": "Terminallerde Yeni Claude'un yanındaki ok kaldırıldı. Modeli seçmek ya da plan kipinde başlatmak için düğmeye sağ tıkla; tıklayınca eskisi gibi yeni bir oturum açılıyor.",
-        "de": "Der Pfeil neben Claude starten in den Terminals ist weg. Ein Rechtsklick auf den Button zeigt die Modelle und Im Planmodus starten; ein Klick startet wie bisher eine Sitzung.",
-        "es": "La flecha junto a Nuevo Claude en las terminales ya no está. Haz clic derecho en el botón para ver los modelos e Iniciar en modo plan; un clic inicia una sesión como antes.",
-        "ru": "Стрелки рядом с «Новый Claude» в терминалах больше нет. Щёлкните кнопку правой кнопкой, чтобы выбрать модель или «Запустить в режиме плана»; обычный щелчок, как и раньше, запускает сессию.",
-        "ja": "ターミナルの 新規Claude の横にあった矢印はなくなりました。モデルや プランモードで開始 はボタンを右クリックして選びます。クリックすると、これまでどおりセッションが始まります。",
-        "zh-Hans": "终端里 新建 Claude 旁边的箭头已去掉。右键点击按钮即可选择模型或 以计划模式启动；单击仍和以前一样启动会话。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Fable among the models",
-        "tr": "Fable da model listesinde",
-        "de": "Fable unter den Modellen",
-        "es": "Fable entre los modelos",
-        "ru": "Fable среди моделей",
-        "ja": "モデルに Fable が加わりました",
-        "zh-Hans": "模型中加入了 Fable"
-      },
-      "body": {
-        "en": "Claude sessions Pitwall starts can now run on Fable, beside Opus, Sonnet and Haiku: in New Claude's right-click, in Give to Claude and as a project's own model in Project settings.",
-        "tr": "Pitwall'dan başlattığın Claude oturumlarında artık Opus, Sonnet ve Haiku'nun yanında Fable'ı da seçebilirsin: Yeni Claude'un sağ tık menüsünde, Claude'a ver panelinde ve Proje ayarları'nda.",
-        "de": "Claude-Sitzungen, die Pitwall startet, können jetzt neben Opus, Sonnet und Haiku auch mit Fable laufen: im Rechtsklick auf Claude starten, bei An Claude geben und als eigenes Modell eines Projekts in den Projekteinstellungen.",
-        "es": "Las sesiones de Claude que inicia Pitwall ahora pueden usar Fable, junto a Opus, Sonnet y Haiku: con clic derecho en Nuevo Claude, en Dar a Claude y como modelo propio de un proyecto en Ajustes del proyecto.",
-        "ru": "Сессии Claude, которые запускает Pitwall, теперь могут работать на Fable, рядом с Opus, Sonnet и Haiku: по правому щелчку на «Новый Claude», в «Отдать Claude» и как собственная модель проекта в «Настройки проекта».",
-        "ja": "Pitwall が始める Claude セッションで、Opus、Sonnet、Haiku に加えて Fable も使えるようになりました。新規Claude の右クリック、Claude に渡す、プロジェクト設定 のプロジェクト自身のモデルで選べます。",
-        "zh-Hans": "Pitwall 启动的 Claude 会话现在除了 Opus、Sonnet 和 Haiku，也可以用 Fable：右键点击 新建 Claude、在 交给 Claude 中，以及在 项目设置 里作为项目自己的模型。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Switching to a Claude tab counts its turn as seen",
-        "tr": "Claude sekmesine geçince tur görüldü sayılıyor",
-        "de": "Der Wechsel zu einem Claude-Tab zählt seine Runde als gesehen",
-        "es": "Cambiar a una pestaña de Claude cuenta su turno como visto",
-        "ru": "Переход на вкладку Claude отмечает её ход просмотренным",
-        "ja": "Claude のタブに切り替えると、そのターンが既読になります",
-        "zh-Hans": "切换到 Claude 标签页即算已读"
-      },
-      "body": {
-        "en": "A turn Claude finished in one of Pitwall's terminals kept its orange dot after you switched to its tab, until you marked it seen somewhere else. Now picking the tab, or clicking in its terminal, is enough. While a session of the project asks you a question or for a permission, the dot stays.",
-        "tr": "Pitwall terminalinde Claude'un bitirdiği turun turuncu noktası, sekmesine geçsen de sönmüyordu; başka bir yerden görüldü saymak gerekiyordu. Artık sekmeye geçmek ya da terminale tıklamak yetiyor. Projede soru soran ya da izin bekleyen bir oturum varken nokta yerinde kalıyor.",
-        "de": "Eine Runde, die Claude in einem der Terminals von Pitwall beendet hatte, behielt ihren orangen Punkt, auch nachdem du zu ihrem Tab gewechselt hattest, bis du sie anderswo als gesehen markiert hast. Jetzt genügt es, den Tab zu wählen oder in sein Terminal zu klicken. Solange eine Sitzung des Projekts dir eine Frage stellt oder auf eine Erlaubnis wartet, bleibt der Punkt.",
-        "es": "Un turno que Claude terminó en una de las terminales de Pitwall conservaba su punto naranja aunque cambiaras a su pestaña, hasta que lo marcabas como visto en otro sitio. Ahora basta con elegir la pestaña o hacer clic en su terminal. Mientras una sesión del proyecto te hace una pregunta o espera un permiso, el punto se queda.",
-        "ru": "Ход, который Claude завершил в одном из терминалов Pitwall, сохранял оранжевую точку и после перехода на его вкладку, пока вы не отмечали его просмотренным где-то ещё. Теперь достаточно выбрать вкладку или щёлкнуть в её терминале. Пока сессия проекта задаёт вам вопрос или ждёт разрешения, точка остаётся.",
-        "ja": "Pitwall のターミナルで Claude が終えたターンは、そのタブに切り替えてもオレンジの点が消えず、ほかの場所で既読にするまで残っていました。今はタブを選ぶか、そのターミナル内をクリックするだけで既読になります。プロジェクトのセッションが質問や許可を待っている間は、点は残ります。",
-        "zh-Hans": "Claude 在 Pitwall 终端中完成的一轮，切换到它的标签页后橙色圆点仍不消失，要到别处标为已读才行。现在选中该标签页，或在它的终端里点击即可。项目中有会话在提问或等待许可时，圆点会保留。"
+        "en": "When the session ran in VS Code, Pitwall's window came up over it as well, often on another desktop. Now only the session comes up.",
+        "tr": "Oturum VS Code'da çalışıyorsa Pitwall'ın penceresi de açılıp onun önüne geçiyordu, çoğu zaman başka bir masaüstüne geçerek. Artık yalnızca oturum açılıyor.",
+        "de": "Lief die Sitzung in VS Code, erschien auch das Fenster von Pitwall darüber, oft auf einem anderen Schreibtisch. Jetzt erscheint nur noch die Sitzung.",
+        "es": "Si la sesión se ejecutaba en VS Code, la ventana de Pitwall también aparecía encima, a menudo en otro escritorio. Ahora solo aparece la sesión.",
+        "ru": "Если сессия работала в VS Code, поверх неё открывалось ещё и окно Pitwall, часто на другом рабочем столе. Теперь появляется только сессия.",
+        "ja": "セッションが VS Code で動いているとき、その上に Pitwall のウィンドウも開き、別のデスクトップに切り替わることもありました。今はセッションだけが表示されます。",
+        "zh-Hans": "会话在 VS Code 中运行时，Pitwall 的窗口也会盖在它上面，常常还会切换到另一个桌面。现在只会显示该会话。"
       }
     }
   ]

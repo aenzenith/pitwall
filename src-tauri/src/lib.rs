@@ -580,9 +580,14 @@ pub fn run() {
                 state.update.install_on_quit();
             }
         }
-        // Opening the app again (Finder, Dock, Spotlight) while it runs brings the window up.
+        // Opening the app again (Finder, Dock, Spotlight) while it runs brings the window up; the
+        // reopen macOS sends behind a click on a notification doesn't (the click went elsewhere).
         #[cfg(target_os = "macos")]
-        RunEvent::Reopen { .. } => tray::show_main(app),
+        RunEvent::Reopen { .. } => {
+            if !notify::reopened_by_click() {
+                tray::show_main(app);
+            }
+        }
         // `pitwall://` links, from whatever opened them: each is the core's to answer or not.
         #[cfg(target_os = "macos")]
         RunEvent::Opened { urls } => {

@@ -1,7 +1,8 @@
 //! System notifications on macOS, silent: Pitwall plays its own sound (`sound.rs`). The
 //! installed app posts through UserNotifications under its own name: it asks for permission
-//! once, shows the banner even while it is in front, a click opens the project, and a newer
-//! notification of a project replaces the older one. A dev binary has no bundle for that API; it
+//! once, shows the banner even while it is in front, a click opens what it is about (not the
+//! window as well: `reopened_by_click`), and a newer notification of a project replaces the
+//! older one. A dev binary has no bundle for that API; it
 //! posts through the older one on behalf of Script Editor, the one borrowed name macOS still
 //! shows banners for (Terminal's are dropped).
 //!
@@ -10,9 +11,9 @@
 
 use std::path::Path;
 use std::ptr::NonNull;
-use std::sync::{mpsc, OnceLock};
+use std::sync::{mpsc, Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use block2::RcBlock;
 use objc2::rc::Retained;
@@ -31,12 +32,17 @@ const DEV_SENDER: &str = "com.apple.ScriptEditor2";
 const READ_WAIT: Duration = Duration::from_secs(3);
 /// How long a test waits for the answer to macOS's question, when it asks one.
 const ASK_WAIT: Duration = Duration::from_secs(60);
+/// How long after a click on a notification a reopen of the app is taken for that click's:
+/// macOS sends one right behind it (some 30 ms later).
+const CLICK_REOPEN: Duration = Duration::from_millis(1500);
 
 type OnClick = Box<dyn Fn(String) + Send + Sync>;
 
 /// What a click on a notification does with its project.
 static ON_CLICK: OnceLock<OnClick> = OnceLock::new();
 static BUNDLED: OnceLock<bool> = OnceLock::new();
+/// When a notification was last clicked, until the reopen that follows the click.
+static CLICKED_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
 define_class!(
     // SAFETY: NSObject has no subclassing requirements, and the class has no Drop.
@@ -81,9 +87,20 @@ impl Delegate {
 }
 
 fn clicked(path: String) {
+    if let Ok(mut at) = CLICKED_AT.lock() {
+        *at = Some(Instant::now());
+    }
     if let Some(on_click) = ON_CLICK.get() {
         on_click(path);
     }
+}
+
+/// Whether a reopen of the app now is the one macOS sends right behind a click on a
+/// notification. The click goes where its notification says (Claude's, to the session where it
+/// runs: VS Code or one of Pitwall's terminals); the window coming up as well would cover it. Once
+/// per click: a reopen after it (the Dock, Spotlight) brings the window up as ever.
+pub fn reopened_by_click() -> bool {
+    CLICKED_AT.lock().ok().and_then(|mut at| at.take()).is_some_and(|at| at.elapsed() < CLICK_REOPEN)
 }
 
 /// Once, at start: from the installed app, asks for permission (macOS shows its prompt the first
