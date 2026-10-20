@@ -207,6 +207,11 @@ fn read_json<T: for<'de> Deserialize<'de>>(file: &Path) -> Option<T> {
     serde_json::from_str(&fs::read_to_string(file).ok()?).ok()
 }
 
+/// `favorites.json`'s list; a byte-order mark before it (an editor's) is no part of it.
+fn favourites_in<T: for<'de> Deserialize<'de>>(raw: &[u8]) -> serde_json::Result<Vec<T>> {
+    serde_json::from_slice(raw.strip_prefix(b"\xef\xbb\xbf").unwrap_or(raw))
+}
+
 fn list_json(dir: &Path) -> Vec<PathBuf> {
     fs::read_dir(dir)
         .map(|entries| {
@@ -502,20 +507,38 @@ impl Registry {
         }
     }
 
+    /// The favourites; none from a file that can't be read. That file is left where it is: it is
+    /// set aside only when it would be written over (`set_favourite`), as `adopt_old_storage`
+    /// would copy an old list into the place of one gone.
     pub fn read_favourites(&self) -> Vec<Favourite> {
-        read_json(&self.dir.join("favorites.json")).unwrap_or_default()
+        fs::read(self.dir.join("favorites.json")).ok().and_then(|raw| favourites_in(&raw).ok()).unwrap_or_default()
     }
 
     /// Adds or removes a favourite; returns whether it is a favourite now. The other entries are
     /// written back as they were read: fields another participant added stay (rule 4 of
-    /// PROTOCOL.md).
+    /// PROTOCOL.md). A file there that can't be read or parsed is never written over: it is set
+    /// aside first (`<file>.broken-<ms>`), and when that fails nothing is written.
     pub fn set_favourite(&self, favourite: Favourite, on: bool) -> bool {
-        let mut list: Vec<serde_json::Value> = read_json(&self.dir.join("favorites.json")).unwrap_or_default();
+        let file = self.dir.join("favorites.json");
+        let (mut list, unusable): (Vec<serde_json::Value>, Option<String>) = match fs::read(&file) {
+            Ok(raw) => match favourites_in(&raw) {
+                Ok(list) => (list, None),
+                Err(error) => (Vec::new(), Some(error.to_string())),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), None),
+            Err(error) => (Vec::new(), Some(error.to_string())),
+        };
         let text = |item: &serde_json::Value, key: &str| item.get(key).and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
         let exists = list.iter().any(|item| same_path(&text(item, "path"), &favourite.path));
 
         if exists == on {
             return on;
+        }
+
+        if let Some(reason) = unusable {
+            if !crate::settings::set_aside(&file, &reason) {
+                return !on;
+            }
         }
 
         if on {
@@ -762,6 +785,36 @@ mod tests {
 
         let written: serde_json::Value = serde_json::from_str(&fs::read_to_string(dir.path().join("favorites.json")).unwrap()).unwrap();
         assert_eq!(written, serde_json::json!([{"path":"/p/a","name":"a"},{"path":"/p/b","name":"b","group":"x"}]));
+    }
+
+    /// A favourites file that doesn't parse (a hand edit's trailing comma) is never written
+    /// over: an unstar leaves it as it is, a star sets it aside whole first. One an editor gave
+    /// a byte-order mark is read as it is.
+    #[test]
+    fn a_damaged_favourites_file_is_set_aside_never_written_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = Registry::with_id(dir.path().to_path_buf(), "Pitwall", "app");
+        let file = dir.path().join("favorites.json");
+        let favourite = |name: &str| Favourite { path: format!("/p/{name}"), name: name.into() };
+        let set_aside = || -> Vec<String> {
+            let entries = fs::read_dir(dir.path()).unwrap().flatten();
+            entries.filter(|entry| entry.file_name().to_string_lossy().starts_with("favorites.json.broken-")).map(|entry| fs::read_to_string(entry.path()).unwrap()).collect()
+        };
+
+        let damaged = r#"[{"path":"/p/b","name":"b"},]"#;
+        fs::write(&file, damaged).unwrap();
+        assert!(!registry.set_favourite(favourite("b"), false));
+        assert_eq!(fs::read_to_string(&file).unwrap(), damaged);
+
+        assert!(registry.set_favourite(favourite("a"), true));
+        assert_eq!(set_aside(), [damaged]);
+        assert_eq!(registry.read_favourites(), [favourite("a")]);
+
+        fs::write(&file, "\u{feff}[{\"path\":\"/p/b\",\"name\":\"b\"}]").unwrap();
+        assert_eq!(registry.read_favourites(), [favourite("b")]);
+        assert!(registry.set_favourite(favourite("c"), true));
+        assert_eq!(set_aside().len(), 1);
+        assert_eq!(registry.read_favourites(), [favourite("b"), favourite("c")]);
     }
 
     #[test]

@@ -67,6 +67,27 @@
     {
       "kind": "fix",
       "title": {
+        "en": "A damaged project list is kept",
+        "tr": "Bozulan proje listesi kaybolmuyor",
+        "de": "Eine beschädigte Projektliste bleibt erhalten",
+        "es": "Una lista de proyectos dañada se conserva",
+        "ru": "Повреждённый список проектов сохраняется",
+        "ja": "壊れたプロジェクトリストも失われません",
+        "zh-Hans": "损坏的项目列表会被保留"
+      },
+      "body": {
+        "en": "When the file that holds your project list (favorites.json) no longer read as JSON, after a hand edit for instance, the next project you added or starred wrote over it and the old list was gone. Pitwall now moves the file aside before it writes, as favorites.json.broken-… in the same folder (~/.pitwall).",
+        "tr": "Proje listeni tutan dosya (favorites.json) örneğin elle düzenlendikten sonra JSON olarak okunamıyorsa, bir proje ekleyince ya da bir projenin yıldızına tıklayınca dosyanın üstüne yazılıyor ve eski liste kayboluyordu. Artık Pitwall yazmadan önce dosyayı aynı klasörde (~/.pitwall) favorites.json.broken-… adıyla kenara alıyor.",
+        "de": "Ließ sich die Datei mit deiner Projektliste (favorites.json) nicht mehr als JSON lesen, etwa nach einer Änderung von Hand, überschrieb sie das nächste Projekt, das du hinzugefügt oder dessen Stern du angeklickt hast, und die alte Liste war weg. Jetzt legt Pitwall die Datei vor dem Schreiben beiseite, als favorites.json.broken-… im selben Ordner (~/.pitwall).",
+        "es": "Cuando el archivo que guarda tu lista de proyectos (favorites.json) dejaba de leerse como JSON, por ejemplo tras editarlo a mano, el siguiente proyecto que añadías o marcabas con la estrella lo sobrescribía y la lista anterior se perdía. Ahora Pitwall aparta el archivo antes de escribir, como favorites.json.broken-… en la misma carpeta (~/.pitwall).",
+        "ru": "Если файл со списком проектов (favorites.json) переставал читаться как JSON, например после правки вручную, следующее добавление проекта или нажатие на звёздочку записывало поверх него новый список, и старый пропадал. Теперь Pitwall перед записью откладывает файл в сторону как favorites.json.broken-… в той же папке (~/.pitwall).",
+        "ja": "プロジェクトリストを保存しているファイル（favorites.json）が、手で編集したあとなどに JSON として読めなくなると、次にプロジェクトを追加したり星をクリックしたりしたときに上書きされ、元のリストは失われていました。今は書き込む前に、同じフォルダ（~/.pitwall）に favorites.json.broken-… として退避します。",
+        "zh-Hans": "保存项目列表的文件（favorites.json）一旦无法按 JSON 读取（例如手动编辑之后），下一次添加项目或点击星标时就会覆盖它，原来的列表随之丢失。现在 Pitwall 会在写入之前，把这个文件移到同一文件夹（~/.pitwall）中，命名为 favorites.json.broken-…。"
+      }
+    },
+    {
+      "kind": "fix",
+      "title": {
         "en": "A stuck file or drive no longer freezes Pitwall",
         "tr": "Takılan bir dosya ya da sürücü Pitwall'ı dondurmuyor",
         "de": "Hängende Dateien und Laufwerke frieren Pitwall nicht mehr ein",
