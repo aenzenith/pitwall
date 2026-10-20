@@ -126,6 +126,27 @@
         "ja": "「実行前に確認」と「常駐させる」を付けたコマンドを自分で実行していた場合、アップデートのための再起動のあとや、起動時に Pitwall が終了時に開いていたものを復元するときに、確認なしで再び始まっていました。今は復元されません。必要なときにもう一度実行してください。開発サーバーと連動して起動するものは、プロジェクトの「コマンド」でスキップされた状態のまま待ちます。",
         "zh-Hans": "同时勾选了“运行前询问”和“持续运行”、由你亲手运行过的命令，在为更新而重启后，或在启动时 Pitwall 恢复退出时打开的内容时，会不经询问再次启动。现在它不会被恢复：需要时请自己再运行一次。随开发服务器一起启动的这类命令，会以已跳过的状态等在项目的“命令”里。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Clicking the tab you're on takes you into its terminal",
+        "tr": "Açık sekmeye tıklayınca klavye terminale geçiyor",
+        "de": "Ein Klick auf den gezeigten Tab bringt dich ins Terminal",
+        "es": "Hacer clic en la pestaña que ya ves te lleva a su terminal",
+        "ru": "Клик по открытой вкладке возвращает в её терминал",
+        "ja": "表示中のタブをクリックするとターミナルに戻ります",
+        "zh-Hans": "点击当前标签页会回到它的终端"
+      },
+      "body": {
+        "en": "Clicking the terminal tab that was already shown left the keyboard on the tab: what you typed went nowhere, and a Backspace closed the tab and the shell in it. Now the click puts the keyboard in the terminal.",
+        "tr": "Zaten görünen terminal sekmesine tıklayınca klavye sekmenin üstünde kalıyordu: yazdıkların hiçbir yere gitmiyor, bir Backspace de sekmeyi içindeki kabukla birlikte kapatıyordu. Artık tıklayınca klavye terminale geçiyor.",
+        "de": "Ein Klick auf den Terminal-Tab, der schon zu sehen war, ließ die Tastatur auf dem Tab: Was du getippt hast, ging ins Leere, und die Rücktaste schloss den Tab samt seiner Shell. Jetzt landet die Tastatur nach dem Klick im Terminal.",
+        "es": "Hacer clic en la pestaña de terminal que ya se mostraba dejaba el teclado en la pestaña: lo que escribías no llegaba a ningún sitio, y un Retroceso cerraba la pestaña junto con su shell. Ahora el clic pone el teclado en la terminal.",
+        "ru": "Клик по уже показанной вкладке терминала оставлял клавиатуру на самой вкладке: набранное никуда не попадало, а Backspace закрывал вкладку вместе с её оболочкой. Теперь после клика клавиатура оказывается в терминале.",
+        "ja": "すでに表示されているターミナルタブをクリックすると、キーボードがタブに残ったままになり、入力はどこにも届かず、Backspace でタブが中のシェルごと閉じていました。今はクリックするとキーボードがターミナルに移ります。",
+        "zh-Hans": "点击已经显示的终端标签页时，键盘焦点会留在标签上：输入的内容没有去处，按一下 Backspace 还会把标签页连同其中的 shell 一起关闭。现在点击后键盘会回到终端。"
+      }
     }
   ]
 }

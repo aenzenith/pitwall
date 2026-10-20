@@ -205,11 +205,15 @@ function claudeMenuBelow(event: KeyboardEvent): void {
   claudeMenu({ clientX: box.left, clientY: box.bottom + 4 });
 }
 
-/** A tab asked for by a click, Return or Space: shown, and a collapsed panel comes up with it. */
+/** A tab asked for by a click, Return or Space: shown, and a collapsed panel comes up with it. The
+ * tab already shown takes the keyboard here, the watch on the shown tab not running for it: left
+ * on the tab's label, a Backspace would close the tab. */
 function open(id: number): void {
+  const shown = active.value?.id === id;
   show(id);
   if (collapsed.value) toggleCollapsed();
   seeFinished(id);
+  if (shown) focusView(id);
 }
 
 function close(id: number): void {
