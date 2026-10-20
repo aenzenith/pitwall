@@ -81,19 +81,16 @@ pub fn detect_package_manager(files: &[String]) -> PackageManager {
         .unwrap_or(PackageManager::Npm)
 }
 
-/// Rejects `build*` scripts and names unsafe for the shell. Running a production build is
-/// blocked on purpose: it breaks the dev server you have open.
-pub fn is_forbidden_script(script: &str) -> bool {
-    let name = script.trim();
-
-    !SAFE_SCRIPT.is_match(name) || name.to_lowercase().starts_with("build")
+/// Rejects script names unsafe for the shell: the name goes into a command line as it is.
+pub fn is_unsafe_script(script: &str) -> bool {
+    !SAFE_SCRIPT.is_match(script.trim())
 }
 
 /// The command line to run. Unsafe extra arguments are dropped.
 pub fn build_command(manager: PackageManager, script: &str, args: &[String]) -> Result<String, String> {
     let name = script.trim();
 
-    if is_forbidden_script(name) {
+    if is_unsafe_script(name) {
         return Err(t!("core.error.forbiddenScript", script = script));
     }
 
@@ -101,22 +98,6 @@ pub fn build_command(manager: PackageManager, script: &str, args: &[String]) -> 
     let tail = if safe.is_empty() { String::new() } else { format!(" -- {}", safe.join(" ")) };
 
     Ok(format!("{manager} run {name}{tail}"))
-}
-
-/// A custom command that would run a production build, which breaks the dev server you have
-/// open. Same rule as the refused `build*` scripts. The package manager's own options (a folder,
-/// a workspace, a filter) can stand before the script, and `run`'s after it (`npm run --silent
-/// build`, `npm run-script build`).
-pub fn is_forbidden_command(command: &str) -> bool {
-    static BUILD: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(concat!(
-            r"(?i)\b(?:npm|pnpm|yarn|bun)(?:\s+(?:-{1,2}[a-z][\w-]*(?:=\S+|\s+[^-\s;&|]\S*)?|run(?:-script)?|workspaces?\s+\S+))*\s+build\b",
-            r"|\b(?:vite|tauri|nuxt|next)\s+(?:--\s+)?build\b|\bnpx\s+(?:vite|tauri)\s+build\b",
-        ))
-        .unwrap()
-    });
-
-    BUILD.is_match(command)
 }
 
 /// Whether `package.json` has `script`. A byte-order mark before it is no part of it: npm reads
@@ -285,51 +266,10 @@ mod tests {
     }
 
     #[test]
-    fn build_scripts_are_never_run() {
-        for script in ["build", "build:ssr", "Build", " build "] {
-            assert!(is_forbidden_script(script), "{script} must be rejected");
-            assert!(build_command(PackageManager::Npm, script, &[]).is_err());
-        }
-        assert!(!is_forbidden_script("dev"));
-    }
-
-    #[test]
-    fn custom_commands_that_build_are_refused() {
-        for command in ["npm run build", "pnpm build", "yarn build:ssr", "npx vite build", "vite build --mode x", "bun run build", "cd app && npm run build"] {
-            assert!(is_forbidden_command(command), "{command} must be refused");
-        }
-        // The manager's options before the script, or `run`'s: a folder, a workspace, a filter.
-        for command in [
-            "npm --prefix web run build",
-            "npm --prefix app run build",
-            "npm -w web run build",
-            "npm run -w web build",
-            "npm run-script build",
-            "npm run --silent build",
-            "npm run -s build",
-            "pnpm --filter web build",
-            "pnpm --filter=web build",
-            "pnpm --filter=web run build",
-            "pnpm -C web build",
-            "pnpm -r build",
-            "yarn workspace web build",
-            "yarn workspaces foreach -A run build",
-            "yarn --cwd web build",
-            "bun --cwd web run build",
-            "npm run tauri -- build",
-        ] {
-            assert!(is_forbidden_command(command), "{command} must be refused");
-        }
-        for command in ["php artisan migrate", "npm run dev", "npm test", "php artisan queue:work", "npm run rebuild-index", "npm run dev -- --outDir build", "npm test -- build", "pnpm --filter web dev", "npm i -D build-tools", "yarn workspace web add build-info", "npm -w web run dev"] {
-            assert!(!is_forbidden_command(command), "{command} must be allowed");
-        }
-    }
-
-    #[test]
     fn shell_metacharacters_never_reach_the_command() {
-        assert!(is_forbidden_script("dev; rm -rf ~"));
-        assert!(is_forbidden_script("dev && curl x"));
-        assert!(is_forbidden_script("$(whoami)"));
+        assert!(is_unsafe_script("dev; rm -rf ~"));
+        assert!(is_unsafe_script("dev && curl x"));
+        assert!(is_unsafe_script("$(whoami)"));
 
         let command = build_command(
             PackageManager::Pnpm,

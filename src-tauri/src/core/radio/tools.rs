@@ -11,7 +11,6 @@ use super::super::sessions::{lineage, Running};
 use super::super::signals::Signal;
 use super::*;
 use crate::claude::inside;
-use crate::resolve::is_forbidden_command;
 
 /// Lines of output answered when Claude names no count, and at most.
 const OUTPUT_LINES_DEFAULT: usize = 40;
@@ -286,8 +285,7 @@ impl Core {
         }
     }
 
-    /// One of the project's saved commands. Never one the user wants to be asked about first,
-    /// and never what the app itself won't run (`is_forbidden_command`).
+    /// One of the project's saved commands. Never one the user wants to be asked about first.
     fn radio_run(self: &Arc<Self>, project: &ProjectView, args: &Value) -> Outcome {
         let Some(command) = text(args, "name").and_then(|name| saved(project, name)) else {
             return no_such_command(project);
@@ -296,9 +294,6 @@ impl Core {
 
         if command.confirm {
             return refused(format!("\"{name}\" is marked \"ask first\" in Pitwall: only the user runs it. Ask them to."));
-        }
-        if is_forbidden_command(&command.command) {
-            return refused(format!("\"{name}\" runs a production build, which Pitwall never does: it would break the dev server."));
         }
         if command.status == "running" || command.status == "busy" {
             return refused(format!("\"{name}\" is running already. Read its output with server_output."));

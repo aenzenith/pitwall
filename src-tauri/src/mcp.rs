@@ -98,7 +98,7 @@ pub const TOOLS: [Tool; 6] = [
     Tool {
         name: "run_command",
         description: "Runs one of the project's saved commands by its name (`server_status` lists them). Commands the user marked \"ask \
-                      first\" and production builds are refused.",
+                      first\" are refused.",
         acts: true,
         default_on: false,
         arguments: || json!({ "name": { "type": "string", "description": "The command's name as Pitwall lists it." } }),

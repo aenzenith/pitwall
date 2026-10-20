@@ -492,11 +492,7 @@ function setTheme(theme: Theme): void {
           <label class="field">
             <span>{{ t("common.script") }}</span>
             <input v-model="form.script" data-setting="script" spellcheck="false" @blur="onFieldBlur" />
-            <small>
-              <Rich :text="t('settings.scriptHint')">
-                <template #build><code>build</code></template>
-              </Rich>
-            </small>
+            <small>{{ t("settings.scriptHint") }}</small>
           </label>
           <label class="field">
             <span>{{ t("settings.packageManager") }}</span>

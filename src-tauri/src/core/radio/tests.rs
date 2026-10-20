@@ -104,15 +104,14 @@ fn a_call_reaches_the_project_of_its_folder_and_no_other() {
 }
 
 /// A tool that is switched off does nothing when it is called all the same, `run_command` is
-/// off until the user turns it on, and on, it never runs a command marked "ask first" or a
-/// production build. With the radio itself off, no tool answers.
+/// off until the user turns it on, and on, it never runs a command marked "ask first". With the
+/// radio itself off, no tool answers.
 #[test]
 fn a_switch_that_is_off_keeps_its_tool_from_acting() {
     let pad = paddock(true);
     let alpha = pad.project("alpha");
     let command = |id: &str, line: &str, confirm: bool| CustomCommand { id: id.into(), name: id.into(), command: line.into(), confirm, ..Default::default() };
-    let commands =
-        vec![command("safe", "echo ran > safe.txt", false), command("ask", "echo ran > ask.txt", true), command("build", "echo ran > build.txt; npm run build", false)];
+    let commands = vec![command("safe", "echo ran > safe.txt", false), command("ask", "echo ran > ask.txt", true)];
     pad.core.set_project_settings(&alpha, ProjectSettings { commands, ..Default::default() });
     let ran = |name: &str| Path::new(&alpha).join(format!("{name}.txt")).exists();
 
@@ -122,14 +121,12 @@ fn a_switch_that_is_off_keeps_its_tool_from_acting() {
     assert!(!ran("safe"));
 
     pad.core.radio_tool("run_command", true).unwrap();
-    for name in ["ask", "build"] {
-        let reply = pad.call(&alpha, "run_command", json!({ "name": name }));
-        assert!(reply.error, "{name}: {}", reply.text);
-    }
-    // The one that may run does, so the refusals above are the gates' and no accident.
+    let reply = pad.call(&alpha, "run_command", json!({ "name": "ask" }));
+    assert!(reply.error && reply.text.contains("ask first"), "{}", reply.text);
+    // The one that may run does, so the refusal above is the gate's and no accident.
     let reply = pad.call(&alpha, "run_command", json!({ "name": "safe" }));
     assert!(!reply.error && reply.text.contains("exit code 0"), "{}", reply.text);
-    assert!(ran("safe") && !ran("ask") && !ran("build"));
+    assert!(ran("safe") && !ran("ask"));
 
     pad.core.radio_tool("board_add", false).unwrap();
     assert!(pad.call(&alpha, "board_add", json!({ "title": "a card" })).error);

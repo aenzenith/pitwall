@@ -167,19 +167,14 @@ fn the_line_answers_only_who_shows_its_key_in_its_version() {
     assert_eq!(pad.cards().len(), 1);
 }
 
-/// `run` takes a saved command's name and nothing else, never runs a production build, and
-/// runs a command marked "ask first" only once the terminal's end says the user agreed.
+/// `run` takes a saved command's name and nothing else, and runs a command marked "ask first"
+/// only once the terminal's end says the user agreed.
 #[test]
-fn run_refuses_a_build_and_what_asks_first() {
+fn run_takes_a_name_and_asks_first() {
     let pad = paddock();
     let alpha = pad.project("alpha");
     let command = |id: &str, line: &str, confirm: bool| CustomCommand { id: id.into(), name: id.into(), command: line.into(), confirm, ..Default::default() };
-    let commands = vec![
-        command("safe", "echo ran > safe.txt", false),
-        command("ask", "echo ran > ask.txt", true),
-        command("build", "echo ran > build.txt; npm run build", false),
-        command("askbuild", "echo ran > askbuild.txt; npx vite build", true),
-    ];
+    let commands = vec![command("safe", "echo ran > safe.txt", false), command("ask", "echo ran > ask.txt", true)];
     pad.core.set_project_settings(&alpha, ProjectSettings { commands: commands.clone(), ..Default::default() });
     let ran = |name: &str| Path::new(&alpha).join(format!("{name}.txt")).exists();
     // Agreed to: the terminal's end says the yes was for the line the command has.
@@ -187,21 +182,17 @@ fn run_refuses_a_build_and_what_asks_first() {
     let run = |name: &str, confirmed: bool| pad.call(&alpha, None, Ask::Run { name: name.into(), confirmed: confirmed.then(|| line(name)) });
     let refused = |said: &[Said]| matches!(said, [Said::Failed { text }] if !text.is_empty());
 
-    // A build: refused, agreed to or not.
-    for (name, confirmed) in [("build", false), ("build", true), ("askbuild", false), ("askbuild", true)] {
-        assert!(refused(&run(name, confirmed)), "{name} {confirmed}");
-    }
     // "Ask first", and nobody was: it only says that it asks.
     assert_eq!(run("ask", false), [Said::Confirm { name: "ask".into(), command: "echo ran > ask.txt".into() }]);
     // A command line of the caller's is no saved command's name.
     assert!(refused(&run("echo ran > safe.txt", true)));
     assert!(refused(&run("safe; echo ran > safe.txt", true)));
-    assert!(!ran("safe") && !ran("ask") && !ran("build") && !ran("askbuild"));
+    assert!(!ran("safe") && !ran("ask"));
 
     // The ones that may run do, so the refusals above are the gates' and no accident.
     assert_eq!(run("safe", false).last(), Some(&Said::Done));
     assert_eq!(run("ask", true).last(), Some(&Said::Done));
-    assert!(ran("safe") && ran("ask") && !ran("build") && !ran("askbuild"));
+    assert!(ran("safe") && ran("ask"));
 }
 
 /// A link does one of its four things to a listed project, only while links are on (they start

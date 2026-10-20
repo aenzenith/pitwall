@@ -5,7 +5,7 @@ use super::*;
 use crate::ports::is_port_served;
 use crate::resolve::{
     build_command, detect_error_line, detect_package_manager, detect_port_conflict, extract_local_url, has_script,
-    is_forbidden_script, parse_vite_port, port_from_url,
+    is_unsafe_script, parse_vite_port, port_from_url,
 };
 
 /// Whether an issue ends a start the user waits on: a refused or failed start, or a final
@@ -85,7 +85,7 @@ impl Core {
 
         let script = settings.script_for(path);
 
-        if is_forbidden_script(&script) {
+        if is_unsafe_script(&script) {
             return self.set_issue(path, "error", move || t!("core.error.forbiddenScript", script = script), IssueEnd::Final);
         }
 

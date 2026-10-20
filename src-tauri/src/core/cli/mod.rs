@@ -10,9 +10,9 @@
 //! project or comes from a folder of one, nothing is switched tool by tool, and no call is kept.
 //!
 //! What a call can do is what the window can, and no more: a saved command by its name, never a
-//! command line of the caller's; a production build never; a command marked "ask first" only
-//! once the user said yes at a terminal (`cli.rs`: `agreed`). A run is the terminal's as a
-//! command in its foreground is: its caller leaving (^C, the terminal closed) stops it.
+//! command line of the caller's; a command marked "ask first" only once the user said yes at a
+//! terminal (`cli.rs`: `agreed`). A run is the terminal's as a command in its foreground is: its
+//! caller leaving (^C, the terminal closed) stops it.
 
 use std::io::{BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
@@ -25,7 +25,6 @@ use super::*;
 use crate::claude::{SessionState, TurnKind};
 use crate::cli::{line_file, Agreed, Ask, Call, ClaudeAt, Companion, LineFile, Row, Said, Tone, LINE_VERSION, SUPPORTED};
 use crate::mcp::{receive, same_secret, send, Hello, Timed, Welcome};
-use crate::resolve::is_forbidden_command;
 
 mod install;
 mod scheme;
@@ -673,8 +672,7 @@ impl Core {
 
     /// The commands a terminal said yes to after a start: each one runs as its button in the
     /// window runs it, on its own, and only while the line it has is the line the yes was for;
-    /// one that changed since is asked about again. Only a command that starts with the server,
-    /// and never what the app itself won't run.
+    /// one that changed since is asked about again. Only a command that starts with the server.
     fn cli_companions(self: &Arc<Self>, project: &ProjectView, agreed: &[Agreed], say: Say) -> std::io::Result<()> {
         let mut again = Vec::new();
         for yes in agreed {
@@ -686,9 +684,7 @@ impl Core {
                 again.push(Companion { id: command.id.clone(), name: command.name.clone(), command: command.command.clone() });
                 continue;
             }
-            let said = if is_forbidden_command(&command.command) {
-                text(t!("core.cli.run.build", name = name), Tone::Bad)
-            } else if command.status == "running" || command.status == "busy" {
+            let said = if command.status == "running" || command.status == "busy" {
                 text(t!("core.cli.run.running", name = name), Tone::Plain)
             } else if self.run_command(&project.path, &command.id) {
                 text(t!("core.cli.run.started", name = name, command = command.command), Tone::Soft)
@@ -767,15 +763,15 @@ impl Core {
         }
     }
 
-    /// One of the project's saved commands, by its name, with its output until it ends. Never
-    /// what the app itself won't run (`is_forbidden_command`), and one the user wants to be
-    /// asked about first only once they were: `confirmed` is the command line they said yes to,
-    /// and until it is the line the command has now it is only said that it asks, with that
-    /// line. Only a run it starts is followed, and that run is the caller's as a command in its
-    /// terminal's foreground is: when the caller leaves (^C, the terminal closed) it is stopped,
-    /// and what came of it is still said to a caller that only shut its side. One that doesn't
-    /// keep up with the output hears no more of it, and the run stays its own all the same. A
-    /// command running already is someone else's: refused, never followed or stopped from here.
+    /// One of the project's saved commands, by its name, with its output until it ends. One the
+    /// user wants to be asked about first only once they were: `confirmed` is the command line
+    /// they said yes to, and until it is the line the command has now it is only said that it
+    /// asks, with that line. Only a run it starts is followed, and that run is the caller's as a
+    /// command in its terminal's foreground is: when the caller leaves (^C, the terminal closed)
+    /// it is stopped, and what came of it is still said to a caller that only shut its side. One
+    /// that doesn't keep up with the output hears no more of it, and the run stays its own all the
+    /// same. A command running already is someone else's: refused, never followed or stopped from
+    /// here.
     fn cli_run(self: &Arc<Self>, project: &ProjectView, name: &str, confirmed: Option<&str>, say: Say, caller: &dyn Fn() -> Presence) -> std::io::Result<()> {
         let command = match Self::cli_command(project, name) {
             Ok(command) => command,
@@ -783,9 +779,6 @@ impl Core {
         };
         let name = command.name.as_str();
 
-        if is_forbidden_command(&command.command) {
-            return say(failed(t!("core.cli.run.build", name = name)));
-        }
         if command.confirm && confirmed != Some(command.command.as_str()) {
             return say(Said::Confirm { name: name.to_string(), command: command.command.clone() });
         }

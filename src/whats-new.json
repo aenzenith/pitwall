@@ -1,25 +1,25 @@
 {
-  "since": "1.12.2",
+  "since": "1.12.3",
   "notes": [
     {
-      "kind": "fix",
+      "kind": "new",
       "title": {
-        "en": "Clicking a Claude notification opens the session, not Pitwall",
-        "tr": "Claude bildirimine tıklayınca Pitwall değil, oturum açılıyor",
-        "de": "Ein Klick auf eine Benachrichtigung von Claude öffnet die Sitzung, nicht Pitwall",
-        "es": "Al hacer clic en una notificación de Claude se abre la sesión, no Pitwall",
-        "ru": "Клик по уведомлению Claude открывает сессию, а не Pitwall",
-        "ja": "Claude の通知をクリックすると、Pitwall ではなくセッションが開きます",
-        "zh-Hans": "点击 Claude 的通知会打开会话，而不是 Pitwall"
+        "en": "Builds run like any other command",
+        "tr": "Build komutlarını da kaydedip çalıştırabilirsin",
+        "de": "Builds laufen wie jeder andere Befehl",
+        "es": "Las compilaciones se ejecutan como cualquier otro comando",
+        "ru": "Сборки запускаются, как любые другие команды",
+        "ja": "ビルドもほかのコマンドと同じように実行できます",
+        "zh-Hans": "构建也能像其他命令一样运行"
       },
       "body": {
-        "en": "When the session ran in VS Code, Pitwall's window came up over it as well, often on another desktop. Now only the session comes up.",
-        "tr": "Oturum VS Code'da çalışıyorsa Pitwall'ın penceresi de açılıp onun önüne geçiyordu, çoğu zaman başka bir masaüstüne geçerek. Artık yalnızca oturum açılıyor.",
-        "de": "Lief die Sitzung in VS Code, erschien auch das Fenster von Pitwall darüber, oft auf einem anderen Schreibtisch. Jetzt erscheint nur noch die Sitzung.",
-        "es": "Si la sesión se ejecutaba en VS Code, la ventana de Pitwall también aparecía encima, a menudo en otro escritorio. Ahora solo aparece la sesión.",
-        "ru": "Если сессия работала в VS Code, поверх неё открывалось ещё и окно Pitwall, часто на другом рабочем столе. Теперь появляется только сессия.",
-        "ja": "セッションが VS Code で動いているとき、その上に Pitwall のウィンドウも開き、別のデスクトップに切り替わることもありました。今はセッションだけが表示されます。",
-        "zh-Hans": "会话在 VS Code 中运行时，Pitwall 的窗口也会盖在它上面，常常还会切换到另一个桌面。现在只会显示该会话。"
+        "en": "Pitwall no longer refuses a production build. Save npm run build, vite build or tauri build as one of a project's commands and run it from its row, the quick switcher, the pitwall command or the team radio; a dev script whose name starts with build, such as build:watch, runs too. To keep a build from starting without you, mark it Ask before running.",
+        "tr": "Pitwall production build'i artık geri çevirmiyor. npm run build, vite build ya da tauri build'i projenin komutlarına kaydet; sonra komutun kendi satırından, hızlı geçişten, pitwall komutundan ya da takım radyosundan çalıştır. Adı build ile başlayan bir dev script'i de (build:watch gibi) artık çalışıyor. Bir build'in sen demeden başlamasını istemiyorsan onu Çalıştırmadan önce sor ile işaretle.",
+        "de": "Pitwall verweigert keinen Production-Build mehr. Speichere npm run build, vite build oder tauri build als Befehl eines Projekts und führe ihn aus seiner Zeile, dem Projektumschalter, dem Befehl pitwall oder dem Teamfunk aus; auch ein Dev-Skript, dessen Name mit build beginnt, etwa build:watch, läuft jetzt. Damit ein Build nicht ohne dich startet, markiere ihn mit Vor dem Ausführen fragen.",
+        "es": "Pitwall ya no rechaza una compilación de producción. Guarda npm run build, vite build o tauri build como uno de los comandos de un proyecto y ejecútalo desde su fila, el selector rápido, el comando pitwall o la radio del equipo; un script de desarrollo cuyo nombre empieza por build, como build:watch, también se ejecuta. Para que una compilación no arranque sin ti, márcala con Preguntar antes de ejecutar.",
+        "ru": "Pitwall больше не отказывается запускать продакшн-сборку. Сохраните npm run build, vite build или tauri build как команду проекта и запускайте её из строки проекта, быстрого перехода, команды pitwall или командного радио; dev-скрипт, имя которого начинается с build, например build:watch, тоже запускается. Чтобы сборка не стартовала без вас, отметьте её «Спрашивать перед запуском».",
+        "ja": "Pitwall は本番ビルドを断らなくなりました。npm run build、vite build、tauri build をプロジェクトのコマンドとして保存すれば、その行、クイックスイッチャー、pitwall コマンド、チーム無線から実行できます。名前が build で始まる開発スクリプト（build:watch など）も実行されます。勝手に始まってほしくないビルドには「実行前に確認」を付けてください。",
+        "zh-Hans": "Pitwall 不再拒绝生产构建。把 npm run build、vite build 或 tauri build 保存为项目的命令，就能从项目行、快速切换器、pitwall 命令或车队无线电运行它；名称以 build 开头的开发脚本（例如 build:watch）也能运行。不想让某个构建在你不知情时启动，就给它勾选“运行前询问”。"
       }
     }
   ]

@@ -4,7 +4,7 @@
 
 use super::*;
 use super::signals::Signal;
-use crate::resolve::{is_forbidden_command, strip_ansi};
+use crate::resolve::strip_ansi;
 use crate::settings::CustomCommand;
 
 /// Commands are keyed per project; the unit separator can't appear in a path or an id.
@@ -171,13 +171,6 @@ impl Core {
         let key = job_key(path, id);
 
         let failed = |code| JobResult { ok: false, code, stopped: false, finished_at: now_ms() };
-
-        if is_forbidden_command(command_line) {
-            self.push_job_line(path, id, format!("[pitwall] {}", t!("core.log.refusedBuild", command = command_line)));
-            drop(start);
-            self.finish_job(path, id, failed(None));
-            return true;
-        }
 
         let child = match process::spawn_shell(command_line, path) {
             Ok(child) => child,

@@ -227,12 +227,15 @@ fn a_crashing_server_is_restarted_three_times_then_given_up() {
 }
 
 #[test]
-fn build_scripts_are_refused_and_nothing_runs() {
+fn a_script_name_the_shell_would_read_is_refused_and_nothing_runs() {
+    // The project's package.json has the script, so only the name's own check stands in the way.
     let fx = fixture("node server.js", &[]);
+    let script = "dev;touch pwned";
+    fs::write(Path::new(&fx.project).join("package.json"), format!(r#"{{"name":"paddock","scripts":{{"{script}":"node server.js"}}}}"#)).unwrap();
     fx.core.add_project(&fx.project).unwrap();
 
     let mut settings = fx.core.settings();
-    settings.script = "build".into();
+    settings.script = script.into();
     fx.core.set_settings(settings);
 
     fx.core.start(&fx.project, false, Origin::User);
@@ -241,6 +244,7 @@ fn build_scripts_are_refused_and_nothing_runs() {
     assert_eq!(project.status, "stopped");
     assert!(project.issue.unwrap().text.contains("will not run"));
     assert!(fx.core.output(&fx.project).is_empty());
+    assert!(!Path::new(&fx.project).join("pwned").exists());
 }
 
 #[test]
@@ -331,7 +335,6 @@ fn custom_commands_run_stop_with_their_tree_and_record_results() {
             commands: vec![
                 command("worker", "node worker.js", true, false),
                 command("fail", "node -e \"process.exit(3)\"", false, false),
-                command("build", "npm run build", false, false),
             ],
             ..Default::default()
         },
@@ -352,12 +355,6 @@ fn custom_commands_run_stop_with_their_tree_and_record_results() {
     fx.core.run_command(&fx.project, "fail");
     assert!(wait_for(Duration::from_secs(20), || command_view(&fx.core, &fx.project, "fail").status == "failed"));
     assert_eq!(command_view(&fx.core, &fx.project, "fail").result.and_then(|r| r.code), Some(3));
-
-    // A production build is refused before anything runs.
-    fx.core.run_command(&fx.project, "build");
-    assert_eq!(command_view(&fx.core, &fx.project, "build").status, "failed");
-    assert!(fx.core.command_output(&fx.project, "build").iter().any(|l| l.contains("refused")));
-    assert!(!fx.core.command_output(&fx.project, "build").iter().any(|l| l.starts_with("$ ")), "nothing was spawned");
 }
 
 #[test]

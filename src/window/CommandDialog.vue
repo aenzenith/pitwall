@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
-import Rich from "../components/Rich.vue";
 import { useBackdropClose } from "../lib/dialog";
 import { useReturnFocus } from "../lib/dialogFocus";
 import { t } from "../lib/i18n";
@@ -58,12 +57,7 @@ function cancel(): void {
       </div>
       <p v-if="error" class="error">{{ error }}</p>
       <p v-if="running" class="note">{{ t("command.runningNote") }}</p>
-      <p class="hint">
-        <Rich :text="t('command.hint')">
-          <template #build><code>npm run build</code></template>
-          <template #vite><code>vite build</code></template>
-        </Rich>
-      </p>
+      <p class="hint">{{ t("command.hint") }}</p>
       <div class="actions">
         <button type="button" class="control" @click="cancel">{{ t("common.cancel") }}</button>
         <button type="submit" class="control primary">{{ t(command ? "common.save" : "command.add") }}</button>
@@ -175,10 +169,6 @@ function cancel(): void {
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-subtle);
-}
-
-.hint code {
-  font-family: var(--font-mono);
 }
 
 .actions {

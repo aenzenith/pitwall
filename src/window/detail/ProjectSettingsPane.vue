@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 
 import Icon from "../../components/Icon.vue";
-import Rich from "../../components/Rich.vue";
 import { t } from "../../lib/i18n";
 import { projectSettings, updateProjectSettings } from "../../lib/projectSettings";
 import { MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice } from "../../lib/start";
@@ -157,12 +156,7 @@ function saveCode(): void {
 
       <button type="button" class="control add" @click="emit('edit', null)">{{ t("detail.addCommand") }}</button>
 
-      <p class="hint">
-        <Rich :text="t('detail.commandsHint')">
-          <template #build><code>npm run build</code></template>
-          <template #vite><code>vite build</code></template>
-        </Rich>
-      </p>
+      <p class="hint">{{ t("detail.commandsHint") }}</p>
     </section>
   </div>
 </template>
@@ -256,10 +250,6 @@ function saveCode(): void {
   color: var(--text);
   font: inherit;
   font-size: 12px;
-}
-
-.hint code {
-  font-family: var(--font-mono);
 }
 
 .form-actions {
