@@ -368,6 +368,13 @@ impl Core {
 
     /// One pass of the background loop; `tick` counts seconds.
     pub fn tick(self: &Arc<Self>, tick: u64) {
+        // A group of ours that is gone is let go of at once, its number off the pids file: the
+        // system may hand that number out again.
+        let pruned = self.lock().supervisor.prune_lingering();
+        if pruned {
+            self.record_pids();
+        }
+
         for command in self.registry.drain_commands() {
             self.handle_command(command);
         }

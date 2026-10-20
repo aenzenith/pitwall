@@ -16,7 +16,7 @@ pub(super) struct Job {
     pub(super) run: u64,
     pub(super) pid: u32,
     pub(super) started: Instant,
-    started_at: u64,
+    pub(super) started_at: u64,
 }
 
 impl Job {

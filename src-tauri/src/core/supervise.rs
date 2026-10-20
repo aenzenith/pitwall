@@ -14,6 +14,9 @@ const STOP_GRACE: Duration = Duration::from_millis(600);
 const KILL_WAIT: Duration = Duration::from_secs(3);
 /// After its shell exits, how long the last output still has to arrive.
 const DRAIN_WAIT: Duration = Duration::from_millis(250);
+/// How much later than its run a lingering group's leader may seem to have started: Linux tells
+/// a start to the second.
+const START_SLACK_MS: u64 = 2_000;
 
 /// A supervised process: a project's dev server, or one of its custom commands.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,8 +46,18 @@ pub(super) struct Supervisor {
     /// Crash restarts used in the current series.
     attempts: HashMap<String, u32>,
     /// Process groups kept in the pids file although their shell is gone or being stopped,
-    /// for as long as something of them is left; with their key.
-    lingering: HashMap<u32, String>,
+    /// for as long as something of them is left; with their key and when their run started.
+    lingering: HashMap<u32, (String, u64)>,
+}
+
+/// Group `pgid` of a run that started at `started_at` (ms) still has processes, and its number
+/// is still that run's. Once the group is gone the system may hand the number out again; a
+/// process under it that started after the run is someone else's. Windows hands a root's number
+/// out again while the rest of its tree runs on: a process under it outside that tree leaves the
+/// tree ours (`process::outside_tree`).
+fn still_ours(pgid: u32, started_at: u64) -> bool {
+    group_alive(pgid)
+        && (process::started_at(pgid).is_none_or(|started| started <= started_at + START_SLACK_MS) || process::outside_tree(pgid))
 }
 
 impl Supervisor {
@@ -106,10 +119,18 @@ impl Supervisor {
         starting || restart
     }
 
-    /// Groups to keep recording; those with nothing left are dropped first.
+    /// Lets go of the groups that are no longer ours (`still_ours`), before their numbers are
+    /// signalled or recorded as ours. True when one went.
+    pub(super) fn prune_lingering(&mut self) -> bool {
+        let before = self.lingering.len();
+        self.lingering.retain(|pgid, (_, started_at)| still_ours(*pgid, *started_at));
+        self.lingering.len() != before
+    }
+
+    /// Groups to keep recording; those no longer ours are dropped first.
     pub(super) fn lingering_groups(&mut self) -> Vec<(u32, String)> {
-        self.lingering.retain(|pgid, _| group_alive(*pgid));
-        self.lingering.iter().map(|(pgid, key)| (*pgid, key.clone())).collect()
+        self.prune_lingering();
+        self.lingering.iter().map(|(pgid, (key, _))| (*pgid, key.clone())).collect()
     }
 }
 
@@ -126,22 +147,23 @@ impl Drop for Start<'_> {
     }
 }
 
-/// The running process of `unit`: its pid and run id.
-fn current(inner: &Inner, unit: &Unit) -> Option<(u32, u64)> {
+/// The running process of `unit`: its pid, run id and start (ms).
+fn current(inner: &Inner, unit: &Unit) -> Option<(u32, u64, u64)> {
     match unit {
-        Unit::Server(path) => inner.runs.get(path).map(|run| (run.pid, run.id)),
-        Unit::Command(path, id) => inner.jobs.get(&job_key(path, id)).map(|job| (job.pid, job.run)),
+        Unit::Server(path) => inner.runs.get(path).map(|run| (run.pid, run.id, run.started_at)),
+        Unit::Command(path, id) => inner.jobs.get(&job_key(path, id)).map(|job| (job.pid, job.run, job.started_at)),
     }
 }
 
-/// Takes run `id` of `unit` out, if it is still the current one: its pid and start.
-fn take_current(inner: &mut Inner, unit: &Unit, id: u64) -> Option<(u32, Instant)> {
-    if current(inner, unit).is_none_or(|(_, run)| run != id) {
+/// Takes run `id` of `unit` out, if it is still the current one: its pid and start, as an
+/// instant and in ms.
+fn take_current(inner: &mut Inner, unit: &Unit, id: u64) -> Option<(u32, Instant, u64)> {
+    if current(inner, unit).is_none_or(|(_, run, _)| run != id) {
         return None;
     }
     match unit {
-        Unit::Server(path) => inner.runs.remove(path).map(|run| (run.pid, run.started)),
-        Unit::Command(path, cid) => inner.jobs.remove(&job_key(path, cid)).map(|job| (job.pid, job.started)),
+        Unit::Server(path) => inner.runs.remove(path).map(|run| (run.pid, run.started, run.started_at)),
+        Unit::Command(path, cid) => inner.jobs.remove(&job_key(path, cid)).map(|job| (job.pid, job.started, job.started_at)),
     }
 }
 
@@ -234,10 +256,10 @@ impl Core {
         // The line that says it ended goes into the output in the same hold that takes the run
         // out: a start that finds the run gone writes its own lines under that one.
         let taken = self.keep_line_with(path, job, |inner| {
-            let (pid, started) = take_current(inner, unit, id)?;
+            let (pid, started, started_at) = take_current(inner, unit, id)?;
             // Whatever of its group is left stays recorded, to be cleaned up later.
-            if group_alive(pid) {
-                inner.supervisor.lingering.insert(pid, key.clone());
+            if still_ours(pid, started_at) {
+                inner.supervisor.lingering.insert(pid, (key.clone(), started_at));
             }
             // Written down with the run taken out: the next start, however soon, finds it.
             let planned = inner.stopping.contains(&key);
@@ -299,14 +321,21 @@ impl Core {
     /// pid stays in the pids file until the whole group is gone.
     pub(super) fn stop_unit(self: &Arc<Self>, unit: &Unit) {
         let key = unit.key();
-        let (found, groups, cancelled) = {
+        let (found, groups, cancelled, pruned) = {
             let mut inner = self.lock();
             let cancelled = inner.supervisor.cancel(&key);
+            // A group of an earlier run that is gone by now isn't signalled under its number.
+            let pruned = inner.supervisor.prune_lingering();
             let found = current(&inner, unit);
 
-            if let Some((pid, _)) = found {
+            if let Some((pid, _, started_at)) = found {
                 inner.stopping.insert(key.clone());
-                inner.supervisor.lingering.insert(pid, key.clone());
+                // Its shell may be gone already, its exit not handled yet. Not waited for, it is
+                // ours whatever its start says: Linux tells a start from the boot time as the
+                // wall clock has it now, which moves when the clock is set.
+                if process::unreaped_child(pid) || still_ours(pid, started_at) {
+                    inner.supervisor.lingering.insert(pid, (key.clone(), started_at));
+                }
                 if let Unit::Server(path) = unit {
                     inner.busy.insert(path.clone());
                 }
@@ -316,11 +345,14 @@ impl Core {
                 inner.issues.remove(path);
             }
 
-            let groups: Vec<u32> = inner.supervisor.lingering.iter().filter(|(_, k)| **k == key).map(|(pgid, _)| *pgid).collect();
-            (found, groups, cancelled)
+            let groups: Vec<u32> = inner.supervisor.lingering.iter().filter(|(_, (k, _))| *k == key).map(|(pgid, _)| *pgid).collect();
+            (found, groups, cancelled, pruned)
         };
 
-        if groups.is_empty() {
+        if found.is_none() && groups.is_empty() {
+            if pruned {
+                self.record_pids();
+            }
             if cancelled {
                 self.notify();
             }
@@ -331,13 +363,13 @@ impl Core {
         process::stop_groups(&groups, STOP_GRACE, KILL_WAIT);
 
         // The group is gone; its exit is handled on the waiter thread, after the last output.
-        if let Some((_, id)) = found {
-            process::wait_until(KILL_WAIT, || current(&self.lock(), unit).is_none_or(|(_, run)| run != id));
+        if let Some((_, id, _)) = found {
+            process::wait_until(KILL_WAIT, || current(&self.lock(), unit).is_none_or(|(_, run, _)| run != id));
         }
 
         {
             let mut inner = self.lock();
-            if let Some((_, id)) = found {
+            if let Some((_, id, _)) = found {
                 take_current(&mut inner, unit, id);
             }
             inner.stopping.remove(&key);
@@ -348,5 +380,95 @@ impl Core {
 
         self.record_pids();
         self.notify();
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use crate::settings::{CustomCommand, ProjectSettings};
+    use std::os::unix::process::CommandExt;
+
+    /// A process group of the test's own, as another app's would be: killed by its pid when the
+    /// test ends, whatever happened.
+    struct Stranger(std::process::Child);
+
+    impl Drop for Stranger {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    impl Stranger {
+        fn new() -> Self {
+            Stranger(std::process::Command::new("/bin/sleep").arg("30").process_group(0).spawn().unwrap())
+        }
+
+        fn pgid(&self) -> u32 {
+            self.0.id()
+        }
+
+        /// Ended by now: someone signalled its group.
+        fn signalled(&mut self) -> bool {
+            process::wait_until(Duration::from_millis(1500), || !matches!(self.0.try_wait(), Ok(None)))
+        }
+    }
+
+    /// Once a group of ours is gone its number isn't ours any more: the system hands it out again,
+    /// and a Stop or the quit would signal whatever group has it by then, a group Pitwall never
+    /// started. The loop lets go of it at its next pass, and a number given out again before that
+    /// is told by the start of the process under it.
+    #[test]
+    fn a_group_that_is_gone_is_never_signalled_under_its_number() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let path = project.to_string_lossy().into_owned();
+        let core = Core::new(
+            CoreConfig {
+                registry_dir: tmp.path().join("registry"),
+                claude_dir: tmp.path().join("claude"),
+                settings_file: tmp.path().join("settings.json"),
+                claude_settings: tmp.path().join("claude-settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            Arc::new(|_| {}),
+        );
+        core.add_project(&path).unwrap();
+        let once = CustomCommand { id: "once".into(), name: "once".into(), command: "sleep 1 & echo started".into(), keep_running: false, confirm: false, with_server: false };
+        core.set_project_settings(&path, ProjectSettings { commands: vec![once], ..Default::default() });
+        let pids = || fs::read_dir(tmp.path().join("registry").join("pids")).map(|dir| dir.flatten().filter_map(|e| fs::read_to_string(e.path()).ok()).collect::<String>()).unwrap_or_default();
+
+        // Its shell ends at once, the sleep of its group a moment later.
+        assert!(core.run_command(&path, "once"));
+        let key = job_key(&path, "once");
+        let pgid = core.lock().jobs.get(&key).map(|job| job.pid()).expect("running");
+        assert!(process::wait_until(Duration::from_secs(10), || core.lock().supervisor.lingering.contains_key(&pgid)), "kept for its group");
+        let entry = core.lock().supervisor.lingering[&pgid].clone();
+        assert!(process::wait_until(Duration::from_secs(10), || !group_alive(pgid)), "the sleep never ended");
+
+        core.tick(1);
+        assert!(!core.lock().supervisor.lingering.contains_key(&pgid), "a group that is gone is still held as ours");
+        assert!(!pids().contains(&format!("\"pid\":{pgid}")), "a group that is gone is still in the pids file");
+
+        // The number given out again before the loop's next pass, to a group that started after
+        // the run.
+        thread::sleep(Duration::from_millis((entry.1 + START_SLACK_MS + 1_500).saturating_sub(now_ms())));
+        let mut stranger = Stranger::new();
+        let number = stranger.pgid();
+        let held = || core.lock().supervisor.lingering.insert(number, entry.clone());
+
+        held();
+        core.stop_command(&path, "once");
+        held();
+        core.record_pids();
+        let recorded = pids().contains(&format!("\"pid\":{number}"));
+        held();
+        core.dispose();
+
+        assert!(!recorded, "another's group was recorded as ours");
+        assert!(!stranger.signalled(), "a group Pitwall never started was signalled");
     }
 }

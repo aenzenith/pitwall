@@ -359,6 +359,39 @@ pub fn process_alive(pid: u32) -> bool {
     win::process_alive(pid)
 }
 
+/// `pid` is a child of ours not waited for yet (running, or ended and not reaped), so its
+/// number is still its own: the system hands no number out again before the wait. Asking reaps
+/// nothing. On Windows never: a process we hold a handle to keeps its number, and its start
+/// says whose it is (`started_at`).
+#[cfg(unix)]
+pub fn unreaped_child(pid: u32) -> bool {
+    if pid == 0 || pid > i32::MAX as u32 {
+        return false;
+    }
+    // SAFETY: a plain C struct; all zeroes is a valid value.
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    // SAFETY: waitid writes at most one siginfo_t into `info`; WNOWAIT leaves the child unreaped.
+    unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, libc::WEXITED | libc::WNOHANG | libc::WNOWAIT) == 0 }
+}
+
+#[cfg(windows)]
+pub fn unreaped_child(_pid: u32) -> bool {
+    false
+}
+
+/// On Windows, the process that has `pid` now runs outside the tree we hold for that pid: the
+/// number went to another program while what is left of the tree runs on, still ours. Never
+/// elsewhere, where no number is handed out again while its group lives.
+#[cfg(windows)]
+pub fn outside_tree(pid: u32) -> bool {
+    win::outside_tree(pid)
+}
+
+#[cfg(not(windows))]
+pub fn outside_tree(_pid: u32) -> bool {
+    false
+}
+
 /// Whether a group a dead participant left behind may be reaped. On Windows only while its pid
 /// still belongs to `cmd.exe`, the shell servers run in, as pids are handed out again quickly
 /// there (see PROTOCOL.md); elsewhere a group's id isn't reused while a member lives.
@@ -668,10 +701,11 @@ mod win {
     use std::process::Child;
     use std::sync::{LazyLock, Mutex, MutexGuard};
 
+    use windows_sys::core::BOOL;
     use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, FILETIME, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32};
     use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
+        AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob, JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
         QueryInformationJobObject, SetInformationJobObject, TerminateJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
@@ -804,6 +838,22 @@ mod win {
             Tree::Running(job) => Some(job.terminate()),
             Tree::Ended => Some(false),
         }
+    }
+
+    /// The process that has `pid` now isn't in the running tree we hold for that pid. False
+    /// when there is no such tree or process, or it can't be told.
+    pub fn outside_tree(pid: u32) -> bool {
+        let trees = trees();
+        let Some(Tree::Running(job)) = trees.get(&pid) else {
+            return false;
+        };
+        let Some(process) = open(pid, PROCESS_QUERY_LIMITED_INFORMATION) else {
+            return false;
+        };
+        let mut inside: BOOL = 0;
+        // SAFETY: both handles are open for the duration of the call.
+        let asked = unsafe { IsProcessInJob(process.as_raw_handle(), job.raw(), &mut inside) };
+        asked != 0 && inside == 0
     }
 
     /// Whether anything of the tree of `pid` runs; `None` for a pid we hold no job for. A job
