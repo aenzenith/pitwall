@@ -1,7 +1,6 @@
 //! A project's links (staging, production, the admin panel, the issue tracker…): addresses made
 //! openable, and suggestions found in the project itself.
 
-use std::fs;
 use std::path::Path;
 
 use serde::Serialize;
@@ -106,13 +105,12 @@ pub fn suggestions(path: &str) -> Vec<LinkSuggestion> {
     }
 
     let folder = Path::new(path);
-    if let Some(url) = fs::read_to_string(folder.join(".env")).ok().as_deref().and_then(parse_app_url) {
+    if let Some(url) = crate::files::read_regular_string(&folder.join(".env"), crate::files::ENV_BYTES).as_deref().and_then(parse_app_url) {
         add("APP_URL".into(), url, ".env");
     }
 
-    let homepage = fs::read_to_string(folder.join("package.json"))
-        .ok()
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+    let homepage = crate::files::read_regular(&folder.join("package.json"), crate::files::MANIFEST_BYTES)
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
         .and_then(|json| json.get("homepage").and_then(|h| h.as_str()).map(str::to_string))
         .filter(|url| url.starts_with("http"));
     if let Some(url) = homepage {

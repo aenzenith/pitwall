@@ -95,7 +95,7 @@ impl Core {
             return self.set_issue(path, "error", || t!("core.issue.folderGone"), IssueEnd::Final);
         }
 
-        let package_json = fs::read_to_string(Path::new(path).join("package.json")).unwrap_or_default();
+        let package_json = crate::files::read_regular_string(&Path::new(path).join("package.json"), crate::files::MANIFEST_BYTES).unwrap_or_default();
 
         if !has_script(&package_json, &script) {
             return self.set_issue(path, "error", move || t!("core.error.noScript", script = script), IssueEnd::Final);

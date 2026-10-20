@@ -1379,6 +1379,7 @@
   "core.error.depsNotLaravel": "Это не проект Laravel: для migrate нужны artisan и laravel/framework.",
   "core.error.depsProduction": "В .env APP_ENV — production: Pitwall не будет запускать там миграции.",
   "core.error.depsNoAppEnv": "В .env не задан APP_ENV, а Laravel считает это production: Pitwall не будет запускать миграции.",
+  "core.error.depsEnvUnread": "{file} не удалось прочитать как обычный файл, поэтому APP_ENV неизвестен: Pitwall не будет запускать миграции.",
   "core.error.depsMigrateFailed": "php artisan migrate завершилась с ошибкой (код {code}).",
   "core.error.depsMigrateStopped": "php artisan migrate остановлена.",
   "core.error.depsTool": "Неизвестный инструмент миграций: {tool}",

@@ -76,7 +76,6 @@
 //!   guards breaks silently and for good.
 
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -568,8 +567,13 @@ pub struct Found {
     pub database: Option<DepDatabase>,
 }
 
+/// Lock files run large (a monorepo's `package-lock.json` to tens of MB), but not past this.
+const JSON_BYTES: u64 = 64 * 1024 * 1024;
+
+/// One of the project's JSON files, when it is a plain file of at most `JSON_BYTES`
+/// (`files::read_regular`).
 fn read_json(file: &Path) -> Option<Value> {
-    serde_json::from_slice(&fs::read(file).ok()?).ok()
+    serde_json::from_slice(&crate::files::read_regular(file, JSON_BYTES)?).ok()
 }
 
 fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
@@ -1453,6 +1457,8 @@ fn count(n: usize) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     fn write(dir: &Path, name: &str, content: &str) {

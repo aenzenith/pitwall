@@ -43,11 +43,18 @@ pub fn skip_held(state: State<'_, AppState>, path: String, id: String) {
     state.core.skip_held(&path, &id);
 }
 
-/// The address "Open in browser" would open, to show it on the dev server row.
+/// The address "Open in browser" would open, to show it on the dev server row. Off the main
+/// thread, as the project's `.env` is read for it.
 #[tauri::command]
-pub fn resolve_address(state: State<'_, AppState>, path: String) -> Option<String> {
-    let local = state.core.snapshot().projects.into_iter().find(|p| p.path == path).and_then(|p| p.url);
-    state.core.resolve_url(&path, local)
+pub async fn resolve_address(app: AppHandle, path: String) -> Option<String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || {
+        let local = core.snapshot().projects.into_iter().find(|p| p.path == path).and_then(|p| p.url);
+        core.resolve_url(&path, local)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 /// Folder picker; the chosen folder becomes a project. It opens in the projects folder when one
@@ -339,10 +346,12 @@ pub fn stop_all(state: State<'_, AppState>) {
     state.core.stop_all();
 }
 
+/// Off the main thread, as the project's `.env` is read for the address.
 #[tauri::command]
 pub fn open_browser(app: AppHandle, state: State<'_, AppState>, path: String) {
     step_aside(&app);
-    state.core.open_browser(&path);
+    let core = state.core.clone();
+    std::thread::spawn(move || core.open_browser(&path));
 }
 
 #[tauri::command]

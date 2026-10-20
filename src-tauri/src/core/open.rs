@@ -8,6 +8,7 @@ use crate::resolve::{herd_fallback_url, parse_app_url};
 
 impl Core {
     /// Setting > `APP_URL` in `.env` > `<folder>.test` for Laravel > the server's own address.
+    /// A `.env` that isn't a plain file (a secrets manager's pipe) is passed over.
     pub fn resolve_url(&self, path: &str, local: Option<String>) -> Option<String> {
         let configured = self.lock().settings.project(path).url.filter(|u| !u.trim().is_empty());
 
@@ -15,7 +16,8 @@ impl Core {
             return configured;
         }
 
-        if let Some(app_url) = fs::read_to_string(Path::new(path).join(".env")).ok().and_then(|env| parse_app_url(&env)) {
+        let env = crate::files::read_regular_string(&Path::new(path).join(".env"), crate::files::ENV_BYTES);
+        if let Some(app_url) = env.as_deref().and_then(parse_app_url) {
             return Some(app_url);
         }
 

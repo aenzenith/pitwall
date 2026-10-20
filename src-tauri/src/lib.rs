@@ -34,6 +34,7 @@ mod shortcuts;
 mod tower;
 mod cli;
 mod start;
+mod files;
 
 use std::path::PathBuf;
 use std::sync::Arc;

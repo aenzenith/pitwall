@@ -1232,6 +1232,7 @@
   "core.error.depsNotLaravel": "不是 Laravel 项目：migrate 需要 artisan 和 laravel/framework。",
   "core.error.depsProduction": ".env 中的 APP_ENV 为 production：Pitwall 不会在那里运行迁移。",
   "core.error.depsNoAppEnv": ".env 未设置 APP_ENV，Laravel 会将其视为 production：Pitwall 不会运行迁移。",
+  "core.error.depsEnvUnread": "{file} 无法作为普通文件读取，因此不知道 APP_ENV：Pitwall 不会运行迁移。",
   "core.error.depsMigrateFailed": "php artisan migrate 失败（退出代码 {code}）。",
   "core.error.depsMigrateStopped": "php artisan migrate 已停止。",
   "core.error.depsTool": "未知的迁移工具：{tool}",

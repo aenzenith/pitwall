@@ -42,6 +42,27 @@
         "ja": "Poetry や Pipenv で管理されている Django プロジェクトでは、未適用のマイグレーションの確認が Poetry や Pipenv を通して行われ、壊れた環境が勝手に削除されて作り直されることがありました。今はプロジェクトのフォルダにある .venv または venv だけで確認します。動く環境がなければ、「データベース」カードに環境の準備ができていないと表示されます。マイグレーションを読ませたいときは、環境をプロジェクトの中に置いてください。",
         "zh-Hans": "在由 Poetry 或 Pipenv 管理的 Django 项目里，检查待执行的迁移要经过 Poetry 或 Pipenv，而它们可能自行删除损坏的环境并新建一个。现在检查只使用项目文件夹里的 .venv 或 venv；没有可用的环境时，“数据库”卡片会显示环境尚未就绪。想读取迁移，就把环境放在项目里。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "A stuck file or drive no longer freezes Pitwall",
+        "tr": "Takılan bir dosya ya da sürücü Pitwall'ı dondurmuyor",
+        "de": "Hängende Dateien und Laufwerke frieren Pitwall nicht mehr ein",
+        "es": "Un archivo o una unidad atascados ya no congelan Pitwall",
+        "ru": "Зависший файл или диск больше не замораживает Pitwall",
+        "ja": "固まったファイルやドライブで Pitwall が止まらなくなりました",
+        "zh-Hans": "卡住的文件或磁盘不再让 Pitwall 卡死"
+      },
+      "body": {
+        "en": "A project whose .env is a pipe, as some secret managers mount it, or whose folder is on a network drive that stopped answering could freeze the whole app, at start or when you selected it. Now the window keeps answering; such a .env isn't read, and Open in browser goes to the next address it knows. Pitwall also no longer hangs at start when Claude Code left many events while it was closed.",
+        "tr": "Bir projenin .env'i bazı parola yöneticilerinin bağladığı gibi bir pipe olduğunda ya da klasörü yanıt vermeyen bir ağ sürücüsünde durduğunda, açılışta ya da projeyi seçince bütün uygulama donabiliyordu. Artık pencere donmuyor; böyle bir .env okunmuyor ve Tarayıcıda aç bildiği bir sonraki adrese gidiyor. Pitwall kapalıyken Claude Code'dan çok sayıda olay birikmişse de artık açılışta takılmıyor.",
+        "de": "Ein Projekt, dessen .env eine Pipe ist, wie manche Secret-Manager sie einhängen, oder dessen Ordner auf einem Netzlaufwerk liegt, das nicht mehr antwortet, konnte die ganze App einfrieren, beim Start oder sobald du es ausgewählt hast. Jetzt reagiert das Fenster weiter; eine solche .env wird nicht gelesen, und Im Browser öffnen nimmt die nächste Adresse, die es kennt. Auch beim Start hängt Pitwall nicht mehr, wenn Claude Code viele Ereignisse hinterlassen hat, während es geschlossen war.",
+        "es": "Un proyecto cuyo .env es una tubería (pipe), como lo montan algunos gestores de secretos, o cuya carpeta está en una unidad de red que dejó de responder podía congelar toda la app, al arrancar o al seleccionarlo. Ahora la ventana sigue respondiendo; ese .env no se lee y Abrir en el navegador va a la siguiente dirección que conoce. Pitwall tampoco se queda colgado al arrancar si Claude Code dejó muchos eventos mientras estaba cerrado.",
+        "ru": "Проект, у которого .env — именованный канал (pipe), как его подключают некоторые менеджеры секретов, или папка лежит на сетевом диске, переставшем отвечать, мог заморозить всё приложение при запуске или при выборе проекта. Теперь окно продолжает отвечать; такой .env не читается, а «Открыть в браузере» ведёт на следующий известный адрес. И при запуске Pitwall больше не зависает, если Claude Code оставил много событий, пока он был закрыт.",
+        "ja": ".env がパイプになっているプロジェクト（一部のシークレット管理ツールがこの形でマウントします）や、応答しなくなったネットワークドライブ上にフォルダがあるプロジェクトがあると、起動時や選択したときにアプリ全体が固まることがありました。今はウィンドウが応答し続けます。そのような .env は読まれず、「ブラウザで開く」は次に分かっているアドレスを開きます。Pitwall が閉じているあいだに Claude Code のイベントが大量にたまっていても、起動時に固まらなくなりました。",
+        "zh-Hans": "如果项目的 .env 是一个管道（有些密钥管理工具会这样挂载它），或项目文件夹位于已无响应的网络磁盘上，整个应用可能在启动时或选中该项目时卡死。现在窗口会一直保持响应；这样的 .env 不会被读取，“在浏览器中打开”会转到它知道的下一个地址。Pitwall 关闭期间 Claude Code 积攒了大量事件时，启动也不再卡住。"
+      }
     }
   ]
 }

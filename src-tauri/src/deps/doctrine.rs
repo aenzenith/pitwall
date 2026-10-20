@@ -3,14 +3,15 @@
 //! `doctrine:migrations:list`, which only reads: it doesn't create the versions table (SQLite
 //! itself leaves an empty file where the database file was missing). Migrate is
 //! `doctrine:migrations:migrate` without a version, which goes up to the latest and never back.
-//! It is refused when `APP_ENV` is `prod` (`.env.local`, then `.env`) or the environment was
-//! dumped for production (`.env.local.php`). `DATABASE_URL` is never read.
+//! It is refused when `APP_ENV` is `prod` (`.env.local`, then `.env`), when one of those two
+//! can't be read as a plain file, or when the environment was dumped for production
+//! (`.env.local.php`). `DATABASE_URL` is never read.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::composer::locked_packages;
 use super::{env_value, read_json, Captured, Commands, DepFramework, EnvValue, MigrationTool, MigrationsError};
+use crate::files::{read_regular_string, ENV_BYTES};
 use crate::i18n::t;
 
 pub struct Doctrine;
@@ -63,8 +64,24 @@ impl MigrationTool for Doctrine {
         if dir.join(".env.local.php").is_file() {
             return Some(t!("core.error.depsProduction"));
         }
-        // Without an `APP_ENV` Symfony runs as `dev`.
-        let app_env = [".env.local", ".env"].iter().find_map(|name| env_value(&fs::read_to_string(dir.join(name)).ok()?, EnvValue::AppEnv))?;
+        // Without an `APP_ENV` Symfony runs as `dev`. One of the two that is there but can't be
+        // read as a plain file (a secrets manager's pipe) may say `prod`: refused as well, and
+        // said so as it is.
+        let mut app_env = None;
+        for name in [".env.local", ".env"] {
+            let file = dir.join(name);
+            let Some(text) = read_regular_string(&file, ENV_BYTES) else {
+                if file.exists() {
+                    return Some(t!("core.error.depsEnvUnread", file = name));
+                }
+                continue;
+            };
+            app_env = env_value(&text, EnvValue::AppEnv);
+            if app_env.is_some() {
+                break;
+            }
+        }
+        let app_env = app_env?;
         let production = ["prod", "production"].iter().any(|name| app_env.trim().eq_ignore_ascii_case(name));
         production.then(|| t!("core.error.depsProduction"))
     }

@@ -1232,6 +1232,7 @@
   "core.error.depsNotLaravel": "Laravelプロジェクトではありません：migrateにはartisanとlaravel/frameworkが必要です。",
   "core.error.depsProduction": ".envのAPP_ENVがproductionです：Pitwallはそこでマイグレーションを実行しません。",
   "core.error.depsNoAppEnv": ".envにAPP_ENVがなく、Laravelはproductionとみなします：Pitwallはマイグレーションを実行しません。",
+  "core.error.depsEnvUnread": "{file}を通常のファイルとして読めないため、APP_ENVがわかりません：Pitwallはマイグレーションを実行しません。",
   "core.error.depsMigrateFailed": "php artisan migrate が失敗しました（終了コード {code}）。",
   "core.error.depsMigrateStopped": "php artisan migrate は停止されました。",
   "core.error.depsTool": "不明なマイグレーションツールです：{tool}",

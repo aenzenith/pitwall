@@ -1281,6 +1281,7 @@
   "core.error.depsNotLaravel": "Not a Laravel project: migrate needs artisan and laravel/framework.",
   "core.error.depsProduction": "APP_ENV is production in .env: Pitwall won't run migrations there.",
   "core.error.depsNoAppEnv": ".env sets no APP_ENV, which Laravel takes as production: Pitwall won't run migrations.",
+  "core.error.depsEnvUnread": "{file} couldn't be read as a plain file, so its APP_ENV isn't known: Pitwall won't run migrations.",
   "core.error.depsMigrateFailed": "php artisan migrate failed (exit code {code}).",
   "core.error.depsMigrateStopped": "php artisan migrate was stopped.",
   "core.error.depsTool": "Unknown migration tool: {tool}",

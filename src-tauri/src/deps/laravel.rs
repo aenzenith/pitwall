@@ -1,9 +1,9 @@
 //! Laravel's migrations: a project with `artisan` and `laravel/framework` in composer.lock. The
 //! pending ones come from `php artisan migrate:status`; migrate is exactly `php artisan migrate`
-//! and refused when `.env` says production or sets no `APP_ENV` (Laravel then counts as
-//! production). `DB_CONNECTION` and `DB_DATABASE` of `.env` name what a migrate runs against.
+//! and refused when `.env` says production, sets no `APP_ENV` (Laravel then counts as
+//! production) or can't be read as a plain file. `DB_CONNECTION` and `DB_DATABASE` of `.env`
+//! name what a migrate runs against.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -11,6 +11,7 @@ use regex::Regex;
 
 use super::composer::locked_packages;
 use super::{env_value, read_json, Captured, Commands, DepDatabase, DepFramework, EnvValue, MigrationTool, MigrationsError};
+use crate::files::{read_regular_string, ENV_BYTES};
 use crate::i18n::t;
 
 pub struct Laravel;
@@ -55,8 +56,14 @@ impl MigrationTool for Laravel {
         &["artisan", ".env"]
     }
 
+    /// A `.env` that is there but isn't read as a plain file (a secrets manager's pipe) is
+    /// refused as well, and said so as it is.
     fn refuse(&self, dir: &Path) -> Option<String> {
-        let env = fs::read_to_string(dir.join(".env")).ok();
+        let file = dir.join(".env");
+        let env = read_regular_string(&file, ENV_BYTES);
+        if env.is_none() && file.exists() {
+            return Some(t!("core.error.depsEnvUnread", file = ".env"));
+        }
         match env.as_deref().and_then(|env| env_value(env, EnvValue::AppEnv)) {
             None => Some(t!("core.error.depsNoAppEnv")),
             Some(app_env) if app_env.trim().eq_ignore_ascii_case("production") => Some(t!("core.error.depsProduction")),
@@ -65,7 +72,7 @@ impl MigrationTool for Laravel {
     }
 
     fn database(&self, dir: &Path) -> Option<DepDatabase> {
-        let env = fs::read_to_string(dir.join(".env")).ok();
+        let env = read_regular_string(&dir.join(".env"), ENV_BYTES);
         Some(DepDatabase {
             connection: env.as_deref().and_then(|env| env_value(env, EnvValue::DbConnection)),
             name: env.as_deref().and_then(|env| env_value(env, EnvValue::DbDatabase)),
