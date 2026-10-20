@@ -1,7 +1,9 @@
-//! Branch and working-tree state per project, from `git status --porcelain=v2 --branch`.
+//! Branch and working-tree state per project, from `git status --porcelain=v2 --branch`, and
+//! how every read of a project's repository runs (`read_command`).
 
 use std::path::Path;
-use std::process::Stdio;
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -46,20 +48,48 @@ pub fn parse_status(output: &str) -> Option<GitInfo> {
     seen_head.then_some(info)
 }
 
-/// `None` when the folder isn't a Git work tree or git isn't available.
+/// How long a read of a repository may take before it is given up (`process::output_within`):
+/// status walks the whole work tree, log the history; the rest look a value up.
+pub const STATUS_LIMIT: Duration = Duration::from_secs(15);
+pub const LOG_LIMIT: Duration = Duration::from_secs(10);
+pub const LOOKUP_LIMIT: Duration = Duration::from_secs(5);
+
+/// git in the repository at `path`, for a read Pitwall makes on its own: it runs no program the
+/// repository names (`core.fsmonitor`'s hook, which status would start; `gpg.program`, which
+/// `log.showSignature` has log start for every signed commit), takes no lock the user's own git
+/// commands would race for, and reads no input.
+pub fn read_command(path: &str) -> Command {
+    let mut command = crate::process::command("git");
+    command
+        .args(["-C", path, "-c", "core.fsmonitor=false", "-c", "log.showSignature=false"])
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .stdin(Stdio::null());
+    command
+}
+
+/// A status read that didn't end within `STATUS_LIMIT`; git was stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimedOut;
+
+/// `None` when the folder isn't a Git work tree, git isn't available or the read didn't end in
+/// time.
 pub fn status(path: &str) -> Option<GitInfo> {
+    read_status(path).ok().flatten()
+}
+
+/// `Ok(None)` when the folder isn't a Git work tree or git isn't available.
+pub fn read_status(path: &str) -> Result<Option<GitInfo>, TimedOut> {
     if !Path::new(path).join(".git").exists() {
-        return None;
+        return Ok(None);
     }
 
-    let output = crate::process::command("git")
-        .args(["-C", path, "status", "--porcelain=v2", "--branch", "--untracked-files=normal"])
-        // Read-only: don't take the index lock and race the user's own git commands.
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
+    let mut command = read_command(path);
+    command.args(["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]);
+    let output = match crate::process::output_within(&mut command, STATUS_LIMIT) {
+        Ok(output) => output,
+        Err(error) if error.kind() == std::io::ErrorKind::TimedOut => return Err(TimedOut),
+        Err(_) => return Ok(None),
+    };
 
-    output.status.success().then(|| parse_status(&String::from_utf8_lossy(&output.stdout))).flatten()
+    Ok(output.status.success().then(|| parse_status(&String::from_utf8_lossy(&output.stdout))).flatten())
 }

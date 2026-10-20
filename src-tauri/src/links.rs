@@ -92,9 +92,7 @@ pub fn suggestions(path: &str) -> Vec<LinkSuggestion> {
         }
     };
 
-    let remote = crate::process::command("git")
-        .args(["-C", path, "remote", "get-url", "origin"])
-        .output()
+    let remote = crate::process::output_within(crate::git::read_command(path).args(["remote", "get-url", "origin"]), crate::git::LOOKUP_LIMIT)
         .ok()
         .filter(|out| out.status.success())
         .map(|out| String::from_utf8_lossy(&out.stdout).into_owned());

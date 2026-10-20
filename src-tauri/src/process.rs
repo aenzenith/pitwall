@@ -621,6 +621,64 @@ pub fn wait_until(limit: Duration, mut done: impl FnMut() -> bool) -> bool {
     done()
 }
 
+/// Runs `command` for its output as `Command::output` does (stdin null), and gives up after
+/// `limit`: what is left of it is stopped then (on macOS and Linux its whole process group, which
+/// it leads) and reaped on a thread of its own, and the answer is `ErrorKind::TimedOut`. For a
+/// program that must not hold its caller up, as git on a huge work tree or a mount that stopped
+/// answering.
+pub fn output_within(command: &mut Command, limit: Duration) -> std::io::Result<std::process::Output> {
+    let deadline = Instant::now() + limit;
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(command, 0);
+    let mut child = command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+
+    // Each stream is read to its end on a thread of its own: both end as the process does.
+    let (sender, streams) = std::sync::mpsc::channel();
+    let streams_of: [(usize, Option<Box<dyn Read + Send>>); 2] =
+        [(0, child.stdout.take().map(|stream| Box::new(stream) as _)), (1, child.stderr.take().map(|stream| Box::new(stream) as _))];
+    for (at, stream) in streams_of {
+        let sender = sender.clone();
+        thread::spawn(move || {
+            let mut bytes = Vec::new();
+            if let Some(mut stream) = stream {
+                let _ = stream.read_to_end(&mut bytes);
+            }
+            let _ = sender.send((at, bytes));
+        });
+    }
+
+    let mut read: [Option<Vec<u8>>; 2] = [None, None];
+    while read.iter().any(Option::is_none) {
+        match streams.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok((at, bytes)) => read[at] = Some(bytes),
+            Err(_) => return Err(give_up(child)),
+        }
+    }
+    // Its output closed: it has ended, or does in a moment.
+    let status = loop {
+        match child.try_wait()? {
+            Some(status) => break status,
+            None if Instant::now() < deadline => thread::sleep(Duration::from_millis(5)),
+            None => return Err(give_up(child)),
+        }
+    };
+    let [stdout, stderr] = read.map(Option::unwrap_or_default);
+    Ok(std::process::Output { status, stdout, stderr })
+}
+
+/// Stops a child `output_within` waited on too long, and leaves its reaping to a thread: one
+/// stuck on a mount that stopped answering may not even end on a SIGKILL yet.
+fn give_up(mut child: Child) -> std::io::Error {
+    #[cfg(unix)]
+    stop_groups(&[child.id()], Duration::from_millis(300), Duration::from_secs(1));
+    #[cfg(windows)]
+    let _ = child.kill();
+    thread::spawn(move || {
+        let _ = child.wait();
+    });
+    std::io::ErrorKind::TimedOut.into()
+}
+
 /// How many bytes at the end of `bytes` begin a UTF-8 character that isn't whole yet (0 to 3).
 fn unfinished(bytes: &[u8]) -> usize {
     let tail = &bytes[bytes.len().saturating_sub(3)..];

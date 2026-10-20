@@ -688,20 +688,18 @@ fn day_commits(path: &str, start: u64, end: u64) -> Vec<DayCommit> {
         return Vec::new();
     }
 
-    let email = process::command("git")
-        .args(["-C", path, "config", "user.email"])
-        .output()
+    let email = process::output_within(crate::git::read_command(path).args(["config", "user.email"]), crate::git::LOOKUP_LIMIT)
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .unwrap_or_default();
 
-    let mut command = process::command("git");
-    command.args(["-C", path, "log", "--exclude=refs/stash", "--all", "--no-merges", "--fixed-strings", "--format=%ct%x1f%s"]);
+    let mut command = crate::git::read_command(path);
+    command.args(["log", "--exclude=refs/stash", "--all", "--no-merges", "--fixed-strings", "--format=%ct%x1f%s"]);
     command.arg(format!("--since=@{}", start / 1000)).arg(format!("--until=@{}", end / 1000));
     if !email.is_empty() {
         command.arg(format!("--author={email}"));
     }
 
-    let Ok(out) = command.output() else {
+    let Ok(out) = process::output_within(&mut command, crate::git::LOG_LIMIT) else {
         return Vec::new();
     };
 
@@ -725,4 +723,67 @@ pub(super) fn day_bounds(date: &str) -> Option<(u64, u64)> {
     let start = local_midnight(year, month as u32, day as u32)?;
     let end = local_midnight(year, month as u32, day as u32 + 1)?;
     (end > start).then_some((start, end))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::{Command, Stdio};
+
+    use super::*;
+
+    /// Pitwall reads every listed project's Git state on its own, and its log for the day's
+    /// summary: a program the repository's own `.git/config` names (an fsmonitor hook, a
+    /// signature program for `log.showSignature`) never runs for that, and both reads still
+    /// answer.
+    #[test]
+    fn a_read_runs_no_program_the_repository_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("shop");
+        let path = repo.to_str().unwrap();
+        let git = |args: &[&str], input: Option<&str>| {
+            let mut command = Command::new("git");
+            command.arg("-C").arg(&repo).args(args).env("GIT_CONFIG_NOSYSTEM", "1").env("HOME", tmp.path());
+            command.stdin(Stdio::piped()).stdout(Stdio::piped());
+            let mut child = command.spawn().unwrap();
+            if let Some(input) = input {
+                child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+            }
+            let out = child.wait_with_output().unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        fs::create_dir_all(&repo).unwrap();
+        git(&["init", "-q"], None);
+        fs::write(repo.join("README.md"), "shop\n").unwrap();
+        git(&["add", "README.md"], None);
+
+        // A commit of today's with a signature on it, made without signing anything.
+        let email = "dev@example.com";
+        let when = now_ms() / 1000 - 60;
+        let tree = git(&["write-tree"], None);
+        let signature = "-----BEGIN PGP SIGNATURE-----\n \n ZHVtbXk=\n -----END PGP SIGNATURE-----";
+        let body = format!("tree {tree}\nauthor Dev <{email}> {when} +0000\ncommitter Dev <{email}> {when} +0000\ngpgsig {signature}\n\nSigned work\n");
+        let commit = git(&["hash-object", "-t", "commit", "-w", "--stdin"], Some(&body));
+        git(&["update-ref", "HEAD", &commit], None);
+
+        let program = |name: &str| {
+            let marker = tmp.path().join(format!("{name}-ran"));
+            let script = tmp.path().join(name);
+            fs::write(&script, format!("#!/bin/sh\necho ran >> '{}'\nexit 0\n", marker.display())).unwrap();
+            fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+            (script, marker)
+        };
+        let (fsmonitor, fsmonitor_ran) = program("fsmonitor");
+        let (gpg, gpg_ran) = program("gpg");
+        let mut config = fs::OpenOptions::new().append(true).open(repo.join(".git").join("config")).unwrap();
+        write!(config, "[user]\n\temail = {email}\n[core]\n\tfsmonitor = {}\n[log]\n\tshowSignature = true\n[gpg]\n\tprogram = {}\n", fsmonitor.display(), gpg.display()).unwrap();
+        drop(config);
+
+        assert!(crate::git::status(path).is_some_and(|info| info.changes == 0), "the state is read");
+        let commits = day_commits(path, (when - 3600) * 1000, (when + 3600) * 1000);
+        assert_eq!(commits.iter().map(|commit| commit.subject.as_str()).collect::<Vec<_>>(), ["Signed work"], "the log is read");
+        let ran: Vec<&str> = [("fsmonitor hook", &fsmonitor_ran), ("signature program", &gpg_ran)].into_iter().filter(|(_, marker)| marker.exists()).map(|(name, _)| name).collect();
+        assert!(ran.is_empty(), "the repository's own programs ran: {ran:?}");
+    }
 }

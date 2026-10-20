@@ -358,13 +358,15 @@ impl Core {
             }
             core.detect_managers(&paths);
 
-            let states: Vec<(String, Option<GitInfo>)> = paths.into_iter().map(|path| (path.clone(), git::status(&path))).collect();
+            let states: Vec<(String, Result<Option<GitInfo>, git::TimedOut>)> = paths.into_iter().map(|path| (path.clone(), git::read_status(&path))).collect();
             {
                 let mut inner = core.lock();
                 for (path, state) in states {
                     match state {
-                        Some(info) => inner.git.insert(path, info),
-                        None => inner.git.remove(&path),
+                        Ok(Some(info)) => inner.git.insert(path, info),
+                        Ok(None) => inner.git.remove(&path),
+                        // Not read in time: what was read last stays until a read gets through.
+                        Err(git::TimedOut) => None,
                     };
                 }
             }
