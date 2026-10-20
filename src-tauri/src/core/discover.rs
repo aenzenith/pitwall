@@ -8,11 +8,10 @@ use std::sync::atomic::Ordering;
 use std::time::UNIX_EPOCH;
 
 use super::*;
+use crate::files::{read_regular, MANIFEST_BYTES};
 
 /// As many subfolders as the quick switcher's search takes.
 const FOLDERS: usize = 5000;
-/// A `package.json` larger than this isn't one a person wrote.
-const MANIFEST_BYTES: u64 = 1024 * 1024;
 /// Among the folders known: the projects folder was looked at once.
 const LOOKED: &str = ".";
 
@@ -112,13 +111,9 @@ fn kind(dir: &Path, manifest: &serde_json::Value) -> String {
     "Node".to_string()
 }
 
-/// The folder as a candidate, when its `package.json` has `script`.
+/// The folder as a candidate, when its `package.json` is a plain file that has `script`.
 fn candidate(name: &str, dir: &Path, script: &str, listed: bool) -> Option<Candidate> {
-    let file = dir.join("package.json");
-    if fs::metadata(&file).ok()?.len() > MANIFEST_BYTES {
-        return None;
-    }
-    let bytes = fs::read(&file).ok()?;
+    let bytes = read_regular(&dir.join("package.json"), MANIFEST_BYTES)?;
     // A byte-order mark before it is no part of it (`resolve::has_script`).
     let manifest: serde_json::Value = serde_json::from_slice(bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes)).ok()?;
     manifest.get("scripts")?.get(script)?.as_str()?;

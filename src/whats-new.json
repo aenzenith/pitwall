@@ -63,6 +63,27 @@
         "ja": ".env がパイプになっているプロジェクト（一部のシークレット管理ツールがこの形でマウントします）や、応答しなくなったネットワークドライブ上にフォルダがあるプロジェクトがあると、起動時や選択したときにアプリ全体が固まることがありました。今はウィンドウが応答し続けます。そのような .env は読まれず、「ブラウザで開く」は次に分かっているアドレスを開きます。Pitwall が閉じているあいだに Claude Code のイベントが大量にたまっていても、起動時に固まらなくなりました。",
         "zh-Hans": "如果项目的 .env 是一个管道（有些密钥管理工具会这样挂载它），或项目文件夹位于已无响应的网络磁盘上，整个应用可能在启动时或选中该项目时卡死。现在窗口会一直保持响应；这样的 .env 不会被读取，“在浏览器中打开”会转到它知道的下一个地址。Pitwall 关闭期间 Claude Code 积攒了大量事件时，启动也不再卡住。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "A package.json that isn't a file no longer crashes Pitwall",
+        "tr": "Dosya olmayan bir package.json Pitwall'ı çökertmiyor",
+        "de": "Eine package.json, die keine Datei ist, bringt Pitwall nicht mehr zum Absturz",
+        "es": "Un package.json que no es un archivo ya no hace caer Pitwall",
+        "ru": "package.json, который не является файлом, больше не роняет Pitwall",
+        "ja": "ファイルではない package.json で Pitwall が落ちなくなりました",
+        "zh-Hans": "不是文件的 package.json 不再让 Pitwall 崩溃"
+      },
+      "body": {
+        "en": "A folder in your projects folder whose package.json was a link to a device or a pipe made Pitwall crash or hang while it looked for new projects. Such a folder is now passed over.",
+        "tr": "Projeler klasöründeki bir klasörün package.json'ı bir aygıta ya da bir pipe'a giden bir bağlantıysa, Pitwall yeni projeleri ararken çöküyor ya da takılıyordu. Artık böyle bir klasör atlanıyor.",
+        "de": "Ein Ordner im Projektordner, dessen package.json ein Link auf ein Gerät oder eine Pipe war, ließ Pitwall abstürzen oder hängen, während es nach neuen Projekten suchte. Ein solcher Ordner wird jetzt übergangen.",
+        "es": "Una carpeta de tu carpeta de proyectos cuyo package.json era un enlace a un dispositivo o a una tubería hacía que Pitwall se cerrara o se colgara mientras buscaba proyectos nuevos. Ahora esa carpeta se pasa por alto.",
+        "ru": "Папка в папке проектов, чей package.json был ссылкой на устройство или именованный канал, приводила к сбою или зависанию Pitwall, пока он искал новые проекты. Теперь такая папка пропускается.",
+        "ja": "プロジェクトフォルダ内のフォルダで package.json がデバイスやパイプへのリンクになっていると、新しいプロジェクトを探している最中に Pitwall がクラッシュしたり固まったりしていました。今はそのようなフォルダを飛ばします。",
+        "zh-Hans": "项目文件夹中如果有文件夹的 package.json 是指向设备或管道的链接，Pitwall 在查找新项目时会崩溃或卡住。现在会跳过这样的文件夹。"
+      }
     }
   ]
 }
