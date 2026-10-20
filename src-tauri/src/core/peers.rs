@@ -177,10 +177,15 @@ impl Core {
 
     /// Writes down every process group we started and that may still have processes, for the
     /// orphan cleanup after a crash. One writer at a time, so the file is never stale or torn.
+    /// Once the app quits nothing is written: the quit deletes the file (`dispose`), and a shell
+    /// that ends meanwhile would put it back.
     pub(super) fn record_pids(&self) {
         let _writing = self.pids_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut entries: Vec<PidEntry> = {
             let mut inner = self.lock();
+            if inner.disposed {
+                return;
+            }
             let lingering = inner.supervisor.lingering_groups();
             let mut entries: Vec<PidEntry> = inner
                 .runs

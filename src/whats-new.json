@@ -46,6 +46,27 @@
     {
       "kind": "fix",
       "title": {
+        "en": "Quitting ends what a terminal tab runs in the background",
+        "tr": "Çıkınca terminal sekmelerinde arka planda çalışan işler de kapanıyor",
+        "de": "Beim Beenden endet auch, was ein Terminal-Tab im Hintergrund ausführt",
+        "es": "Al salir termina lo que una pestaña de terminal ejecuta en segundo plano",
+        "ru": "При выходе завершается и то, что вкладка терминала запустила в фоне",
+        "ja": "終了時にターミナルタブのバックグラウンドの処理も終わります",
+        "zh-Hans": "退出时，终端标签页在后台运行的任务也会结束"
+      },
+      "body": {
+        "en": "A job left running in the background of a Pitwall terminal tab, such as npm run dev & or a queue worker, kept running after you quit Pitwall or restarted it for an update, holding its port with no tab to show it. It now ends with its tab, as it does when you close the tab.",
+        "tr": "Pitwall'ın bir terminal sekmesinde arka planda bıraktığın bir iş (npm run dev & ya da bir kuyruk worker'ı gibi), Pitwall'dan çıktıktan ya da güncelleme için yeniden başlattıktan sonra da çalışmayı sürdürüp hiçbir sekmede görünmeden portunu tutuyordu. Artık sekmeyi kapattığında olduğu gibi sekmesiyle birlikte kapanıyor.",
+        "de": "Ein Job, den du in einem Terminal-Tab von Pitwall im Hintergrund laufen ließt, etwa npm run dev & oder ein Queue-Worker, lief weiter, nachdem du Pitwall beendet oder für ein Update neu gestartet hattest, und hielt seinen Port, ohne dass ein Tab ihn zeigte. Jetzt endet er mit seinem Tab, wie beim Schließen des Tabs.",
+        "es": "Un trabajo que dejabas en segundo plano en una pestaña de terminal de Pitwall, como npm run dev & o un worker de colas, seguía en marcha después de salir de Pitwall o de reiniciarlo para una actualización, ocupando su puerto sin ninguna pestaña que lo mostrara. Ahora termina con su pestaña, como cuando la cierras.",
+        "ru": "Задача, оставленная в фоне во вкладке терминала Pitwall, например npm run dev & или воркер очереди, продолжала работать после выхода из Pitwall или его перезапуска для обновления и держала свой порт, хотя её не показывала ни одна вкладка. Теперь она завершается вместе со своей вкладкой, как при закрытии вкладки.",
+        "ja": "Pitwall のターミナルタブでバックグラウンドに残したジョブ（npm run dev & やキューワーカーなど）は、Pitwall を終了したりアップデートのために再起動したりしたあとも動き続け、それを示すタブもないままポートを使い続けていました。今はタブを閉じたときと同じように、そのタブと一緒に終わります。",
+        "zh-Hans": "在 Pitwall 终端标签页中留在后台运行的任务（例如 npm run dev & 或队列 worker），在退出 Pitwall 或为更新而重启后仍会继续运行，没有任何标签页显示它，却一直占着端口。现在它会和所在的标签页一起结束，就像关闭该标签页时一样。"
+      }
+    },
+    {
+      "kind": "fix",
+      "title": {
         "en": "A stuck file or drive no longer freezes Pitwall",
         "tr": "Takılan bir dosya ya da sürücü Pitwall'ı dondurmuyor",
         "de": "Hängende Dateien und Laufwerke frieren Pitwall nicht mehr ein",

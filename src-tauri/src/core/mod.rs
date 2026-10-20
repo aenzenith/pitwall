@@ -350,11 +350,17 @@ impl Core {
         pids.extend(self.terminal_pids());
         pids.sort_unstable();
         pids.dedup();
+        // The tabs' jobs go with their shells. On Windows a tab's whole tree is in a job of its
+        // own (`process::contain`), which ending the shell ends.
+        #[cfg(unix)]
+        self.hang_up_terminals();
 
         if !pids.is_empty() {
             process::stop_groups(&pids, Duration::from_millis(600), Duration::ZERO);
         }
 
+        // A pids file written meanwhile is done by now, and none comes after (`record_pids`).
+        let _writing = self.pids_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         self.registry.dispose();
     }
 

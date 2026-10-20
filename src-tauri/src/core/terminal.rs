@@ -431,6 +431,16 @@ impl Core {
         self.terminal_sessions().values().filter_map(|session| session.pid).collect()
     }
 
+    /// Quit: every tab's shell gets SIGHUP and hangs up its jobs, as a closed tab's does
+    /// (`close_terminal`). A job sent to the background is a process group of its own, which
+    /// ending the shell's group alone leaves running.
+    #[cfg(unix)]
+    pub(super) fn hang_up_terminals(&self) {
+        for session in self.terminal_sessions().values_mut() {
+            let _ = session.killer.kill();
+        }
+    }
+
     /// Every open tab's process, size and last output, for a restart (`restore.rs`).
     pub(super) fn terminal_tabs(&self) -> Vec<TabState> {
         self.terminal_sessions()
