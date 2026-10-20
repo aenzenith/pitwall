@@ -578,6 +578,7 @@
   "deps.db.timeout": "Veritabanı yanıt vermedi",
   "deps.db.failed": "Migration durumu okunamadı",
   "deps.db.toolMissing": "Araç bulunamadı; bekleyen migration'lar okunamadı",
+  "deps.db.noEnvironment": "Proje ortamı (.venv) hazır değil; önce bağımlılıkları kur",
   "deps.migrate": "Migrate…",
   "deps.migrateConfirm": "Migrate çalıştırılsın mı?",
   "deps.migrateAfterInstall": "Kurulum bitince",

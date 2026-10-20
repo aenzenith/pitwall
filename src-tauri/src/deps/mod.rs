@@ -37,7 +37,8 @@
 //!
 //! 1. Write `deps/<name>.rs`: a unit struct that implements [`MigrationTool`] (`laravel.rs`).
 //!    Required: `id`, `detect`, `variants`, `parse_pending`, `sources` and `ecosystem`; the rest
-//!    (`variant`, `watched`, `refuse`, `database`, `framework`, `status_timeout`) has defaults.
+//!    (`variant`, `status_variant`, `watched`, `refuse`, `database`, `framework`,
+//!    `status_timeout`) has defaults.
 //!    `variants` lists every spelling of the tool's two commands, ONE read-only status command
 //!    and ONE forward-only migrate command, as constants; `variant` picks the project's by its
 //!    files (another module's answer is at hand: `super::ecosystem("npm")?.detect(dir)`). A
@@ -244,6 +245,13 @@ pub trait MigrationTool: Sync {
     /// Which of `variants` the project runs, by its files (a virtualenv, a wrapper script).
     fn variant(&self, _dir: &Path) -> usize {
         0
+    }
+
+    /// Which of `variants` a status read runs, or why it runs none: `variant`'s, unless a
+    /// spelling there could change the project (a manager that makes environments), which only
+    /// the user's migrate may run.
+    fn status_variant(&self, dir: &Path) -> Result<usize, MigrationsError> {
+        Ok(self.variant(dir))
     }
 
     /// A finished status command's pending migrations, in order; or why there is no list. The
@@ -460,6 +468,9 @@ pub enum MigrationsError {
     Failed,
     /// The login shell lacks an executable the status command needs: it wasn't run.
     ToolMissing,
+    /// The project has no working environment of its own to run the status command in (Poetry,
+    /// Pipenv): it wasn't run.
+    NoEnvironment,
 }
 
 /// What the last status read of one of a project's migration tools gave.
@@ -1225,11 +1236,20 @@ pub fn migrate_command(tool: &dyn MigrationTool, dir: &Path) -> Result<&'static 
     }
 }
 
+/// The spelling a status read runs in this project (`MigrationTool::status_variant`), or why it
+/// runs none.
+pub fn status_command(tool: &dyn MigrationTool, dir: &Path) -> Result<&'static Commands, MigrationsError> {
+    if !tool.detect(dir) {
+        return Err(MigrationsError::Failed);
+    }
+    tool.variants().get(tool.status_variant(dir)?).ok_or(MigrationsError::Failed)
+}
+
 /// The migrations the project's database hasn't run, from the tool's read-only status command
 /// in the project folder through the login shell. Blocks for as long as it runs. Its output
 /// (which can name the connection) is only parsed, never kept or logged.
 pub fn migration_status(tool: &dyn MigrationTool, dir: &Path) -> Result<Vec<String>, MigrationsError> {
-    let commands = commands(tool, dir).ok_or(MigrationsError::Failed)?;
+    let commands = status_command(tool, dir)?;
     match run_capture(commands.status, &dir.to_string_lossy(), tool.status_timeout()) {
         Err(CaptureError::Timeout) => Err(MigrationsError::Timeout),
         Err(CaptureError::Spawn) => Err(MigrationsError::Failed),

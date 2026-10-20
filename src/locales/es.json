@@ -596,6 +596,7 @@
   "deps.db.timeout": "La base de datos no respondió",
   "deps.db.failed": "No se pudo leer el estado de las migraciones",
   "deps.db.toolMissing": "No se encontró la herramienta; no se pudieron leer las migraciones pendientes",
+  "deps.db.noEnvironment": "El entorno del proyecto (.venv) no está listo; instala primero las dependencias",
   "deps.migrate": "Migrar…",
   "deps.migrateConfirm": "¿Ejecutar las migraciones?",
   "deps.migrateAfterInstall": "Cuando termine la instalación",

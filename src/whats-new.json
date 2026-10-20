@@ -21,6 +21,27 @@
         "ja": "Pitwall は本番ビルドを断らなくなりました。npm run build、vite build、tauri build をプロジェクトのコマンドとして保存すれば、その行、クイックスイッチャー、pitwall コマンド、チーム無線から実行できます。名前が build で始まる開発スクリプト（build:watch など）も実行されます。勝手に始まってほしくないビルドには「実行前に確認」を付けてください。",
         "zh-Hans": "Pitwall 不再拒绝生产构建。把 npm run build、vite build 或 tauri build 保存为项目的命令，就能从项目行、快速切换器、pitwall 命令或车队无线电运行它；名称以 build 开头的开发脚本（例如 build:watch）也能运行。不想让某个构建在你不知情时启动，就给它勾选“运行前询问”。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Garage leaves Poetry and Pipenv environments alone",
+        "tr": "Garaj Poetry ve Pipenv ortamlarına dokunmuyor",
+        "de": "Die Garage lässt Poetry- und Pipenv-Umgebungen in Ruhe",
+        "es": "El Garaje no toca los entornos de Poetry y Pipenv",
+        "ru": "Гараж не трогает окружения Poetry и Pipenv",
+        "ja": "ガレージは Poetry と Pipenv の環境に手を出しません",
+        "zh-Hans": "车库不再改动 Poetry 和 Pipenv 的环境"
+      },
+      "body": {
+        "en": "In a Django project managed by Poetry or Pipenv, checking for pending migrations went through Poetry or Pipenv, which could delete a broken environment and make a new one on their own. The check now reads only with the .venv or venv in the project's folder; without a working one, the Database card says the environment isn't ready. To have the migrations read, keep the environment in the project.",
+        "tr": "Poetry ya da Pipenv ile yönetilen bir Django projesinde bekleyen migration'lar Poetry ya da Pipenv üzerinden okunuyordu; bu araçlar da bozuk bir ortamı kendiliğinden silip yenisini kurabiliyordu. Artık bu okuma yalnızca proje klasöründeki .venv ya da venv ile yapılıyor; çalışan bir ortam yoksa Veritabanı kartı ortamın hazır olmadığını söylüyor. Migration'ların okunmasını istiyorsan ortamı projenin içinde tut.",
+        "de": "In einem mit Poetry oder Pipenv verwalteten Django-Projekt lief die Prüfung auf ausstehende Migrationen über Poetry oder Pipenv, und die konnten eine kaputte Umgebung von selbst löschen und neu anlegen. Jetzt liest die Prüfung nur mit dem .venv oder venv im Projektordner; ohne eine funktionierende Umgebung sagt die Karte Datenbank, dass die Umgebung nicht bereit ist. Damit die Migrationen gelesen werden, halte die Umgebung im Projekt.",
+        "es": "En un proyecto Django gestionado con Poetry o Pipenv, comprobar las migraciones pendientes pasaba por Poetry o Pipenv, que podían borrar por su cuenta un entorno roto y crear otro. Ahora la comprobación solo lee con el .venv o venv de la carpeta del proyecto; sin uno que funcione, la tarjeta Base de datos dice que el entorno no está listo. Para que se lean las migraciones, guarda el entorno dentro del proyecto.",
+        "ru": "В проекте Django под управлением Poetry или Pipenv проверка ожидающих миграций шла через Poetry или Pipenv, а они могли сами удалить сломанное окружение и создать новое. Теперь проверка читает только через .venv или venv в папке проекта; если рабочего окружения нет, карточка «База данных» сообщает, что окружение не готово. Чтобы миграции читались, держите окружение внутри проекта.",
+        "ja": "Poetry や Pipenv で管理されている Django プロジェクトでは、未適用のマイグレーションの確認が Poetry や Pipenv を通して行われ、壊れた環境が勝手に削除されて作り直されることがありました。今はプロジェクトのフォルダにある .venv または venv だけで確認します。動く環境がなければ、「データベース」カードに環境の準備ができていないと表示されます。マイグレーションを読ませたいときは、環境をプロジェクトの中に置いてください。",
+        "zh-Hans": "在由 Poetry 或 Pipenv 管理的 Django 项目里，检查待执行的迁移要经过 Poetry 或 Pipenv，而它们可能自行删除损坏的环境并新建一个。现在检查只使用项目文件夹里的 .venv 或 venv；没有可用的环境时，“数据库”卡片会显示环境尚未就绪。想读取迁移，就把环境放在项目里。"
+      }
     }
   ]
 }

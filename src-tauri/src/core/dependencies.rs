@@ -638,12 +638,13 @@ impl Core {
 
     /// One project's status reads (`deps::migration_status`), tool by tool, blocking: `running`
     /// while one runs, sent when it flips and when the result lands. A failed read keeps the
-    /// last list and says why; a tool whose executable the login shell lacks isn't run.
+    /// last list and says why; a tool whose executable the login shell lacks isn't run, nor one
+    /// that has no environment of the project's to run in.
     fn deps_read_migrations(&self, path: &str) {
-        let tools: Vec<(&'static str, &'static [&'static str])> = {
+        let tools: Vec<&'static str> = {
             let state = self.deps_lock();
             let found = state.checked.get(path).into_iter().flat_map(|inspection| &inspection.migrations);
-            found.map(|found| (found.tool, found.commands.needs)).collect()
+            found.map(|found| found.tool).collect()
         };
         if tools.is_empty() || self.lock().disposed {
             let mut state = self.deps_lock();
@@ -656,23 +657,28 @@ impl Core {
         }
 
         let dir = Path::new(path);
-        for (id, needs) in tools {
+        for id in tools {
             let Some(tool) = deps::migration_tool(id) else {
                 continue;
             };
             let started = now_ms();
             let listing = migrations_listing(tool, dir);
+            let status = deps::status_command(tool, dir);
             let lacking = {
                 let mut state = self.deps_lock();
                 state.listings.insert((path.to_string(), id), listing);
                 let read = state.migrations.entry(path.to_string()).or_default().entry(id).or_default();
                 read.running = true;
                 read.at = started;
-                needs.iter().any(|tool| state.probed.lacks(tool))
+                status.is_ok_and(|commands| commands.needs.iter().any(|tool| state.probed.lacks(tool)))
             };
             self.deps_send();
 
-            let result = if lacking { Err(MigrationsError::ToolMissing) } else { deps::migration_status(tool, dir) };
+            let result = match status {
+                Err(error) => Err(error),
+                Ok(_) if lacking => Err(MigrationsError::ToolMissing),
+                Ok(_) => deps::migration_status(tool, dir),
+            };
             // Asked for again meanwhile: still `running`, read once more right after.
             let again = self.deps.status.contains(path);
             {
@@ -938,36 +944,74 @@ mod tests {
         assert!(core.command_output(&path, &job).is_empty());
     }
 
-    /// A status read runs on its own (at start, after a pull, at the minute's look). In a uv
-    /// project whose environment lost its interpreter (a Python that Homebrew or pyenv removed)
-    /// it goes through no manager: `uv run` deletes such an environment, makes a new one and
-    /// installs into it.
+    /// A status read runs on its own (at start, after a pull, at the minute's look), so it goes
+    /// through no manager. In a uv project whose environment lost its interpreter (a Python that
+    /// Homebrew or pyenv removed) `uv run` deletes the environment, makes a new one and installs
+    /// into it; `poetry run` and `pipenv run` do the same to such a `.venv`, and make one where
+    /// there is none. A Poetry or Pipenv project without a working environment of its own isn't
+    /// read at all; its migrate, the user's click, goes through the manager only where there is
+    /// no `.venv`.
     #[cfg(unix)]
     #[test]
     fn a_status_read_never_makes_the_environment_again() {
         let django = deps::migration_tool("django").unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
-        let write = |name: &str, content: &str| fs::write(dir.join(name), content).unwrap();
-        let status = || django.variants()[django.variant(dir)].status;
-        write("manage.py", "from django.core.management import execute_from_command_line\n");
-        write("pyproject.toml", "[project]\nname = \"shop\"\ndependencies = [\"django>=5\"]\n");
-        write("uv.lock", "version = 1\n");
+        let write = |dir: &Path, name: &str, content: &str| {
+            fs::create_dir_all(dir.join(name).parent().unwrap()).unwrap();
+            fs::write(dir.join(name), content).unwrap();
+        };
+        let status = |dir: &Path| deps::status_command(django, dir).map(|commands| commands.status);
+        let migrate = |dir: &Path| deps::migrate_command(django, dir).map(|commands| commands.migrate).ok();
+        let lost = "/opt/homebrew/opt/python@3.11/bin/python3.11-gone";
+        write(dir, "manage.py", "from django.core.management import execute_from_command_line\n");
+        write(dir, "pyproject.toml", "[project]\nname = \"shop\"\ndependencies = [\"django>=5\"]\n");
+        write(dir, "uv.lock", "version = 1\n");
+        write(dir, ".venv/pyvenv.cfg", "home = /opt/homebrew/opt/python@3.11/bin\n");
         fs::create_dir_all(dir.join(".venv").join("bin")).unwrap();
-        write(".venv/pyvenv.cfg", "home = /opt/homebrew/opt/python@3.11/bin\n");
-        std::os::unix::fs::symlink("/opt/homebrew/opt/python@3.11/bin/python3.11-gone", dir.join(".venv").join("bin").join("python")).unwrap();
+        std::os::unix::fs::symlink(lost, dir.join(".venv").join("bin").join("python")).unwrap();
 
         assert!(django.detect(dir));
-        assert_eq!(status(), "python3 manage.py showmigrations --plan", "the bare spelling, which fails until the install");
+        assert_eq!(status(dir), Ok("python3 manage.py showmigrations --plan"), "the bare spelling, which fails until the install");
 
         // Windows' layout: the environment's own interpreter, as it is.
-        fs::create_dir_all(dir.join(".venv").join("Scripts")).unwrap();
-        write(".venv/Scripts/python.exe", "");
-        assert_eq!(status(), ".venv\\Scripts\\python manage.py showmigrations --plan");
+        write(dir, ".venv/Scripts/python.exe", "");
+        assert_eq!(status(dir), Ok(".venv\\Scripts\\python manage.py showmigrations --plan"));
 
         // An environment that works: its interpreter.
         fs::remove_file(dir.join(".venv").join("bin").join("python")).unwrap();
-        write(".venv/bin/python", "");
-        assert_eq!(status(), ".venv/bin/python manage.py showmigrations --plan");
+        write(dir, ".venv/bin/python", "");
+        assert_eq!(status(dir), Ok(".venv/bin/python manage.py showmigrations --plan"));
+
+        for (manager, lock, content) in [("poetry", "poetry.lock", "[[package]]\nname = \"django\"\n"), ("pipenv", "Pipfile.lock", "{}")] {
+            let tmp = tempfile::tempdir().unwrap();
+            let dir = tmp.path();
+            write(dir, "manage.py", "from django.core.management import execute_from_command_line\n");
+            write(dir, lock, content);
+            let through = format!("{manager} run python manage.py migrate --no-input");
+
+            // None in the project: no read; a migrate through the manager, which finds one kept
+            // elsewhere.
+            assert_eq!(status(dir), Err(MigrationsError::NoEnvironment), "{manager}");
+            assert_eq!(deps::migration_status(django, dir), Err(MigrationsError::NoEnvironment), "{manager}: nothing runs");
+            assert_eq!(migrate(dir), Some(through.as_str()), "{manager}");
+
+            // Its interpreter gone, and the whole `.venv` a link that leads nowhere: neither.
+            write(dir, ".venv/pyvenv.cfg", "home = /opt/homebrew/opt/python@3.11/bin\n");
+            fs::create_dir_all(dir.join(".venv").join("bin")).unwrap();
+            std::os::unix::fs::symlink(lost, dir.join(".venv").join("bin").join("python")).unwrap();
+            assert_eq!(status(dir), Err(MigrationsError::NoEnvironment), "{manager}");
+            assert_eq!(migrate(dir), None, "{manager}: refused");
+            fs::remove_dir_all(dir.join(".venv")).unwrap();
+            std::os::unix::fs::symlink(lost, dir.join(".venv")).unwrap();
+            assert_eq!(status(dir), Err(MigrationsError::NoEnvironment), "{manager}");
+            assert_eq!(migrate(dir), None, "{manager}: refused");
+
+            // One that works: its interpreter, for both.
+            fs::remove_file(dir.join(".venv")).unwrap();
+            write(dir, ".venv/bin/python", "");
+            assert_eq!(status(dir), Ok(".venv/bin/python manage.py showmigrations --plan"), "{manager}");
+            assert_eq!(migrate(dir), Some(".venv/bin/python manage.py migrate --no-input"), "{manager}");
+        }
     }
 }

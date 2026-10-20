@@ -2,16 +2,20 @@
 //! `manage.py` itself (requirements often live in a folder of their own). The pending ones come
 //! from `manage.py showmigrations --plan`, which only reads; migrate is exactly
 //! `manage.py migrate --no-input`. Both run with the project environment's interpreter, else
-//! through the project's manager, else with `python3` (`python::runner`).
+//! with `python3`; a Poetry or Pipenv project without a working environment of its own isn't
+//! read, and its migrate goes through the manager only where it has no `.venv` at all
+//! (`python::runner`).
 //!
 //! Django's settings are code: what a migrate would run against isn't known here, and nothing
-//! in the files tells production apart, so this module never refuses.
+//! in the files tells production apart, so this module refuses a migrate only where the
+//! project's environment is broken.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::python::{installed_version, locked_version, runner};
+use super::python::{installed_version, locked_version, runner, Run};
 use super::{Captured, Commands, DepFramework, MigrationTool, MigrationsError};
+use crate::i18n::t;
 
 pub struct Django;
 
@@ -51,8 +55,20 @@ impl MigrationTool for Django {
         &VARIANTS
     }
 
+    /// The migrate's spelling; on a broken environment its own interpreter, which the confirm
+    /// shows and `refuse` keeps from running.
     fn variant(&self, dir: &Path) -> usize {
-        runner(dir, "python")
+        runner(dir, "python", Run::Migrate).unwrap_or(0)
+    }
+
+    fn status_variant(&self, dir: &Path) -> Result<usize, MigrationsError> {
+        runner(dir, "python", Run::Read).ok_or(MigrationsError::NoEnvironment)
+    }
+
+    /// A Poetry or Pipenv project's `.venv` whose interpreter has gone: the manager would delete
+    /// it and make it again.
+    fn refuse(&self, dir: &Path) -> Option<String> {
+        runner(dir, "python", Run::Migrate).is_none().then(|| t!("deps.db.noEnvironment"))
     }
 
     fn parse_pending(&self, output: &Captured) -> Result<Vec<String>, MigrationsError> {

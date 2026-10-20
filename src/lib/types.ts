@@ -459,7 +459,7 @@ export type DepMigrations = {
   tool: string;
   command: string;
   pending: string[];
-  error: "unreachable" | "noTable" | "timeout" | "failed" | "toolMissing" | null;
+  error: "unreachable" | "noTable" | "timeout" | "failed" | "toolMissing" | "noEnvironment" | null;
   at: number;
   running: boolean;
   database: { connection: string | null; name: string | null } | null;

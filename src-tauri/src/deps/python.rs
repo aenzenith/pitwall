@@ -701,29 +701,47 @@ fn clause_holds(clause: &str, version: &[u64]) -> Option<bool> {
 
 /* ---------- running a Python tool ---------- */
 
+/// What one of Python's tools is run for: a status read, which runs on its own, or a migrate,
+/// the user's click.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Run {
+    Read,
+    Migrate,
+}
+
 /// How a project runs one of Python's tools, as the place of its spelling among the six a
 /// migration tool lists in this order: `.venv/bin/<tool>`, `venv/bin/<tool>`,
-/// `.venv\Scripts\<tool>` (Windows' layout), `poetry run <tool>`, `pipenv run <tool>`, `<bare>`.
-/// The project environment's own comes first; else the manager's runner, which finds an
-/// environment kept elsewhere.
+/// `.venv\Scripts\<tool>` (Windows' layout), `poetry run <tool>`, `pipenv run <tool>`, `<bare>`;
+/// `None` when it isn't run at all. The project environment's own comes first.
 ///
 /// Never `uv run`, though uv keeps its environment in the project: on one whose interpreter has
 /// gone (a Python that Homebrew or pyenv removed) it deletes the environment and makes a new one,
 /// on any other it installs what the lock has and the environment lacks, and without one it makes
 /// one: a status read, which runs on its own, must do none of that. A uv project without a
 /// working environment falls to the bare spelling, which fails until the install.
-pub(super) fn runner(dir: &Path, executable: &str) -> usize {
+///
+/// `poetry run` and `pipenv run` do the same to an in-project `.venv` whose interpreter has gone,
+/// and make an environment where there is none, so a status read never goes through them: a
+/// Poetry or Pipenv project without a working environment of its own isn't read (the bare
+/// spelling would be another Python than the project's). A migrate goes through the manager,
+/// which finds an environment kept elsewhere, only when the project has no `.venv` at all; on a
+/// broken one it doesn't run.
+pub(super) fn runner(dir: &Path, executable: &str, run: Run) -> Option<usize> {
     if let Some(at) = ENVIRONMENTS[..2].iter().position(|environment| dir.join(environment.folder).join("bin").join(executable).exists()) {
-        return at;
+        return Some(at);
     }
     if dir.join(".venv").join("Scripts").join(format!("{executable}.exe")).is_file() {
-        return 2;
+        return Some(2);
     }
-    match Python.detect(dir) {
+    let manager = match Python.detect(dir) {
         Some("poetry") => 3,
         Some("pipenv") => 4,
-        _ => 5,
-    }
+        _ => return Some(5),
+    };
+    // A `.venv` here is one whose interpreter isn't there, a link that leads nowhere too: the
+    // manager would delete it and make it again.
+    let broken = fs::symlink_metadata(dir.join(".venv")).is_ok();
+    (run == Run::Migrate && !broken).then_some(manager)
 }
 
 /* ---------- the network scan ---------- */

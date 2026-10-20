@@ -587,6 +587,7 @@
   "deps.db.timeout": "The database didn't respond",
   "deps.db.failed": "Couldn't read the migration status",
   "deps.db.toolMissing": "Tool not found; pending migrations couldn't be read",
+  "deps.db.noEnvironment": "The project's environment (.venv) isn't ready; install the dependencies first",
   "deps.migrate": "Migrate…",
   "deps.migrateConfirm": "Run the migrations?",
   "deps.migrateAfterInstall": "After the install finishes",

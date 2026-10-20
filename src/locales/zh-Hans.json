@@ -568,6 +568,7 @@
   "deps.db.timeout": "数据库没有响应",
   "deps.db.failed": "未能读取迁移状态",
   "deps.db.toolMissing": "未找到工具；未能读取待执行的迁移",
+  "deps.db.noEnvironment": "项目环境 (.venv) 尚未就绪；请先安装依赖",
   "deps.migrate": "迁移…",
   "deps.migrateConfirm": "运行迁移？",
   "deps.migrateAfterInstall": "安装完成后",

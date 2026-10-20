@@ -568,6 +568,7 @@
   "deps.db.timeout": "データベースが応答しませんでした",
   "deps.db.failed": "マイグレーションの状態を読み取れませんでした",
   "deps.db.toolMissing": "ツールが見つかりません。未実行のマイグレーションを読み取れません",
+  "deps.db.noEnvironment": "プロジェクトの環境 (.venv) の準備ができていません。先に依存関係をインストールしてください",
   "deps.migrate": "マイグレート…",
   "deps.migrateConfirm": "マイグレーションを実行しますか?",
   "deps.migrateAfterInstall": "インストール完了後",

@@ -473,6 +473,7 @@ const DB_ERRORS: Record<NonNullable<DepMigrations["error"]>, Key> = {
   timeout: "deps.db.timeout",
   failed: "deps.db.failed",
   toolMissing: "deps.db.toolMissing",
+  noEnvironment: "deps.db.noEnvironment",
 };
 
 /** Why the last read of the migrations got no list; empty when it got one. */
