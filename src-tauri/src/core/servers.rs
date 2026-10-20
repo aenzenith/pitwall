@@ -103,7 +103,7 @@ impl Core {
 
         let manager = PackageManager::parse(&settings.package_manager).unwrap_or_else(|| {
             let detected = detect_manager(path);
-            self.lock().managers.borrow_mut().insert(path.to_string(), detected);
+            self.lock().managers.insert(path.to_string(), detected);
             detected
         });
 
@@ -390,8 +390,9 @@ pub(super) fn describe_exit(status: Option<std::process::ExitStatus>) -> (String
     (code, signal)
 }
 
-/// The package manager a project's lock file names (npm without one).
-fn detect_manager(path: &str) -> PackageManager {
+/// The package manager a project's lock file names (npm without one). It lists the folder, so
+/// never under the core's lock.
+pub(super) fn detect_manager(path: &str) -> PackageManager {
     let files: Vec<String> =
         fs::read_dir(path).map(|entries| entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect()).unwrap_or_default();
     detect_package_manager(&files)
@@ -399,11 +400,12 @@ fn detect_manager(path: &str) -> PackageManager {
 
 /// The command a project's dev server would run, as the launcher builds it: Settings' package
 /// manager or the lock file's, and the project's script. The lock file is read once per
-/// project (and again at each start).
+/// project on the Git thread (`Core::detect_managers`) and again at each start; until then it
+/// is npm.
 pub(super) fn run_command(inner: &Inner, path: &str) -> String {
     let script = inner.settings.script_for(path);
     let manager = PackageManager::parse(&inner.settings.package_manager)
-        .unwrap_or_else(|| *inner.managers.borrow_mut().entry(path.to_string()).or_insert_with(|| detect_manager(path)));
+        .unwrap_or_else(|| inner.managers.get(path).copied().unwrap_or(PackageManager::Npm));
 
     build_command(manager, &script, &[]).unwrap_or_else(|_| format!("{manager} run {}", script.trim()))
 }

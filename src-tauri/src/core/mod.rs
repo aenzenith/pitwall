@@ -5,7 +5,6 @@
 //! silent free port, crash restart after 3 s, give up after 3 failures within 60 s, health
 //! probe every 30 s.
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::Read;
@@ -151,8 +150,9 @@ struct Inner {
     /// Servers and commands being stopped, by `Unit::key`: their exit is no crash.
     stopping: HashSet<String>,
     supervisor: Supervisor,
-    /// Each project's package manager as its lock file tells, read once and again at each start.
-    managers: RefCell<HashMap<String, PackageManager>>,
+    /// Each project's package manager as its lock file tells, read once off this lock
+    /// (`Core::detect_managers`) and again at each start.
+    managers: HashMap<String, PackageManager>,
     output: HashMap<String, VecDeque<String>>,
     peers: Vec<WindowRecord>,
     favourites: Vec<Favourite>,

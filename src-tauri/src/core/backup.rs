@@ -671,14 +671,14 @@ impl Core {
     }
 
     /// Puts the chosen parts of `file` back.
-    pub fn backup_import(&self, file: &Path, parts: BackupParts) -> Result<ImportReport, String> {
+    pub fn backup_import(self: &Arc<Self>, file: &Path, parts: BackupParts) -> Result<ImportReport, String> {
         self.backup_import_as(file, parts, &home())
     }
 
     /// `backup_import` on a machine whose home folder is `home`. The file is checked whole
     /// (`backup_checked`) and what is here is copied aside (`keep_before`) before anything
     /// changes; either failing, nothing does.
-    fn backup_import_as(&self, file: &Path, parts: BackupParts, home: &str) -> Result<ImportReport, String> {
+    fn backup_import_as(self: &Arc<Self>, file: &Path, parts: BackupParts, home: &str) -> Result<ImportReport, String> {
         let mut backup = self.backup_checked(file)?;
         backup.move_home(home);
 
@@ -692,8 +692,9 @@ impl Core {
         let mut report = ImportReport::default();
 
         if general.is_some() || projects.is_some() {
-            let language = {
+            let (language, unnamed) = {
                 let mut inner = self.lock();
+                let named = PackageManager::parse(&inner.settings.package_manager).is_some();
                 // Checked when the file was read: it fits.
                 if let Some(Ok(next)) = general.as_ref().map(|general| General::onto(&inner.settings, general)) {
                     inner.settings = next;
@@ -702,11 +703,14 @@ impl Core {
                 if let Some(part) = &projects {
                     put_projects(&mut inner.settings, part);
                 }
-                inner.settings.language.clone()
+                (inner.settings.language.clone(), named && PackageManager::parse(&inner.settings.package_manager).is_none())
             };
             self.save_settings();
             i18n::set(i18n::resolve(&language));
             self.retell_issues();
+            if unnamed {
+                self.managers_unnamed();
+            }
         }
 
         // Listed whether or not its folder is here: one that isn't shows among the moved ones.

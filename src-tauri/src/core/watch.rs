@@ -356,6 +356,7 @@ impl Core {
                 }
                 return;
             }
+            core.detect_managers(&paths);
 
             let states: Vec<(String, Option<GitInfo>)> = paths.into_iter().map(|path| (path.clone(), git::status(&path))).collect();
             {
@@ -369,5 +370,35 @@ impl Core {
             }
             core.notify();
         });
+    }
+
+    /// Settings stopped naming the package manager: each listed project's lock file is looked
+    /// for now (`detect_managers`), not at the next poll, as its row shows npm until then.
+    pub(super) fn managers_unnamed(self: &Arc<Self>) {
+        self.refresh_git(self.listed_paths());
+    }
+
+    /// The package manager of each of these projects whose lock file wasn't looked for yet
+    /// (`servers::run_command` shows npm until then): their folders are listed here, off the
+    /// core's lock, as a large one or one on a share that stopped answering takes its time.
+    /// Nothing is listed while Settings names the manager. A start that read the folder
+    /// meanwhile is kept.
+    fn detect_managers(&self, paths: &[String]) {
+        let unknown: Vec<&String> = {
+            let inner = self.lock();
+            if PackageManager::parse(&inner.settings.package_manager).is_some() {
+                return;
+            }
+            paths.iter().filter(|path| !inner.managers.contains_key(*path)).collect()
+        };
+        if unknown.is_empty() {
+            return;
+        }
+
+        let detected: Vec<(&String, PackageManager)> = unknown.into_iter().map(|path| (path, servers::detect_manager(path))).collect();
+        let mut inner = self.lock();
+        for (path, manager) in detected {
+            inner.managers.entry(path.clone()).or_insert(manager);
+        }
     }
 }

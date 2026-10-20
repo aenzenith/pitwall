@@ -37,11 +37,12 @@ impl Core {
     /// first run, the folders known) have their own commands: those stay as they are here,
     /// whatever the form holds of them, which may be older. Taken and put back under one lock,
     /// so nothing changes in between.
-    pub fn set_settings_form(&self, form: Settings) {
+    pub fn set_settings_form(self: &Arc<Self>, form: Settings) {
         let language = form.language.clone();
-        {
+        let unnamed = {
             let mut inner = self.lock();
             let kept = std::mem::take(&mut inner.settings);
+            let unnamed = PackageManager::parse(&kept.package_manager).is_some() && PackageManager::parse(&form.package_manager).is_none();
             // Turned on: its first look only notes what is there (`discover.rs`).
             let seen_folders = if form.suggest_projects && !kept.suggest_projects { Vec::new() } else { kept.seen_folders };
             inner.settings = Settings {
@@ -67,12 +68,16 @@ impl Core {
                 cli: kept.cli,
                 ..form
             };
-        }
+            unnamed
+        };
 
         self.save_settings();
         i18n::set(i18n::resolve(&language));
         self.retell_issues();
         self.notify();
+        if unnamed {
+            self.managers_unnamed();
+        }
     }
 
     /// The settings as a whole, as a test sets a core up; the app changes them part by part.
