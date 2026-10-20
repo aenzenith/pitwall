@@ -105,6 +105,27 @@
         "ja": "プロジェクトフォルダ内のフォルダで package.json がデバイスやパイプへのリンクになっていると、新しいプロジェクトを探している最中に Pitwall がクラッシュしたり固まったりしていました。今はそのようなフォルダを飛ばします。",
         "zh-Hans": "项目文件夹中如果有文件夹的 package.json 是指向设备或管道的链接，Pitwall 在查找新项目时会崩溃或卡住。现在会跳过这样的文件夹。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "A command that asks first no longer comes back on its own",
+        "tr": "Önce soran komut kendiliğinden geri gelmiyor",
+        "de": "Ein Befehl, der zuerst fragt, kommt nicht mehr von selbst zurück",
+        "es": "Un comando que pregunta primero ya no vuelve solo",
+        "ru": "Команда, которая спрашивает, больше не возвращается сама",
+        "ja": "確認付きのコマンドが勝手に戻らなくなりました",
+        "zh-Hans": "运行前询问的命令不再自行回来"
+      },
+      "body": {
+        "en": "A command marked Ask before running and Keeps running that you had run yourself started again unasked after a restart for an update, or at launch when Pitwall put back what was open at quit. Now it isn't put back: run it again when you want it. One that starts with the dev server waits in the project's Commands, skipped.",
+        "tr": "Hem Çalıştırmadan önce sor hem Sürekli çalışır işaretli bir komutu elle çalıştırdıysan, güncelleme için yeniden başlatınca ya da Pitwall açılırken çıkışta açık olanları geri getirdiğinde, sana sorulmadan yeniden başlıyordu. Artık geri getirilmiyor: istediğinde kendin yeniden çalıştır. Dev sunucusuyla birlikte başlayan böyle bir komut ise projenin Komutlar bölümünde atlanmış olarak bekliyor.",
+        "de": "Ein mit Vor dem Ausführen fragen und Läuft dauerhaft markierter Befehl, den du selbst ausgeführt hattest, startete ungefragt wieder, nach einem Neustart für ein Update oder beim Start, wenn Pitwall zurückholte, was beim Beenden geöffnet war. Jetzt wird er nicht zurückgeholt: Führ ihn wieder aus, wenn du ihn brauchst. Einer, der mit dem Dev-Server startet, wartet übersprungen unter den Befehlen des Projekts.",
+        "es": "Un comando marcado con Preguntar antes de ejecutar y Mantener en ejecución que habías ejecutado tú volvía a arrancar sin preguntar tras reiniciar para una actualización, o al abrir Pitwall cuando restauraba lo que estaba abierto al salir. Ahora no se restaura: ejecútalo de nuevo cuando lo quieras. Uno que arranca con el servidor de desarrollo espera en los Comandos del proyecto, omitido.",
+        "ru": "Команда с отметками «Спрашивать перед запуском» и «Работает постоянно», которую вы запускали сами, снова стартовала без вопроса после перезапуска для обновления или при запуске, когда Pitwall возвращал то, что было открыто при выходе. Теперь она не восстанавливается: запустите её снова, когда понадобится. Та, что стартует вместе с dev-сервером, ждёт в «Командах» проекта как пропущенная.",
+        "ja": "「実行前に確認」と「常駐させる」を付けたコマンドを自分で実行していた場合、アップデートのための再起動のあとや、起動時に Pitwall が終了時に開いていたものを復元するときに、確認なしで再び始まっていました。今は復元されません。必要なときにもう一度実行してください。開発サーバーと連動して起動するものは、プロジェクトの「コマンド」でスキップされた状態のまま待ちます。",
+        "zh-Hans": "同时勾选了“运行前询问”和“持续运行”、由你亲手运行过的命令，在为更新而重启后，或在启动时 Pitwall 恢复退出时打开的内容时，会不经询问再次启动。现在它不会被恢复：需要时请自己再运行一次。随开发服务器一起启动的这类命令，会以已跳过的状态等在项目的“命令”里。"
+      }
     }
   ]
 }

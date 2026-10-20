@@ -24,7 +24,7 @@ const RESET: &str = "\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Cut {
     /// `claude`: a turn at work in a tab (its session is opened again). `shell`: a command
-    /// running in a tab. `command`: a running one-off custom command.
+    /// running in a tab. `command`: a running custom command that is one-off or asks first.
     pub kind: &'static str,
     /// The project's name.
     pub project: String,
@@ -88,7 +88,7 @@ struct Record {
     version: String,
     window: bool,
     servers: Vec<String>,
-    /// Custom commands that keep running and weren't started by their server.
+    /// Custom commands that keep running, don't ask first and weren't started by their server.
     commands: Vec<Rerun>,
     tabs: Vec<Tab>,
 }
@@ -189,9 +189,10 @@ impl Core {
             let Some(command) = inner.settings.project(path).commands.into_iter().find(|command| command.id == id) else {
                 continue;
             };
-            // One that starts with its server comes back with it.
-            let again = command.keep_running && !(command.with_server && inner.runs.contains_key(path));
-            if !command.keep_running || again {
+            // One that starts with its server comes back with it. One marked "ask first" never
+            // comes back by itself: it is cut off.
+            let again = command.keep_running && !command.confirm && !(command.with_server && inner.runs.contains_key(path));
+            if !command.keep_running || again || command.confirm {
                 commands.push((path.to_string(), id.to_string(), command.name, again));
             }
         }
@@ -245,8 +246,8 @@ impl Core {
     }
 
     /// At start: puts back what the record names, once. Only listed projects whose folder is
-    /// still there take part, only commands they still have that keep running, and only a
-    /// session id reaches Claude's command line.
+    /// still there take part, only commands they still have that keep running and don't ask
+    /// first, and only a session id reaches Claude's command line.
     pub fn restore(self: &Arc<Self>) -> Option<Restored> {
         let file = self.restore_file();
         let raw = fs::read(&file).ok()?;
@@ -286,9 +287,10 @@ impl Core {
         }
 
         let servers: Vec<String> = record.servers.into_iter().filter(|path| known(path)).collect();
-        // Only commands the project still has and that keep running: the record names no other.
+        // Only commands the project still has, that keep running and don't ask first: the record
+        // names no other.
         let settings = self.settings();
-        let keeps_running = |command: &Rerun| settings.project(&command.path).commands.iter().any(|own| own.id == command.id && own.keep_running);
+        let keeps_running = |command: &Rerun| settings.project(&command.path).commands.iter().any(|own| own.id == command.id && own.keep_running && !own.confirm);
         let commands: Vec<Rerun> = record.commands.into_iter().filter(|command| known(&command.path) && keeps_running(command)).collect();
         restored.servers = servers.len();
 
@@ -397,9 +399,10 @@ mod tests {
         false
     }
 
-    /// The record names the commands that keep running, and nothing else starts one: a one-off
-    /// command marked "ask first" that a record written by hand names would run unasked, a
-    /// migration with nobody there.
+    /// The record names the commands that keep running and don't ask first, and nothing else
+    /// starts one: a one-off command marked "ask first" that a record written by hand names would
+    /// run unasked, a migration with nobody there, and so would a worker marked "ask first" that
+    /// the user said yes to before the restart.
     #[cfg(unix)]
     #[test]
     fn only_commands_that_keep_running_come_back() {
@@ -409,22 +412,28 @@ mod tests {
         let project = tmp.path().join("paddock");
         fs::create_dir_all(&project).unwrap();
         let project = project.to_string_lossy().into_owned();
-        let (worked, migrated) = (tmp.path().join("worked"), tmp.path().join("migrated"));
+        let (worked, migrated, watched) = (tmp.path().join("worked"), tmp.path().join("migrated"), tmp.path().join("watched"));
 
         let core = core_in(tmp.path());
         core.add_project(&project).unwrap();
         let command = |id: &str, line: String, keep_running: bool, confirm: bool| CustomCommand { id: id.into(), name: id.into(), command: line, keep_running, confirm, with_server: false };
-        let commands = vec![command("migrate", format!("touch '{}'", migrated.display()), false, true), command("worker", format!("touch '{}'; sleep 30", worked.display()), true, false)];
+        let commands = vec![
+            command("migrate", format!("touch '{}'", migrated.display()), false, true),
+            command("worker", format!("touch '{}'; sleep 30", worked.display()), true, false),
+            command("watch", format!("touch '{}'; sleep 30", watched.display()), true, true),
+        ];
         core.set_project_settings(&project, ProjectSettings { commands, ..Default::default() });
 
         let rerun = |id: &str| Rerun { path: project.clone(), id: id.into() };
-        let record = Record { v: 1, at: now_ms(), version: "9.9.9".into(), window: false, servers: Vec::new(), commands: vec![rerun("migrate"), rerun("worker")], tabs: Vec::new() };
+        let commands = vec![rerun("migrate"), rerun("worker"), rerun("watch")];
+        let record = Record { v: 1, at: now_ms(), version: "9.9.9".into(), window: false, servers: Vec::new(), commands, tabs: Vec::new() };
         write_private(&core.restore_file(), &serde_json::to_string(&record).unwrap()).unwrap();
         core.restore().expect("a fresh record");
 
         assert!(wait_for(|| worked.exists()), "the worker came back");
         thread::sleep(Duration::from_millis(500));
         assert!(!migrated.exists(), "an ask-first command was run");
+        assert!(!watched.exists(), "an ask-first worker came back unasked");
 
         core.dispose();
     }

@@ -31,7 +31,8 @@ struct OpenTab {
 struct OpenProject {
     path: String,
     server: bool,
-    /// Custom commands that keep running and weren't started by their server, by id.
+    /// Custom commands that keep running, don't ask first and weren't started by their server,
+    /// by id.
     commands: Vec<String>,
     tabs: Vec<OpenTab>,
 }
@@ -153,8 +154,8 @@ impl Core {
 
     /// At start: reads the last quit's record, once. `restored`: a restart for an update already
     /// put back what was open, so the record is only dropped. Only listed projects whose folder
-    /// is still there take part, only commands the project still has, and only a session id
-    /// reaches Claude's command line.
+    /// is still there take part, only commands the project still has that keep running and don't
+    /// ask first, and only a session id reaches Claude's command line.
     pub fn resume_start(self: &Arc<Self>, restored: bool) {
         let file = self.resume_file();
         let Ok(raw) = fs::read(&file) else {
@@ -184,7 +185,7 @@ impl Core {
             .filter(|project| listed.iter().any(|known| same_path(known, &project.path)) && Path::new(&project.path).is_dir())
             .map(|mut project| {
                 let known = settings.project(&project.path).commands;
-                project.commands.retain(|id| known.iter().any(|command| &command.id == id && command.keep_running));
+                project.commands.retain(|id| known.iter().any(|command| &command.id == id && command.keep_running && !command.confirm));
                 for tab in &mut project.tabs {
                     tab.session = tab.session.take().filter(|id| is_session_id(id));
                     tab.name = tab.name.take().map(|name| name.trim().chars().take(40).collect::<String>()).filter(|name| !name.is_empty());
@@ -332,6 +333,45 @@ mod tests {
 
         core.resume_start(false);
         assert_eq!(core.lock().terminal_list.len(), 1, "no second time");
+
+        core.dispose();
+    }
+
+    /// Putting back what was open is no yes to a command marked "ask first": a worker the user
+    /// said yes to before the quit, which a record written by an older version or by hand names,
+    /// is neither offered nor run; one that doesn't ask first comes back.
+    #[test]
+    fn a_command_marked_ask_first_never_comes_back_by_itself() {
+        use crate::settings::{CustomCommand, ProjectSettings};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        let (worked, watched) = (tmp.path().join("worked"), tmp.path().join("watched"));
+
+        let core = core_in(tmp.path());
+        core.add_project(&project).unwrap();
+        let command = |id: &str, line: String, confirm: bool| CustomCommand { id: id.into(), name: id.into(), command: line, keep_running: true, confirm, with_server: false };
+        let commands = vec![command("worker", format!("touch '{}'; sleep 30", worked.display()), false), command("watch", format!("touch '{}'; sleep 30", watched.display()), true)];
+        core.set_project_settings(&project, ProjectSettings { commands, ..Default::default() });
+
+        let open = OpenProject { path: project.clone(), server: false, commands: vec!["worker".into(), "watch".into()], tabs: Vec::new() };
+        let record = Record { v: 1, at: now_ms(), projects: vec![open] };
+        write_private(&core.resume_file(), &serde_json::to_string(&record).unwrap()).unwrap();
+
+        core.resume_start(false);
+        let offered = core.snapshot().resume.expect("an offer");
+        assert_eq!(offered.projects.iter().map(|project| project.commands.clone()).collect::<Vec<_>>(), vec![vec!["worker".to_string()]]);
+        core.resume_restore(false);
+
+        let until = Instant::now() + Duration::from_secs(15);
+        while !worked.exists() && Instant::now() < until {
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(worked.exists(), "the worker came back");
+        thread::sleep(Duration::from_millis(500));
+        assert!(!watched.exists(), "an ask-first worker came back unasked");
 
         core.dispose();
     }
