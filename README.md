@@ -109,7 +109,10 @@ nothing of yours along.
 Download the latest build from [Releases](https://github.com/aenzenith/pitwall/releases/latest).
 Builds aren't signed yet, so the system asks once:
 
-- **macOS 13+** (Apple Silicon, `.dmg`): drag Pitwall to Applications, then right-click it › Open › Open.
+- **macOS 13+** (Apple Silicon): `brew install --cask aenzenith/tap/pitwall`, or drag Pitwall from the
+  `.dmg` to Applications. On macOS 15 and later the first open is blocked: open System Settings ›
+  Privacy & Security, click Open Anyway within about an hour, then enter your password. On macOS 13
+  and 14, right-click Pitwall › Open › Open.
 - **Windows 10/11** (`-setup.exe` or `.msi`): on the SmartScreen prompt, More info › Run anyway.
   Needs WebView2, which Windows 11 and an up-to-date Windows 10 already have.
 - **Linux** (`.AppImage` or `.deb`): `chmod +x Pitwall_*.AppImage` and run it, or
