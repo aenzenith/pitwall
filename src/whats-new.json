@@ -147,6 +147,27 @@
         "ja": "すでに表示されているターミナルタブをクリックすると、キーボードがタブに残ったままになり、入力はどこにも届かず、Backspace でタブが中のシェルごと閉じていました。今はクリックするとキーボードがターミナルに移ります。",
         "zh-Hans": "点击已经显示的终端标签页时，键盘焦点会留在标签上：输入的内容没有去处，按一下 Backspace 还会把标签页连同其中的 shell 一起关闭。现在点击后键盘会回到终端。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Editing a link changes only its own project",
+        "tr": "Düzenlediğin bağlantı kendi projesinde kalıyor",
+        "de": "Ein Link ändert sich nur in seinem eigenen Projekt",
+        "es": "Editar un enlace solo cambia su propio proyecto",
+        "ru": "Ссылка меняется только в своём проекте",
+        "ja": "リンクの編集は自分のプロジェクトだけに反映されます",
+        "zh-Hans": "编辑链接只会改动它所属的项目"
+      },
+      "body": {
+        "en": "If another project got selected while the link dialog was open, for instance because a notification brought it up or a crash took the first one out of a filtered list, Save or Delete changed that project's link in the same place. The dialog now closes when the project changes, and changes only its own project's links.",
+        "tr": "Bağlantı penceresi açıkken başka bir proje seçildiyse (örneğin bir bildirim onu öne getirdiyse ya da bir çökme ilk projeyi filtreli listeden çıkardıysa), Kaydet ya da Sil o projenin aynı sıradaki bağlantısını değiştiriyordu. Artık proje değişince pencere kapanıyor ve yalnızca kendi projesinin bağlantılarını değiştiriyor.",
+        "de": "Wurde ein anderes Projekt ausgewählt, während der Link-Dialog offen war, etwa weil eine Benachrichtigung es hervorholte oder ein Absturz das erste aus einer gefilterten Liste nahm, änderten Sichern oder Löschen den Link an derselben Stelle in diesem Projekt. Jetzt schließt sich der Dialog, sobald das Projekt wechselt, und ändert nur die Links seines eigenen Projekts.",
+        "es": "Si se seleccionaba otro proyecto con el diálogo del enlace abierto, por ejemplo porque una notificación lo traía al frente o una caída sacaba el primero de una lista filtrada, Guardar o Eliminar cambiaban el enlace de ese otro proyecto en la misma posición. Ahora el diálogo se cierra cuando cambia el proyecto y solo toca los enlaces del suyo.",
+        "ru": "Если, пока был открыт диалог ссылки, выбирался другой проект (например, его открыло уведомление или сбой убрал первый проект из отфильтрованного списка), «Сохранить» или «Удалить» меняли ссылку на том же месте в другом проекте. Теперь диалог закрывается при смене проекта и меняет только ссылки своего проекта.",
+        "ja": "リンクのダイアログを開いているあいだに別のプロジェクトが選択されると（通知でそのプロジェクトが前に出た、クラッシュで最初のプロジェクトが絞り込んだリストから外れた、など）、「保存」や「削除」がそのプロジェクトの同じ位置のリンクを変えていました。今はプロジェクトが変わるとダイアログが閉じ、自分のプロジェクトのリンクだけを変更します。",
+        "zh-Hans": "链接对话框打开期间，如果选中了另一个项目（例如通知把它调到前面，或某次崩溃让第一个项目从筛选后的列表中消失），“保存”或“删除”会改动那个项目同一位置的链接。现在项目一变，对话框就会关闭，并且只改动它自己项目的链接。"
+      }
     }
   ]
 }
