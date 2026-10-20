@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
@@ -739,6 +740,56 @@ fn cut_short(verdict: &Verdict, idle: Option<u64>) -> bool {
     verdict.turn.is_none() && idle.zip(verdict.at).is_some_and(|(idle, at)| idle >= at)
 }
 
+/// One take of the hook's events at a time (`take_events`): the files of two at once would be
+/// applied twice, or out of order.
+static TAKING: Mutex<()> = Mutex::new(());
+
+/// Takes the hook's events in: their files read and deleted without the lock on `claude`, then
+/// applied under it, so a pile the hook left while Pitwall was closed holds up nothing that waits
+/// on Claude's state. Returns the listed projects where a turn just ended.
+pub fn take_events(claude: &Mutex<ClaudeWatch>) -> Vec<String> {
+    let _taking = TAKING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Ok(dir) = claude.lock().map(|claude| claude.events_dir.clone()) else {
+        return Vec::new();
+    };
+    let events = read_events(&dir);
+    match claude.lock() {
+        Ok(mut claude) => claude.apply_events(events),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// The hook's event files in `dir`, read in the order they were written, and deleted; one older
+/// than a day is deleted unread.
+fn read_events(dir: &Path) -> Vec<HookEvent> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+
+    let now = now_ms();
+    let mut files: Vec<(SystemTime, PathBuf)> = entries
+        .flatten()
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "event" || ext == "json"))
+        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+        .collect();
+    files.sort();
+
+    let mut events = Vec::new();
+    for (modified, file) in files {
+        let at = system_ms(modified);
+        if now.saturating_sub(at) >= EVENT_MAX_AGE_MS {
+            let _ = fs::remove_file(&file);
+            continue;
+        }
+        let raw = fs::read_to_string(&file).unwrap_or_default();
+        let _ = fs::remove_file(&file);
+
+        let legacy = file.extension().is_some_and(|ext| ext == "json");
+        events.extend(if legacy { HookEvent::parse_legacy(&raw, at) } else { HookEvent::parse(&raw, at) });
+    }
+    events
+}
+
 pub struct ClaudeWatch {
     root: PathBuf,
     seen_file: PathBuf,
@@ -906,7 +957,7 @@ impl ClaudeWatch {
     pub fn scan(&mut self, folder_paths: &[String]) -> ScanResult {
         self.set_listed(folder_paths);
         self.rescan();
-        self.apply_events();
+        self.apply_events(read_events(&self.events_dir));
         self.evaluate()
     }
 
@@ -1009,38 +1060,13 @@ impl ClaudeWatch {
         }
     }
 
-    /// Applies the hook's event files in the order they were written, then deletes them; one
-    /// older than a day is only deleted. Returns the listed projects where a turn just ended.
-    pub fn apply_events(&mut self) -> Vec<String> {
-        let Ok(entries) = fs::read_dir(&self.events_dir) else {
-            return Vec::new();
-        };
-
-        let now = now_ms();
-        let mut files: Vec<(SystemTime, PathBuf)> = entries
-            .flatten()
-            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "event" || ext == "json"))
-            .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
-            .collect();
-        files.sort();
-
+    /// Applies the hook's events (`read_events`), in the order they were written. Returns the
+    /// listed projects where a turn just ended.
+    fn apply_events(&mut self, events: Vec<HookEvent>) -> Vec<String> {
         let mut ended = Vec::new();
 
-        for (modified, file) in files {
-            let at = system_ms(modified);
-            let raw = fs::read_to_string(&file).unwrap_or_default();
-            let _ = fs::remove_file(&file);
-
-            if now.saturating_sub(at) >= EVENT_MAX_AGE_MS {
-                continue;
-            }
-
-            let legacy = file.extension().is_some_and(|ext| ext == "json");
-            let Some(event) = (if legacy { HookEvent::parse_legacy(&raw, at) } else { HookEvent::parse(&raw, at) }) else {
-                continue;
-            };
-
-            let session = self.hooked.entry(event.session_id.clone()).or_insert_with(|| HookSession::new(at));
+        for event in events {
+            let session = self.hooked.entry(event.session_id.clone()).or_insert_with(|| HookSession::new(event.at));
             session.apply(&event);
 
             if event.event == "Stop" {

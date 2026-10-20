@@ -150,8 +150,8 @@ impl Core {
         if let Ok(mut claude) = self.claude.lock() {
             claude.set_listed(&paths);
             claude.rescan();
-            claude.apply_events();
         }
+        crate::claude::take_events(&self.claude);
 
         self.watch_paths(&paths);
         self.lock().git.retain(|path, _| paths.contains(path));
@@ -317,10 +317,10 @@ impl Core {
                 for (dir, file) in &changes.logs {
                     claude.refresh_log(dir, file);
                 }
-                if changes.events || changes.rescan {
-                    // A turn that ended may have changed files: their Git state too.
-                    git.extend(claude.apply_events());
-                }
+            }
+            if changes.events || changes.rescan {
+                // A turn that ended may have changed files: their Git state too.
+                git.extend(crate::claude::take_events(&self.claude));
             }
             self.refresh_claude();
         }
