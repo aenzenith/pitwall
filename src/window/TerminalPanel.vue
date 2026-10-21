@@ -23,6 +23,8 @@ import {
   HISTORY_WIDTH,
   historyWidth,
   terminalRequest,
+  sessionsTerminalCollapsed,
+  sessionsTerminalHeight,
   trackTerminalCollapsed,
   trackTerminalHeight,
   trackTerminals,
@@ -41,18 +43,24 @@ import TerminalHistory from "./TerminalHistory.vue";
 const REQUEST_MS = 5_000;
 
 /**
- * The selected project's terminals. `track`: the Track page's, the same panel with one difference:
- * it lies over the page's bottom instead of taking its room from what is above it, so nothing there
- * is laid out again (or scrolls in less room) as it grows. Its height and collapsed state are that
- * page's own (lib/panel), and a press on what it lies over folds it away (`collapse`).
+ * The selected project's terminals. `place`: the page they are on, the list's by default. The Track
+ * page's is the same panel with one difference: it lies over the page's bottom instead of taking
+ * its room from what is above it, so nothing there is laid out again (or scrolls in less room) as
+ * it grows, and a press on what it lies over folds it away (`collapse`). The Sessions page's takes
+ * its room under that page's list, as the list's does; the page moves it from session to session,
+ * so it never takes the keyboard by itself. Each has a height and a collapsed state of its own
+ * (lib/panel).
  */
-const props = defineProps<{ project: Project; track?: boolean }>();
+const props = withDefaults(defineProps<{ project: Project; place?: "list" | "track" | "sessions" }>(), { place: "list" });
 
 /** Room above the panel that always stays: the toolbar (56), and under it the list's table header
- * (38). */
-const HEADER = props.track ? 56 : 94;
-const height = props.track ? trackTerminalHeight : terminalHeight;
-const collapsed = props.track ? trackTerminalCollapsed : terminalCollapsed;
+ * (38) or the Sessions page's filters (44). */
+const PLACES = {
+  list: { header: 94, height: terminalHeight, collapsed: terminalCollapsed },
+  track: { header: 56, height: trackTerminalHeight, collapsed: trackTerminalCollapsed },
+  sessions: { header: 100, height: sessionsTerminalHeight, collapsed: sessionsTerminalCollapsed },
+};
+const { header: HEADER, height, collapsed } = PLACES[props.place];
 
 const panel = ref<HTMLElement | null>(null);
 const viewport = ref<HTMLElement | null>(null);
@@ -90,7 +98,7 @@ const active = computed(() => {
 const resizer = useResizer(
   height,
   () => (panel.value?.parentElement?.clientHeight ?? 0) - HEADER,
-  () => (!props.track && outputShown.value && !outputCollapsed.value ? outputHeight.value : null),
+  () => (props.place === "list" && outputShown.value && !outputCollapsed.value ? outputHeight.value : null),
 );
 const dragging = resizer.dragging;
 
@@ -245,7 +253,8 @@ async function openTerminal(claude = false, start: StartChoice | null = null): P
     }
     const size = viewport.value ? measure(viewport.value) : null;
     const view = await api.openTerminal(props.project.path, claude, size, start);
-    if (props.track) trackTerminals.add(view.id);
+    if (props.place === "track") trackTerminals.add(view.id);
+    asked = view.id;
     chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: view.id };
   } finally {
     opening.value = false;
@@ -254,6 +263,7 @@ async function openTerminal(claude = false, start: StartChoice | null = null): P
 
 function show(id: number): void {
   unasked.delete(id);
+  asked = id;
   chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: id };
 }
 
@@ -282,6 +292,13 @@ function seeFinished(id: number | undefined): void {
  * keyboard. A tab the user asked for (put back, a card given by hand) is shown as any other.
  */
 const unasked = new Set<number>();
+
+/**
+ * The tab asked for here, until it shows: clicked, picked, opened from "+" or brought up
+ * (`terminalRequest`). On the Sessions page only that one takes the keyboard; a tab the page shows
+ * for the session selected in its list comes up without it, so the list keeps its arrow keys.
+ */
+let asked: number | null = null;
 
 watch(
   () => [props.project.path, terminals.value] as const,
@@ -483,9 +500,12 @@ watch(
   async (id) => {
     const onTabs = stayOnTabs;
     stayOnTabs = false;
+    const wanted = id !== undefined && asked === id;
+    asked = null;
     await nextTick();
-    // A tab that came by itself is shown without the keyboard.
-    const quiet = id !== undefined && unasked.delete(id);
+    // A tab that came by itself is shown without the keyboard; on the Sessions page, so is any
+    // tab not asked for here.
+    const quiet = (id !== undefined && unasked.delete(id)) || (props.place === "sessions" && !wanted);
     showTab(id);
     if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value && !quiet);
     if (onTabs) focusTab(id);
@@ -535,7 +555,7 @@ watch(
 watch(
   () => [shellRequest.value, props.project.path] as const,
   async ([request, path]) => {
-    if (!request || props.track) return;
+    if (!request || props.place !== "list") return;
     if (Date.now() - request.at > REQUEST_MS) {
       shellRequest.value = null;
       return;
@@ -597,7 +617,7 @@ defineExpose({ openTerminal, collapse });
 <template>
   <section
     ref="panel"
-    :class="['term-panel', { animated: !dragging, collapsed, over: track }]"
+    :class="['term-panel', { animated: !dragging, collapsed, over: place === 'track', paged: place === 'sessions' }]"
     :style="{ height: `${shownHeight}px` }"
     :aria-label="t('terminal.panel', { name: project.name })"
   >
@@ -755,6 +775,12 @@ defineExpose({ openTerminal, collapse });
   flex-direction: column;
   border-top: 1px solid var(--line);
   box-shadow: var(--shadow-rise);
+}
+
+/* The Sessions page's: up to its filters, under its bar. Not `.sessions`: that page's own root
+   class, whose scoped rule reaches this root too, would make it grow. */
+.term-panel.paged {
+  max-height: calc(100% - 100px);
 }
 
 /* The Track page's: over the page's bottom, on a ground of its own, up to the page's bar. */

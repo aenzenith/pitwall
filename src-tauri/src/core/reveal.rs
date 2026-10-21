@@ -3,11 +3,12 @@
 //! it runs. In one of Pitwall's own terminals, the main window shows that terminal (the board
 //! card it was given from, else the project's terminal panel). Elsewhere the project's
 //! window comes to the front, and that window's extension (a `reveal-claude` command) shows the
-//! Claude Code tab or the terminal the session runs in; a finished session opens again in a
-//! Claude Code tab. One that has just stopped (no process of Claude Code's runs it, its log
-//! written a moment ago) opens again in a Pitwall terminal, wherever it ran. Anything that can't
-//! be proven safe only brings the window up: a session opened a second time would have two
-//! processes writing one log.
+//! Claude Code tab or the terminal the session runs in. One no process of Claude Code's runs
+//! (finished, or just stopped) opens again in a Pitwall terminal, wherever it ran, even with its
+//! project open in an editor; only one Pitwall has no tab for (a folder that isn't listed, a log
+//! outside the project's own Claude folder) goes to the editor as before, a finished one into a
+//! Claude Code tab. Anything that can't be proven safe only brings the window up: a session
+//! opened a second time would have two processes writing one log.
 //!
 //! Which sessions run, and under which processes, comes from Claude Code's
 //! `~/.claude/sessions/<pid>.json` (see `sessions.rs` for what is read of it).
@@ -46,7 +47,7 @@ pub(super) enum Reveal {
     Window,
 }
 
-/// What bringing up a session that has just stopped does about its tab.
+/// What bringing up a session no process runs does about its tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Claim {
     /// Nobody holds it: the caller opens its tab, and says which once it is open.
@@ -144,13 +145,15 @@ pub(super) fn plan_reveal(path: &str, liveness: &Liveness, peers: &[WindowRecord
 
             Reveal::Window
         }
-        Liveness::Ended => match capable().find(|peer| peer.has_root(path)) {
-            Some(peer) => Reveal::Command { target: peer.window_id.clone(), raise: path.to_string(), terminal: None },
-            None => Reveal::Window,
-        },
-        Liveness::Stopped => Reveal::Reopen,
+        Liveness::Ended | Liveness::Stopped => Reveal::Reopen,
         Liveness::Unknown => Reveal::Window,
     }
+}
+
+/// The window a finished session Pitwall has no tab for is sent to: one that takes
+/// `reveal-claude` and has its project.
+fn finished_window<'a>(path: &str, peers: &'a [WindowRecord]) -> Option<&'a WindowRecord> {
+    peers.iter().find(|peer| peer.takes("reveal-claude") && peer.has_root(path))
 }
 
 impl Core {
@@ -222,19 +225,20 @@ impl Core {
                 self.registry.send_reveal(&target, path, session, terminal);
             }
             Reveal::Reopen if self.reopen(path, session) => {}
-            // Without a terminal to open it in, the window as well.
-            Reveal::Reopen | Reveal::Window => {
+            // Without a terminal to open it in, the editor: a finished session in a Claude Code
+            // tab of the window that has its project, or of the one opening now.
+            Reveal::Reopen if liveness == Liveness::Ended => {
                 self.launch_editor(path);
-
-                // A finished session can wait for the window that is opening now.
-                if liveness == Liveness::Ended {
-                    self.reveal_when_open(path, session);
+                match finished_window(path, &self.registry.read_peers()) {
+                    Some(peer) => self.registry.send_reveal(&peer.window_id, path, session, None),
+                    None => self.reveal_when_open(path, session),
                 }
             }
+            Reveal::Reopen | Reveal::Window => self.launch_editor(path),
         }
     }
 
-    /// Opens a session that has just stopped again (`claude --resume`) in a new tab of its
+    /// Opens a session no process runs again (`claude --resume`) in a new tab of its
     /// project's terminals and shows it; a card that holds it follows it there. `false` when
     /// there is no such tab to open: a folder that isn't listed has no terminals, and Claude Code
     /// finds a session only from the folder it ran in. Asked again before its process is listed,
@@ -280,8 +284,8 @@ impl Core {
         while Instant::now() < deadline {
             thread::sleep(Duration::from_millis(500));
 
-            if let Reveal::Command { target, .. } = plan_reveal(path, &Liveness::Ended, &self.registry.read_peers()) {
-                self.registry.send_reveal(&target, path, session, None);
+            if let Some(peer) = finished_window(path, &self.registry.read_peers()) {
+                self.registry.send_reveal(&peer.window_id, path, session, None);
                 return;
             }
         }
@@ -372,10 +376,9 @@ mod tests {
             // Old extension versions get nothing.
             (running("claude-vscode", &[900, host]), vec![window(host, false, &[])], Reveal::Window),
             (running("cli", &[900, shell]), vec![window(host, false, &[shell])], Reveal::Window),
-            (Liveness::Ended, vec![window(host, false, &[])], Reveal::Window),
-            // A finished session opens again in a window that has the project.
-            (Liveness::Ended, vec![window(host, true, &[])], command(host, None)),
-            // Just stopped: one of Pitwall's own terminals, although a window has the project.
+            // Finished or just stopped: one of Pitwall's own terminals, although a window has the
+            // project.
+            (Liveness::Ended, vec![window(host, true, &[])], Reveal::Reopen),
             (Liveness::Stopped, vec![window(host, true, &[])], Reveal::Reopen),
             // Unsure whether it runs: only the window.
             (Liveness::Unknown, vec![window(host, true, &[])], Reveal::Window),

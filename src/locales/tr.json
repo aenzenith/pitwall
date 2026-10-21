@@ -499,7 +499,7 @@
   "day.under": "<{value}",
   "day.sessions": "Claude oturumları",
   "day.untitled": "Adsız oturum",
-  "day.sessionTitle": "Oturumu editörde göstermek için tıkla",
+  "day.sessionTitle": "Oturumu öne getirmek için tıkla",
   "day.turns": {
     "other": "{count} tur"
   },
@@ -818,8 +818,8 @@
   "sessions.origin.unknownLong": "Nerede çalıştığı bilinmiyor",
   "sessions.action.bringUp": "Öne getir",
   "sessions.action.bringUpTitle": "Oturumu çalıştığı yerde göster",
-  "sessions.action.reopen": "Yeniden aç",
-  "sessions.action.reopenTitle": "Editörde bir Claude Code sekmesinde sürdür",
+  "sessions.action.reopenTerminal": "Terminalde yeniden aç",
+  "sessions.action.reopenTitle": "Pitwall terminalinde yeni bir sekmede sürdür",
   "sessions.elsewhere.tag": "Başka uygulama",
   "sessions.elsewhere.title": "Bu oturum {app} içinde çalışıyor",
   "sessions.elsewhere.titleUnnamed": "Bu oturum başka bir uygulamada çalışıyor",

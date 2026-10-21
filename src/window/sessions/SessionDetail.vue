@@ -23,8 +23,8 @@ import SessionTerminal from "./SessionTerminal.vue";
 
 /**
  * One session: what it is doing, its day and its tokens, what Claude last said in it, and under
- * them its terminal when it runs in one of Pitwall's. The Sessions page's details, and a board
- * card's once it has a session.
+ * them its terminal when it runs in one of Pitwall's (not on the Sessions page, whose terminal
+ * panel shows it). The Sessions page's details, and a board card's once it has a session.
  * Claude's state reads as a project's Claude card does (detail/ClaudeCard), its one button the
  * same; bringing it up and opening its project are the list's (double-click, Enter, the
  * context menu). `others`: the other sessions of its project that wait on you (seen is kept per
@@ -53,8 +53,8 @@ const ownTerminal = computed(() => (props.terminal === undefined ? sessionTermin
 const waiting = computed(() => props.row.phase === "waiting");
 const permission = computed(() => waiting.value && props.row.turn?.kind === "permission");
 const elsewhere = computed(() => runsElsewhere(props.row));
-/** Where it runs isn't known, and it isn't ended (an ended one reopens in the editor either way):
- * with no process running it, it opens again in a Pitwall terminal. */
+/** Where it runs isn't known, and it isn't ended (an ended one reopens either way): with no
+ * process running it, it opens again in a Pitwall terminal. */
 const unknown = computed(() => props.row.origin.kind === "unknown" && props.row.phase !== "ended");
 
 const spark = computed(() => (waiting.value ? "waiting" : props.row.phase === "working" ? "working" : "quiet"));

@@ -500,7 +500,7 @@
   "day.under": "<{value}",
   "day.sessions": "Claude sessions",
   "day.untitled": "Untitled session",
-  "day.sessionTitle": "Click to show this session in the editor",
+  "day.sessionTitle": "Click to bring this session up",
   "day.turns": {
     "one": "{count} turn",
     "other": "{count} turns"
@@ -829,8 +829,8 @@
   "sessions.origin.unknownLong": "Where it runs is unknown",
   "sessions.action.bringUp": "Bring up",
   "sessions.action.bringUpTitle": "Show the session where it runs",
-  "sessions.action.reopen": "Reopen",
-  "sessions.action.reopenTitle": "Continue it in a Claude Code tab in the editor",
+  "sessions.action.reopenTerminal": "Reopen in terminal",
+  "sessions.action.reopenTitle": "Continue it in a new tab of Pitwall's terminal",
   "sessions.elsewhere.tag": "Another app",
   "sessions.elsewhere.title": "This session runs in {app}",
   "sessions.elsewhere.titleUnnamed": "This session runs in another app",

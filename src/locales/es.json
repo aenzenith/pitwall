@@ -509,7 +509,7 @@
   "day.under": "<{value}",
   "day.sessions": "Sesiones de Claude",
   "day.untitled": "Sesión sin nombre",
-  "day.sessionTitle": "Haz clic para mostrar esta sesión en el editor",
+  "day.sessionTitle": "Haz clic para traer esta sesión al frente",
   "day.turns": {
     "one": "{count} turno",
     "other": "{count} turnos"
@@ -838,8 +838,8 @@
   "sessions.origin.unknownLong": "No se sabe dónde se ejecuta",
   "sessions.action.bringUp": "Traer al frente",
   "sessions.action.bringUpTitle": "Mostrar la sesión donde se ejecuta",
-  "sessions.action.reopen": "Reabrir",
-  "sessions.action.reopenTitle": "Continuarla en una pestaña de Claude Code en el editor",
+  "sessions.action.reopenTerminal": "Reabrir en la terminal",
+  "sessions.action.reopenTitle": "Continuarla en una pestaña nueva de la terminal de Pitwall",
   "sessions.elsewhere.tag": "Otra aplicación",
   "sessions.elsewhere.title": "Esta sesión se ejecuta en {app}",
   "sessions.elsewhere.titleUnnamed": "Esta sesión se ejecuta en otra aplicación",

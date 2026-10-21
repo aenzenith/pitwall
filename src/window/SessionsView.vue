@@ -10,23 +10,25 @@ const scope = ref<string | null>(null);
 </script>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 
 import PeriodPicker from "../components/PeriodPicker.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
 import Spinner from "../components/Spinner.vue";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
+import { chosenTerminal } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { ALL, dayLong, type Period } from "../lib/period";
-import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionWaits, type Layout } from "../lib/sessions";
+import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionTerminal, sessionWaits, type Layout } from "../lib/sessions";
 import { api, loadSessions, now, sessions, snapshot, today, visible } from "../lib/store";
 import { tabKey } from "../lib/tabs";
-import type { SessionRow, SessionsView } from "../lib/types";
+import type { Project, SessionRow, SessionsView } from "../lib/types";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionList from "./sessions/SessionList.vue";
 import SessionNotice from "./sessions/SessionNotice.vue";
+import TerminalPanel from "./TerminalPanel.vue";
 
 /** Every Claude Code session today, live; or, looking back, those of an earlier day or of every
  * day there is something kept of. `claudeProject`: where "Open a Claude terminal" would open one
@@ -147,7 +149,7 @@ const fresh = computed(() => layout(pool.value, current.value.sections));
 /**
  * While the pointer or the keyboard is on the list, rows keep their places (lib/sessions:
  * keepOrder): a session that changes state stays put until the list is let go. So it is while the
- * keyboard is in the selected session's terminal: answered there, it stays selected even when it
+ * keyboard is in the page's terminals: answered there, the session stays selected even when it
  * leaves the filter.
  */
 const holding = ref(false);
@@ -185,8 +187,7 @@ const selected = computed(() => (selectedId.value ? (byId.value.get(selectedId.v
 /** The selected session's project's other sessions waiting on you: marking it seen clears them too. */
 const others = computed(() => (selected.value ? othersWaiting(selected.value, all.value) : 0));
 
-/** What Claude last said in the selected session: its details show it, beside its terminal when it
- * runs in one of Pitwall's. */
+/** What Claude last said in the selected session: its details show it. */
 const lastMessage = useLastMessage(
   () => selected.value?.id ?? null,
   () => messageState(selected.value, now.value),
@@ -208,8 +209,8 @@ function onTabKey(event: KeyboardEvent, at: number): void {
 /** The session on its way up: nothing else is brought up meanwhile. */
 const pending = ref<string | null>(null);
 
-/** Where it runs: its tab or terminal comes up; an ended one opens again in the editor, one that
- * has just stopped in a Pitwall terminal. */
+/** Where it runs: its tab or window comes up; one that has ended or just stopped opens again in a
+ * Pitwall terminal, which shows in the page's own terminals when they are its project's. */
 async function bringUp(id: string): Promise<void> {
   const row = byId.value.get(id);
   if (!row || pending.value) return;
@@ -288,11 +289,108 @@ const hiddenText = computed(() => {
   return count ? t("sessions.hiddenCount", { count }) : "";
 });
 
+/* ---------- the terminals ---------- */
+
+/**
+ * The page's terminals (TerminalPanel, `place="sessions"`), under the list: the project picked's,
+ * else the selected session's; with neither, none. While the keyboard is in them they keep their
+ * project and tab, and the list keeps its order (`hold`): nothing moves under what is typed.
+ */
+const terminals = ref<InstanceType<typeof TerminalPanel> | null>(null);
+const typing = ref(false);
+const panelPath = ref<string | null>(null);
+
+watch(
+  [() => scope.value ?? selected.value?.path ?? null, typing],
+  ([path, busy]) => {
+    if (!busy) panelPath.value = path;
+  },
+  { immediate: true },
+);
+
+const panelProject = computed<Project | null>(() => (panelPath.value ? (projects.value.find((p) => p.path === panelPath.value) ?? null) : null));
+
+function setTyping(on: boolean): void {
+  if (typing.value === on) return;
+  typing.value = on;
+  hold("terminal", on);
+}
+
+/** The keyboard left the panel, and not for another place in it. */
+function onPanelFocusOut(event: FocusEvent): void {
+  const to = event.relatedTarget as Node | null;
+  if (to && (event.currentTarget as HTMLElement).contains(to)) return;
+  setTyping(false);
+}
+
+/** The keyboard is somewhere else, though the panel never said it left (a terminal that closed
+ * under it takes its focus along). */
+function onFocusAnywhere(event: FocusEvent): void {
+  const root = terminals.value?.$el as HTMLElement | undefined;
+  if (typing.value && !root?.contains(event.target as Node)) setTyping(false);
+}
+
+// Taken away with the keyboard in it, no focus leaves to say so.
+watch(panelProject, (project) => {
+  if (!project) setTyping(false);
+});
+
+/** The tab the selected session runs in, when it is one of the panel's. */
+const sessionTab = computed(() => {
+  const row = selected.value;
+  const project = panelProject.value;
+  return row && project ? (sessionTerminal(row, [project])?.id ?? null) : null;
+});
+
+/** Its tab changed while the keyboard was in the panel: it comes once the keyboard leaves. */
+let behind = false;
+
+/** The panel shows the selected session's tab, without the keyboard (TerminalPanel): the list
+ * keeps it. */
+function followSession(): void {
+  const project = panelProject.value;
+  const id = sessionTab.value;
+  if (!project || id === null) return;
+  if (typing.value) {
+    behind = true;
+    return;
+  }
+  behind = false;
+  if (chosenTerminal.value[project.path] !== id) chosenTerminal.value = { ...chosenTerminal.value, [project.path]: id };
+}
+
+// Another session selected, another project's panel, or the session's tab opened (reopened): that
+// tab. Not each time the project's state comes again: a tab picked by hand stays while the
+// selection does.
+watch(() => `${panelProject.value?.path ?? ""}\u0000${sessionTab.value ?? ""}`, followSession, { immediate: true });
+watch(typing, (on) => {
+  if (!on && behind) followSession();
+});
+
+/** ⌘T (WindowApp: `onKey`): a new terminal in the panel's project; `claude`: a Claude session. */
+function openTerminal(claude = false): void {
+  void terminals.value?.openTerminal(claude);
+}
+
+/** The empty page's "Open a Claude terminal": in the panel when there is one, else in the project
+ * selected in the list (WindowApp). */
+function openClaude(): void {
+  if (terminals.value) openTerminal(true);
+  else emit("openClaude");
+}
+
+defineExpose({ openTerminal, panelPath });
+
 /* ---------- life ---------- */
 
 // The core pushes every change (`sessions`) once asked, while the window is on screen; on
 // opening, a fresh look (back on screen, the window asks: WindowApp).
-onMounted(() => void loadSessions());
+onMounted(() => {
+  void loadSessions();
+  document.addEventListener("focusin", onFocusAnywhere);
+});
+
+onBeforeUnmount(() => document.removeEventListener("focusin", onFocusAnywhere));
 </script>
 
 <template>
@@ -349,8 +447,8 @@ onMounted(() => void loadSessions());
 
           <SessionNotice v-else-if="!all.length" :tag="t('sessions.empty.tag')" :title="t(emptyTitle)">
             {{ t(period === null ? "sessions.empty.body" : "sessions.empty.bodyPast") }}
-            <template v-if="claudeProject && period === null" #action>
-              <button type="button" class="control" :title="t('sessions.empty.openClaudeTitle', { project: claudeProject })" @click="emit('openClaude')">
+            <template v-if="(panelProject || claudeProject) && period === null" #action>
+              <button type="button" class="control" :title="t('sessions.empty.openClaudeTitle', { project: panelProject?.name ?? claudeProject ?? '' })" @click="openClaude">
                 {{ t("sessions.empty.openClaude") }}
               </button>
             </template>
@@ -379,6 +477,18 @@ onMounted(() => void loadSessions());
           <p v-if="hiddenText" class="hidden-note">{{ hiddenText }}</p>
         </div>
       </div>
+
+      <!-- The terminals of the project picked, else of the selected session's: under the list, as
+           the Projects page has its own. A session running in one of them shows there, so the
+           details have no terminal of their own here. -->
+      <TerminalPanel
+        v-if="panelProject"
+        ref="terminals"
+        :project="panelProject"
+        place="sessions"
+        @focusin="setTyping(true)"
+        @focusout="onPanelFocusOut"
+      />
     </main>
 
     <SessionDetail
@@ -386,10 +496,10 @@ onMounted(() => void loadSessions());
       :row="selected"
       :now="now"
       :others="others"
+      :terminal="null"
       :last-message="lastMessage"
       :period="period"
       @mark-seen="markSeen(selected.id)"
-      @hold="hold('terminal', $event)"
     />
     <!-- Nothing to show: the panel stays blank but keeps its place, so the layout never jumps. -->
     <section v-else class="detail-empty" :aria-label="t('sessions.details')"></section>

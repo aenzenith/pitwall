@@ -489,7 +489,7 @@
   "day.under": "<{value}",
   "day.sessions": "Claude セッション",
   "day.untitled": "名前のないセッション",
-  "day.sessionTitle": "クリックしてエディタでこのセッションを表示",
+  "day.sessionTitle": "クリックしてこのセッションを前面に表示",
   "day.turns": {
     "other": "{count} ターン"
   },
@@ -807,8 +807,8 @@
   "sessions.origin.unknownLong": "実行場所は不明です",
   "sessions.action.bringUp": "前面に表示",
   "sessions.action.bringUpTitle": "実行している場所でセッションを表示",
-  "sessions.action.reopen": "再び開く",
-  "sessions.action.reopenTitle": "エディタの Claude Code タブで続ける",
+  "sessions.action.reopenTerminal": "ターミナルで再び開く",
+  "sessions.action.reopenTitle": "Pitwall ターミナルの新しいタブで続ける",
   "sessions.elsewhere.tag": "別のアプリ",
   "sessions.elsewhere.title": "このセッションは {app} で実行中です",
   "sessions.elsewhere.titleUnnamed": "このセッションは別のアプリで実行中です",

@@ -116,11 +116,12 @@ export function keepOrder(frozen: Layout, next: Layout, present: Set<string> = n
   return SECTIONS.filter((section) => ids.get(section)?.length).map((section) => ({ section, ids: ids.get(section) ?? [] }));
 }
 
-/** What bringing a session up does, as its button and menu say it: an ended one opens again in
- * the editor, one running where Pitwall can't reach only has the project's window come up, the
- * rest come up where they run (one that has just stopped: in a Pitwall terminal, opened again). */
+/** What bringing a session up does, as its button and menu say it: an ended one opens again in a
+ * Pitwall terminal, one running where Pitwall can't reach only has the project's window come up,
+ * the rest come up where they run (one that has just stopped: in a Pitwall terminal, opened
+ * again). */
 export function bringKeys(row: SessionRow): { label: Key; title: Key } {
-  if (row.phase === "ended") return { label: "sessions.action.reopen", title: "sessions.action.reopenTitle" };
+  if (row.phase === "ended") return { label: "sessions.action.reopenTerminal", title: "sessions.action.reopenTitle" };
   if (runsElsewhere(row)) return { label: "common.openInEditor", title: unlinkedEditor(row.origin) ? "sessions.unlinked.body" : "sessions.elsewhere.body" };
   return { label: "sessions.action.bringUp", title: "sessions.action.bringUpTitle" };
 }

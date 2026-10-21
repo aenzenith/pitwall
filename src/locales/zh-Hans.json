@@ -489,7 +489,7 @@
   "day.under": "<{value}",
   "day.sessions": "Claude 会话",
   "day.untitled": "未命名会话",
-  "day.sessionTitle": "单击在编辑器中显示此会话",
+  "day.sessionTitle": "单击将此会话调到前台",
   "day.turns": {
     "other": "{count} 轮"
   },
@@ -807,8 +807,8 @@
   "sessions.origin.unknownLong": "不知道它在哪里运行",
   "sessions.action.bringUp": "调到前台",
   "sessions.action.bringUpTitle": "在它运行的地方显示会话",
-  "sessions.action.reopen": "重新打开",
-  "sessions.action.reopenTitle": "在编辑器的 Claude Code 标签页中继续",
+  "sessions.action.reopenTerminal": "在终端中重新打开",
+  "sessions.action.reopenTitle": "在 Pitwall 终端的新标签页中继续",
   "sessions.elsewhere.tag": "其他应用",
   "sessions.elsewhere.title": "此会话在 {app} 中运行",
   "sessions.elsewhere.titleUnnamed": "此会话在其他应用中运行",

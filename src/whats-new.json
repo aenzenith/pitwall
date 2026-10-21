@@ -84,6 +84,27 @@
         "ja": "「設定 › プロジェクト」で、プロジェクト一覧・ほかのページ・メニューバー、ミニタワー、クイックスイッチャーからプロジェクトを開いたときに、ファイルウィンドウ、エディタ、プロジェクト一覧のどれを開くかを選べます。プロジェクトごとに、その設定で別のものを選ぶこともできます。メニューバー、ミニタワー、クイックスイッチャー、「コース」と「今日」では、プロジェクトが一覧に表示されるようになりました。前のようにエディタで開くには、そこで「エディタ」を選んでください。",
         "zh-Hans": "在“设置 › 项目”中，可以选择从项目列表、其他页面以及菜单栏、迷你塔和快速切换器打开项目时打开什么：它的文件窗口、编辑器或项目列表。每个项目也可以在自己的设置中另选。菜单栏、迷你塔、快速切换器、“赛道”和“今天”现在会在列表中显示项目；如需像以前一样打开编辑器，请在那里选择“编辑器”。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Terminals on the Sessions page",
+        "tr": "Oturumlar sayfasında terminal",
+        "de": "Terminals auf der Seite Sitzungen",
+        "es": "Terminales en la página Sesiones",
+        "ru": "Терминалы на странице «Сессии»",
+        "ja": "セッションページにターミナル",
+        "zh-Hans": "会话页面有了终端"
+      },
+      "body": {
+        "en": "Under the session list there are now terminals, folded away until you open them: the picked project's, or with every project shown, the selected session's. A session that runs in one of Pitwall's tabs shows there. A session no longer running opens again in a new terminal tab, from the Sessions page, the Today page or the terminal's history alike; one still running in VS Code is brought up there, as before.",
+        "tr": "Oturum listesinin altında artık terminal var; sen açana kadar kapalı durur. Bir proje seçtiysen o projenin, tüm projelere bakıyorsan seçtiğin oturumun projesinin terminalleri gelir. Pitwall sekmesinde çalışan bir oturum orada görünür. Kapanmış bir oturuma tıklayınca, Oturumlar ya da Bugün sayfasından da terminal geçmişinden de, yeni bir terminal sekmesinde yeniden açılır. VS Code'da hâlâ çalışan bir oturum ise eskisi gibi orada öne gelir.",
+        "de": "Unter der Sitzungsliste gibt es jetzt Terminals, eingeklappt, bis du sie öffnest: die des gewählten Projekts oder, wenn alle Projekte zu sehen sind, die des Projekts der ausgewählten Sitzung. Eine Sitzung, die in einem Pitwall-Tab läuft, erscheint dort. Eine Sitzung, die nicht mehr läuft, öffnet sich in einem neuen Terminal-Tab wieder, ob von der Seite Sitzungen, der Seite Heute oder aus dem Verlauf des Terminals; eine, die noch in VS Code läuft, kommt wie bisher dort nach vorn.",
+        "es": "Bajo la lista de sesiones ahora hay terminales, plegados hasta que los abras: los del proyecto elegido o, con todos los proyectos a la vista, los del proyecto de la sesión seleccionada. Una sesión que corre en una pestaña de Pitwall aparece ahí. Una sesión que ya no corre se abre de nuevo en una pestaña de terminal nueva, tanto desde la página Sesiones como desde Hoy o el historial del terminal; una que aún corre en VS Code se trae al frente allí, como antes.",
+        "ru": "Под списком сессий теперь есть терминалы, свёрнутые, пока вы их не откроете: выбранного проекта или, когда показаны все проекты, проекта выбранной сессии. Сессия, идущая во вкладке Pitwall, видна там. Сессия, которая больше не идёт, открывается снова в новой вкладке терминала — со страниц «Сессии» и «Сегодня» и из истории терминала; та, что ещё идёт в VS Code, как и раньше выводится там.",
+        "ja": "セッション一覧の下にターミナルが付きました。開くまでは折りたたまれています。プロジェクトを選んでいればそのプロジェクトの、すべてのプロジェクトを表示していれば選択したセッションのプロジェクトのターミナルです。Pitwall のタブで動いているセッションはそこに表示されます。もう動いていないセッションは、セッションページ、「今日」ページ、ターミナルの履歴のどこから開いても、新しいターミナルタブで再開します。VS Code でまだ動いているセッションは、これまでどおりそこで前面に出ます。",
+        "zh-Hans": "会话列表下方现在有终端，打开之前保持折叠：已选项目的终端；显示全部项目时，则是所选会话所在项目的终端。在 Pitwall 标签页中运行的会话会显示在这里。已不再运行的会话，无论从会话页面、今天页面还是终端历史中打开，都会在新的终端标签页中重新打开；仍在 VS Code 中运行的会话照旧在那里调到前台。"
+      }
     }
   ]
 }

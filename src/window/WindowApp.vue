@@ -572,11 +572,12 @@ let unlistenResize: UnlistenFn | null = null;
 
 const terminalPanel = ref<InstanceType<typeof TerminalPanel> | null>(null);
 const trackPage = ref<InstanceType<typeof TrackView> | null>(null);
+const sessionsPage = ref<InstanceType<typeof SessionsView> | null>(null);
 
 /** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the
- * selected project: the list's, or on the Track page the tower's. */
+ * selected project: the list's, on the Track page the tower's, on the Sessions page its panel's. */
 function onKey(event: KeyboardEvent): void {
-  const terminals = terminalPanel.value ?? trackPage.value;
+  const terminals = terminalPanel.value ?? trackPage.value ?? sessionsPage.value;
   if (terminalChord(event) && event.code === "KeyT" && terminals) {
     event.preventDefault();
     void terminals.openTerminal();
@@ -643,10 +644,15 @@ function revealOutput(path: string, job: string): void {
  * card: that card on its project's board, its terminal open in the card's details (BoardView
  * takes the request). Opened in a project's terminal panel: the project, its panel open on that
  * tab (TerminalPanel takes the request), on the page it was opened from: the Track page, else the
- * list. Either way the keyboard is in it.
+ * list. On the Sessions page, while its own terminals are that project's, there. Either way the
+ * keyboard is in it.
  */
 async function revealTerminal(path: string, id: number): Promise<void> {
   settingsOpen.value = false;
+  if (view.value === "sessions" && sessionsPage.value?.panelPath === path) {
+    terminalRequest.value = { path, id, at: Date.now() };
+    return;
+  }
   // The board's cards, to know whether one runs in that terminal.
   if (!boardLink) boardLink = connectBoard();
   await boardLink.then(
@@ -848,6 +854,7 @@ function server(project: Project): string {
     <FuelView v-else-if="view === 'fuel'" />
     <SessionsView
       v-else-if="view === 'sessions'"
+      ref="sessionsPage"
       :claude-project="selected?.name ?? null"
       @open-project="revealProject"
       @open-settings="openSettings('claude')"

@@ -97,9 +97,9 @@ function toggle(project: Project): void {
 const terminals = ref<InstanceType<typeof TerminalPanel> | null>(null);
 
 /**
- * The page's room for the selected project's terminals (TerminalPanel, `track`): its tab row, the
- * panel collapsed, and never more. Open, the panel is a layer of its own over the stage, so the
- * circuit, the tower, the card and the legend stay as they are whatever its height.
+ * The page's room for the selected project's terminals (TerminalPanel, the Track page's): its tab
+ * row, the panel collapsed, and never more. Open, the panel is a layer of its own over the stage,
+ * so the circuit, the tower, the card and the legend stay as they are whatever its height.
  */
 const ROOM = COLLAPSED_HEIGHT;
 
@@ -236,7 +236,7 @@ const inset = computed<Inset>(() => ({
     </div>
 
     <!-- The selected project's terminals, over the page's bottom: its tab row's height (`ROOM`) is theirs. -->
-    <TerminalPanel v-if="selected" ref="terminals" :project="selected" track />
+    <TerminalPanel v-if="selected" ref="terminals" :project="selected" place="track" />
   </div>
 </template>
 

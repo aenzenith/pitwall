@@ -61,6 +61,15 @@ export const trackTerminalHeight = ref(TRACK_TERMINAL_DEFAULT);
 export const trackTerminalCollapsed = ref(true);
 
 /**
+ * The Sessions page's terminals: the list's panel, under the page's list with a height and a
+ * collapsed state of its own, its project the one picked or else the selected session's. Every
+ * launch starts it collapsed, its tab row alone, and expanded at this default, as the Track page's.
+ */
+const SESSIONS_TERMINAL_DEFAULT = 350;
+export const sessionsTerminalHeight = ref(SESSIONS_TERMINAL_DEFAULT);
+export const sessionsTerminalCollapsed = ref(true);
+
+/**
  * The terminals' history column (window/TerminalHistory), beside the terminal: shown or not, and
  * how wide (its handle drags it, a double click puts the default back), the same for every
  * project and both panels. Every launch starts it hidden, at the default width.

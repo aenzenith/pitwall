@@ -500,7 +500,7 @@
   "day.under": "<{value}",
   "day.sessions": "Claude-Sitzungen",
   "day.untitled": "Unbenannte Sitzung",
-  "day.sessionTitle": "Zum Anzeigen der Sitzung im Editor klicken",
+  "day.sessionTitle": "Klicken, um die Sitzung nach vorn zu holen",
   "day.turns": {
     "one": "{count} Runde",
     "other": "{count} Runden"
@@ -829,8 +829,8 @@
   "sessions.origin.unknownLong": "Wo sie läuft, ist unbekannt",
   "sessions.action.bringUp": "Nach vorn holen",
   "sessions.action.bringUpTitle": "Die Sitzung dort zeigen, wo sie läuft",
-  "sessions.action.reopen": "Wieder öffnen",
-  "sessions.action.reopenTitle": "In einem Claude-Code-Tab im Editor fortsetzen",
+  "sessions.action.reopenTerminal": "Im Terminal wieder öffnen",
+  "sessions.action.reopenTitle": "In einem neuen Tab des Pitwall-Terminals fortsetzen",
   "sessions.elsewhere.tag": "Andere App",
   "sessions.elsewhere.title": "Diese Sitzung läuft in {app}",
   "sessions.elsewhere.titleUnnamed": "Diese Sitzung läuft in einer anderen App",
