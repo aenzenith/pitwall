@@ -260,10 +260,13 @@ export function focusView(id: number): void {
 }
 
 /** Sizes the terminal to its host and tells the shell. */
-export function fitView(id: number): void {
+export function fitView(id: number, tell = true): void {
   const view = views.get(id);
   if (!view || !view.element.isConnected) return;
   view.fit.fit();
+  // A size still on its way (the history sliding in beside it): the view follows it frame by
+  // frame, the shell hears only the size it ends at.
+  if (!tell) return;
   if (view.term.cols !== view.cols || view.term.rows !== view.rows) {
     view.cols = view.term.cols;
     view.rows = view.term.rows;

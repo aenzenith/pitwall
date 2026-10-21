@@ -70,6 +70,42 @@ fn claim(reopened: &mut HashMap<String, u64>, session: &str, open: impl Fn(u64) 
     }
 }
 
+/// What a click on a session in the terminal's history did (`resume_claude`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Resumed {
+    /// It runs in one of Pitwall's terminals: that tab is shown.
+    Shown,
+    /// It runs elsewhere: brought up there, as a click on it anywhere brings it.
+    Elsewhere,
+    /// It had ended: it opened again in a new tab.
+    Opened,
+    /// There is no log of it to open it from in the project's folder.
+    Missing,
+    /// Whether it still runs can't be told: it is left alone.
+    Unsure,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Resume {
+    Reveal,
+    Reopen,
+    Missing,
+    Unsure,
+}
+
+/// What a click in the terminal's history does with a session: one that runs is only brought up
+/// (two processes would write one log); only one known to have ended opens again. `logged`: it
+/// has a log, asked only when its process can't be told.
+fn plan_resume(liveness: &Liveness, logged: impl FnOnce() -> bool) -> Resume {
+    match liveness {
+        Liveness::Running { .. } => Resume::Reveal,
+        Liveness::Ended | Liveness::Stopped => Resume::Reopen,
+        Liveness::Unknown if logged() => Resume::Unsure,
+        Liveness::Unknown => Resume::Missing,
+    }
+}
+
 /// Session ids are the log's file name, a UUID; anything else never reaches a path or a command.
 pub(super) fn is_session_id(id: &str) -> bool {
     id.len() == 36
@@ -147,7 +183,31 @@ impl Core {
 
     fn reveal_now(self: &Arc<Self>, path: &str, session: &str) {
         let liveness = if is_session_id(session) { self.liveness(session) } else { Liveness::Unknown };
+        self.reveal_as(path, session, liveness);
+    }
 
+    /// A session of the terminal's history (its project `path`, listed) brought up: where it runs
+    /// while it runs, as `reveal_claude` brings it; once it has ended, opened again in a new tab
+    /// of the project's terminals (`claude --resume`), never in an editor's. Whatever can't be
+    /// told to have ended is never opened.
+    pub fn resume_claude(self: &Arc<Self>, path: &str, session: &str) -> Resumed {
+        if !is_session_id(session) {
+            return Resumed::Missing;
+        }
+        let liveness = self.liveness(session);
+        match plan_resume(&liveness, || self.session_log(session).is_some()) {
+            Resume::Reveal => {
+                let own = matches!(&liveness, Liveness::Running { lineage, .. } if self.pitwall_terminal(lineage).is_some());
+                self.reveal_as(path, session, liveness);
+                if own { Resumed::Shown } else { Resumed::Elsewhere }
+            }
+            Resume::Reopen if self.reopen(path, session) => Resumed::Opened,
+            Resume::Reopen | Resume::Missing => Resumed::Missing,
+            Resume::Unsure => Resumed::Unsure,
+        }
+    }
+
+    fn reveal_as(self: &Arc<Self>, path: &str, session: &str, liveness: Liveness) {
         // One of our own terminals: the window shows it.
         if let Liveness::Running { lineage, .. } = &liveness {
             if let Some((id, path)) = self.pitwall_terminal(lineage) {
@@ -356,8 +416,15 @@ mod tests {
         fs::create_dir_all(&folder).unwrap();
         fs::write(folder.join(format!("{id}.jsonl")), "{}\n").unwrap();
 
-        // No sessions folder (an older Claude Code): nothing tells that it stopped.
+        // No sessions folder (an older Claude Code): nothing tells that it stopped, and the
+        // terminal's history leaves it alone.
         assert_eq!(core.liveness(id), Liveness::Unknown);
+        assert_eq!(core.resume_claude(PROJECT, id), Resumed::Unsure);
+        assert_eq!(core.resume_claude(PROJECT, "../../etc/passwd"), Resumed::Missing);
+        // One that runs is only ever brought up, wherever it runs.
+        for liveness in [running("cli", &[900]), running("claude-vscode", &[900])] {
+            assert_eq!(plan_resume(&liveness, || true), Resume::Reveal);
+        }
         fs::create_dir_all(claude.join("sessions")).unwrap();
         assert_eq!(core.liveness(id), Liveness::Stopped);
         // Without a log there is nothing to open again.

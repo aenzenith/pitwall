@@ -542,6 +542,14 @@ export type SessionRow = {
  */
 export type SessionsView = { now: number; hook: boolean; sessions: SessionRow[]; unlisted: number };
 
+/** A session in the terminal's history (`claude_past`): its name and when it was last heard of. */
+export type PastSession = { id: string; title: string | null; at: number | null };
+
+/** What a click on a session in the terminal's history did (`resume_claude`): its tab shown, brought
+ * up where it runs, opened again in a new tab; no log of it in the project's folder, or no telling
+ * whether it still runs (left alone). */
+export type Resumed = "shown" | "elsewhere" | "opened" | "missing" | "unsure";
+
 /* ---------- Board: cards of work per project, given to Claude (board_state, event `board`) ---------- */
 
 /** Up next, with Claude, to review, done. */

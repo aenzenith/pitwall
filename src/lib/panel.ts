@@ -61,6 +61,16 @@ export const trackTerminalHeight = ref(TRACK_TERMINAL_DEFAULT);
 export const trackTerminalCollapsed = ref(true);
 
 /**
+ * The terminals' history column (window/TerminalHistory), beside the terminal: shown or not, and
+ * how wide (its handle drags it, a double click puts the default back), the same for every
+ * project and both panels. Every launch starts it hidden, at the default width.
+ */
+export const terminalHistoryShown = ref(false);
+export const HISTORY_WIDTH = 296;
+export const HISTORY_MIN = 240;
+export const historyWidth = ref(HISTORY_WIDTH);
+
+/**
  * The terminal tab shown, per project, so coming back to a project shows the same one: its panel
  * goes away meanwhile (a team selected, another page shown).
  */

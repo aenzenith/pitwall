@@ -17,6 +17,10 @@ import {
   outputShown,
   terminalCollapsed,
   terminalHeight,
+  terminalHistoryShown,
+  HISTORY_MIN,
+  HISTORY_WIDTH,
+  historyWidth,
   terminalRequest,
   trackTerminalCollapsed,
   trackTerminalHeight,
@@ -29,6 +33,7 @@ import { api, now, sessions } from "../lib/store";
 import { attach, fitView, focusView, measure } from "../lib/terminals";
 import type { Project, StartChoice } from "../lib/types";
 import RenameDialog from "./RenameDialog.vue";
+import TerminalHistory from "./TerminalHistory.vue";
 
 /** How long a `reveal-terminal` request waits for its project and tab to show up. */
 const REQUEST_MS = 5_000;
@@ -106,6 +111,115 @@ function collapse(): void {
 /** The handle doesn't drag a collapsed panel; the button brings it back. */
 function startDrag(event: PointerEvent): void {
   if (!collapsed.value) resizer.start(event);
+}
+
+/* ---------- the history ---------- */
+
+/** Below this width the panel has no room for the history beside the terminal: it lies over the
+ * terminal's right side instead, and goes once a session is picked. */
+const HISTORY_ROOM = 760;
+const narrow = ref(false);
+/** The narrow panel's history, over the terminal. */
+const overlayOpen = ref(false);
+/** Shown, as "History" says it: never while the panel is collapsed. The column beside the terminal
+ * is kept through a collapse and comes back with the panel; the narrow panel's goes with it. */
+const historyOpen = computed(() => !collapsed.value && (narrow.value ? overlayOpen.value : terminalHistoryShown.value));
+/** The history beside the terminal; `sliding`: its room is still opening, closing or being
+ * resized. */
+const beside = computed(() => terminalHistoryShown.value && !narrow.value && !collapsed.value);
+const sliding = ref(false);
+/** A few frames have passed since the panel came: until then the history takes its place (the
+ * panel's width, measured) without moving, so coming to the page shows it as it was. */
+const settled = ref(false);
+/** What the terminal keeps beside the history, however wide that is dragged; and the margins
+ * around the two (20 left, 12 between, 20 right). */
+const TERMINAL_ROOM = 320;
+const MARGINS = 52;
+const panelWidth = ref(0);
+/** The history's width as the panel allows it: what it was dragged to, the terminal's room kept. */
+const widest = computed(() => Math.max(HISTORY_MIN, panelWidth.value - TERMINAL_ROOM - MARGINS));
+const historyShown = computed(() => Math.min(historyWidth.value, widest.value));
+/** The room opens in this long; closing, it waits as long again for the list to fade (CSS). */
+const SLIDE_MS = COLLAPSE_MS + 120;
+let slid: ReturnType<typeof setTimeout> | undefined;
+const side = ref<InstanceType<typeof TerminalHistory> | null>(null);
+const over = ref<InstanceType<typeof TerminalHistory> | null>(null);
+
+// While the history's room opens or closes, the terminal follows its width frame by frame; the
+// shell is told the size it ends at.
+watch([beside, historyShown], () => {
+  if (!settled.value) return;
+  sliding.value = true;
+  clearTimeout(slid);
+  slid = setTimeout(() => {
+    sliding.value = false;
+    if (!collapsed.value && !animating.value && active.value) fitView(active.value.id);
+  }, SLIDE_MS + 40);
+});
+
+/** "History": the column beside the terminal, or a narrow panel's over it; shown, the keyboard
+ * goes to its search, and a collapsed panel comes up with it. Hidden, back to the terminal. */
+async function toggleHistory(): Promise<void> {
+  const open = !historyOpen.value;
+  // The panel comes up first: coming up, it would put away a history over the terminal.
+  if (open && collapsed.value) {
+    toggleCollapsed();
+    await nextTick();
+  }
+  if (narrow.value) overlayOpen.value = open;
+  else terminalHistoryShown.value = open;
+  if (!open) return backToTerminal();
+  await nextTick();
+  (narrow.value ? over : side).value?.focus();
+}
+
+function closeOverlay(): void {
+  overlayOpen.value = false;
+  backToTerminal();
+}
+
+function backToTerminal(): void {
+  if (active.value) focusView(active.value.id);
+}
+
+/* The history's width: its handle, the gap between it and the terminal, drags it (the pointer
+   moving left widens it); ←/→ step it; a double click puts the default back. */
+let widthDrag: { x: number; width: number } | null = null;
+const resizing = ref(false);
+
+function setWidth(width: number): void {
+  historyWidth.value = Math.round(Math.max(HISTORY_MIN, Math.min(widest.value, width)));
+}
+
+function startWidth(event: PointerEvent): void {
+  widthDrag = { x: event.clientX, width: historyShown.value };
+  resizing.value = true;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+}
+
+function moveWidth(event: PointerEvent): void {
+  if (widthDrag) setWidth(widthDrag.width + widthDrag.x - event.clientX);
+}
+
+function endWidth(): void {
+  widthDrag = null;
+  resizing.value = false;
+}
+
+function nudgeWidth(event: KeyboardEvent): void {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  setWidth(historyShown.value + (event.key === "ArrowLeft" ? 24 : -24));
+}
+
+function resetWidth(): void {
+  historyWidth.value = HISTORY_WIDTH;
+}
+
+/** A press on the terminal puts away the history lying over it. */
+function pressScreen(): void {
+  seeFinished(active.value?.id);
+  overlayOpen.value = false;
 }
 
 /** A new tab: the shell, or with `claude` a Claude Code session (`start`: with the model and in
@@ -373,6 +487,8 @@ watch(
 // No terminal opens on its own: a project starts with "No terminal in …" until you open one.
 
 let observer: ResizeObserver | null = null;
+/** How wide the panel is: room for the history beside the terminal or not. */
+let panelObserver: ResizeObserver | null = null;
 /** A row that narrows (the window, the panel) keeps the shown tab in sight too. */
 let tabsObserver: ResizeObserver | null = null;
 watch(tablist, (list, old) => {
@@ -382,17 +498,33 @@ watch(tablist, (list, old) => {
 
 onMounted(() => {
   observer = new ResizeObserver(() => {
-    if (active.value && !collapsed.value && !animating.value) fitView(active.value.id);
+    if (active.value && !collapsed.value && !animating.value) fitView(active.value.id, !sliding.value);
   });
   if (viewport.value) observer.observe(viewport.value);
   tabsObserver = new ResizeObserver(() => showTab(active.value?.id));
   if (tablist.value) tabsObserver.observe(tablist.value);
+  const measure = (): void => {
+    panelWidth.value = panel.value?.clientWidth ?? 0;
+    narrow.value = panelWidth.value < HISTORY_ROOM;
+  };
+  panelObserver = new ResizeObserver(measure);
+  if (panel.value) panelObserver.observe(panel.value);
+  measure();
+  requestAnimationFrame(() => requestAnimationFrame(() => (settled.value = true)));
+});
+
+// Wide again, the column is as it was; narrow again or collapsed, the history over the terminal
+// waits for its button.
+watch([narrow, collapsed], () => {
+  overlayOpen.value = false;
 });
 
 onBeforeUnmount(() => {
   observer?.disconnect();
   tabsObserver?.disconnect();
+  panelObserver?.disconnect();
   clearTimeout(settle);
+  clearTimeout(slid);
 });
 
 defineExpose({ openTerminal, collapse });
@@ -480,6 +612,15 @@ defineExpose({ openTerminal, collapse });
       </button>
       <button
         type="button"
+        :class="['action', 'history-toggle', { on: historyOpen }]"
+        :aria-pressed="historyOpen"
+        :title="t('terminal.historyTitle')"
+        @click="toggleHistory"
+      >
+        <Icon name="clock" :size="13" /> <span class="action-text">{{ t("terminal.history") }}</span>
+      </button>
+      <button
+        type="button"
         :class="['icon', 'collapse', { up: collapsed }]"
         :aria-expanded="!collapsed"
         :aria-label="t(collapsed ? 'terminal.expand' : 'terminal.collapse')"
@@ -489,11 +630,40 @@ defineExpose({ openTerminal, collapse });
         <Icon name="chevron" :size="13" />
       </button>
     </div>
-    <div class="screen">
-      <div ref="viewport" class="viewport" @pointerdown="seeFinished(active?.id)"></div>
-      <div v-if="!active" class="empty">
-        <span>{{ t("terminal.none", { name: project.name }) }}</span>
+    <div class="body" :style="{ '--history-width': `${historyShown}px` }">
+      <div class="screen">
+        <div ref="viewport" class="viewport" @pointerdown="pressScreen"></div>
+        <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
+          <span>{{ t("terminal.none", { name: project.name }) }}</span>
+        </div>
       </div>
+      <!-- The history's room beside the terminal: the panel's right margin alone while it is
+           hidden; shown, it grows to the left and the terminal gives up that width as it goes. -->
+      <div :class="['side', { open: beside, resizing, still: !settled }]" :style="beside ? { width: `${historyShown + 32}px` } : undefined">
+        <Transition name="fade">
+          <div
+            v-if="beside"
+            class="width-grip"
+            role="separator"
+            aria-orientation="vertical"
+            tabindex="0"
+            :aria-label="t('terminal.historyResize')"
+            :aria-valuenow="historyShown"
+            @pointerdown="startWidth"
+            @pointermove="moveWidth"
+            @pointerup="endWidth"
+            @pointercancel="endWidth"
+            @keydown="nudgeWidth"
+            @dblclick="resetWidth"
+          ></div>
+        </Transition>
+        <Transition name="fade">
+          <TerminalHistory v-if="beside" ref="side" :project="project" @leave="backToTerminal" />
+        </Transition>
+      </div>
+      <Transition name="pop">
+        <TerminalHistory v-if="narrow && overlayOpen" ref="over" :project="project" overlay @close="closeOverlay" @leave="backToTerminal" />
+      </Transition>
     </div>
 
     <RenameDialog v-if="renaming" :name="renaming.name" :project-name="project.name" @save="rename" @close="endRename" />
@@ -705,22 +875,32 @@ defineExpose({ openTerminal, collapse });
   color: var(--text-strong);
 }
 
-/* "New Claude" keeps its mark whatever the tabs take. */
-.action.new-claude {
+/* "New Claude" and "History" keep their marks whatever the tabs take. */
+.action.new-claude,
+.action.history-toggle {
   flex-shrink: 0;
 }
 
-/* A narrow row: "New tab" is its plus alone, and narrower still "New Claude" its mark (still their
-   tooltips, and read out). */
+/* "History" while its list shows. */
+.action.on,
+.action.on:hover:not(:disabled) {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+/* A narrow row: "New tab" is its plus alone and "History" its clock, and narrower still "New
+   Claude" its mark (still their tooltips, and read out). */
 @container (max-width: 455px) {
-  .action.new-tab {
+  .action.new-tab,
+  .action.history-toggle {
     flex-shrink: 0;
     width: 24px;
     padding: 0;
     justify-content: center;
   }
 
-  .new-tab .action-text {
+  .new-tab .action-text,
+  .history-toggle .action-text {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -780,11 +960,20 @@ defineExpose({ openTerminal, collapse });
   transform: rotate(-90deg);
 }
 
-.screen {
+/* The terminal, and the history beside it or over it. */
+.body {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  margin: 6px 20px 20px;
+  display: flex;
+}
+
+.screen {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 6px 0 20px 20px;
   padding: 8px 4px 8px 10px;
   border-radius: 8px;
   background: var(--bg-log);
@@ -794,13 +983,105 @@ defineExpose({ openTerminal, collapse });
   transition: opacity 160ms ease;
 }
 
-.term-panel.collapsed .screen {
+/* Opening, the room comes first and the list fades in once it is there; closing, the list fades
+   first and then the room goes. */
+.side {
+  position: relative;
+  flex-shrink: 0;
+  width: 20px;
+  overflow: hidden;
+  transition:
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms,
+    opacity 160ms ease;
+}
+
+/* Open, the gap, the history (`historyShown`) and the panel's right margin: set on the element. */
+.side.open {
+  transition-delay: 0ms;
+}
+
+/* A drag follows the pointer; coming to the page, an open history is there without moving. */
+.side.resizing,
+.side.still,
+.side.still .fade-enter-active,
+.side.still .fade-leave-active {
+  transition: none;
+}
+
+/* The history's handle: the gap beside the terminal, with a bar like the panel's handle. */
+.width-grip {
+  position: absolute;
+  top: 6px;
+  bottom: 20px;
+  left: 0;
+  width: 12px;
+  cursor: col-resize;
+  outline: none;
+}
+
+.width-grip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 3px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 2px;
+  background: var(--line-dialog);
+}
+
+.width-grip:hover::after,
+.side.resizing .width-grip::after {
+  background: var(--line-heavy);
+}
+
+.width-grip:focus-visible::after {
+  background: var(--focus-ring);
+}
+
+.fade-enter-active {
+  transition: opacity 160ms ease 220ms;
+}
+
+.fade-leave-active {
+  transition: opacity 120ms ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* A narrow panel's history comes in over the terminal from its right edge. */
+.pop-enter-active,
+.pop-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pop-enter-from,
+.pop-leave-to {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+/* Collapsed, the tab row alone: nothing of the terminal or the history shows under it. */
+.term-panel.collapsed .screen,
+.term-panel.collapsed .side,
+.term-panel.collapsed .history {
   opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .term-panel.animated,
   .screen,
+  .side,
+  .fade-enter-active,
+  .fade-leave-active,
+  .pop-enter-active,
+  .pop-leave-active,
   .collapse :deep(svg) {
     transition: none;
   }

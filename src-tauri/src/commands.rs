@@ -202,6 +202,22 @@ pub async fn claude_history(app: AppHandle, period: String) -> Result<crate::cor
     tauri::async_runtime::spawn_blocking(move || core.sessions_history(&period)).await.map_err(|error| error.to_string())
 }
 
+/// The terminal's history: the sessions of a listed project that open again in its terminals. It
+/// goes through Claude Code's log folders, so it runs off the main thread.
+#[tauri::command]
+pub async fn claude_past(app: AppHandle, path: String) -> Result<Vec<crate::core::PastSession>, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.claude_past(&path)).await.map_err(|error| error.to_string())
+}
+
+/// A session of the terminal's history brought up where it runs, or opened again in a new tab of
+/// the project's terminals once it has ended.
+#[tauri::command]
+pub async fn resume_claude(app: AppHandle, path: String, session: String) -> Result<crate::core::Resumed, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.resume_claude(&path, &session)).await.map_err(|error| error.to_string())
+}
+
 /// What Claude last said in a session, for its details (the Sessions page's, a board card's):
 /// read from its log off the main thread, never kept.
 #[tauri::command]

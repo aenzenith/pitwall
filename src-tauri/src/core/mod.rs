@@ -72,6 +72,8 @@ pub use jobs::CommandView;
 pub use projects::Folder;
 pub use restore::{RestartPlan, Restored};
 pub use routing::{Action, Origin};
+pub use history::PastSession;
+pub use reveal::Resumed;
 pub use sessions::SessionsView;
 pub use snapshot::Snapshot;
 pub use relay::{PhoneConfig, PhoneView};

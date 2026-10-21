@@ -293,6 +293,12 @@ export const api = {
    * row: the Sessions page looking back. With `all`, a row's time is the days before today's; the
    * page adds today's from the live row. */
   claudeHistory: (period: string) => invoke<SessionsView>("claude_history", { period }),
+  /** The terminal's history: the project's sessions that open again in its terminals, the last
+   * heard of first. */
+  claudePast: (path: string) => invoke<import("./types").PastSession[]>("claude_past", { path }),
+  /** A session of the terminal's history: brought up where it runs, or opened again in a new tab
+   * once it has ended (`reveal-terminal` shows it). */
+  resumeClaude: (path: string, session: string) => invoke<import("./types").Resumed>("resume_claude", { path, session }),
   /** What Claude last said in a session (Markdown): read when asked, never kept. */
   lastMessage: (session: string) => invoke<string | null>("claude_last_message", { session }),
   /** Every listed project's dependencies (the Garage page). */

@@ -167,4 +167,28 @@ impl Core {
 
         SessionsView { now, hook, unlisted: rows.iter().filter(|row| row.path.is_none()).count(), sessions: rows }
     }
+
+    /// The terminal's history: the sessions of the listed project `path` that `claude --resume`
+    /// finds from its folder (their log is in the folder Claude Code keeps for it), every day
+    /// there is something kept of, the last heard of first. What the Sessions page's every day
+    /// shows of them, nothing more is read.
+    pub fn claude_past(&self, path: &str) -> Vec<PastSession> {
+        let folder = self.cfg.claude_dir.join(encode_project_path(path));
+        self.sessions_history(ALL)
+            .sessions
+            .into_iter()
+            .filter(|row| row.path.as_deref().is_some_and(|listed| same_path(listed, path)))
+            .filter(|row| folder.join(format!("{}.jsonl", row.id)).is_file())
+            .map(|row| PastSession { id: row.id, title: row.title, at: row.since })
+            .collect()
+    }
+}
+
+/// A session in the terminal's history (`claude_past`): its name and when it was last heard of.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PastSession {
+    pub id: String,
+    pub title: Option<String>,
+    pub at: Option<u64>,
 }
