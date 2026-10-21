@@ -53,6 +53,20 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// Whether a window may go to `url`: only to Pitwall's own pages. Nothing a window shows (a
+/// project's Markdown in the Files window, say) takes it to another site or file; a web address
+/// opens in the browser through `open_url`, never in a window.
+fn own_page(url: &tauri::Url, dev: Option<&tauri::Url>) -> bool {
+    match url.scheme() {
+        "tauri" => true,
+        // Windows and Android serve the app from here; a dev build's pages come from its dev
+        // server (`devUrl`), that one and no other.
+        "http" | "https" => url.host_str() == Some("tauri.localhost") || (cfg!(debug_assertions) && dev.is_some_and(|dev| dev.origin() == url.origin())),
+        "about" => url.as_str() == "about:blank",
+        _ => false,
+    }
+}
+
 /// The window `label`, made now from its `tauri.conf.json` entry if it doesn't exist yet. Only
 /// for showing it: code that merely hides or looks at a window uses `get_webview_window`.
 pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<WebviewWindow<R>> {
@@ -67,9 +81,12 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     let config = tauri::utils::config::WindowConfig { transparent: false, ..config };
     // A new page, should an earlier window of this label have gone: not listening yet.
     pages().ready.retain(|l| l != label);
+    let dev = app.config().build.dev_url.clone();
     let build = || {
+        let dev = dev.clone();
         WebviewWindowBuilder::from_config(app, &config).and_then(|builder| {
             builder
+                .on_navigation(move |url| own_page(url, dev.as_ref()))
                 // A reload (or a crashed page coming back) is not listening until it says so again.
                 .on_page_load(|window, load| {
                     if load.event() == PageLoadEvent::Started {
@@ -203,4 +220,39 @@ pub fn hide<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
     let hidden = window.hide();
     tell(window.app_handle(), window.label(), false);
     hidden
+}
+
+#[cfg(test)]
+mod tests {
+    use super::own_page;
+
+    /// The gate: a window goes to Pitwall's own pages and nowhere else, whatever a page links to.
+    #[test]
+    fn a_window_goes_to_pitwall_s_own_pages_only() {
+        let url = |text: &str| tauri::Url::parse(text).unwrap();
+        let dev = url("http://localhost:1420/");
+        for own in ["tauri://localhost/", "tauri://localhost/window.html", "http://tauri.localhost/", "https://tauri.localhost/index.html", "about:blank"] {
+            assert!(own_page(&url(own), None), "{own} is Pitwall's");
+            assert!(own_page(&url(own), Some(&dev)), "{own} is Pitwall's");
+        }
+        for away in [
+            "https://evil.test/",
+            "http://evil.test/tauri.localhost",
+            "https://tauri.localhost.evil.test/",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,<script>1</script>",
+            "blob:https://evil.test/x",
+            "about:srcdoc",
+            "ftp://localhost/",
+            "http://localhost:9999/",
+            "http://127.0.0.1:1420/",
+            "https://localhost:1420/",
+        ] {
+            assert!(!own_page(&url(away), Some(&dev)), "{away} must not be opened in a window");
+        }
+        // The dev server, in a dev build only, and only when there is one.
+        assert_eq!(own_page(&url("http://localhost:1420/window.html"), Some(&dev)), cfg!(debug_assertions));
+        assert!(!own_page(&url("http://localhost:1420/"), None));
+    }
 }
