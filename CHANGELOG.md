@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.13.0](https://github.com/aenzenith/pitwall/compare/v1.12.3...v1.13.0) (2026-10-21)
+
+
+### Features
+
+* **details:** the dev server shows its address, and its buttons step back ([a45dae0](https://github.com/aenzenith/pitwall/commit/a45dae04996a45976c72f9bc81da9d3fc4474540))
+* **files:** a project's files, its changes and its history in a window of their own ([1e512fe](https://github.com/aenzenith/pitwall/commit/1e512fe1f03d72fd53936e46ba5d6a689abebb6f))
+* **teams:** a team's projects hang on one line, not under a head row ([386c70e](https://github.com/aenzenith/pitwall/commit/386c70ebc33e54fc52cb52bb191ac52f377e0a6d))
+* **track:** the Track card takes the details' address line, and the standings open as the list does ([21f90af](https://github.com/aenzenith/pitwall/commit/21f90af71e61565482dffdc44c88f93c847b6bfe))
+
+
+### Bug Fixes
+
+* **claude:** hook events piled up while Pitwall was closed no longer stall its start ([d60274b](https://github.com/aenzenith/pitwall/commit/d60274bcfef7000a9eea2ffdf8cde7d986c967d3))
+* **commands:** a command marked ask first never comes back on its own ([f9f8f95](https://github.com/aenzenith/pitwall/commit/f9f8f95e1b7dfe66485034ffaaacfba6b93730e1))
+* **commands:** build commands run and can be saved like any other ([433b494](https://github.com/aenzenith/pitwall/commit/433b4947cabec5da4798e6484e1256c9bde50965))
+* **deps:** a migration status read never goes through Poetry or Pipenv ([ea3f146](https://github.com/aenzenith/pitwall/commit/ea3f14622ebee0a6077221479697132eae4df23f))
+* **discover:** a package.json that isn't a file is passed over ([85b06b3](https://github.com/aenzenith/pitwall/commit/85b06b3a86be35fd6308ce00b52f9f15c465df69))
+* **git:** Pitwall's git reads run no program a repository names, and give up in time ([bed8661](https://github.com/aenzenith/pitwall/commit/bed8661defc80da8ea867668e86320c7af0a7504))
+* **links:** the link dialog changes only its own project's links ([4cfe9fc](https://github.com/aenzenith/pitwall/commit/4cfe9fc7f174230c67fb892182a3eb8b0f12c57e))
+* **projects:** a .env or package.json that isn't a plain file no longer freezes Pitwall ([49340b0](https://github.com/aenzenith/pitwall/commit/49340b0f1f0a666b6abdbb729c4470caf62f3236))
+* **projects:** a damaged project list is set aside, never written over ([f02a577](https://github.com/aenzenith/pitwall/commit/f02a5778a50c5289304b544236a53705d5d5947a))
+* **servers:** a process group that ended is never signalled again ([d5e8b3a](https://github.com/aenzenith/pitwall/commit/d5e8b3a30bf833a4e44b08a5616ef94e9c99f19a))
+* **servers:** a project's folder is listed off the core's lock ([3013c9e](https://github.com/aenzenith/pitwall/commit/3013c9ed1f6e0ed9ba27ee3e0565ba5f5fe09028))
+* **terminal:** clicking the tab already shown puts the keyboard in its terminal ([bcd79bc](https://github.com/aenzenith/pitwall/commit/bcd79bc96d0c0066a986ebead4df8a2635b78681))
+* **terminal:** quitting ends what a tab runs in the background ([fb26f15](https://github.com/aenzenith/pitwall/commit/fb26f15331a045873c8087d3b94dcaec714b4f2e))
+* **windows:** no window leaves Pitwall's own pages ([2a8569b](https://github.com/aenzenith/pitwall/commit/2a8569b212ab1a5f846b8a1aa2994cd8e73b6fec))
+
 ## [1.12.3](https://github.com/aenzenith/pitwall/compare/v1.12.2...v1.12.3) (2026-10-19)
 
 
