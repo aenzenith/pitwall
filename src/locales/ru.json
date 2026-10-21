@@ -177,6 +177,7 @@
   "detail.claudePermission": "Claude просит разрешения",
   "detail.menuEdit": "Изменить…",
   "detail.projectSettings": "Настройки проекта",
+  "detail.openInEditorName": "Открыть в {editor}",
   "detail.settingsHeading": "Настройки проекта",
   "detail.backToDetails": "Назад к сведениям о проекте",
   "detail.serverSettings": "Настройки dev-сервера",

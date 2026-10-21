@@ -168,6 +168,7 @@
   "detail.claudePermission": "Claudeが許可を求めています",
   "detail.menuEdit": "編集…",
   "detail.projectSettings": "プロジェクト設定",
+  "detail.openInEditorName": "{editor} で開く",
   "detail.settingsHeading": "プロジェクト設定",
   "detail.backToDetails": "プロジェクトの詳細に戻る",
   "detail.serverSettings": "開発サーバーの設定",

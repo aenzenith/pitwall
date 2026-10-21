@@ -23,6 +23,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "The dev server's address in a project's details",
+        "tr": "Proje ayrıntısında dev sunucusunun adresi",
+        "de": "Die Adresse des Dev-Servers in den Projektdetails",
+        "es": "La dirección del servidor de desarrollo en los detalles del proyecto",
+        "ru": "Адрес dev-сервера в сведениях о проекте",
+        "ja": "プロジェクトの詳細に開発サーバーのアドレス",
+        "zh-Hans": "项目详情中显示开发服务器的地址"
+      },
+      "body": {
+        "en": "Instead of the Open in browser button, the address it opens now sits under the server's state: click it to open it, or copy it with the button beside it. Start and Stop are a quiet word at the end of that line, Stop red only under the pointer, and the editor button moved up beside the project's name.",
+        "tr": "Tarayıcıda aç düğmesinin yerinde artık açtığı adres yazıyor, sunucunun durumunun altında: tıklayınca açılır, yanındaki düğmeyle kopyalanır. Başlat ve Durdur o satırın sonunda kutusuz bir sözcük; Durdur yalnız fareyle üstüne gelince kırmızılaşır. Editör düğmesi de projenin adının yanına çıktı.",
+        "de": "Statt des Buttons Im Browser öffnen steht jetzt die Adresse, die er öffnet, unter dem Status des Servers: Ein Klick öffnet sie, der Button daneben kopiert sie. Starten und Stoppen sind ein schlichtes Wort am Ende dieser Zeile, Stoppen wird erst unter dem Zeiger rot, und der Editor-Button sitzt jetzt neben dem Namen des Projekts.",
+        "es": "En lugar del botón Abrir en el navegador está ahora la dirección que abre, bajo el estado del servidor: un clic la abre y el botón de al lado la copia. Iniciar y Detener son una palabra discreta al final de esa línea; Detener solo se vuelve rojo bajo el puntero, y el botón del editor sube junto al nombre del proyecto.",
+        "ru": "Вместо кнопки «Открыть в браузере» под состоянием сервера теперь стоит адрес, который она открывает: щелчок открывает его, кнопка рядом копирует. «Запустить» и «Остановить» — неброское слово в конце этой строки, «Остановить» краснеет только под указателем, а кнопка редактора переехала к названию проекта.",
+        "ja": "「ブラウザで開く」ボタンの代わりに、サーバーの状態の下に開くアドレスが表示されます。クリックすると開き、横のボタンでコピーできます。「起動」と「停止」はその行の端の控えめな文字になり、「停止」はポインタを重ねたときだけ赤くなります。エディタのボタンはプロジェクト名の横に移りました。",
+        "zh-Hans": "“在浏览器中打开”按钮换成了它要打开的地址，位于服务器状态下方：点击即打开，旁边的按钮可复制。“启动”和“停止”成了这一行末端一个低调的文字按钮，“停止”只在指针移上去时变红；编辑器按钮移到了项目名称旁边。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Garage leaves Poetry and Pipenv environments alone",

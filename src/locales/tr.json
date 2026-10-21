@@ -170,6 +170,7 @@
   "detail.claudePermission": "Claude izin istiyor",
   "detail.menuEdit": "Düzenle…",
   "detail.projectSettings": "Proje ayarları",
+  "detail.openInEditorName": "{editor} ile aç",
   "detail.settingsHeading": "Proje Ayarları",
   "detail.backToDetails": "Proje ayrıntılarına dön",
   "detail.serverSettings": "Dev sunucusu ayarları",

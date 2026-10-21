@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import Icon from "../../components/Icon.vue";
-import { gitLine } from "../../lib/format";
+import { editorName, gitLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { dragRegion } from "../../lib/platform";
+import { api, snapshot } from "../../lib/store";
 import type { Project } from "../../lib/types";
 
 defineProps<{ project: Project; settingsOpen: boolean }>();
@@ -25,6 +26,16 @@ const emit = defineEmits<{ toggle: [] }>();
     <!-- Name, path and branch drag the window; the settings button stays clickable. -->
     <div class="title-row">
       <div class="name">{{ project.name }}</div>
+      <!-- The project in the editor Settings › Editor names: it opens the project, not its server. -->
+      <button
+        type="button"
+        class="icon"
+        :aria-label="t('detail.openInEditorName', { editor: editorName(snapshot?.settings.editor) })"
+        :title="t('detail.openInEditorName', { editor: editorName(snapshot?.settings.editor) })"
+        @click="api.openEditor(project.path)"
+      >
+        <Icon name="editor" :size="16" />
+      </button>
       <button type="button" class="icon" :aria-label="t('detail.projectSettings')" :title="t('detail.projectSettings')" @click="emit('toggle')">
         <Icon name="settings" :size="16" />
       </button>

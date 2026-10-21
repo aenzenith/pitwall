@@ -168,6 +168,7 @@
   "detail.claudePermission": "Claude 需要你授权",
   "detail.menuEdit": "编辑…",
   "detail.projectSettings": "项目设置",
+  "detail.openInEditorName": "在 {editor} 中打开",
   "detail.settingsHeading": "项目设置",
   "detail.backToDetails": "返回项目详情",
   "detail.serverSettings": "开发服务器设置",

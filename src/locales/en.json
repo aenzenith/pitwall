@@ -171,6 +171,7 @@
   "detail.claudePermission": "Claude needs your permission",
   "detail.menuEdit": "Edit…",
   "detail.projectSettings": "Project settings",
+  "detail.openInEditorName": "Open in {editor}",
   "detail.settingsHeading": "Project Settings",
   "detail.backToDetails": "Back to project details",
   "detail.serverSettings": "Dev server settings",
