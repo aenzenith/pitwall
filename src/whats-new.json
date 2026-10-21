@@ -21,6 +21,27 @@
         "ja": "「新規Claude」の横の「履歴」に、プロジェクトの過去の Claude セッションが日ごとに並び、検索もできます。クリックすると新しいタブで続きから再開します。まだ開いているセッションは、実行中の場所に表示されます。",
         "zh-Hans": "“新建 Claude”旁边的“历史”按天列出项目过去的 Claude 会话，并可搜索。点击一个即可在新标签页中接着进行；仍然打开的会话会在它运行的地方显示。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Terminal tabs you can drag into order",
+        "tr": "Terminal sekmelerini sürükleyerek sırala",
+        "de": "Terminal-Tabs per Ziehen ordnen",
+        "es": "Ordena las pestañas de terminal arrastrándolas",
+        "ru": "Вкладки терминала можно перетаскивать",
+        "ja": "ターミナルのタブをドラッグで並べ替え",
+        "zh-Hans": "拖动终端标签页调整顺序"
+      },
+      "body": {
+        "en": "Drag a terminal tab to move it among the others. The + right after the tabs opens New tab and New Claude, with Claude's models and plan mode in a submenu. A double-click on an empty part of the tab row starts a Claude session in a new tab, and a middle-click on a tab closes it.",
+        "tr": "Bir terminal sekmesini sürükleyerek ötekilerin arasında istediğin yere taşı. Sekmelerin hemen ardındaki + düğmesi Yeni sekme ve Yeni Claude'u açar; Claude'un modelleri ve plan kipi alt menüde. Sekme satırında boş bir yere çift tıklarsan yeni bir sekmede Claude oturumu başlar; farenin orta tuşuyla tıkladığın sekme de kapanır.",
+        "de": "Zieh einen Terminal-Tab, um ihn zwischen die anderen zu setzen. Das + direkt hinter den Tabs öffnet „Neuer Tab“ und „Claude starten“, Claudes Modelle und der Planmodus stehen in einem Untermenü. Ein Doppelklick auf eine freie Stelle der Tab-Leiste startet eine Claude-Sitzung in einem neuen Tab, und ein Klick mit der mittleren Maustaste schließt einen Tab.",
+        "es": "Arrastra una pestaña de terminal para moverla entre las demás. El + justo después de las pestañas abre Nueva pestaña y Nuevo Claude, con los modelos de Claude y el modo plan en un submenú. Un doble clic en una parte vacía de la fila de pestañas inicia una sesión de Claude en una pestaña nueva, y un clic con el botón central del ratón en una pestaña la cierra.",
+        "ru": "Перетащите вкладку терминала, чтобы поставить её среди других. Кнопка + сразу после вкладок открывает «Новая вкладка» и «Новый Claude», а модели Claude и режим плана — в подменю. Двойной щелчок по пустому месту в строке вкладок запускает сессию Claude в новой вкладке, а щелчок средней кнопкой мыши по вкладке закрывает её.",
+        "ja": "ターミナルのタブをドラッグして、ほかのタブの間に移せます。タブのすぐ後ろの + から「新規タブ」と「新規Claude」を開け、Claude のモデルとプランモードはサブメニューにあります。タブの並びの空いている所をダブルクリックすると新しいタブで Claude セッションが始まり、タブをマウスの中ボタンでクリックすると閉じます。",
+        "zh-Hans": "拖动终端标签页即可把它移到其他标签页之间。标签页后面的 + 可打开“新标签页”和“新建 Claude”，Claude 的模型和计划模式在子菜单中。在标签栏空白处双击会在新标签页中启动 Claude 会话，用鼠标中键点击标签页即可关闭它。"
+      }
     }
   ]
 }

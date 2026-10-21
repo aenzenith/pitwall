@@ -71,6 +71,12 @@ export const HISTORY_MIN = 240;
 export const historyWidth = ref(HISTORY_WIDTH);
 
 /**
+ * The order the terminal tabs were dragged into, per project, by terminal id; tabs it doesn't name
+ * (opened since) come after them. Kept while Pitwall runs.
+ */
+export const terminalOrder = ref<Record<string, number[]>>({});
+
+/**
  * The terminal tab shown, per project, so coming back to a project shows the same one: its panel
  * goes away meanwhile (a team selected, another page shown).
  */

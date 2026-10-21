@@ -6,8 +6,8 @@ import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import { shellRequest } from "../lib/flag";
 import { t } from "../lib/i18n";
-import { useNativeMenu, type MenuPoint } from "../lib/nativeMenu";
-import { keys, TERMINAL_MOD } from "../lib/platform";
+import { useNativeMenu } from "../lib/nativeMenu";
+import { isMac } from "../lib/platform";
 import {
   chosenTerminal,
   COLLAPSED_HEIGHT,
@@ -18,6 +18,7 @@ import {
   terminalCollapsed,
   terminalHeight,
   terminalHistoryShown,
+  terminalOrder,
   HISTORY_MIN,
   HISTORY_WIDTH,
   historyWidth,
@@ -30,6 +31,7 @@ import {
 import { statusLine } from "../lib/sessions";
 import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
 import { api, now, sessions } from "../lib/store";
+import { useTabReorder } from "../lib/tabReorder";
 import { attach, fitView, focusView, measure } from "../lib/terminals";
 import type { Project, StartChoice } from "../lib/types";
 import RenameDialog from "./RenameDialog.vue";
@@ -58,7 +60,15 @@ const opening = ref(false);
 /** The tab being renamed: double-click opens the rename dialog for it. */
 const renaming = ref<{ id: number; name: string } | null>(null);
 
-const terminals = computed(() => props.project.terminals);
+/** The project's terminals, in the order their tabs were dragged into (lib/panel), new ones last. */
+const terminals = computed(() => {
+  const list = props.project.terminals;
+  const order = terminalOrder.value[props.project.path];
+  if (!order) return list;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  const unranked = Number.MAX_SAFE_INTEGER;
+  return [...list].sort((a, b) => (rank.get(a.id) ?? unranked) - (rank.get(b.id) ?? unranked));
+});
 
 /** Claude in a tab's terminal, by the terminal's id: at work, or waiting on you (a turn finished
  * and not looked at yet, a question, a permission prompt). Nothing for a tab with neither. */
@@ -294,30 +304,42 @@ watch(
   { flush: "sync" },
 );
 
-/* ---------- "New Claude"'s options ---------- */
+/* ---------- "+": a new tab, or a Claude session ---------- */
 
 /** How "New Claude" starts a session here when nothing is picked: the project's own settings. */
 const defaults = computed(() => projectChoice(props.project));
 
 const menu = useNativeMenu();
 
-/** On a right click on "New Claude": the models (the project's own checked), then plan mode; each
- * starts a session at once, the rest as the project's settings say. */
-function claudeMenu(at: MenuPoint): void {
+/** The "+" menu, under it: a shell tab, a Claude session as the project's settings say, and in
+ * a submenu the models (the project's own checked) and plan mode, each starting a session at
+ * once with that one change, the rest as the project's settings say. */
+function addMenu(event: Event): void {
   if (opening.value) return;
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const { model, mode } = defaults.value;
-  void menu.popup(at, [
-    ...MODELS.map((each) => ({ text: t(MODEL_LABELS[each]), checked: model === each, action: () => void openTerminal(true, { model: each, mode }) })),
+  void menu.popup({ clientX: box.left, clientY: box.bottom + 4 }, [
+    { text: t("terminal.newTab"), accelerator: isMac ? "Cmd+T" : "Ctrl+Shift+T", action: () => void openTerminal() },
+    { text: t("terminal.newClaude"), action: () => void openTerminal(true) },
     "separator",
-    { text: t("start.newClaudePlan"), checked: mode === "plan", action: () => void openTerminal(true, { model, mode: "plan" }) },
+    {
+      text: t("terminal.claudeWith"),
+      items: [
+        ...MODELS.map((each) => ({ text: t(MODEL_LABELS[each]), checked: model === each, action: () => void openTerminal(true, { model: each, mode }) })),
+        "separator",
+        { text: t("start.newClaudePlan"), checked: mode === "plan", action: () => void openTerminal(true, { model, mode: "plan" }) },
+      ],
+    },
   ]);
 }
 
-/** ↓ on the button: the same menu, under it. */
-function claudeMenuBelow(event: KeyboardEvent): void {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  claudeMenu({ clientX: box.left, clientY: box.bottom + 4 });
+/** A double click on the tab row's empty part opens a Claude tab, as "New Claude" does. A tab's
+ * own double click renames it, and the project's name and the buttons keep theirs. */
+function newClaudeHere(event: MouseEvent): void {
+  const target = event.target as HTMLElement;
+  if (target === event.currentTarget || target === tablist.value || target.classList.contains("grow")) void openTerminal(true);
 }
+
 
 /** A tab asked for by a click, Return or Space: shown, and a collapsed panel comes up with it. The
  * tab already shown takes the keyboard here, the watch on the shown tab not running for it: left
@@ -346,6 +368,48 @@ function endRename(): void {
 }
 
 const tablist = ref<HTMLElement | null>(null);
+
+/** Tabs dragged into another order keep it, per project, for as long as Pitwall runs. */
+const tabDrag = useTabReorder(tablist, (ids) => {
+  terminalOrder.value = { ...terminalOrder.value, [props.project.path]: ids };
+});
+
+/* A tab opens by growing to its width and closes by shrinking away, the gap beside it too; the
+   tabs and the buttons after it follow it frame by frame. Not as the panel comes, nor for a
+   project's tabs when another project is picked: those are there at once. */
+const TAB_IN_MS = 260;
+const TAB_OUT_MS = 200;
+/** Even at both ends: a tab is seen growing from nothing, not appearing nearly whole. */
+const EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+function animateTab(tab: HTMLElement, opening: boolean, done: () => void): void {
+  if (!settled.value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
+  const style = getComputedStyle(tab);
+  const row = tab.parentElement;
+  const gap = row && row.children.length > 1 ? parseFloat(getComputedStyle(row).columnGap) || 0 : 0;
+  const full = { width: `${tab.getBoundingClientRect().width}px`, minWidth: "0px", paddingLeft: style.paddingLeft, paddingRight: style.paddingRight, marginRight: "0px", opacity: 1 };
+  const none = { width: "0px", minWidth: "0px", paddingLeft: "0px", paddingRight: "0px", marginRight: `${-gap}px`, opacity: 0 };
+  // The row's room for one tab at least would show at once: it waits for its first tab.
+  if (opening && row?.children.length === 1) row.style.minWidth = "0px";
+  tab.style.overflow = "hidden";
+  if (!opening) tab.style.pointerEvents = "none";
+  const motion = tab.animate(opening ? [none, full] : [full, none], { duration: opening ? TAB_IN_MS : TAB_OUT_MS, easing: EASE, fill: opening ? "none" : "forwards" });
+  const end = (): void => {
+    tab.style.overflow = "";
+    if (row) row.style.minWidth = "";
+    done();
+  };
+  motion.onfinish = end;
+  motion.oncancel = end;
+}
+
+function tabEnter(el: Element, done: () => void): void {
+  animateTab(el as HTMLElement, true, done);
+}
+
+function tabLeave(el: Element, done: () => void): void {
+  animateTab(el as HTMLElement, false, done);
+}
 /** An arrow key picked the tab: the keyboard stays on the tabs instead of going to the shell. */
 let stayOnTabs = false;
 /** A tab closed from the keyboard: once it is gone, the focus goes to the tab shown next. */
@@ -550,21 +614,28 @@ defineExpose({ openTerminal, collapse });
       @pointercancel="resizer.end"
       @keydown="resizer.nudge"
     ></div>
-    <div class="tabs">
-      <span :class="['where', { divided: terminals.length }]" :title="project.path">{{ project.name }}</span>
+    <div class="tabs" @dblclick="newClaudeHere">
+      <span class="where" :title="project.path">{{ project.name }}</span>
       <span id="terminal-tab-keys" class="sr-only">{{ t("terminal.tabKeys") }}</span>
       <!-- Each tab and its close button side by side, never one inside the other; the list holds
            tabs only, so the close button is the mouse's (the keyboard closes with Delete). One Tab
-           stop: the shown tab; ←/→ move. Double-click (or F2) renames. -->
-      <div v-if="terminals.length" ref="tablist" class="tablist" role="tablist" :aria-label="t('terminal.tabs')">
+           stop: the shown tab; ←/→ move. Double-click (or F2) renames; a middle click closes; a drag
+           moves it. -->
+      <div ref="tablist" :class="['tablist', { some: terminals.length }, tabDrag.listClass()]" role="tablist" :aria-label="t('terminal.tabs')">
+        <TransitionGroup :key="project.path" :css="false" @enter="tabEnter" @leave="tabLeave">
         <div
           v-for="term in terminals"
           :key="term.id"
-          :class="['tab', { on: active?.id === term.id }]"
+          :class="['tab', { on: active?.id === term.id }, tabDrag.tabClass(term.id)]"
+          :style="tabDrag.tabStyle(term.id)"
+          :data-tab-id="term.id"
           role="none"
           :title="t('terminal.renameHint')"
+          @pointerdown="tabDrag.down($event, term.id)"
           @click="open(term.id)"
           @dblclick="renaming = { id: term.id, name: term.name }"
+          @mousedown.middle.prevent
+          @mouseup.middle="close(term.id)"
         >
           <div
             role="tab"
@@ -586,30 +657,33 @@ defineExpose({ openTerminal, collapse });
             class="x"
             tabindex="-1"
             aria-hidden="true"
+            data-no-drag
             :title="t('common.close')"
             @click.stop="close(term.id)"
             @dblclick.stop
           >×</button>
         </div>
+        </TransitionGroup>
       </div>
-      <!-- Left: the project and its tabs. Right: new tab buttons and collapse. -->
-      <span class="grow"></span>
-      <button type="button" class="action new-tab" :title="t('terminal.newTabTitle', { shortcut: keys(`${TERMINAL_MOD}+T`) })" :disabled="opening" @click="openTerminal()">
-        <Icon name="plus" :size="13" /> <span class="action-text">{{ t("terminal.newTab") }}</span>
-      </button>
-      <!-- A session as the project starts them; the others on a right click. -->
+      <!-- The project, its tabs and right after them the buttons that open one; at the right end,
+           the history and collapse. -->
+      <span :class="['divider', { shown: terminals.length }]" aria-hidden="true"></span>
+      <!-- A shell tab, a Claude session, or one with a model or mode of its own: a menu under it. -->
       <button
         type="button"
-        class="action new-claude"
-        :title="t('terminal.newClaudeTitle')"
+        class="icon add"
+        aria-haspopup="menu"
         aria-keyshortcuts="ArrowDown"
+        :aria-label="t('terminal.add')"
+        :title="t('terminal.add')"
         :disabled="opening"
-        @click="openTerminal(true)"
-        @contextmenu="claudeMenu($event)"
-        @keydown.down.prevent="claudeMenuBelow"
+        @click="addMenu"
+        @contextmenu.prevent="addMenu"
+        @keydown.down.prevent="addMenu"
       >
-        <ClaudeLogo :size="12" /> <span class="action-text">{{ t("terminal.newClaude") }}</span>
+        <Icon name="plus" :size="13" />
       </button>
+      <span class="grow"></span>
       <button
         type="button"
         :class="['action', 'history-toggle', { on: historyOpen }]"
@@ -754,11 +828,48 @@ defineExpose({ openTerminal, collapse });
    least). */
 .tablist {
   flex: 0 100000 auto;
-  min-width: 56px;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 2px;
   overflow: hidden;
+}
+
+.tablist.some {
+  min-width: 56px;
+}
+
+/* Drag to reorder (lib/tabReorder): the tab lifts and follows the pointer, the others slide
+   aside, and on release it slides into place. */
+.tablist.reordering .tab {
+  transition: translate 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tablist.reordering .tab:hover:not(.on, .dragging) {
+  color: var(--text-faint);
+}
+
+.tab.dragging {
+  position: relative;
+  z-index: 2;
+  background: var(--bg-lit);
+  color: var(--text-strong);
+  transition: none;
+}
+
+.tablist.reordering .tab.dragging.settling {
+  transition: translate 160ms ease-out;
+}
+
+.tablist.frozen .tab {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tablist.reordering .tab,
+  .tablist.reordering .tab.dragging.settling {
+    transition: none;
+  }
 }
 
 /* The tab and its close button read as one: the hover, the colour and the hand are the pair's. */
@@ -855,7 +966,7 @@ defineExpose({ openTerminal, collapse });
   flex-grow: 1;
 }
 
-/* New tab buttons: a terminal, or a Claude Code session. */
+/* A button with its label: "History". */
 .action {
   height: 24px;
   display: inline-flex;
@@ -875,8 +986,7 @@ defineExpose({ openTerminal, collapse });
   color: var(--text-strong);
 }
 
-/* "New Claude" and "History" keep their marks whatever the tabs take. */
-.action.new-claude,
+/* "History" keeps its mark whatever the tabs take ("New tab" and "New Claude" are marks alone). */
 .action.history-toggle {
   flex-shrink: 0;
 }
@@ -888,10 +998,8 @@ defineExpose({ openTerminal, collapse });
   color: var(--text-strong);
 }
 
-/* A narrow row: "New tab" is its plus alone and "History" its clock, and narrower still "New
-   Claude" its mark (still their tooltips, and read out). */
+/* A narrow row: "History" is its clock alone (still its tooltip, and read out). */
 @container (max-width: 455px) {
-  .action.new-tab,
   .action.history-toggle {
     flex-shrink: 0;
     width: 24px;
@@ -899,25 +1007,7 @@ defineExpose({ openTerminal, collapse });
     justify-content: center;
   }
 
-  .new-tab .action-text,
   .history-toggle .action-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-}
-
-@container (max-width: 359px) {
-  .action.new-claude {
-    width: 24px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .new-claude .action-text {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -935,7 +1025,7 @@ defineExpose({ openTerminal, collapse });
   max-width: 180px;
   margin-right: 6px;
   padding: 0 10px 0 6px;
-  border-right: 1px solid transparent;
+  border-right: 1px solid var(--line);
   font-size: 12px;
   font-weight: 600;
   line-height: 14px;
@@ -945,9 +1035,31 @@ defineExpose({ openTerminal, collapse });
   text-overflow: ellipsis;
 }
 
-/* The divider separates the project from its tabs; with no tabs there is nothing to set off. */
-.where.divided {
-  border-right-color: var(--line);
+/* The tabs set off from the buttons after them, as the project is from its tabs (its right
+   border); with no tabs there is nothing to set off, and it comes and goes with the first. */
+.divider {
+  flex-shrink: 0;
+  width: 0;
+  height: 14px;
+  margin: 0 -2px 0 0;
+  background: var(--line);
+  opacity: 0;
+  transition:
+    width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms ease;
+}
+
+.divider.shown {
+  width: 1px;
+  margin: 0 6px 0 8px;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .divider {
+    transition: none;
+  }
 }
 
 /* Points down while open (collapse), up while collapsed (expand). */
