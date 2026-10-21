@@ -49,6 +49,8 @@ export type ProjectSettings = {
   claudeMode?: ClaudeMode;
   /** The three letters the Track page and the mini tower write for it; unset: told from its name. */
   code?: string;
+  /** What a double click (or Return) on its row in the list opens; unset: its Files window. */
+  doubleClick?: "editor";
 };
 
 export type JobResult = { ok: boolean; code: number | null; stopped: boolean; finishedAt: number };
@@ -152,6 +154,8 @@ export type Settings = {
   boardScope?: string;
   /** How a project's board is drawn: `columns` (side by side) or `list` (one under the other). */
   boardView?: string;
+  /** The Files window shows a Markdown or SVG file as its preview, until its eye is pressed again. */
+  filesPreview?: boolean;
   /** The Track page's own settings (lib/track: TrackSettings), read leniently. */
   track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
   /** How the app is drawn (lib/theme). */

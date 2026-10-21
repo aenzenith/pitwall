@@ -20,7 +20,9 @@ import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/grou
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
 import { cardRequest, outputRequest, terminalRequest, trackTerminals } from "../lib/panel";
-import { dragRegion, keys, terminalChord } from "../lib/platform";
+import { dragRegion, isMac, keys, terminalChord } from "../lib/platform";
+import { closeFiles, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
+import { projectSettings } from "../lib/projectSettings";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
@@ -41,6 +43,7 @@ import SettingsView from "./SettingsView.vue";
 import TrackView from "./TrackView.vue";
 import UpdateDialog from "./UpdateDialog.vue";
 import FlagDialog from "./FlagDialog.vue";
+import FilesWindows from "./files/FilesWindows.vue";
 import WhatsNewDialog from "./WhatsNewDialog.vue";
 import TeamDeleteDialog from "./team/TeamDeleteDialog.vue";
 import TeamHead from "./team/TeamHead.vue";
@@ -442,13 +445,20 @@ function onHeadKey(event: KeyboardEvent): boolean {
   return true;
 }
 
+/** A double click or ↵ on a row: the project's Files window, or its editor when its settings say so. */
+function openRow(path: string): void {
+  const project = projects.value.find((p) => p.path === path);
+  if (project && projectSettings(project).doubleClick === "editor") api.openEditor(path);
+  else showFiles(path);
+}
+
 /** The list is one Tab stop: arrows go along its rows and heads (a row is selected), ↵ opens the
- * editor, Space starts or stops. */
+ * project as a double click does, Space starts or stops. */
 function onTableKey(event: KeyboardEvent): void {
   if (onHeadKey(event)) return;
   rowKeys(event, {
     move: selectProject,
-    enter: (path) => void api.openEditor(path),
+    enter: openRow,
     space: (path) => {
       const project = rows.value.find((p) => p.path === path);
       if (project && project.status !== "busy") toggle(project);
@@ -465,11 +475,16 @@ function focusSelected(): void {
 
 const menu = useNativeMenu();
 
-/** Right-click on a row: the project goes to another team, to a new one, or out of its own. */
+/** Right-click on a row: the project's files or its editor; the project goes to another team, to a new one, or out of its own. */
 function rowMenu(event: MouseEvent, project: Project): void {
   selectProject(project.path);
   const own = teamOf(project.path);
-  const entries: MenuEntry[] = teams.value.filter((team) => team.id !== own?.id).map((team) => ({ text: t("team.moveTo", { team: team.name }), action: () => moveToTeam(project.path, team.id) }));
+  const entries: MenuEntry[] = [
+    { text: t("files.show"), accelerator: "CmdOrCtrl+Shift+E", action: () => toggleFiles(project.path) },
+    { text: t("common.openInEditor"), action: () => void api.openEditor(project.path) },
+    "separator",
+  ];
+  entries.push(...teams.value.filter((team) => team.id !== own?.id).map((team) => ({ text: t("team.moveTo", { team: team.name }), action: () => moveToTeam(project.path, team.id) })));
   entries.push({ text: t("team.newMenu"), action: () => (teamAsk.value = { kind: "create", projects: [project.path], show: false }) });
   if (own) entries.push("separator", { text: t("team.leave"), action: () => void leaveTeam(project.path) });
   entries.push("separator", { text: t(project.muted ? "notifications.unmute" : "notifications.mute"), action: () => void api.muteProject(project.path, !project.muted) });
@@ -490,6 +505,29 @@ function linkEntries(path: string): MenuEntry[] {
     "separator",
     { text: t("cli.link.show"), action: copy("show") },
   ];
+}
+
+/** The Files windows open, as the sidebar lists them under Garage: each by its project's name. */
+const openFiles = computed(() =>
+  filesWindows
+    .filter((win) => win.open)
+    .map((win) => ({ win, name: snapshot.value?.projects.find((p) => p.path === win.path)?.name ?? win.path.slice(win.path.lastIndexOf("/") + 1) })),
+);
+
+/** A Files window's sidebar entry pressed: a folded window comes up, the one in front folds back,
+ * one that is up behind another comes in front. */
+function pressEntry(win: FilesWin): void {
+  if (win.minimized) showFiles(win.path);
+  else if (frontFiles() === win) minimizeFiles(win);
+  else raiseFiles(win);
+}
+
+/** Right-click on a Files window's sidebar entry: fold it there, or close it. */
+function filesMenu(at: MenuPoint, win: FilesWin): void {
+  void menu.popup(at, [
+    { text: t("files.minimize"), enabled: !win.minimized, action: () => minimizeFiles(win) },
+    { text: t("common.close"), action: () => closeFiles(win.path) },
+  ]);
 }
 
 /** Right-click on a team, on its head in the list or its entry in the sidebar. */
@@ -543,6 +581,10 @@ function onKey(event: KeyboardEvent): void {
   if (terminalChord(event) && event.code === "KeyT" && terminals) {
     event.preventDefault();
     void terminals.openTerminal();
+  } else if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyE" && shown.value) {
+    // ⇧⌘E: the selected project's files, in their floating window (files/FilesWindow).
+    event.preventDefault();
+    toggleFiles(shown.value.path);
   }
 }
 
@@ -761,6 +803,24 @@ function server(project: Project): string {
             <span v-if="depsBadge" class="deps-badge" :aria-label="t('deps.group.attention', { count: depsBadge })">{{ depsBadge }}</span>
           </button>
         </div>
+        <!-- The Files windows open, under Garage: a click brings a folded one up and in front, and
+             folds one that is up back into its entry (files/FilesWindow); closed, it leaves the list. -->
+        <nav v-if="openFiles.length" :aria-label="t('files.openWindows')" class="nav files-nav">
+          <button
+            v-for="entry in openFiles"
+            :key="entry.win.path"
+            type="button"
+            :data-files="entry.win.path"
+            :aria-label="t('files.window', { name: entry.name })"
+            :title="t('files.window', { name: entry.name })"
+            @click="pressEntry(entry.win)"
+            @contextmenu.prevent="filesMenu($event, entry.win)"
+          >
+            <Icon name="folder" /> <span class="nav-label">{{ entry.name }}</span>
+            <!-- → folded away (a click brings it up), ← up (a click folds it here). -->
+            <Icon name="arrow-right" :size="13" :class="['files-go', { up: !entry.win.minimized }]" />
+          </button>
+        </nav>
       </div>
       <div class="nav foot">
         <button type="button" @click="api.pickFolder()"><Icon name="plus" /> {{ t("window.addProject") }}</button>
@@ -865,10 +925,10 @@ function server(project: Project): string {
                   drag.lineClass(rowKey(project.path)),
                 ]"
                 :style="section.team ? teamLineStyle(rowKey(project.path), section.team) : drag.lineStyle(rowKey(project.path))"
-                :title="t('window.rowTitle')"
+                :title="t(projectSettings(project).doubleClick === 'editor' ? 'window.rowTitle' : 'window.rowTitleFiles')"
                 @pointerdown="drag.down($event, rowKey(project.path))"
                 @click="select(project.path)"
-                @dblclick="api.openEditor(project.path)"
+                @dblclick="openRow(project.path)"
                 @contextmenu="rowMenu($event, project)"
               >
                 <span class="cell-project" role="gridcell">
@@ -953,6 +1013,9 @@ function server(project: Project): string {
            The middle panel already shows the glyph and what to do. -->
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
     </template>
+
+    <!-- The selected project's files, floating over whatever page is up (⇧⌘E, the details' button). -->
+    <FilesWindows />
 
     <SettingsView v-if="settingsOpen" :start-tab="settingsTab" :start-part="settingsPart" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" @open-whats-new="whatsNewOpen = true" />
     <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
@@ -1094,6 +1157,32 @@ function server(project: Project): string {
 /* The teams, between the filters and the pages. */
 .team-nav {
   margin-top: 12px;
+}
+
+/* The Files windows open, under the pages. */
+.files-nav {
+  margin-top: 12px;
+}
+
+.files-go {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--text-subtle);
+  transition: transform 200ms ease;
+}
+
+.files-go.up {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .files-go {
+    transition: none;
+  }
+}
+
+.files-nav button:hover .files-go {
+  color: var(--text-strong);
 }
 
 .team-nav-head {
@@ -1253,7 +1342,8 @@ function server(project: Project): string {
   }
 
   .team-nav,
-  .today {
+  .today,
+  .files-nav {
     margin-top: 6px;
   }
 

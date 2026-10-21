@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right";
     size?: number;
   }>(),
   { size: 15 },
@@ -23,6 +23,7 @@ withDefaults(
     <path v-else-if="name === 'chevron'" d="m9 6 6 6-6 6" />
     <path v-else-if="name === 'chevron-down'" d="m6 9 6 6 6-6" />
     <path v-else-if="name === 'back'" d="m15 6-6 6 6 6" />
+    <path v-else-if="name === 'arrow-right'" d="M5 12h14M13 6l6 6-6 6" />
     <g v-else-if="name === 'search'"><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></g>
     <g v-else-if="name === 'settings'"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></g>
     <g v-else-if="name === 'editor'"><path d="m8 8-4 4 4 4" /><path d="m16 8 4 4-4 4" /><path d="m13.5 5-3 14" /></g>
@@ -61,6 +62,14 @@ withDefaults(
     <path v-else-if="name === 'grip'" d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01" stroke-width="2.4" />
     <g v-else-if="name === 'bell'"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></g>
     <g v-else-if="name === 'trash'"><path d="M5 7h14" /><path d="M9.500 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2" /><path d="M7 7l.8 11.200A2 2 0 0 0 9.800 20h4.400a2 2 0 0 0 2-1.800L17 7" /></g>
+    <g v-else-if="name === 'file'"><path d="M13.5 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8.5z" /><path d="M13.5 3.5v5h5" /></g>
+    <g v-else-if="name === 'folder-open'"><path d="M3.5 17.5V7a2 2 0 0 1 2-2h4l2 2.5h5.5a2 2 0 0 1 2 2v1.3" /><path d="M3.5 17.5 6 11.8a1.5 1.5 0 0 1 1.4-.9h12.4a1 1 0 0 1 .9 1.4l-2.3 5.3a1.5 1.5 0 0 1-1.4.9H5a1.5 1.5 0 0 1-1.5-1z" /></g>
+    <path v-else-if="name === 'minus'" d="M6 12h12" />
+    <g v-else-if="name === 'files'"><path d="M14 3.5H8a2 2 0 0 0-2 2V16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.5z" /><path d="M14 3.5v4h4" /><path d="M6 7H5a1.5 1.5 0 0 0-1.5 1.5V19A1.5 1.5 0 0 0 5 20.5h8.5A1.5 1.5 0 0 0 15 19v-1" /></g>
+    <g v-else-if="name === 'source-control'"><circle cx="6.5" cy="5.5" r="2" /><circle cx="6.5" cy="18.5" r="2" /><circle cx="17.5" cy="8.5" r="2" /><path d="M6.5 7.5v9M17.5 10.5c0 4-5 3.5-9.5 6.5" /></g>
+    <g v-else-if="name === 'commit'"><circle cx="12" cy="12" r="3.5" /><path d="M3 12h5.5M15.5 12H21" /></g>
+    <g v-else-if="name === 'diff'"><path d="M7 4v11M4 7l3-3 3 3" /><path d="M17 20V9M14 17l3 3 3-3" /></g>
+    <g v-else-if="name === 'collapse'"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M4 16V6a2 2 0 0 1 2-2h10M11.5 14h5" /></g>
     <path v-else-if="name === 'folder'" d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
     <g v-else-if="name === 'bell-off'"><path d="M6.6 8.4A6 6 0 0 0 6 11v5.5l-1.5 2h12.3" /><path d="M9 5.8A6 6 0 0 1 18 11v4" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /><path d="M4.5 4 20 19.5" /></g>
     <path v-else-if="name === 'filter'" d="M4 6h16M7 12h10M10 18h4" />

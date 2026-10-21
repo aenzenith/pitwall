@@ -80,6 +80,12 @@ function saveCode(): void {
   }
   void updateProjectSettings(props.project.path, (s) => ({ ...s, code: value }));
 }
+
+/** What a double click (or Return) on the project's row opens: its Files window unless the
+ * editor is picked; only the editor is written down. */
+function setDoubleClick(value: string): void {
+  void updateProjectSettings(props.project.path, (s) => ({ ...s, doubleClick: value === "editor" ? "editor" : undefined }));
+}
 </script>
 
 <template>
@@ -135,6 +141,19 @@ function saveCode(): void {
         </label>
       </div>
       <p v-if="codeTakenBy" class="error" role="alert">{{ t("detail.codeTaken", { name: codeTakenBy }) }}</p>
+    </section>
+
+    <section class="group" :aria-label="t('detail.listSection')">
+      <div class="section-label">{{ t("detail.listSection") }}</div>
+      <div class="picks">
+        <label class="pick">
+          <span class="pick-name">{{ t("detail.doubleClick") }}</span>
+          <select :value="settings.doubleClick ?? 'files'" @change="setDoubleClick(($event.target as HTMLSelectElement).value)">
+            <option value="files">{{ t("detail.doubleClick.files") }}</option>
+            <option value="editor">{{ t("detail.doubleClick.editor") }}</option>
+          </select>
+        </label>
+      </div>
     </section>
 
     <section class="group" :aria-label="t('common.commands')">

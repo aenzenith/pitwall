@@ -122,6 +122,7 @@ struct General {
     claudes_in_bar: bool,
     auto_update: bool,
     board_view: Option<String>,
+    files_preview: bool,
     track: Option<TrackSettings>,
     theme: String,
     resume: String,
@@ -135,7 +136,7 @@ impl General {
         // backups or kept out of them on purpose.
         let Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
             theme, resume, suggest_projects, flag,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
@@ -153,7 +154,7 @@ impl General {
 
         Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
             theme, resume, suggest_projects, flag,
         }
     }
@@ -178,13 +179,13 @@ impl General {
 
         let Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
             theme, resume, suggest_projects, flag,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
             theme, resume, suggest_projects, flag,
             ..settings.clone()
         })
@@ -417,6 +418,7 @@ fn move_project(settings: &mut Settings, from: &str, to: &str) {
         ours.url = ours.url.or(theirs.url);
         ours.claude_model = ours.claude_model.or(theirs.claude_model);
         ours.code = ours.code.or(theirs.code);
+        ours.double_click = ours.double_click.or(theirs.double_click);
         if ours.claude_mode.is_normal() {
             ours.claude_mode = theirs.claude_mode;
         }
@@ -1299,6 +1301,7 @@ mod tests {
             claude_model: Some(crate::start::Model::Sonnet),
             claude_mode: crate::start::Mode::Plan,
             code: Some("PDK".into()),
+            double_click: Some("editor".into()),
         };
         core.set_project_settings(&old, kept.clone());
         core.mute_project(&old, true);

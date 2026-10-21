@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import Icon from "../../components/Icon.vue";
+import { filesShown, toggleFiles } from "../../lib/explorer";
 import { editorName, gitLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
-import { dragRegion } from "../../lib/platform";
+import { dragRegion, keys } from "../../lib/platform";
 import { api, snapshot } from "../../lib/store";
 import type { Project } from "../../lib/types";
 
@@ -35,6 +36,18 @@ const emit = defineEmits<{ toggle: [] }>();
         @click="api.openEditor(project.path)"
       >
         <Icon name="editor" :size="16" />
+      </button>
+      <!-- The project's files in their floating window (files/FilesWindow); pressed while it shows them. -->
+      <button
+        type="button"
+        :class="['icon', { on: filesShown(project.path) }]"
+        :aria-pressed="filesShown(project.path)"
+        data-files-toggle
+        :aria-label="t('files.title')"
+        :title="t('files.toggle', { keys: keys('mod+Shift+E') })"
+        @click="toggleFiles(project.path)"
+      >
+        <Icon name="folder" :size="16" />
       </button>
       <button type="button" class="icon" :aria-label="t('detail.projectSettings')" :title="t('detail.projectSettings')" @click="emit('toggle')">
         <Icon name="settings" :size="16" />
@@ -72,7 +85,12 @@ const emit = defineEmits<{ toggle: [] }>();
 .title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+}
+
+.icon.on {
+  background: var(--bg-control-on);
+  color: var(--text-strong);
 }
 
 .name {

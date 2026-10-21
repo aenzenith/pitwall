@@ -52,6 +52,7 @@ impl Core {
                 projects_dir: kept.projects_dir,
                 board_scope: kept.board_scope,
                 board_view: kept.board_view,
+                files_preview: kept.files_preview,
                 track: kept.track,
                 teams: kept.teams,
                 seen_version: kept.seen_version,
@@ -146,6 +147,20 @@ impl Core {
                 return;
             }
             inner.settings.board_view = Some(view);
+        }
+
+        self.save_settings();
+        self.notify();
+    }
+
+    /// Whether the Files window shows a Markdown or SVG file as its preview, kept until it is turned off.
+    pub fn set_files_preview(&self, on: bool) {
+        {
+            let mut inner = self.lock();
+            if inner.settings.files_preview == on {
+                return;
+            }
+            inner.settings.files_preview = on;
         }
 
         self.save_settings();

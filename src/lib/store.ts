@@ -314,6 +314,7 @@ export const api = {
   setBoardScope: (scope: string) => invoke("set_board_scope", { scope }),
   /** How a project's board is drawn: `columns` or `list`. */
   setBoardView: (view: string) => invoke("set_board_view", { view }),
+  setFilesPreview: (on: boolean) => invoke("set_files_preview", { on }),
   /** The Track page's own settings: its circuit, what the cars carry, how much moves. */
   setTrack: (track: TrackSettings) => invoke("set_track", { track }),
   setShortcut: (keys: string) => invoke("set_shortcut", { keys }),
@@ -462,6 +463,26 @@ export const api = {
   /** Opens the file an output line names (`file`, as printed) in the editor, at its line. The
    * core finds it, in the project's folder only: false when the project has no such file. */
   openReference: (path: string, file: string, line: number, column: number | null) => invoke<boolean>("open_reference", { path, file, line, column }),
+  /** The Files window (lib/explorer): a folder of the project (`""` its root), at most `limit` entries. */
+  explorerList: (path: string, dir: string, limit: number) => invoke<import("./explorer").Listing | null>("explorer_list", { path, dir, limit }),
+  /** A file of the project: its text, or why it isn't shown; null when it can't be read. */
+  explorerRead: (path: string, file: string) => invoke<import("./explorer").FileView | null>("explorer_read", { path, file }),
+  /** A picture a Markdown file names, as a `data:` URL; null when it isn't one of the project's. */
+  explorerImage: (path: string, file: string) => invoke<string | null>("explorer_image", { path, file }),
+  /** The Git state of the project's paths; null when it isn't a Git work tree. */
+  explorerStatus: (path: string) => invoke<import("./explorer").GitMark[] | null>("explorer_status", { path }),
+  /** What changed in a file since the last commit, as `git diff` writes it. */
+  explorerDiff: (path: string, file: string) => invoke<string | null>("explorer_diff", { path, file }),
+  /** The project's files, for the window's search. */
+  explorerFiles: (path: string) => invoke<{ files: string[]; partial: boolean } | null>("explorer_files", { path }),
+  /** The history of the project's branch and its upstream, `limit` commits after `skip`. */
+  explorerLog: (path: string, skip: number, limit: number) => invoke<import("./explorer").History | null>("explorer_log", { path, skip, limit }),
+  /** The files a commit of the project changed. */
+  explorerCommit: (path: string, id: string) => invoke<import("./explorer").CommitFile[] | null>("explorer_commit", { path, id }),
+  /** What a commit changed in one file (`from`: where a renamed one was). */
+  explorerCommitDiff: (path: string, id: string, file: string, from: string | null) => invoke<string | null>("explorer_commit_diff", { path, id, file, from }),
+  /** A file or folder of the project shown in Finder. */
+  explorerReveal: (path: string, file: string) => invoke<boolean>("explorer_reveal", { path, file }),
   /* The chequered flag (core/flag.rs): what is still open, before a quit and from Today's bar. */
   /** What is open, and whether a quit waits on the dialog. `fresh`: the projects' Git state is
    * read again first, so the answer takes a moment. */

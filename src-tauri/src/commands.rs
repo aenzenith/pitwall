@@ -465,6 +465,12 @@ pub fn set_board_view(state: State<'_, AppState>, view: String) {
     state.core.set_board_view(view);
 }
 
+/// Whether the Files window shows a Markdown or SVG file as its preview, kept until it is turned off.
+#[tauri::command]
+pub fn set_files_preview(state: State<'_, AppState>, on: bool) {
+    state.core.set_files_preview(on);
+}
+
 /// The Track page's own settings: its circuit, what the cars carry, how much moves.
 #[tauri::command]
 pub fn set_track(state: State<'_, AppState>, track: TrackSettings) {
@@ -998,6 +1004,81 @@ pub fn radio_calls(state: State<'_, AppState>, session: String) -> Vec<crate::co
 pub async fn open_reference(app: AppHandle, path: String, file: String, line: u32, column: Option<u32>) -> bool {
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     tauri::async_runtime::spawn_blocking(move || core.open_reference(&path, &file, line, column)).await.unwrap_or(false)
+}
+
+/* ---------- the Files window: a listed project's folders and files, read only (core/explorer.rs) ---------- */
+
+/// The folder `dir` of the project at `path` (`""` its root), at most `limit` entries.
+#[tauri::command]
+pub async fn explorer_list(app: AppHandle, path: String, dir: String, limit: usize) -> Option<crate::core::Listing> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_list(&path, &dir, limit)).await.ok().flatten()
+}
+
+/// A file of the project, as the window shows it: its text, or why not.
+#[tauri::command]
+pub async fn explorer_read(app: AppHandle, path: String, file: String) -> Option<crate::core::FileView> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_read(&path, &file)).await.ok().flatten()
+}
+
+/// A picture a Markdown file names, for its preview: a data URL, or nothing (`core/explorer.rs`).
+#[tauri::command]
+pub async fn explorer_image(app: AppHandle, path: String, file: String) -> Option<String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_image(&path, &file)).await.ok().flatten()
+}
+
+/// The Git state of the project's paths; nothing when it isn't a Git work tree.
+#[tauri::command]
+pub async fn explorer_status(app: AppHandle, path: String) -> Option<Vec<crate::core::GitMark>> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_status(&path)).await.ok().flatten()
+}
+
+/// What changed in a file of the project since the last commit.
+#[tauri::command]
+pub async fn explorer_diff(app: AppHandle, path: String, file: String) -> Option<String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_diff(&path, &file)).await.ok().flatten()
+}
+
+/// The project's files for the window's search.
+#[tauri::command]
+pub async fn explorer_files(app: AppHandle, path: String) -> Option<crate::core::FileIndex> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_files(&path)).await.ok().flatten()
+}
+
+/// The history of the project's branch and its upstream, `limit` commits after `skip`.
+#[tauri::command]
+pub async fn explorer_log(app: AppHandle, path: String, skip: usize, limit: usize) -> Option<crate::core::History> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_log(&path, skip, limit)).await.ok().flatten()
+}
+
+/// The files a commit of the project changed.
+#[tauri::command]
+pub async fn explorer_commit(app: AppHandle, path: String, id: String) -> Option<Vec<crate::core::CommitFile>> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_commit(&path, &id)).await.ok().flatten()
+}
+
+/// What a commit of the project changed in one file (and, renamed, where it came from).
+#[tauri::command]
+pub async fn explorer_commit_diff(app: AppHandle, path: String, id: String, file: String, from: Option<String>) -> Option<String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_commit_diff(&path, &id, &file, from.as_deref())).await.ok().flatten()
+}
+
+/// A file or folder of the project shown in Finder (Explorer, the file manager).
+#[tauri::command]
+pub async fn explorer_reveal(app: AppHandle, path: String, file: String) -> bool {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    let Ok(Some(found)) = tauri::async_runtime::spawn_blocking(move || core.explorer_path(&path, &file)).await else {
+        return false;
+    };
+    tauri_plugin_opener::reveal_item_in_dir(found).is_ok()
 }
 
 /* ---------- the chequered flag: what is still open (core/flag.rs, flag.rs) ---------- */

@@ -59,6 +59,10 @@ pub struct ProjectSettings {
     /// those told from its name (`codes` in `src/lib/track.ts`).
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "code_or_none")]
     pub code: Option<String>,
+    /// What a double click (or Return) on the project's row in the list opens: `editor`, or,
+    /// left out, its Files window.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "editor_or_none")]
+    pub double_click: Option<String>,
 }
 
 /// A project's code as a file has it: its letters and digits in capitals, three at most; none
@@ -67,6 +71,12 @@ fn code_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Opt
     let value = Value::deserialize(deserializer)?;
     let code: String = value.as_str().unwrap_or_default().chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_uppercase).take(3).collect();
     Ok((!code.is_empty()).then_some(code))
+}
+
+/// A row's double click as a file has it: `editor`, or none for anything else (the Files window).
+fn editor_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    Ok((value.as_str() == Some("editor")).then(|| "editor".to_string()))
 }
 
 impl ProjectSettings {
@@ -337,6 +347,9 @@ pub struct Settings {
     /// How the Board page draws a project's board: `columns` or `list`. None until one is picked.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub board_view: Option<String>,
+    /// The Files window shows a Markdown or SVG file as its preview rather than its text, from
+    /// the moment its eye is pressed until it is pressed again.
+    pub files_preview: bool,
     /// The Track page's own settings. None until one is changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<TrackSettings>,
@@ -402,6 +415,7 @@ impl Default for Settings {
             auto_update: true,
             board_scope: None,
             board_view: None,
+            files_preview: false,
             track: None,
             theme: "system".into(),
             teams: Vec::new(),

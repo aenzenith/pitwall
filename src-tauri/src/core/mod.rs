@@ -54,6 +54,8 @@ mod terminal;
 mod watch;
 mod radio;
 mod reference;
+mod explorer;
+pub use explorer::{CommitFile, FileIndex, FileView, GitMark, History, Listing};
 mod flag;
 pub use flag::FlagState;
 mod tower;

@@ -24,6 +24,25 @@
   --bg-control-on: #2c3039;
   /* A row under the pointer (a project, a session, a link, a tab). */
   --bg-row-hover: #1b1e24;
+  /* The Files window's code (window/files): the picked line, what ⌘F found (the one it is at
+     ringed besides), the map's view of the screen. */
+  --bg-code-line: #171a1f;
+  --bg-code-hit: #3a3520;
+  --bg-code-here: #4d4421;
+  --bg-code-slider: rgba(255, 255, 255, 0.07);
+  --bg-diff-add: #15211a;
+  --bg-diff-del: #261617;
+  /* Over the code: the shown tab and the path bar a step lighter than it, the tabs' strip between. */
+  --bg-code-head: #1b1e24;
+  --bg-code-tabs: #131519;
+  /* The history graph's lanes (window/files/SourceControl), taken in turn as branches start. */
+  --lane-0: #6ea8e0;
+  --lane-1: #b48cf0;
+  --lane-2: #4fb8ad;
+  --lane-3: #e07bb0;
+  --lane-4: #d8b45a;
+  /* A link in a Markdown file's preview (window/files/MarkdownView). */
+  --text-link: #6ea8e0;
   /* The line that ties a team's projects together in the project list (team/TeamHead, a row's
      branch): faint at rest, a step up under the pointer, bright for the selected team. */
   --team-line: #2b2f36;
@@ -264,6 +283,20 @@
   --bg-control-hover: #eaedf0;
   --bg-control-on: #e1e4e8;
   --bg-row-hover: #eff1f3;
+  --bg-code-line: #f2f4f6;
+  --bg-code-hit: #f6ecc2;
+  --bg-code-here: #f0dc8a;
+  --bg-code-slider: rgba(15, 17, 20, 0.07);
+  --bg-diff-add: #e8f5ec;
+  --bg-diff-del: #fbeaea;
+  --bg-code-head: #f4f5f7;
+  --bg-code-tabs: #e9ebee;
+  --lane-0: #2f6db3;
+  --lane-1: #7c4fc4;
+  --lane-2: #1f8a80;
+  --lane-3: #b8467f;
+  --lane-4: #9a7420;
+  --text-link: #2f6db3;
   --team-line: #d4d8dd;
   --team-line-hover: #b2b8c0;
   --team-line-selected: #5b626d;
