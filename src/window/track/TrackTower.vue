@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import StatusIcon from "../../components/StatusIcon.vue";
-import { showFiles, toggleFiles } from "../../lib/explorer";
+import { toggleFiles } from "../../lib/explorer";
 import { claudeState, meta } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
-import { projectSettings } from "../../lib/projectSettings";
+import { openInWindow, openTarget } from "../../lib/open";
 import { rowKeys } from "../../lib/rows";
 import { api, now } from "../../lib/store";
 import { sessionsIn } from "../../lib/track";
@@ -38,12 +38,13 @@ function line(project: Project): { server: string; claude: string } {
   return { server: project.status === "running" && project.port ? `:${project.port}` : meta(project, now.value), claude };
 }
 
-/** A double click, as on the project list's row: the project's Files window, or its editor when
- * its settings say so. */
+/** A double click: the project in the list, its editor or its Files window, as its settings or
+ * Pitwall's say for the window's pages (lib/open). */
 function openRow(project: Project): void {
-  if (projectSettings(project).doubleClick === "editor") void api.openEditor(project.path);
-  else showFiles(project.path);
+  openInWindow(project.path, "pages");
 }
+
+const ROW_TITLES = { list: "track.rowTitleList", editor: "track.rowTitle", files: "track.rowTitleFiles" } as const;
 
 const menu = useNativeMenu();
 
@@ -85,7 +86,7 @@ function onKey(event: KeyboardEvent): void {
         :tabindex="project.path === selected || (!selected && index === 0) ? 0 : -1"
         :aria-selected="project.path === selected"
         :class="['tower-row', { on: project.path === selected }]"
-        :title="t(projectSettings(project).doubleClick === 'editor' ? 'track.rowTitle' : 'track.rowTitleFiles')"
+        :title="t(ROW_TITLES[openTarget(project.path, 'pages')])"
         @click="emit('select', project.path)"
         @dblclick="openRow(project)"
         @contextmenu="rowMenu($event, project)"

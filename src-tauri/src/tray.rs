@@ -869,15 +869,15 @@ mod bar {
 }
 
 /// The tray's menu on Windows and Linux: Pitwall's window, the quick switcher, the projects that
-/// wait on you and those that run (a few of each; a click opens one in its editor, as a
-/// notification does), and Quit. Rebuilt only when what it lists changes.
+/// wait on you and those that run (a few of each; a click opens one as Settings › Projects says
+/// for the menu bar), and Quit. Rebuilt only when what it lists changes.
 #[cfg(not(target_os = "macos"))]
 mod menu {
     use std::sync::Mutex;
 
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::TrayIcon;
-    use tauri::{AppHandle, Manager, Runtime};
+    use tauri::{AppHandle, Emitter, Manager, Runtime};
 
     use crate::core::Snapshot;
     use crate::i18n::t;
@@ -960,7 +960,14 @@ mod menu {
             QUIT => crate::flag::request_quit(app),
             _ => {
                 if let (Some(path), Some(state)) = (id.strip_prefix(PROJECT), app.try_state::<AppState>()) {
-                    state.core.open_editor(path);
+                    match state.core.settings().open_outside(path) {
+                        "editor" => state.core.open_editor(path),
+                        target => {
+                            super::show_main(app);
+                            let event = if target == "files" { "reveal-files" } else { "reveal-project" };
+                            let _ = app.emit(event, serde_json::json!({ "path": path }));
+                        }
+                    }
                 }
             }
         }

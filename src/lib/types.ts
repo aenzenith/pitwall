@@ -49,9 +49,18 @@ export type ProjectSettings = {
   claudeMode?: ClaudeMode;
   /** The three letters the Track page and the mini tower write for it; unset: told from its name. */
   code?: string;
-  /** What a double click (or Return) on its row in the list opens; unset: its Files window. */
-  doubleClick?: "editor";
+  /** Where it opens from each place, in place of Pitwall's choice (`Settings.open`); a place
+   * left out takes Pitwall's. Read leniently (lib/open). */
+  open?: Partial<OpenSettings>;
 };
+
+/** What opening a project opens: its Files window, its editor, or the project in Pitwall's list. */
+export type OpenTarget = "files" | "editor" | "list";
+
+/** Where a project opens from each place (Settings › Projects, lib/open): a double click or ↵ on
+ * its row in the list (`files` or `editor`), a double click on it on the window's other pages, and
+ * the menu bar's popover, the quick switcher and the mini tower. */
+export type OpenSettings = { list: OpenTarget; pages: OpenTarget; outside: OpenTarget };
 
 export type JobResult = { ok: boolean; code: number | null; stopped: boolean; finishedAt: number };
 
@@ -183,6 +192,8 @@ export type Settings = {
   tower?: TowerSettings;
   /** The command line and `pitwall://` links; changed through their own commands only. */
   cli?: CliSettings;
+  /** Where a project opens from each place, unless it chose its own. Read leniently (lib/open). */
+  open?: Partial<OpenSettings>;
 };
 
 /** The chequered flag: a quit from Pitwall's own menus shows what is still open first. */

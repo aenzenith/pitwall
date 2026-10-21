@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
+import { openInWindow } from "../lib/open";
 import { COLLAPSED_HEIGHT, terminalRequest } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, setTrack, snapshot, track as settings } from "../lib/store";
@@ -212,7 +213,7 @@ const inset = computed<Inset>(() => ({
         :hot="hot"
         :inset="inset"
         @select="selectedPath = $event"
-        @open="emit('open-project', $event)"
+        @open="openInWindow($event, 'pages')"
         @bring="bring"
       />
 

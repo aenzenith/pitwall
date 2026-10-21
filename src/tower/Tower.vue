@@ -22,6 +22,7 @@ import StatusIcon from "../components/StatusIcon.vue";
 import { isStale, left, LOW_LEFT, percentText, sessionWindow } from "../lib/fuel";
 import { language, t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
+import { openFromOutside } from "../lib/open";
 import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
 import { towerRows, towerSession, towerSettings, towerState } from "../lib/tower";
 import { codes } from "../lib/track";
@@ -291,7 +292,7 @@ onBeforeUnmount(() => {
           :class="['chip', { lit: lit(project) }]"
           :aria-label="said(project)"
           :title="said(project)"
-          @dblclick="api.openEditor(project.path)"
+          @dblclick="openFromOutside(project.path)"
         >
           <StatusIcon :project="project" :ring="lit(project) ? 'var(--bg-hover)' : 'var(--bg-panel)'" />
           <span class="code" aria-hidden="true">{{ letters.get(project.path) }}</span>
@@ -333,7 +334,7 @@ onBeforeUnmount(() => {
           :key="project.path"
           :data-path="project.path"
           :class="['row', { lit: lit(project) }]"
-          @dblclick="api.openEditor(project.path)"
+          @dblclick="openFromOutside(project.path)"
         >
           <StatusIcon :project="project" :ring="lit(project) ? 'var(--bg-hover)' : 'var(--bg-panel)'" />
           <span class="name">{{ project.name }}</span>

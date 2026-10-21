@@ -13,6 +13,7 @@ import { claudeLine, gitLine, meta, shortcutLabel } from "../lib/format";
 import { rowKey, useGroupReorder } from "../lib/groupReorder";
 import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
+import { openFromOutside, openTarget } from "../lib/open";
 import { missed, notifications, quiet, quietLine, waits } from "../lib/quiet";
 import { rowKeys } from "../lib/rows";
 import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
@@ -47,12 +48,20 @@ const summary = computed(() => {
   return parts.join(" · ");
 });
 
-/** A click on the row: the project's VS Code window comes to the front, or opens. With Claude
- * waiting on you there, its waiting session comes up where it runs (the core's `open_claude`). */
+/** A click on the row, or ↵: with Claude waiting on you there, its waiting session comes up where
+ * it runs (the core's `open_claude`); else the project opens as Settings › Projects says for the
+ * menu bar (lib/open). */
 function openRow(project: Project): void {
   if (!reorder.isClick()) return;
-  void (project.claude ? api.openClaude(project.path) : api.openEditor(project.path));
+  openProject(project);
 }
+
+function openProject(project: Project): void {
+  if (project.claude) void api.openClaude(project.path);
+  else openFromOutside(project.path);
+}
+
+const ROW_TITLES = { list: "popover.rowTitleList", editor: "popover.rowTitle", files: "popover.rowTitleFiles" } as const;
 
 /** While there are teams a row is dragged among its own team's rows only, or among those of the
  * projects in no team (lib/groupReorder: `data-zone`); with no team it goes anywhere. */
@@ -116,7 +125,7 @@ function onListKey(event: KeyboardEvent): void {
     move: (path) => (focusedPath.value = path),
     enter: (path) => {
       const project = find(path);
-      if (project) void (project.claude ? api.openClaude(project.path) : api.openEditor(project.path));
+      if (project) openProject(project);
     },
     space: (path) => {
       const project = find(path);
@@ -259,7 +268,7 @@ onBeforeUnmount(() => {
           :data-zone="zone(project)"
           :class="['row', reorder.lineClass(rowKey(project.path))]"
           :style="reorder.lineStyle(rowKey(project.path))"
-          :title="t('popover.rowTitle', { name: project.name })"
+          :title="t(ROW_TITLES[openTarget(project.path, 'outside')], { name: project.name })"
           @pointerdown="reorder.down($event, rowKey(project.path))"
           @focus="focusedPath = project.path"
           @click="openRow(project)"

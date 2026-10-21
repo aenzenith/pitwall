@@ -34,7 +34,7 @@ use super::board::{taken, CardImage, Column, ImageKind, IMAGES_MAX};
 use super::reveal::is_session_id;
 use super::*;
 use crate::registry::{base36, write_atomic};
-use crate::settings::{CustomCommand, FlagSettings, Sounds, Team};
+use crate::settings::{CustomCommand, FlagSettings, OpenSettings, Sounds, Team};
 
 const FORMAT: &str = "pitwall-backup";
 const VERSION: u64 = 1;
@@ -128,6 +128,7 @@ struct General {
     resume: String,
     suggest_projects: bool,
     flag: FlagSettings,
+    open: OpenSettings,
 }
 
 impl General {
@@ -137,7 +138,7 @@ impl General {
         let Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
-            theme, resume, suggest_projects, flag,
+            theme, resume, suggest_projects, flag, open,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
@@ -155,7 +156,7 @@ impl General {
         Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
-            theme, resume, suggest_projects, flag,
+            theme, resume, suggest_projects, flag, open,
         }
     }
 
@@ -180,13 +181,13 @@ impl General {
         let Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
-            theme, resume, suggest_projects, flag,
+            theme, resume, suggest_projects, flag, open,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
-            theme, resume, suggest_projects, flag,
+            theme, resume, suggest_projects, flag, open,
             ..settings.clone()
         })
     }
@@ -381,8 +382,9 @@ fn unique(paths: Vec<String>) -> Vec<String> {
 /// one it brings or replaces doesn't, until that is switched on here.
 fn put_projects(settings: &mut Settings, part: &ProjectsPart) {
     for (path, project) in &part.settings {
-        if !path.is_empty() && *project != ProjectSettings::default() {
-            settings.projects.insert(path.clone(), project.clone());
+        let project = project.clone().upgraded();
+        if !path.is_empty() && project != ProjectSettings::default() {
+            settings.projects.insert(path.clone(), project);
         }
     }
 
@@ -418,7 +420,7 @@ fn move_project(settings: &mut Settings, from: &str, to: &str) {
         ours.url = ours.url.or(theirs.url);
         ours.claude_model = ours.claude_model.or(theirs.claude_model);
         ours.code = ours.code.or(theirs.code);
-        ours.double_click = ours.double_click.or(theirs.double_click);
+        ours.open = ours.open.or(theirs.open);
         if ours.claude_mode.is_normal() {
             ours.claude_mode = theirs.claude_mode;
         }
@@ -1301,7 +1303,8 @@ mod tests {
             claude_model: Some(crate::start::Model::Sonnet),
             claude_mode: crate::start::Mode::Plan,
             code: Some("PDK".into()),
-            double_click: Some("editor".into()),
+            open: crate::settings::ProjectOpen { list: Some("editor".into()), outside: Some("list".into()), pages: None },
+            double_click: None,
         };
         core.set_project_settings(&old, kept.clone());
         core.mute_project(&old, true);

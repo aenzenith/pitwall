@@ -11,11 +11,12 @@ import ThemeSwitch from "../components/ThemeSwitch.vue";
 import { useBackdropClose } from "../lib/dialog";
 import { ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
+import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../lib/open";
 import { keys, shortcutModifiers } from "../lib/platform";
 import { recordingEnded, recordingStarts } from "../lib/shortcutRecording";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
-import type { ExtensionStatus, Settings, Theme } from "../lib/types";
+import type { ExtensionStatus, OpenTarget, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
 import CliSection from "./settings/CliSection.vue";
@@ -25,7 +26,7 @@ import TowerSection from "./settings/TowerSection.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
 import TrackOptions from "./track/TrackOptions.vue";
 
-type Tab = "general" | "servers" | "editor" | "claude" | "track" | "notifications" | "about";
+type Tab = "general" | "projects" | "servers" | "editor" | "claude" | "track" | "notifications" | "about";
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
  * page's settings button Track's); `startPart`: a part of it scrolled to the top (the first run's
@@ -35,8 +36,9 @@ const props = defineProps<{ startTab?: Tab; startPart?: "phone" }>();
 const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNew: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
-const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "server" | "editor" | "claude" | "flag" | "bell" }> = [
+const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "claude" | "flag" | "bell" }> = [
   { id: "general", label: "settings.general", icon: "settings" },
+  { id: "projects", label: "common.projects", icon: "grid" },
   { id: "servers", label: "settings.servers", icon: "server" },
   { id: "editor", label: "settings.editor", icon: "editor" },
   { id: "claude", label: "settings.claude", icon: "claude" },
@@ -121,6 +123,7 @@ const form = reactive<Settings>({
   resume: "ask",
   onboarded: false,
   suggestProjects: false,
+  open: { list: "files", pages: "list", outside: "list" },
 });
 const error = ref("");
 const hookBusy = ref(false);
@@ -134,6 +137,24 @@ const RESUME: Array<{ id: Settings["resume"]; label: Key }> = [
   { id: "always", label: "settings.resume.always" },
   { id: "never", label: "settings.resume.never" },
 ];
+
+/** Where a project opens from each place unless it chose its own (lib/open); `hint` says what
+ * opens it there. */
+const OPEN_FROM: Array<{ from: OpenFrom; label: Key; hint: Key }> = [
+  { from: "list", label: "open.from.list", hint: "open.listHint" },
+  { from: "pages", label: "open.from.pages", hint: "open.pagesHint" },
+  { from: "outside", label: "open.from.outside", hint: "open.outsideHint" },
+];
+
+/** The form's choice for `from`, read as lib/open reads it. */
+function openChoice(from: OpenFrom): OpenTarget {
+  return OPEN_TARGETS[from].find((target) => target === form.open?.[from]) ?? OPEN_TARGETS[from][0];
+}
+
+/** A pick goes into the form; its `change` then saves it. */
+function pickOpen(from: OpenFrom, value: string): void {
+  form.open = { ...form.open, [from]: OPEN_TARGETS[from].find((target) => target === value) };
+}
 
 /** The moved folders' list (backup/MissingProjects): an import may bring in projects whose folder
  * isn't on this machine. */
@@ -488,6 +509,17 @@ function setTheme(theme: Theme): void {
       </nav>
 
       <form ref="body" class="body" @submit.prevent="save" @change="save">
+        <fieldset v-show="tab === 'projects'" :aria-label="t('common.projects')">
+          <div class="section-label">{{ t("open.title") }}</div>
+          <label v-for="place in OPEN_FROM" :key="place.from" class="field">
+            <span>{{ t(place.label) }}</span>
+            <select :value="openChoice(place.from)" @change="pickOpen(place.from, ($event.target as HTMLSelectElement).value)">
+              <option v-for="target in OPEN_TARGETS[place.from]" :key="target" :value="target">{{ t(OPEN_LABELS[target]) }}</option>
+            </select>
+            <small>{{ t(place.hint, { enter: keys("Enter") }) }}</small>
+          </label>
+        </fieldset>
+
         <fieldset v-show="tab === 'servers'" :aria-label="t('settings.servers')">
           <label class="field">
             <span>{{ t("common.script") }}</span>

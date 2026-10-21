@@ -2,13 +2,16 @@
 import ClaudeDot from "../../components/ClaudeDot.vue";
 import type { Lane, Live, Tick } from "../../lib/day";
 import { t } from "../../lib/i18n";
-import { api } from "../../lib/store";
+import { openInWindow, openTarget } from "../../lib/open";
 import { useTooltip } from "../../lib/tooltip";
 
 /** One project's row: its name and time, and what happened on it along the hours. `on`: it is the
  * selected project; `nowLeft`: where now is, while today is shown; `live`: Claude, right now. */
 const props = defineProps<{ lane: Lane; on: boolean; ticks: Tick[]; nowLeft: string | null; live?: Live }>();
 const emit = defineEmits<{ select: [] }>();
+
+/** The hint on its name: what a double click opens (lib/open). */
+const LANE_TITLES = { list: "day.laneTitleList", editor: "day.laneTitle", files: "day.laneTitleFiles" } as const;
 
 const tooltip = useTooltip();
 /** The block the arrows are on, oldest first; `null` once the tooltip goes. */
@@ -48,12 +51,12 @@ function onKey(event: KeyboardEvent): void {
     :aria-pressed="on"
     :aria-describedby="lane.blocks.length ? 'lane-keys' : undefined"
     @click="emit('select')"
-    @dblclick="api.openEditor(lane.project.path)"
+    @dblclick="openInWindow(lane.project.path, 'pages')"
     @keydown="onKey"
     @blur="tooltip.hide()"
   >
     <!-- The hint sits on the name only: the blocks have their own tooltips. -->
-    <span class="label" :title="t('day.laneTitle')">
+    <span class="label" :title="t(LANE_TITLES[openTarget(lane.project.path, 'pages')])">
       <span class="mark"><ClaudeDot :live="live" /></span>
       <span class="names">
         <span class="name">{{ lane.project.name }}</span>

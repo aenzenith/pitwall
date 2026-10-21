@@ -59,10 +59,38 @@ pub struct ProjectSettings {
     /// those told from its name (`codes` in `src/lib/track.ts`).
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "code_or_none")]
     pub code: Option<String>,
-    /// What a double click (or Return) on the project's row in the list opens: `editor`, or,
-    /// left out, its Files window.
-    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "editor_or_none")]
+    /// Where the project opens from each place, in place of Pitwall's own choice
+    /// (`Settings::open`); a place left out takes Pitwall's.
+    #[serde(skip_serializing_if = "ProjectOpen::is_empty")]
+    pub open: ProjectOpen,
+    /// What a double click on its row opened before `open` (`editor`, or none for its Files
+    /// window): read from an older file into `open` (`ProjectSettings::upgraded`), never written.
+    #[serde(skip_serializing, deserialize_with = "editor_or_none")]
     pub double_click: Option<String>,
+}
+
+/// A project's own choice of where it opens from each place (`OpenSettings`'s places and
+/// values); none: Pitwall's. The window reads them leniently (`src/lib/open.ts`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ProjectOpen {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pages: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outside: Option<String>,
+}
+
+impl ProjectOpen {
+    pub fn is_empty(&self) -> bool {
+        self.list.is_none() && self.pages.is_none() && self.outside.is_none()
+    }
+
+    /// Each place this one has no choice for takes `other`'s.
+    pub fn or(self, other: Self) -> Self {
+        Self { list: self.list.or(other.list), pages: self.pages.or(other.pages), outside: self.outside.or(other.outside) }
+    }
 }
 
 /// A project's code as a file has it: its letters and digits in capitals, three at most; none
@@ -73,7 +101,8 @@ fn code_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Opt
     Ok((!code.is_empty()).then_some(code))
 }
 
-/// A row's double click as a file has it: `editor`, or none for anything else (the Files window).
+/// A row's double click as an older file has it: `editor`, or none for anything else (the Files
+/// window).
 fn editor_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
     let value = Value::deserialize(deserializer)?;
     Ok((value.as_str() == Some("editor")).then(|| "editor".to_string()))
@@ -83,6 +112,36 @@ impl ProjectSettings {
     /// How a Claude session of the project starts when nothing else was chosen.
     pub fn start(&self) -> Start {
         Start { model: self.claude_model, mode: self.claude_mode }
+    }
+
+    /// An older file's double click as the places it reached then: the list's row and the Track
+    /// page's tower; a place already chosen keeps its choice.
+    pub fn upgraded(mut self) -> Self {
+        if let Some(target) = self.double_click.take() {
+            self.open = ProjectOpen { list: self.open.list.or(Some(target.clone())), pages: self.open.pages.or(Some(target)), ..self.open };
+        }
+        self
+    }
+}
+
+/// Where a project opens from each place (Settings › Projects): `list`, a double click or Return
+/// on its row in the list (`files`, its Files window, or `editor`); `pages`, a double click on it
+/// on the window's other pages (the Track page, the Today page), and `outside`, a click in the
+/// menu bar's popover or the tray's menu (`tray.rs`), Return in the quick switcher or a double
+/// click in the mini tower (`list`, the project in the list, `editor` or `files`). A project may
+/// choose its own (`ProjectOpen`). The window and the tray's menu read them leniently
+/// (`src/lib/open.ts`, `Settings::open_outside`): a value not known is the default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OpenSettings {
+    pub list: String,
+    pub pages: String,
+    pub outside: String,
+}
+
+impl Default for OpenSettings {
+    fn default() -> Self {
+        Self { list: "files".into(), pages: "list".into(), outside: "list".into() }
     }
 }
 
@@ -388,6 +447,9 @@ pub struct Settings {
     /// The command line and `pitwall://` links; changed through their own commands only.
     #[serde(default)]
     pub cli: CliSettings,
+    /// Where a project opens from each place, unless it chose its own (Settings › Projects).
+    #[serde(default)]
+    pub open: OpenSettings,
 }
 
 impl Default for Settings {
@@ -429,6 +491,7 @@ impl Default for Settings {
             flag: FlagSettings::default(),
             tower: TowerSettings::default(),
             cli: CliSettings::default(),
+            open: OpenSettings::default(),
         }
     }
 }
@@ -457,10 +520,10 @@ impl Settings {
         };
 
         match serde_json::from_value::<Self>(value.clone()) {
-            Ok(settings) => settings,
+            Ok(settings) => settings.upgraded(),
             Err(error) => {
                 set_aside(file, &error.to_string());
-                let settings = salvage(value);
+                let settings = salvage(value).upgraded();
                 if settings != Self::default() {
                     settings.save(file);
                 }
@@ -479,8 +542,22 @@ impl Settings {
         }
     }
 
+    /// What an older file says in words this version no longer writes, in those it does
+    /// (`ProjectSettings::upgraded`).
+    pub fn upgraded(mut self) -> Self {
+        self.projects = self.projects.into_iter().map(|(path, project)| (path, project.upgraded())).collect();
+        self
+    }
+
     pub fn project(&self, path: &str) -> ProjectSettings {
         self.projects.get(path).cloned().unwrap_or_default()
+    }
+
+    /// Where the project at `path` opens from outside the window (`OpenSettings::outside`): its
+    /// own choice, else Pitwall's, a value not known being the default, as the window reads it.
+    pub fn open_outside(&self, path: &str) -> &'static str {
+        let known = |value: &str| ["list", "editor", "files"].into_iter().find(|target| *target == value);
+        self.project(path).open.outside.as_deref().and_then(known).or_else(|| known(&self.open.outside)).unwrap_or("list")
     }
 
     pub fn script_for(&self, path: &str) -> String {
@@ -601,7 +678,32 @@ fn fitting<T: DeserializeOwned + Serialize + Default>(value: Value) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
+
+    #[test]
+    fn an_older_double_click_still_opens_the_places_it_did() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        let older = json!({ "projects": {
+            "/a": { "doubleClick": "editor" },
+            "/b": { "doubleClick": "editor", "open": { "list": "files" } },
+            "/c": { "doubleClick": "files", "script": "serve" },
+        } });
+        fs::write(&file, older.to_string()).unwrap();
+
+        let settings = Settings::load(&file);
+        let open = |path: &str| settings.project(path).open;
+        let place = |value: &str| Some(value.to_string());
+        assert_eq!(open("/a"), ProjectOpen { list: place("editor"), pages: place("editor"), outside: None });
+        assert_eq!(open("/b"), ProjectOpen { list: place("files"), pages: place("editor"), outside: None }, "a place chosen keeps its choice");
+        assert!(open("/c").is_empty(), "the Files window was no choice of its own");
+
+        settings.save(&file);
+        assert!(!fs::read_to_string(&file).unwrap().contains("doubleClick"));
+        assert_eq!(Settings::load(&file), settings);
+    }
 
     #[test]
     fn a_broken_settings_file_is_kept_and_what_parses_survives() {

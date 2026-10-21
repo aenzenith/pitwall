@@ -248,8 +248,8 @@ const spots = computed<Spot[]>(() => {
 
 const standing = computed(() => (left.value ?? spots.value).filter((spot) => spot.kind !== "lane"));
 
-/** A double click: what Claude waits with is brought up where that session runs; anything else goes
- * to its project. */
+/** A double click: what Claude waits with is brought up where that session runs; anything else
+ * opens its project as the window's pages do (TrackView, lib/open). */
 function open(spot: Spot): void {
   if (spot.kind === "waiting" && spot.session) emit("bring", spot.path, spot.session);
   else emit("open", spot.path);

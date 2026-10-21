@@ -22,7 +22,7 @@ import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu
 import { cardRequest, outputRequest, terminalRequest, trackTerminals } from "../lib/panel";
 import { dragRegion, isMac, keys, terminalChord } from "../lib/platform";
 import { closeFiles, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
-import { projectSettings } from "../lib/projectSettings";
+import { listRequest, openInWindow, openTarget } from "../lib/open";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
@@ -445,11 +445,10 @@ function onHeadKey(event: KeyboardEvent): boolean {
   return true;
 }
 
-/** A double click or ↵ on a row: the project's Files window, or its editor when its settings say so. */
+/** A double click or ↵ on a row: the project's Files window or its editor, as its settings or
+ * Pitwall's say (lib/open). */
 function openRow(path: string): void {
-  const project = projects.value.find((p) => p.path === path);
-  if (project && projectSettings(project).doubleClick === "editor") api.openEditor(path);
-  else showFiles(path);
+  openInWindow(path, "list");
 }
 
 /** The list is one Tab stop: arrows go along its rows and heads (a row is selected), ↵ opens the
@@ -590,6 +589,7 @@ function onKey(event: KeyboardEvent): void {
 
 let unlistenReveal: UnlistenFn | null = null;
 let unlistenProject: UnlistenFn | null = null;
+let unlistenFiles: UnlistenFn | null = null;
 let unlistenFuelReveal: UnlistenFn | null = null;
 let unlistenTerminal: UnlistenFn | null = null;
 let unlistenPage: UnlistenFn | null = null;
@@ -618,6 +618,18 @@ function revealProject(path: string): void {
   }
   selectProject(path);
 }
+
+/** From outside the window: the project's Files window, over the page shown; Settings, which
+ * would cover it, closes. */
+function revealFiles(path: string): void {
+  settingsOpen.value = false;
+  showFiles(path);
+}
+
+// A page's double click where its project opens in the list (lib/open).
+watch(listRequest, (asked) => {
+  if (asked) revealProject(asked.path);
+});
 
 /** From the switcher (⌘↵ on a command): the project, with that command's output showing. */
 function revealOutput(path: string, job: string): void {
@@ -673,6 +685,8 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
   unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
+  // Opened from the popover, the switcher or the mini tower where Settings › Projects says Files.
+  unlistenFiles = await listen<{ path: string }>("reveal-files", (event) => revealFiles(event.payload.path));
   // A click on the 90 % notification: the Fuel page.
   unlistenFuelReveal = await listen("reveal-fuel", () => (view.value = "fuel"));
   // Bringing up a Claude session that runs in one of Pitwall's terminals: that terminal.
@@ -693,6 +707,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   unlistenReveal?.();
   unlistenProject?.();
+  unlistenFiles?.();
   unlistenFuelReveal?.();
   unlistenTerminal?.();
   unlistenPage?.();
@@ -925,7 +940,7 @@ function server(project: Project): string {
                   drag.lineClass(rowKey(project.path)),
                 ]"
                 :style="section.team ? teamLineStyle(rowKey(project.path), section.team) : drag.lineStyle(rowKey(project.path))"
-                :title="t(projectSettings(project).doubleClick === 'editor' ? 'window.rowTitle' : 'window.rowTitleFiles')"
+                :title="t(openTarget(project.path, 'list') === 'editor' ? 'window.rowTitle' : 'window.rowTitleFiles')"
                 @pointerdown="drag.down($event, rowKey(project.path))"
                 @click="select(project.path)"
                 @dblclick="openRow(project.path)"

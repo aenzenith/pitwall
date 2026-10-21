@@ -2,7 +2,8 @@
 import { computed, ref } from "vue";
 
 import Icon from "../../components/Icon.vue";
-import { t } from "../../lib/i18n";
+import { t, type Key } from "../../lib/i18n";
+import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../../lib/open";
 import { projectSettings, updateProjectSettings } from "../../lib/projectSettings";
 import { MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice } from "../../lib/start";
 import { snapshot } from "../../lib/store";
@@ -81,10 +82,27 @@ function saveCode(): void {
   void updateProjectSettings(props.project.path, (s) => ({ ...s, code: value }));
 }
 
-/** What a double click (or Return) on the project's row opens: its Files window unless the
- * editor is picked; only the editor is written down. */
-function setDoubleClick(value: string): void {
-  void updateProjectSettings(props.project.path, (s) => ({ ...s, doubleClick: value === "editor" ? "editor" : undefined }));
+/** Where the project opens from each place: Pitwall's choice ("Default", left out of its
+ * settings) or one of its own (lib/open). */
+const OPEN_FROM: Array<{ from: OpenFrom; label: Key }> = [
+  { from: "list", label: "open.from.list" },
+  { from: "pages", label: "open.from.pages" },
+  { from: "outside", label: "open.from.outside" },
+];
+
+/** Its own choice for `from`, "" for Pitwall's. */
+function ownOpen(from: OpenFrom): string {
+  const value = settings.value.open?.[from];
+  return OPEN_TARGETS[from].find((target) => target === value) ?? "";
+}
+
+/** Kept as it is picked, as the Claude picks are; with no place of its own left, `open` goes. */
+function setOpen(from: OpenFrom, value: string): void {
+  const target = OPEN_TARGETS[from].find((known) => known === value);
+  void updateProjectSettings(props.project.path, (s) => {
+    const open = { ...s.open, [from]: target };
+    return { ...s, open: Object.values(open).some(Boolean) ? open : undefined };
+  });
 }
 </script>
 
@@ -143,14 +161,14 @@ function setDoubleClick(value: string): void {
       <p v-if="codeTakenBy" class="error" role="alert">{{ t("detail.codeTaken", { name: codeTakenBy }) }}</p>
     </section>
 
-    <section class="group" :aria-label="t('detail.listSection')">
-      <div class="section-label">{{ t("detail.listSection") }}</div>
+    <section class="group" :aria-label="t('open.title')">
+      <div class="section-label">{{ t("open.title") }}</div>
       <div class="picks">
-        <label class="pick">
-          <span class="pick-name">{{ t("detail.doubleClick") }}</span>
-          <select :value="settings.doubleClick ?? 'files'" @change="setDoubleClick(($event.target as HTMLSelectElement).value)">
-            <option value="files">{{ t("detail.doubleClick.files") }}</option>
-            <option value="editor">{{ t("detail.doubleClick.editor") }}</option>
+        <label v-for="place in OPEN_FROM" :key="place.from" class="pick">
+          <span class="pick-name">{{ t(place.label) }}</span>
+          <select :value="ownOpen(place.from)" @change="setOpen(place.from, ($event.target as HTMLSelectElement).value)">
+            <option value="">{{ t("open.default") }}</option>
+            <option v-for="target in OPEN_TARGETS[place.from]" :key="target" :value="target">{{ t(OPEN_LABELS[target]) }}</option>
           </select>
         </label>
       </div>

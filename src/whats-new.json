@@ -63,6 +63,27 @@
         "ja": "「今日」の上部に、その日に Claude が使ったトークン数と、それが週間上限のどれだけにあたるかが表示されます。各プロジェクトの分は名前の下と詳細に出ます。過ぎた日の数字も残ります。",
         "zh-Hans": "“今天”页面顶部显示 Claude 当天用了多少 token，以及占每周限额的多少。每个项目的部分显示在名称下方和详情中。过去的日子也会保留各自的数字。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Choose what opening a project opens",
+        "tr": "Projeyi açınca ne geleceğini sen seç",
+        "de": "Wähle, was sich beim Öffnen eines Projekts öffnet",
+        "es": "Elige qué se abre al abrir un proyecto",
+        "ru": "Выберите, что открывается при открытии проекта",
+        "ja": "プロジェクトを開いたときに何を開くか選べます",
+        "zh-Hans": "自选打开项目时打开什么"
+      },
+      "body": {
+        "en": "In Settings › Projects, pick what opens a project from the project list, from the other pages, and from the menu bar, mini tower and quick switcher: its Files window, the editor or the project list. A project can pick its own in its settings. The menu bar, the mini tower, the quick switcher, the Track page and the Today page now show the project in the list; pick Editor there to have them open the editor again.",
+        "tr": "Ayarlar › Projeler'de bir projeyi proje listesinden, diğer sayfalardan ya da menü çubuğu, mini kule ve hızlı geçişten açınca ne geleceğini seçebilirsin: Dosyalar penceresi, editör ya da proje listesi. Her proje kendi ayarlarında başka bir seçim yapabilir. Menü çubuğu, mini kule, hızlı geçiş, Pist ve Bugün artık projeyi proje listesinde gösteriyor; yine editör açılsın istersen orada Editör'ü seç.",
+        "de": "Unter Einstellungen › Projekte wählst du, was sich öffnet, wenn du ein Projekt aus der Projektliste, von anderen Seiten oder aus Menüleiste, Mini-Turm und Projektumschalter öffnest: sein Dateien-Fenster, der Editor oder die Projektliste. Jedes Projekt kann in seinen Einstellungen selbst wählen. Menüleiste, Mini-Turm, Projektumschalter, „Strecke“ und „Heute“ zeigen das Projekt jetzt in der Liste; wähle dort „Editor“, damit sich wieder der Editor öffnet.",
+        "es": "En Ajustes › Proyectos eliges qué se abre al abrir un proyecto desde la lista de proyectos, desde otras páginas y desde la barra de menús, la minitorre y el selector rápido: su ventana de archivos, el editor o la lista de proyectos. Cada proyecto puede elegir lo suyo en sus ajustes. La barra de menús, la minitorre, el selector rápido, Pista y Hoy ahora muestran el proyecto en la lista; elige Editor ahí para que vuelvan a abrir el editor.",
+        "ru": "В «Настройки › Проекты» выберите, что открывается, когда вы открываете проект из списка проектов, с других страниц и из строки меню, мини-башни и быстрого перехода: окно файлов, редактор или список проектов. Каждый проект может выбрать своё в своих настройках. Строка меню, мини-башня, быстрый переход, «Трасса» и «Сегодня» теперь показывают проект в списке; выберите там «Редактор», чтобы снова открывался редактор.",
+        "ja": "「設定 › プロジェクト」で、プロジェクト一覧・ほかのページ・メニューバー、ミニタワー、クイックスイッチャーからプロジェクトを開いたときに、ファイルウィンドウ、エディタ、プロジェクト一覧のどれを開くかを選べます。プロジェクトごとに、その設定で別のものを選ぶこともできます。メニューバー、ミニタワー、クイックスイッチャー、「コース」と「今日」では、プロジェクトが一覧に表示されるようになりました。前のようにエディタで開くには、そこで「エディタ」を選んでください。",
+        "zh-Hans": "在“设置 › 项目”中，可以选择从项目列表、其他页面以及菜单栏、迷你塔和快速切换器打开项目时打开什么：它的文件窗口、编辑器或项目列表。每个项目也可以在自己的设置中另选。菜单栏、迷你塔、快速切换器、“赛道”和“今天”现在会在列表中显示项目；如需像以前一样打开编辑器，请在那里选择“编辑器”。"
+      }
     }
   ]
 }

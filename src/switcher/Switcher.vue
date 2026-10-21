@@ -14,6 +14,7 @@ import { composing, draft } from "../lib/capture";
 import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
 import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
+import { openFromOutside, openTarget } from "../lib/open";
 import { pages, type Page, type PageEntry } from "../lib/pages";
 import { keys, primary } from "../lib/platform";
 import { api, now, snapshot } from "../lib/store";
@@ -280,11 +281,17 @@ function detail(p: Project): string {
   return [meta(p, now.value), gitLine(p.git)].filter(Boolean).join("  ·  ");
 }
 
+/** ↵ on a project: with Claude waiting on you there, its waiting session; else the project as
+ * Settings › Projects says for the switcher (lib/open). */
 function open(p: Project | null): void {
   if (!p) return;
   conceal();
-  void (p.claude ? api.openClaude(p.path) : api.openEditor(p.path));
+  if (p.claude) void api.openClaude(p.path);
+  else openFromOutside(p.path);
 }
+
+/** What ↵ on the selected project does, for the foot. */
+const OPEN_HINTS = { list: "switcher.goToProject", editor: "common.openInEditor", files: "files.show" } as const;
 
 function toggle(p: Project | null): void {
   if (!p || p.status === "busy") return;
@@ -711,7 +718,7 @@ onBeforeUnmount(() => {
       <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>
     </footer>
     <footer v-else class="foot">
-      <span><kbd>{{ keys("Enter") }}</kbd> {{ t(selected?.claude ? "switcher.openMarkSeen" : "common.openInEditor") }}</span>
+      <span><kbd>{{ keys("Enter") }}</kbd> {{ t(selected?.claude ? "switcher.openMarkSeen" : selected ? OPEN_HINTS[openTarget(selected.path, "outside")] : "common.openInEditor") }}</span>
       <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t(selected?.status === "running" ? "common.stop" : "common.start") }}</span>
       <span><kbd>{{ keys("mod+B") }}</kbd> {{ t("switcher.browser") }}</span>
       <span class="grow"></span>
