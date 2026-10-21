@@ -1,8 +1,9 @@
 // The day's timeline as numbers and text: spans, the hours shown, the blocks on each lane and
 // their tooltips. No component state; what reads the language (`clock`, `duration`, `t`) follows it.
 
+import { compactText, percentText } from "./fuel";
 import { language, t } from "./i18n";
-import type { DayProject, DaySession, DaySpan, DaySummary } from "./types";
+import type { DayProject, DaySession, DaySpan, DaySpend, DaySummary } from "./types";
 
 export const HOUR = 3_600_000;
 /** The timeline shows at least this many hours. */
@@ -16,7 +17,7 @@ export type TimeRange = { from: number; to: number; hours: number };
 /** An hour on the axis; only the major ones that aren't under the now marker have a label. */
 export type Tick = { at: number; left: string; label: string; major: boolean };
 /** A project's lane: how long it was busy (overlaps once), that as text, what happened on it. */
-export type Lane = { project: DayProject; time: number; total: string; blocks: Block[] };
+export type Lane = { project: DayProject; time: number; total: string; tokens: string; week: string; blocks: Block[] };
 /** Claude, live: waiting on you (a notification not read yet) or working; `text` says which. */
 export type Live = { phase: "waiting" | "working"; text: string };
 /** A project's part of the bar of where the time went. */
@@ -206,37 +207,73 @@ export function blocks(project: DayProject, r: TimeRange | null): Block[] {
   return list;
 }
 
-export function lane(project: DayProject, r: TimeRange | null): Lane {
+export function lane(project: DayProject, r: TimeRange | null, spend: DaySpend | null = null): Lane {
   const time = covered(spansOf(project));
+  const tokens = project.spend?.tokens ? project.spend : null;
   return {
     project,
     time,
-    total: time ? duration(time) : t("day.commitCount", { count: project.commits.length }),
+    // A project with Claude's tokens alone that day has nothing else to count.
+    total: time ? duration(time) : project.commits.length || !tokens ? t("day.commitCount", { count: project.commits.length }) : "",
+    tokens: tokens ? tokenText(tokens.tokens) : "",
+    week: tokens ? weekText(tokens.week, spend?.estimated ?? false) : "",
     blocks: blocks(project, r),
   };
 }
 
 /* ---------- totals ---------- */
 
-/** The day's figures, over every project. */
-export function dayTotals(projects: DayProject[]): Array<{ label: string; value: string }> {
-  return [
+/** `17.2M`, `17,2 Mn`: as the Fuel page counts tokens. */
+export function tokenText(count: number): string {
+  return compactText(count, language.value);
+}
+
+/** A share of the week's limit: a tenth of a percent under 10 %, `≈` when it was worked out; empty
+    when the limit wasn't read. */
+export function weekText(value: number | null, estimated: boolean): string {
+  if (value === null) return "";
+  const lang = language.value;
+  const text = value > 0 && value < 0.05 ? t("day.under", { value: percentText(0.1, lang, 1) }) : percentText(value, lang, value < 10 ? 1 : 0);
+  return estimated ? t("day.estimated", { value: text }) : text;
+}
+
+/** Whether the day has Claude's tokens to show. */
+function spent(spend: DaySpend | null): spend is DaySpend {
+  return !!spend && spend.tokens > 0;
+}
+
+/** The day's figures, over every project; Claude's tokens when it used any. `claude`: in
+    Claude's colour. */
+export function dayTotals(projects: DayProject[], spend: DaySpend | null = null): Array<{ label: string; value: string; claude?: boolean }> {
+  const totals: Array<{ label: string; value: string; claude?: boolean }> = [
     { label: t("day.active"), value: duration(covered(projects.flatMap(spansOf))) },
     { label: t("day.claudeWorked"), value: duration(sum(projects.flatMap((p) => p.work))) },
     { label: t("day.waitedOnYou"), value: duration(sum(projects.flatMap((p) => p.wait))) },
     { label: t("day.commits"), value: String(projects.reduce((n, p) => n + p.commits.length, 0)) },
   ];
+  if (spent(spend)) {
+    totals.push({ label: t("day.tokens"), value: tokenText(spend.tokens) });
+    totals.push({ label: t("day.weekShare"), value: weekText(spend.week, spend.estimated) || "—", claude: spend.week !== null });
+  }
+  return totals;
 }
 
-/** One project's figures; an empty `value` is shown as a dash. */
-export function projectTiles(p: DayProject): Array<{ label: string; value: string; note: string }> {
+/** One project's figures; an empty `value` is shown as a dash. Claude's tokens when the day has
+    any, the project's or not. */
+export function projectTiles(p: DayProject, spend: DaySpend | null = null): Array<{ label: string; value: string; note: string; claude?: boolean }> {
   const server = covered(p.server);
-  return [
+  const tiles: Array<{ label: string; value: string; note: string; claude?: boolean }> = [
     { label: t("day.claudeWorked"), value: p.work.length ? duration(sum(p.work)) : "", note: "" },
     { label: t("day.waitedOnYou"), value: p.wait.length ? duration(sum(p.wait)) : "", note: "" },
     { label: t("day.serverUp"), value: server ? duration(server) : "", note: p.crashes.length ? t("day.crashCount", { count: p.crashes.length }) : "" },
     { label: t("day.commits"), value: p.commits.length ? String(p.commits.length) : "", note: "" },
   ];
+  if (spent(spend)) {
+    const own = p.spend?.tokens ? p.spend : null;
+    tiles.push({ label: t("day.tokens"), value: own ? tokenText(own.tokens) : "", note: "" });
+    tiles.push({ label: t("day.weekShare"), value: own ? weekText(own.week, spend.estimated) : "", note: "", claude: true });
+  }
+  return tiles;
 }
 
 /** `part`'s width in a session's bar of work and waiting, as a CSS percentage. */

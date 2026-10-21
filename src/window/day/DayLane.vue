@@ -57,7 +57,8 @@ function onKey(event: KeyboardEvent): void {
       <span class="mark"><ClaudeDot :live="live" /></span>
       <span class="names">
         <span class="name">{{ lane.project.name }}</span>
-        <span class="lane-total">{{ lane.total }}</span>
+        <span v-if="lane.total" class="lane-total">{{ lane.total }}</span>
+        <span v-if="lane.tokens" class="lane-total">{{ lane.tokens }}<template v-if="lane.week"> · <span class="lane-week">{{ lane.week }}</span></template></span>
       </span>
     </span>
     <!-- Drawn for the eye; VoiceOver hears each block as the arrows reach it. -->
@@ -149,6 +150,13 @@ function onKey(event: KeyboardEvent): void {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lane-week {
+  color: var(--claude-text);
 }
 
 /* Square, like the blocks on it. */

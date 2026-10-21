@@ -2,6 +2,9 @@
 //! as it changes: Claude sessions (working, waiting on you, idle, with their names), dev servers
 //! (running, stopped, crashed) and custom commands (started, finished). One file per local day
 //! in the app's own folder. A day's summary is built from that file and the projects' `git log`.
+//! The day's Claude tokens go into the same file (`day_tokens.rs`): the week's limit as read at
+//! the day's first reading and after a refill (`week`), and every few minutes the tokens in all
+//! and per project with their share of the week (`spend`).
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -27,10 +30,11 @@ pub(super) struct Event {
     /// The project; empty for the app's own events.
     #[serde(default)]
     path: String,
-    /// `claude` | `server` | `command` | `app`
+    /// `claude` | `server` | `command` | `app` | `week` | `spend`
     kind: String,
     /// claude: working | waiting | idle · server: running | stopped | crashed ·
-    /// command: running | ok | failed | stopped · app: start | stop | pause
+    /// command: running | ok | failed | stopped · app: start | stop | pause · week: start | reset ·
+    /// spend: measured | estimated | unread (the week's share as `week` holds it)
     state: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     session: Option<String>,
@@ -39,12 +43,66 @@ pub(super) struct Event {
     /// A command's name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+    /// spend: the day's tokens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tokens: Option<u64>,
+    /// spend: the share of the week's limit the day took, in percent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    week: Option<f64>,
+    /// week, spend: the week's limit used as read, in percent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    used: Option<f64>,
+    /// week (reset): what the week's limit had used before it refilled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    before: Option<f64>,
+    /// week: when the week's limit refills, in ms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    resets: Option<i64>,
+    /// spend: each project's tokens and share of the week, by path; an empty path holds those of
+    /// projects not listed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    projects: Option<BTreeMap<String, (u64, Option<f64>)>>,
 }
 
 impl Event {
     fn new(t: u64, path: &str, kind: &str, state: &str) -> Self {
-        Self { t, path: path.into(), kind: kind.into(), state: state.into(), session: None, title: None, name: None }
+        Self {
+            t,
+            path: path.into(),
+            kind: kind.into(),
+            state: state.into(),
+            session: None,
+            title: None,
+            name: None,
+            tokens: None,
+            week: None,
+            used: None,
+            before: None,
+            resets: None,
+            projects: None,
+        }
     }
+}
+
+/// The week's limit as read at the start of a stretch of the day: its first reading, or the
+/// first after the limit refilled (`before` holds what it had used until then).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WeekMark {
+    pub t: u64,
+    pub used: f64,
+    pub before: Option<f64>,
+    pub resets: Option<i64>,
+}
+
+/// A day's tokens as written down: in all and per project path (empty: projects not listed),
+/// each with its share of the week's limit.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct SpendRecord {
+    pub tokens: u64,
+    pub week: Option<f64>,
+    pub estimated: bool,
+    pub used: Option<f64>,
+    pub projects: BTreeMap<String, (u64, Option<f64>)>,
 }
 
 /// What was last written down, so only changes are.
@@ -161,6 +219,8 @@ pub struct DayProject {
     pub sessions: Vec<DaySession>,
     pub commits: Vec<DayCommit>,
     pub commands: Vec<DayCommand>,
+    /// Claude's tokens in it that day; none when nothing is known of them.
+    pub spend: Option<ProjectSpend>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -174,6 +234,8 @@ pub struct DaySummary {
     pub today: bool,
     pub now: u64,
     pub projects: Vec<DayProject>,
+    /// Claude's tokens that day, in all projects; none for a day before they were written down.
+    pub spend: Option<DaySpend>,
 }
 
 impl Core {
@@ -295,6 +357,49 @@ impl Core {
         self.record(&Event { name: Some(name.into()), ..Event::new(now_ms(), path, "command", state) });
     }
 
+    /// The week's limit at the start of a stretch of the day (`WeekMark`).
+    pub fn record_week(&self, mark: &WeekMark) {
+        let state = if mark.before.is_some() { "reset" } else { "start" };
+        self.record(&Event { used: Some(mark.used), before: mark.before, resets: mark.resets, ..Event::new(mark.t, "", "week", state) });
+    }
+
+    /// The day's week marks, the earliest first, and the week's limit used as that day's file
+    /// last has it.
+    pub fn week_marks(&self, day: &str) -> (Vec<WeekMark>, Option<f64>) {
+        let mut events = self.read_day(day);
+        events.sort_by_key(|event| event.t);
+
+        let mut marks = Vec::new();
+        let mut last = None;
+        for event in events {
+            match (event.kind.as_str(), event.used) {
+                ("week", Some(used)) => {
+                    marks.push(WeekMark { t: event.t, used, before: event.before, resets: event.resets });
+                    last = Some(used);
+                }
+                ("spend", Some(used)) => last = Some(used),
+                _ => {}
+            }
+        }
+        (marks, last)
+    }
+
+    /// The day's tokens as they stand at `t`, written into that moment's day.
+    pub(super) fn record_spend(&self, t: u64, record: &SpendRecord) {
+        let state = match (record.week, record.estimated) {
+            (None, _) => "unread",
+            (Some(_), true) => "estimated",
+            (Some(_), false) => "measured",
+        };
+        self.record(&Event {
+            tokens: Some(record.tokens),
+            week: record.week,
+            used: record.used,
+            projects: Some(record.projects.clone()),
+            ..Event::new(t, "", "spend", state)
+        });
+    }
+
     fn read_day(&self, day: &str) -> Vec<Event> {
         let Some(dir) = self.activity_dir() else {
             return Vec::new();
@@ -352,21 +457,39 @@ impl Core {
             }
         }
 
+        // Claude's tokens: today's as the logs were last looked at, a day before's as its file
+        // last has them.
+        let today = (start..end).contains(&now);
+        let (spend, mut parts) = if today {
+            let owners: HashMap<String, String> =
+                day.projects.iter().flat_map(|(path, built)| built.sessions.iter().map(move |session| (session.id.clone(), path.clone()))).collect();
+            let listed: Vec<String> = names.keys().cloned().collect();
+            self.tokens_today(&day_name(start), &owners, &listed)
+        } else {
+            spend_of(&events, start, end)
+        };
+        for path in parts.keys().filter(|path| !path.is_empty()) {
+            day.project(path);
+        }
+
         let mut projects: Vec<DayProject> = day
             .projects
             .into_iter()
             .filter(|(path, _)| !path.is_empty())
             .map(|(path, built)| {
                 let name = names.get(&path).cloned().unwrap_or_else(|| folder_name(&path));
-                built.finish(path, name)
+                let spend = parts.remove(&path);
+                built.finish(path, name, spend)
             })
-            .filter(|p| !(p.work.is_empty() && p.wait.is_empty() && p.server.is_empty() && p.crashes.is_empty() && p.commits.is_empty() && p.commands.is_empty()))
+            .filter(|p| {
+                !(p.work.is_empty() && p.wait.is_empty() && p.server.is_empty() && p.crashes.is_empty() && p.commits.is_empty() && p.commands.is_empty() && p.spend.is_none())
+            })
             .collect();
 
         let claude_time = |p: &DayProject| p.work.iter().chain(&p.wait).map(|span| span.end - span.start).sum::<u64>();
         projects.sort_by(|a, b| claude_time(b).cmp(&claude_time(a)).then(b.commits.len().cmp(&a.commits.len())).then(a.name.cmp(&b.name)));
 
-        DaySummary { date: day_name(start), start, end, today: (start..end).contains(&now), now, projects }
+        DaySummary { date: day_name(start), start, end, today, now, projects, spend }
     }
 }
 
@@ -473,6 +596,21 @@ fn session_days(events: &[Event], start: u64, until: u64) -> HashMap<String, Ses
     }
 
     found
+}
+
+/// A day's tokens as the last `spend` event between `start` and `end` has them: in all, and per
+/// project path (empty: projects not listed).
+fn spend_of(events: &[Event], start: u64, end: u64) -> (Option<DaySpend>, BTreeMap<String, ProjectSpend>) {
+    let Some(event) = events.iter().rev().find(|event| event.kind == "spend" && (start..end).contains(&event.t)) else {
+        return (None, BTreeMap::new());
+    };
+    let Some(tokens) = event.tokens else {
+        return (None, BTreeMap::new());
+    };
+
+    let spend = DaySpend { tokens, week: event.week, estimated: event.state == "estimated" };
+    let parts = event.projects.iter().flatten().map(|(path, (tokens, week))| (path.clone(), ProjectSpend { tokens: *tokens, week: *week })).collect();
+    (Some(spend), parts)
 }
 
 /// The day's Claude, server and command events folded into each project's spans, cut to the
@@ -648,7 +786,7 @@ impl Building {
         &mut self.commands[at]
     }
 
-    fn finish(mut self, path: String, name: String) -> DayProject {
+    fn finish(mut self, path: String, name: String, spend: Option<ProjectSpend>) -> DayProject {
         // Only sessions that did something that day; the earliest first.
         self.sessions.retain(|s| s.work + s.wait > 0);
         self.sessions.sort_by_key(|s| s.start);
@@ -668,6 +806,7 @@ impl Building {
             sessions: self.sessions,
             commits: self.commits,
             commands: self.commands,
+            spend,
         }
     }
 }

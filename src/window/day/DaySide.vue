@@ -7,10 +7,10 @@ import { turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { dragRegion } from "../../lib/platform";
 import { api, now, snapshot } from "../../lib/store";
-import type { DayProject } from "../../lib/types";
+import type { DayProject, DaySpend } from "../../lib/types";
 
-/** `selected`: the project shown. */
-const props = defineProps<{ selected: DayProject | null }>();
+/** `selected`: the project shown; `spend`: Claude's tokens that day, in all projects. */
+const props = defineProps<{ selected: DayProject | null; spend: DaySpend | null }>();
 
 /** Claude, live, per session, whatever day is shown: waiting on you or working. */
 const liveSessions = computed(() => {
@@ -28,7 +28,7 @@ const selectedSpan = computed(() => {
   return span ? clockRange(span[0], span[1]) : "";
 });
 
-const tiles = computed(() => (props.selected ? projectTiles(props.selected) : []));
+const tiles = computed(() => (props.selected ? projectTiles(props.selected, props.spend) : []));
 
 const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
 </script>
@@ -49,7 +49,7 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
         <div class="tiles">
           <div v-for="tile in tiles" :key="tile.label" class="tile">
             <span class="tile-label">{{ tile.label }}</span>
-            <span :class="['tile-value', { none: !tile.value }]">{{ tile.value || "—" }}</span>
+            <span :class="['tile-value', { none: !tile.value, claude: tile.claude && tile.value }]">{{ tile.value || "—" }}</span>
             <span v-if="tile.note" class="tile-note">{{ tile.note }}</span>
           </div>
         </div>
@@ -186,6 +186,10 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
 
 .tile-value.none {
   color: var(--text-faint);
+}
+
+.tile-value.claude {
+  color: var(--claude-text);
 }
 
 .tile-note {

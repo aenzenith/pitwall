@@ -49,7 +49,9 @@ const projects = computed(() => day.value?.projects ?? []);
 /** Whole hours around what happened (and now, today), at least eight of them. */
 const range = computed(() => timeRange(day.value));
 
-const lanes = computed(() => projects.value.map((project) => lane(project, range.value)));
+const spend = computed(() => day.value?.spend ?? null);
+
+const lanes = computed(() => projects.value.map((project) => lane(project, range.value, spend.value)));
 
 /** Live, whatever day is shown: where Claude waits on you (a notification not read yet) or
     works, by project; waiting wins, as in the project list. */
@@ -95,7 +97,7 @@ onBeforeUnmount(() => window.clearInterval(timer));
 
       <div class="board">
         <template v-if="day && projects.length">
-          <DayTotals :projects="projects" :lanes="lanes" :selected="selected?.path ?? null" @select="selectedPath = $event" />
+          <DayTotals :projects="projects" :spend="spend" :lanes="lanes" :selected="selected?.path ?? null" @select="selectedPath = $event" />
           <DayTimeline :day="day" :lanes="lanes" :range="range" :selected="selected?.path ?? null" :live="liveProjects" @select="selectedPath = $event" />
           <DayLegend />
         </template>
@@ -107,7 +109,7 @@ onBeforeUnmount(() => window.clearInterval(timer));
       </div>
     </div>
 
-    <DaySide :selected="selected" />
+    <DaySide :selected="selected" :spend="spend" />
 
     <span id="lane-keys" class="sr-only">{{ t("day.laneKeys") }}</span>
     <div class="sr-only" aria-live="polite">{{ announced }}</div>

@@ -270,12 +270,18 @@ pub struct SessionSpend {
     pub priced: bool,
     /// The models it used, the costliest first.
     pub models: Vec<String>,
+    /// The folder under `~/.claude/projects` its logs are in: Claude Code's name for the folder
+    /// it ran in (`claude::encode_project_path`). Never sent to a page.
+    #[serde(skip)]
+    pub folder: String,
 }
 
 /// One API response's counts, as found on a line.
 #[derive(Clone, Copy)]
 struct Entry<'a> {
     timestamp: &'a str,
+    /// The timestamp in ms.
+    at: u64,
     session: &'a str,
     message_id: Option<&'a str>,
     request_id: Option<&'a str>,
@@ -324,6 +330,8 @@ fn hash(parts: &[&str]) -> u64 {
 }
 
 struct Counted {
+    /// When it was logged, in ms.
+    at: u64,
     /// Index into `Spend::models`.
     model: usize,
     /// Index into `Spend::sessions`.
@@ -358,8 +366,8 @@ pub struct Spend {
     /// Keys of responses logged before today: a copy written today isn't new use either.
     earlier: HashSet<u64>,
     models: Vec<Model>,
-    /// Session ids of today's responses.
-    sessions: Vec<String>,
+    /// Session ids of today's responses, and the folder under the root each one's logs are in.
+    sessions: Vec<(String, String)>,
 }
 
 // The caller moves it to a worker thread.
@@ -440,6 +448,7 @@ impl Spend {
         // Lines carry their session id; the file name stands in for one that doesn't, and for a
         // subagent's log (`<session>/subagents/agent-….jsonl`) its session's folder.
         let fallback = log_session(path);
+        let folder = log_folder(&self.root, path);
         let mut offset = from;
         let mut line = Vec::new();
 
@@ -451,7 +460,7 @@ impl Spend {
                 Ok(_) if line.last() != Some(&b'\n') => break,
                 Ok(read) => {
                     offset += read as u64;
-                    self.take_line(&line, &fallback);
+                    self.take_line(&line, &fallback, &folder);
                 }
             }
         }
@@ -459,7 +468,7 @@ impl Spend {
         self.offsets.insert(path.to_path_buf(), offset);
     }
 
-    fn take_line(&mut self, bytes: &[u8], fallback: &str) {
+    fn take_line(&mut self, bytes: &[u8], fallback: &str, folder: &str) {
         let Ok(text) = std::str::from_utf8(bytes) else {
             return;
         };
@@ -505,6 +514,7 @@ impl Spend {
         let message_id = id.filter(|id| !id.is_empty());
         let entry = Entry {
             timestamp: line.timestamp.as_deref().unwrap_or_default(),
+            at,
             session: &session,
             message_id: message_id.as_deref(),
             request_id: line.request_id.as_deref().filter(|id| !id.is_empty()),
@@ -513,7 +523,7 @@ impl Spend {
             tokens: Tokens::of(&usage),
             fast: usage.speed.as_deref() == Some("fast"),
         };
-        self.take(entry, today);
+        self.take(entry, today, folder);
 
         // An advisor's calls are listed apart, under its own model; the top-level counts
         // don't include them.
@@ -532,11 +542,11 @@ impl Spend {
                 fast: iteration.speed.as_deref() == Some("fast"),
                 ..entry
             };
-            self.take(advisor, today);
+            self.take(advisor, today, folder);
         }
     }
 
-    fn take(&mut self, entry: Entry, today: bool) {
+    fn take(&mut self, entry: Entry, today: bool, folder: &str) {
         let key = entry.key();
         let route = entry.route();
 
@@ -571,8 +581,8 @@ impl Spend {
         }
 
         let model = self.model(entry.model);
-        let session = self.session(entry.session);
-        self.counted.insert(key, Counted { model, session, tokens: entry.tokens, fast: entry.fast, sidechain: entry.sidechain });
+        let session = self.session(entry.session, folder);
+        self.counted.insert(key, Counted { at: entry.at, model, session, tokens: entry.tokens, fast: entry.fast, sidechain: entry.sidechain });
 
         if let (Some(route), true) = (route, entry.sidechain) {
             let keys = self.replays.entry(route).or_default();
@@ -598,9 +608,9 @@ impl Spend {
         })
     }
 
-    fn session(&mut self, id: &str) -> usize {
-        self.sessions.iter().position(|session| session == id).unwrap_or_else(|| {
-            self.sessions.push(id.to_string());
+    fn session(&mut self, id: &str, folder: &str) -> usize {
+        self.sessions.iter().position(|(session, _)| session == id).unwrap_or_else(|| {
+            self.sessions.push((id.to_string(), folder.to_string()));
             self.sessions.len() - 1
         })
     }
@@ -623,9 +633,10 @@ impl Spend {
 
         let mut found: HashMap<String, SessionSpend> = HashMap::new();
         for ((session, model), (tokens, cost)) in parts {
+            let (id, folder) = &self.sessions[session];
             let spend = found
-                .entry(self.sessions[session].clone())
-                .or_insert_with(|| SessionSpend { tokens: TokenTotals::default(), cost_usd: 0.0, priced: true, models: Vec::new() });
+                .entry(id.clone())
+                .or_insert_with(|| SessionSpend { tokens: TokenTotals::default(), cost_usd: 0.0, priced: true, models: Vec::new(), folder: folder.clone() });
             spend.tokens.input += tokens.input;
             spend.tokens.output += tokens.output;
             spend.tokens.cache_write += tokens.cache_write;
@@ -637,6 +648,15 @@ impl Spend {
         }
 
         found
+    }
+
+    /// Today's tokens and cost (priced models only) of the responses logged from `at` on, as of
+    /// the last refresh.
+    pub fn since(&self, at: u64) -> (u64, f64) {
+        self.counted.values().filter(|counted| counted.at >= at).fold((0, 0.0), |(tokens, cost), counted| {
+            let price = self.models[counted.model].price.map_or(0.0, |price| price.cost(&counted.tokens, counted.fast));
+            (tokens + counted.tokens.total(), cost + price)
+        })
     }
 
     /// Today as of the last refresh.
@@ -682,6 +702,17 @@ fn log_session(path: &Path) -> String {
         _ => path.file_stem(),
     };
     session.map(|name| name.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// The folder right under `root` that a log is in, at whatever depth: the project's folder as
+/// Claude Code names it.
+fn log_folder(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .ok()
+        .and_then(|relative| relative.components().next())
+        .filter(|_| path.parent() != Some(root))
+        .map(|first| first.as_os_str().to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// Every `.jsonl` under `dir`, at any depth (subagents log into `<session>/subagents/`),

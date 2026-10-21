@@ -42,6 +42,27 @@
         "ja": "ターミナルのタブをドラッグして、ほかのタブの間に移せます。タブのすぐ後ろの + から「新規タブ」と「新規Claude」を開け、Claude のモデルとプランモードはサブメニューにあります。タブの並びの空いている所をダブルクリックすると新しいタブで Claude セッションが始まり、タブをマウスの中ボタンでクリックすると閉じます。",
         "zh-Hans": "拖动终端标签页即可把它移到其他标签页之间。标签页后面的 + 可打开“新标签页”和“新建 Claude”，Claude 的模型和计划模式在子菜单中。在标签栏空白处双击会在新标签页中启动 Claude 会话，用鼠标中键点击标签页即可关闭它。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Claude's tokens on the Today page",
+        "tr": "Bugün sayfasında Claude'un token harcaması",
+        "de": "Claudes Tokens auf der Seite „Heute“",
+        "es": "Los tokens de Claude en la página Hoy",
+        "ru": "Токены Claude на странице «Сегодня»",
+        "ja": "「今日」ページに Claude のトークン",
+        "zh-Hans": "“今天”页面显示 Claude 的 token"
+      },
+      "body": {
+        "en": "The top of Today shows how many tokens Claude used that day and what share of the weekly limit went on them. Each project shows its own part under its name and in its details. Days gone by keep theirs.",
+        "tr": "Bugün sayfasının üstünde Claude'un o gün kaç token harcadığı ve bunun haftalık limitin yüzde kaçı olduğu yazar. Her proje kendi payını adının altında ve ayrıntılarında gösterir. Geçmiş günler de kendi sayılarını saklar.",
+        "de": "Oben auf „Heute“ steht, wie viele Tokens Claude an dem Tag verbraucht hat und welcher Anteil des Wochenlimits darauf ging. Jedes Projekt zeigt seinen Teil unter seinem Namen und in seinen Details. Vergangene Tage behalten ihre Zahlen.",
+        "es": "Arriba en Hoy se ve cuántos tokens usó Claude ese día y qué parte del límite semanal se llevaron. Cada proyecto muestra la suya bajo su nombre y en sus detalles. Los días pasados conservan las suyas.",
+        "ru": "Вверху страницы «Сегодня» видно, сколько токенов Claude потратил за день и какую долю недельного лимита это заняло. Каждый проект показывает свою часть под названием и в подробностях. Прошедшие дни сохраняют свои цифры.",
+        "ja": "「今日」の上部に、その日に Claude が使ったトークン数と、それが週間上限のどれだけにあたるかが表示されます。各プロジェクトの分は名前の下と詳細に出ます。過ぎた日の数字も残ります。",
+        "zh-Hans": "“今天”页面顶部显示 Claude 当天用了多少 token，以及占每周限额的多少。每个项目的部分显示在名称下方和详情中。过去的日子也会保留各自的数字。"
+      }
     }
   ]
 }

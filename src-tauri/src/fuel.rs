@@ -1,7 +1,10 @@
 //! The Fuel page's data: Claude's plan limits (`usage.rs`) and today's tokens with their API price
 //! (`spend.rs`). Both are read off the main thread, sent to the main window, the popover and the
 //! mini tower as `fuel` when they change, and a limit passing 90 % brings one notification per
-//! window. The session's share left also goes beside the icon in the menu bar (`bar`).
+//! window. The session's share left also goes beside the icon in the menu bar (`bar`). Each look
+//! at the logs also goes to the core for the Today page (`DayFuel`), with the share of the
+//! week's limit the day took: told from the week as read at the day's first reading and after a
+//! refill, which the core writes into the day's file (`WeekMark`).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,6 +15,8 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::clock::day_name;
+use crate::core::{Core, DayFuel, WeekMark};
 use crate::i18n::t;
 use crate::registry::now_ms;
 use crate::settings::Settings;
@@ -30,6 +35,14 @@ const ALERTED: [&str; 2] = ["five_hour", "seven_day"];
 pub const NOTIFICATION_ID: &str = "pitwall:fuel";
 /// At or under this share left, a limit shows red: the page's `LOW_LEFT` (src/lib/fuel.ts).
 const LOW_LEFT: f64 = 10.0;
+/// A week whose refill moves on by more than this is a new week.
+const HOUR_MS: i64 = 60 * 60 * 1000;
+/// Past this much of the day's use for each of its share measured, the share was worked out
+/// (`DayFuel::estimated`).
+const ESTIMATED: f64 = 1.02;
+/// Past this much, too little of the day was measured to tell its share: the limit is read in
+/// whole percents, and a point or two measured late in the day would be scaled up many times.
+const UNTOLD: f64 = 1.25;
 
 /// What the page shows.
 #[derive(Clone, Serialize)]
@@ -60,6 +73,19 @@ pub struct Fuel {
     /// The reset of each limit the door has had, and whether the user was told of it: one
     /// notification per window.
     alerted: Mutex<HashMap<String, (Option<i64>, bool)>>,
+    /// The week's limit through the day.
+    week: Mutex<WeekDay>,
+}
+
+/// The week's limit through a day: where each stretch of it started, and the latest reading.
+#[derive(Default)]
+struct WeekDay {
+    /// `YYYY-MM-DD`, local.
+    date: String,
+    marks: Vec<WeekMark>,
+    /// The week's limit used, as last read, and when it refills.
+    last: Option<f64>,
+    resets: Option<i64>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -82,6 +108,7 @@ impl Fuel {
             today: Mutex::new(None),
             sessions: Mutex::new(HashMap::new()),
             alerted: Mutex::new(HashMap::new()),
+            week: Mutex::new(WeekDay::default()),
         }
     }
 
@@ -135,13 +162,21 @@ impl Fuel {
         });
     }
 
-    /// Reads today's new log lines; tells the page when the totals moved.
+    /// Reads today's new log lines; tells the page when the totals moved, and hands the day's
+    /// tokens to the core for the Today page.
     fn read_spend(&self, app: &AppHandle) {
-        let (today, sessions) = {
+        let state = app.try_state::<AppState>();
+        let (today, sessions, since) = {
             let mut spend = lock(&self.spend);
             spend.refresh();
-            (spend.today(), spend.by_session())
+            let today = spend.today();
+            let first = state.as_ref().and_then(|state| self.week_of(&state.core, &today.date).marks.first().map(|mark| mark.t));
+            let since = first.map(|at| spend.since(at));
+            (today, spend.by_session(), since)
         };
+        if let Some(state) = &state {
+            state.core.day_fuel(self.day_fuel(&state.core, &today, &sessions, since));
+        }
         *lock(&self.sessions) = sessions;
 
         let changed = {
@@ -159,6 +194,7 @@ impl Fuel {
     fn limits_changed(&self, app: &AppHandle) {
         self.send(app);
         if let Some(state) = app.try_state::<AppState>() {
+            self.note_week(&state.core);
             crate::tray::refresh(app, &state.core.snapshot());
             // A board card that waits for the session's refill follows what was just read.
             if let Some(at) = self.refill_read() {
@@ -185,6 +221,79 @@ impl Fuel {
     pub fn refill(&self) -> Option<u64> {
         let session = self.usage.state().usage?.windows.into_iter().find(|window| window.id == "five_hour")?;
         u64::try_from(session.resets_at?).ok().filter(|at| *at > now_ms())
+    }
+
+    /// The week's limit through `date`: from the day's file the first time the day is met.
+    fn week_of(&self, core: &Core, date: &str) -> std::sync::MutexGuard<'_, WeekDay> {
+        let mut week = lock(&self.week);
+        if week.date != date {
+            let (marks, last) = core.week_marks(date);
+            let resets = marks.last().and_then(|mark| mark.resets);
+            *week = WeekDay { date: date.to_string(), marks, last, resets };
+        }
+        week
+    }
+
+    /// A good reading of the week's limit. The day's first, and the first after the week
+    /// refilled, start a stretch of the day, written into its file.
+    fn note_week(&self, core: &Core) {
+        let limits = self.usage.state();
+        if limits.status != Status::Ready {
+            return;
+        }
+        let Some(window) = limits.usage.and_then(|usage| usage.windows.into_iter().find(|window| window.id == "seven_day")) else {
+            return;
+        };
+
+        let now = now_ms();
+        let mut week = self.week_of(core, &day_name(now));
+        // A week that ran out unused may come back unstarted, with no refill time.
+        let refilled = match (week.resets, window.resets_at) {
+            (Some(at), Some(next)) => next > at + HOUR_MS,
+            (Some(at), None) => now as i64 >= at,
+            (None, _) => false,
+        };
+        let mark = if week.marks.is_empty() {
+            Some(WeekMark { t: now, used: window.used, before: None, resets: window.resets_at })
+        } else if refilled {
+            let before = week.last.or(week.marks.last().map(|mark| mark.used));
+            Some(WeekMark { t: now, used: window.used, before, resets: window.resets_at })
+        } else {
+            None
+        };
+
+        if let Some(mark) = mark {
+            core.record_week(&mark);
+            week.marks.push(mark);
+        }
+        week.last = Some(window.used);
+        week.resets = window.resets_at;
+    }
+
+    /// The day's tokens and the share of the week's limit they took. Measured from the day's
+    /// marks; when the day's use began before the first of them, the share is scaled up by the
+    /// use before it, at the rate after it, as long as that is a small part of the day (`UNTOLD`).
+    /// `since`: the tokens and cost from the first mark on.
+    fn day_fuel(&self, core: &Core, today: &SpendToday, sessions: &HashMap<String, SessionSpend>, since: Option<(u64, f64)>) -> DayFuel {
+        let week = self.week_of(core, &today.date);
+        let (share, estimated) = match (week.last, since) {
+            (Some(last), Some((tokens_after, cost_after))) => {
+                let measured = spent(&week.marks, last);
+                // By cost, or by tokens when no model used has a price.
+                let (all, after) = if today.cost_usd > 0.0 { (today.cost_usd, cost_after) } else { (today.tokens.total as f64, tokens_after as f64) };
+                if all <= 0.0 {
+                    (Some(measured), false)
+                } else if after <= 0.0 || all / after > UNTOLD {
+                    // All or most of it before the limit was read: no telling.
+                    (None, false)
+                } else {
+                    let factor = all / after;
+                    (Some(measured * factor), factor > ESTIMATED)
+                }
+            }
+            _ => (None, false),
+        };
+        DayFuel { date: today.date.clone(), tokens: today.tokens.total, week: share, estimated, used: week.last, sessions: sessions.clone() }
     }
 
     /// To the Fuel page, the popover's dials and the mini tower's share.
@@ -233,4 +342,17 @@ impl Fuel {
             alerted.insert(window.id.clone(), (window.resets_at, told));
         }
     }
+}
+
+/// What the week's limit took in a day, in percent: each stretch from its mark to what the next
+/// one says it had used before the refill, the last one to `last`.
+fn spent(marks: &[WeekMark], last: f64) -> f64 {
+    marks
+        .iter()
+        .enumerate()
+        .map(|(at, mark)| {
+            let end = marks.get(at + 1).and_then(|next| next.before).unwrap_or(last);
+            (end - mark.used).max(0.0)
+        })
+        .sum()
 }

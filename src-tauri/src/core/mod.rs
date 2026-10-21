@@ -29,6 +29,7 @@ use crate::settings::{ProjectSettings, Settings, TrackSettings};
 
 mod activity;
 mod backup;
+mod day_tokens;
 mod board;
 mod claude_state;
 mod dependencies;
@@ -62,7 +63,8 @@ mod tower;
 mod cli;
 pub use cli::CliState;
 mod capture;
-pub use activity::DaySummary;
+pub use activity::{DaySummary, WeekMark};
+pub use day_tokens::{DayFuel, DaySpend, ProjectSpend};
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};
 pub use discover::{Candidate, Discovery};
@@ -234,6 +236,8 @@ pub struct Core {
     terminals: Mutex<HashMap<u64, terminal::Session>>,
     /// What the day's timeline has written down last.
     activity: Mutex<activity::Recorder>,
+    /// The day's Claude tokens as last looked at, and what of them was written down.
+    day_tokens: Mutex<day_tokens::DayTokens>,
     /// What the Sessions page keeps between two requests.
     sessions: Mutex<sessions::SessionsCache>,
     reservations: Mutex<Reservations>,
@@ -312,6 +316,7 @@ impl Core {
             }),
             terminals: Mutex::new(HashMap::new()),
             activity: Mutex::new(activity::Recorder::default()),
+            day_tokens: Mutex::new(day_tokens::DayTokens::default()),
             sessions: Mutex::new(sessions::SessionsCache::default()),
             reservations: Mutex::new(Reservations::default()),
             claude: Mutex::new(claude),
@@ -342,6 +347,7 @@ impl Core {
 
     /// Quit: every server goes, nothing is left behind.
     pub fn dispose(&self) {
+        self.flush_day_tokens();
         self.record_app("stop");
         self.board_quit();
 

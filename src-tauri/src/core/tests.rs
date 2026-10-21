@@ -487,3 +487,59 @@ fn two_starts_at_once_run_one_server() {
 
     fx.core.stop(&fx.project);
 }
+
+#[test]
+fn a_past_days_tokens_come_from_its_file_split_by_project() {
+    use crate::spend::{SessionSpend, TokenTotals};
+
+    let fx = fixture("node server.js", &[]);
+    fx.core.add_project(&fx.project).unwrap();
+    let dir = fx._tmp.path().join("activity");
+    fs::create_dir_all(&dir).unwrap();
+
+    let day = 24 * 60 * 60 * 1000;
+    let yesterday = crate::clock::day_name(now_ms() - day);
+    let before = crate::clock::day_name(now_ms() - 2 * day);
+    let (start, _) = activity::day_bounds(&yesterday).unwrap();
+    let (earlier, _) = activity::day_bounds(&before).unwrap();
+
+    // Written by a version without tokens: the day shows as it did, with none.
+    let claude = |t: u64, state: &str| format!(r#"{{"t":{t},"path":"{}","kind":"claude","state":"{state}","session":"s1"}}"#, fx.project);
+    fs::write(dir.join(format!("{before}.jsonl")), format!("{}\n{}\n", claude(earlier + 3_600_000, "working"), claude(earlier + 7_200_000, "idle"))).unwrap();
+    fs::write(dir.join(format!("{yesterday}.jsonl")), format!("{}\n{}\n", claude(start + 3_600_000, "working"), claude(start + 7_200_000, "idle"))).unwrap();
+
+    let old = fx.core.day_summary(Some(&before));
+    assert_eq!(old.spend, None);
+    assert_eq!(old.projects.len(), 1);
+    assert_eq!(old.projects[0].spend, None);
+
+    let session = |total: u64, cost: f64, folder: &str| SessionSpend {
+        tokens: TokenTotals { input: 0, output: total, cache_write: 0, cache_read: 0, total },
+        cost_usd: cost,
+        priced: true,
+        models: vec!["claude-opus-5-5".into()],
+        folder: folder.into(),
+    };
+    let sessions = HashMap::from([
+        // Its project from the day's file.
+        ("s1".to_string(), session(2_000_000, 2.0, "elsewhere")),
+        // From the folder its logs are in.
+        ("s2".to_string(), session(1_000_000, 1.0, &crate::claude::encode_project_path(&fx.project))),
+        // Neither: a project not listed.
+        ("s3".to_string(), session(1_000_000, 3.0, "-somewhere-else")),
+    ]);
+    fx.core.day_fuel(DayFuel { date: yesterday.clone(), tokens: 4_000_000, week: Some(6.0), estimated: false, used: Some(40.0), sessions });
+
+    // The week as read through the day, for a restart to go on from.
+    let first = WeekMark { t: start + 3_600_000, used: 30.0, before: None, resets: Some(1_000) };
+    let refill = WeekMark { t: start + 5_400_000, used: 1.0, before: Some(38.0), resets: Some(1_000 + 7 * day as i64) };
+    fx.core.record_week(&first);
+    fx.core.record_week(&refill);
+    assert_eq!(fx.core.week_marks(&yesterday), (vec![first, refill], Some(40.0)));
+
+    let past = fx.core.day_summary(Some(&yesterday));
+    assert_eq!(past.spend, Some(DaySpend { tokens: 4_000_000, week: Some(6.0), estimated: false }));
+    let project = past.projects.iter().find(|p| p.path == fx.project).expect("listed project");
+    assert_eq!(project.spend, Some(ProjectSpend { tokens: 3_000_000, week: Some(3.0) }));
+    assert!(past.projects.iter().all(|p| !p.path.is_empty()), "the projects not listed are in the total alone");
+}

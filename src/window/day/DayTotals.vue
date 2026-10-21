@@ -4,17 +4,17 @@ import { computed, ref } from "vue";
 import { dayTotals, projectColors, timeSplit, type Lane, type SplitPart } from "../../lib/day";
 import { language, t } from "../../lib/i18n";
 import { useTooltip } from "../../lib/tooltip";
-import type { DayProject } from "../../lib/types";
+import type { DayProject, DaySpend } from "../../lib/types";
 
-/** `selected`: the path of the project the side panel shows. */
-const props = defineProps<{ projects: DayProject[]; lanes: Lane[]; selected: string | null }>();
+/** `selected`: the path of the project the side panel shows; `spend`: Claude's tokens that day. */
+const props = defineProps<{ projects: DayProject[]; spend: DaySpend | null; lanes: Lane[]; selected: string | null }>();
 const emit = defineEmits<{ select: [path: string] }>();
 
 const tooltip = useTooltip();
 /** The bar of where the time went; its parts anchor the legend's tooltips. */
 const splitEl = ref<HTMLElement | null>(null);
 
-const totals = computed(() => dayTotals(props.projects));
+const totals = computed(() => dayTotals(props.projects, props.spend));
 const colors = computed(() => projectColors(props.projects.map((p) => p.path)));
 const percent = computed(() => new Intl.NumberFormat(language.value, { style: "percent", maximumFractionDigits: 0 }));
 const split = computed(() => timeSplit(props.lanes, colors.value, percent.value));
@@ -32,7 +32,7 @@ function focusPart(event: FocusEvent, part: SplitPart): void {
     <div class="totals">
       <div v-for="total in totals" :key="total.label" class="total">
         <span class="section-label">{{ total.label }}</span>
-        <span class="total-value">{{ total.value }}</span>
+        <span :class="['total-value', { claude: total.claude }]">{{ total.value }}</span>
       </div>
     </div>
 
@@ -154,5 +154,10 @@ function focusPart(event: FocusEvent, part: SplitPart): void {
   letter-spacing: -0.01em;
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
+}
+
+/* The share of the week's limit, in Claude's colour as on the Fuel page. */
+.total-value.claude {
+  color: var(--claude-text);
 }
 </style>

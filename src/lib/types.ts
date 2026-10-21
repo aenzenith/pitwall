@@ -322,6 +322,13 @@ export type DayCommit = { at: number; subject: string };
 
 export type DayCommand = { name: string; runs: number; failed: number };
 
+/** Claude's tokens in a day, and the share of the week's limit they took, in percent: null before
+ * the limit was read that day. `estimated`: part of the share was worked out from the tokens. */
+export type DaySpend = { tokens: number; week: number | null; estimated: boolean };
+
+/** A project's part of them. */
+export type ProjectSpend = { tokens: number; week: number | null };
+
 export type DayProject = {
   path: string;
   name: string;
@@ -332,10 +339,13 @@ export type DayProject = {
   sessions: DaySession[];
   commits: DayCommit[];
   commands: DayCommand[];
+  /** Null when nothing is known of its tokens that day. */
+  spend: ProjectSpend | null;
 };
 
-/** One day: what Pitwall wrote down while it ran, and the commits made. */
-export type DaySummary = { date: string; start: number; end: number; today: boolean; now: number; projects: DayProject[] };
+/** One day: what Pitwall wrote down while it ran, and the commits made; its tokens, null for a day
+ * before they were written down. */
+export type DaySummary = { date: string; start: number; end: number; today: boolean; now: number; projects: DayProject[]; spend: DaySpend | null };
 
 /* ---------- Fuel: Claude's plan limits (src-tauri/src/usage.rs) and today's spend (spend.rs) ---------- */
 
