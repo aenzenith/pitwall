@@ -105,6 +105,27 @@
         "ja": "セッション一覧の下にターミナルが付きました。開くまでは折りたたまれています。プロジェクトを選んでいればそのプロジェクトの、すべてのプロジェクトを表示していれば選択したセッションのプロジェクトのターミナルです。Pitwall のタブで動いているセッションはそこに表示されます。もう動いていないセッションは、セッションページ、「今日」ページ、ターミナルの履歴のどこから開いても、新しいターミナルタブで再開します。VS Code でまだ動いているセッションは、これまでどおりそこで前面に出ます。",
         "zh-Hans": "会话列表下方现在有终端，打开之前保持折叠：已选项目的终端；显示全部项目时，则是所选会话所在项目的终端。在 Pitwall 标签页中运行的会话会显示在这里。已不再运行的会话，无论从会话页面、今天页面还是终端历史中打开，都会在新的终端标签页中重新打开；仍在 VS Code 中运行的会话照旧在那里调到前台。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Lists in Claude's last message sit tight again",
+        "tr": "Claude'un son mesajındaki listeler yine derli toplu",
+        "de": "Listen in Claudes letzter Nachricht stehen wieder dicht",
+        "es": "Las listas del último mensaje de Claude vuelven a verse compactas",
+        "ru": "Списки в последнем сообщении Claude снова выглядят аккуратно",
+        "ja": "Claude の最後のメッセージのリストが元どおり詰まって表示されます",
+        "zh-Hans": "Claude 最后一条消息中的列表恢复紧凑"
+      },
+      "body": {
+        "en": "After a Files window had been open, the items of a list in a session's last message, on the Sessions page and in a board card, showed with wide gaps around them. They look as they should again.",
+        "tr": "Bir Dosyalar penceresi açıldıktan sonra, Oturumlar sayfasında ve pano kartlarında bir oturumun son mesajındaki liste maddeleri arasında kocaman boşluklar çıkıyordu. Artık olması gerektiği gibi görünüyorlar.",
+        "de": "Nachdem ein Dateien-Fenster offen war, standen die Punkte einer Liste in der letzten Nachricht einer Sitzung, auf der Seite Sitzungen und in einer Board-Karte, mit großen Abständen. Sie sehen wieder aus, wie sie sollen.",
+        "es": "Después de abrir una ventana de Archivos, los elementos de una lista en el último mensaje de una sesión, en la página Sesiones y en una tarjeta del tablero, aparecían con grandes huecos alrededor. Vuelven a verse como deben.",
+        "ru": "После того как открывалось окно «Файлы», пункты списка в последнем сообщении сессии на странице «Сессии» и в карточке доски показывались с большими промежутками. Теперь они снова выглядят как надо.",
+        "ja": "ファイルウィンドウを一度開くと、セッションページやボードのカードで、セッションの最後のメッセージにあるリストの項目の周りに大きな余白が出ていました。正しく表示されるようになりました。",
+        "zh-Hans": "打开过文件窗口后，会话页面和看板卡片中会话最后一条消息里的列表项周围会出现很大的空白。现在恢复正常显示。"
+      }
     }
   ]
 }

@@ -205,7 +205,7 @@ function toAnchor(box: HTMLElement, hash: string, smooth = true): boolean {
 let hold: { stop: () => void } | null = null;
 function holdAnchor(box: HTMLElement, hash: string): void {
   hold?.stop();
-  const body = box.querySelector(".md-body");
+  const body = box.querySelector(".md-page");
   if (!body) return;
   const again = () => toAnchor(box, hash, false);
   const watcher = new ResizeObserver(again);
@@ -251,7 +251,7 @@ function onCopy(event: ClipboardEvent): void {
   copy.querySelectorAll(".katex-mathml").forEach((hidden) => hidden.remove());
   // `innerText` gives the lines as laid out: only of what is in the page.
   const holder = document.createElement("div");
-  holder.className = "md-body";
+  holder.className = "md-page";
   holder.style.cssText = "position:fixed;left:-99999px;top:0;white-space:normal";
   holder.append(copy);
   root.value.append(holder);
@@ -293,7 +293,7 @@ function onClick(event: MouseEvent): void {
 function onKey(event: KeyboardEvent): void {
   // ⌘A takes the preview's text, not the whole window's.
   if ((isMac ? event.metaKey : event.ctrlKey) && !event.shiftKey && !event.altKey && event.code === "KeyA") {
-    const body = root.value?.querySelector(".md-body");
+    const body = root.value?.querySelector(".md-page");
     if (body) {
       event.preventDefault();
       getSelection()?.selectAllChildren(body);
@@ -314,7 +314,7 @@ function onKey(event: KeyboardEvent): void {
     <div v-if="html === null" class="md-state"><Spinner /></div>
     <!-- Cleaned in lib/markdownPreview (DOMPurify), and the app's CSP runs no script of it. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
-    <article v-else class="md-body" v-html="html"></article>
+    <article v-else class="md-page" v-html="html"></article>
   </div>
 </template>
 
@@ -335,10 +335,11 @@ function onKey(event: KeyboardEvent): void {
 }
 </style>
 
-<!-- The file's own markup: not scoped (v-html), every rule under `.md-body`. Whatever the file's
-     HTML sets on its elements stays inside: `contain` keeps even a fixed one in the preview. -->
+<!-- The file's own markup: not scoped (v-html), every rule under `.md-page`, a class no other
+     component has: these rules reach the whole window once a Files window was shown. Whatever the
+     file's HTML sets on its elements stays inside: `contain` keeps even a fixed one in the preview. -->
 <style>
-.md-body {
+.md-page {
   contain: layout paint;
   position: relative;
   max-width: 880px;
@@ -350,80 +351,80 @@ function onKey(event: KeyboardEvent): void {
   overflow-wrap: break-word;
 }
 
-.md-body > :first-child {
+.md-page > :first-child {
   margin-top: 0;
 }
 
-.md-body h1,
-.md-body h2,
-.md-body h3,
-.md-body h4,
-.md-body h5,
-.md-body h6 {
+.md-page h1,
+.md-page h2,
+.md-page h3,
+.md-page h4,
+.md-page h5,
+.md-page h6 {
   margin: 1.5em 0 0.6em;
   font-weight: 600;
   line-height: 1.3;
   color: var(--text-strong);
 }
 
-.md-body h1 {
+.md-page h1 {
   padding-bottom: 0.3em;
   border-bottom: 1px solid var(--line-soft);
   font-size: 1.9em;
 }
 
-.md-body h2 {
+.md-page h2 {
   padding-bottom: 0.3em;
   border-bottom: 1px solid var(--line-soft);
   font-size: 1.45em;
 }
 
-.md-body h3 {
+.md-page h3 {
   font-size: 1.2em;
 }
 
-.md-body h4 {
+.md-page h4 {
   font-size: 1.05em;
 }
 
-.md-body h5,
-.md-body h6 {
+.md-page h5,
+.md-page h6 {
   font-size: 0.95em;
   color: var(--text-soft);
 }
 
-.md-body p,
-.md-body ul,
-.md-body ol,
-.md-body blockquote,
-.md-body table,
-.md-body pre,
-.md-body details,
-.md-body .md-diagram,
-.md-body .markdown-alert {
+.md-page p,
+.md-page ul,
+.md-page ol,
+.md-page blockquote,
+.md-page table,
+.md-page pre,
+.md-page details,
+.md-page .md-diagram,
+.md-page .markdown-alert {
   margin: 0 0 1em;
 }
 
-.md-body ul,
-.md-body ol {
+.md-page ul,
+.md-page ol {
   padding-left: 2em;
 }
 
-.md-body li + li {
+.md-page li + li {
   margin-top: 0.25em;
 }
 
-.md-body li > ul,
-.md-body li > ol,
-.md-body li > p {
+.md-page li > ul,
+.md-page li > ol,
+.md-page li > p {
   margin: 0.25em 0 0;
 }
 
-.md-body .task-list-item {
+.md-page .task-list-item {
   list-style: none;
 }
 
-.md-body .task-list-item .md-check {
+.md-page .task-list-item .md-check {
   display: inline-block;
   width: 13px;
   height: 13px;
@@ -433,43 +434,43 @@ function onKey(event: KeyboardEvent): void {
   vertical-align: -1px;
 }
 
-.md-body .task-list-item .md-check.done {
+.md-page .task-list-item .md-check.done {
   border-color: var(--run);
   background:
     no-repeat center / 9px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E"),
     var(--run);
 }
 
-.md-body [data-href] {
+.md-page [data-href] {
   color: var(--text-link);
   text-decoration: none;
   cursor: pointer;
 }
 
-.md-body [data-href]:hover {
+.md-page [data-href]:hover {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.md-body strong {
+.md-page strong {
   font-weight: 600;
   color: var(--text-strong);
 }
 
-.md-body hr {
+.md-page hr {
   height: 1px;
   margin: 1.6em 0;
   border: 0;
   background: var(--line-soft);
 }
 
-.md-body blockquote {
+.md-page blockquote {
   padding: 0 1em;
   border-left: 3px solid var(--line-strong);
   color: var(--text-soft);
 }
 
-.md-body code {
+.md-page code {
   padding: 0.15em 0.4em;
   border-radius: 5px;
   background: var(--bg-tag);
@@ -477,7 +478,7 @@ function onKey(event: KeyboardEvent): void {
   font-size: 0.86em;
 }
 
-.md-body pre {
+.md-page pre {
   overflow: auto;
   padding: 12px 14px;
   border-radius: 8px;
@@ -486,18 +487,18 @@ function onKey(event: KeyboardEvent): void {
   line-height: 1.5;
 }
 
-.md-body pre code {
+.md-page pre code {
   padding: 0;
   background: none;
   font-size: 12.5px;
   white-space: pre;
 }
 
-.md-body .md-front {
+.md-page .md-front {
   color: var(--text-subtle);
 }
 
-.md-body kbd {
+.md-page kbd {
   padding: 0.1em 0.45em;
   border-radius: 5px;
   background: var(--bg-key);
@@ -506,7 +507,7 @@ function onKey(event: KeyboardEvent): void {
   font-size: 0.82em;
 }
 
-.md-body table {
+.md-page table {
   display: block;
   width: max-content;
   max-width: 100%;
@@ -514,36 +515,36 @@ function onKey(event: KeyboardEvent): void {
   border-collapse: collapse;
 }
 
-.md-body th,
-.md-body td {
+.md-page th,
+.md-page td {
   padding: 6px 12px;
   border: 1px solid var(--line-soft);
 }
 
-.md-body th {
+.md-page th {
   font-weight: 600;
   background: var(--bg-code-head);
   color: var(--text-strong);
 }
 
-.md-body tr:nth-child(2n) td {
+.md-page tr:nth-child(2n) td {
   background: color-mix(in srgb, var(--bg-code-head) 55%, transparent);
 }
 
-.md-body img {
+.md-page img {
   max-width: 100%;
   height: auto;
   border-radius: 4px;
   vertical-align: middle;
 }
 
-.md-body img.reading {
+.md-page img.reading {
   min-width: 48px;
   min-height: 24px;
   background: var(--bg-tag);
 }
 
-.md-body .md-picture-off {
+.md-page .md-picture-off {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -554,30 +555,30 @@ function onKey(event: KeyboardEvent): void {
   color: var(--text-subtle);
 }
 
-.md-body details > summary {
+.md-page details > summary {
   cursor: pointer;
 }
 
-.md-body .footnotes {
+.md-page .footnotes {
   font-size: 0.88em;
   color: var(--text-soft);
 }
 
-.md-body .footnotes-sep {
+.md-page .footnotes-sep {
   margin-top: 2em;
 }
 
 /* GitHub's alerts: the edge and the title in the alert's own colour. */
-.md-body .markdown-alert {
+.md-page .markdown-alert {
   padding: 8px 16px;
   border-left: 3px solid var(--md-alert);
 }
 
-.md-body .markdown-alert > :last-child {
+.md-page .markdown-alert > :last-child {
   margin-bottom: 0;
 }
 
-.md-body .markdown-alert-title {
+.md-page .markdown-alert-title {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -586,61 +587,61 @@ function onKey(event: KeyboardEvent): void {
   color: var(--md-alert);
 }
 
-.md-body .markdown-alert-title svg {
+.md-page .markdown-alert-title svg {
   fill: currentColor;
 }
 
-.md-body .markdown-alert-note {
+.md-page .markdown-alert-note {
   --md-alert: var(--lane-0);
 }
 
-.md-body .markdown-alert-tip {
+.md-page .markdown-alert-tip {
   --md-alert: var(--run);
 }
 
-.md-body .markdown-alert-important {
+.md-page .markdown-alert-important {
   --md-alert: var(--lane-1);
 }
 
-.md-body .markdown-alert-warning {
+.md-page .markdown-alert-warning {
   --md-alert: var(--warn);
 }
 
-.md-body .markdown-alert-caution {
+.md-page .markdown-alert-caution {
   --md-alert: var(--crash);
 }
 
 /* Mermaid's diagrams: centred, never wider than the page; the text until drawn. */
-.md-body .md-diagram.drawn {
+.md-page .md-diagram.drawn {
   display: flex;
   justify-content: center;
   overflow: auto;
 }
 
-.md-body .md-diagram svg {
+.md-page .md-diagram svg {
   max-width: 100%;
   height: auto;
 }
 
-.md-body .md-diagram-error,
-.md-body .md-diagram-note {
+.md-page .md-diagram-error,
+.md-page .md-diagram-note {
   margin-bottom: 6px;
   font-size: 12px;
   color: var(--crash-text);
 }
 
-.md-body .md-diagram-note {
+.md-page .md-diagram-note {
   color: var(--text-subtle);
 }
 
 /* KaTeX: display maths scroll on their own when wider than the page; a copy takes the maths once,
    as drawn, not again from its hidden MathML. */
-.md-body .katex-mathml {
+.md-page .katex-mathml {
   -webkit-user-select: none;
   user-select: none;
 }
 
-.md-body .katex-display {
+.md-page .katex-display {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 0;
