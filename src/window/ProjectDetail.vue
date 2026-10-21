@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 
+import { useAddress } from "../lib/address";
 import { t } from "../lib/i18n";
 import { useOutputStream } from "../lib/outputStream";
 import { COLLAPSED_HEIGHT, outputCollapsed, outputHeight, outputRequest, terminalCollapsed, terminalHeight, useResizer } from "../lib/panel";
@@ -26,7 +27,7 @@ const tab = ref<string | null>(null);
 /** A command waiting for "Run?" to be confirmed. Kept here, so it outlasts a visit to the settings. */
 const confirming = ref<string | null>(null);
 /** Where "Open in browser" goes. */
-const address = ref<string | null>(null);
+const address = useAddress(() => props.project);
 /** Addresses the project names itself (git remote, .env, package.json); read once per project. */
 const found = ref<LinkSuggestion[]>([]);
 /** The add/edit dialog: open with the command being edited, or `null` for a new one. */
@@ -77,18 +78,6 @@ const outputDragging = resizer.dragging;
 
 /** Collapsed, only the tab row shows; the chosen height comes back on expanding. */
 const shownOutput = computed(() => (outputCollapsed.value ? COLLAPSED_HEIGHT : outputHeight.value));
-
-/* ---------- dev server ---------- */
-
-/** The newest `loadAddress`: an older answer, or one for another project, is dropped. */
-let addressLoad = 0;
-
-async function loadAddress(): Promise<void> {
-  const load = ++addressLoad;
-  const path = props.project.path;
-  const resolved = await api.resolveAddress(path);
-  if (load === addressLoad && path === props.project.path) address.value = resolved;
-}
 
 /* ---------- links ---------- */
 
@@ -161,12 +150,9 @@ watch(
     confirming.value = null;
     tab.value = null;
     void loadOutput();
-    void loadAddress();
   },
   { immediate: true },
 );
-
-watch(() => [props.project.status, props.project.url], () => void loadAddress());
 </script>
 
 <template>

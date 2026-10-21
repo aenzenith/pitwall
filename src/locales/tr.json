@@ -1024,6 +1024,8 @@
   "track.crashed": "{count} çöktü",
   "track.working": "{count} çalışıyor",
   "track.tower": "Sıralama",
+  "track.rowTitle": "Editörde açmak için çift tıkla",
+  "track.rowTitleFiles": "Dosyalarını açmak için çift tıkla",
   "track.wall": "Pit duvarı",
   "track.empty": "Pistte kimse yok. Listeden bir proje başlat.",
   "track.unsupported": "Pist bu makinede çizilemiyor. Yanındaki liste onsuz da çalışır.",

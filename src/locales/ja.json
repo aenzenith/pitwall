@@ -1000,6 +1000,8 @@
   "track.crashed": "クラッシュ {count}",
   "track.working": "作業中 {count}",
   "track.tower": "順位",
+  "track.rowTitle": "ダブルクリックしてエディタで開く",
+  "track.rowTitleFiles": "ダブルクリックでファイルを開く",
   "track.wall": "ピットウォール",
   "track.empty": "コース上には何もありません。リストからプロジェクトを開始してください。",
   "track.unsupported": "このマシンではコースを描画できません。横のリストはそのまま使えます。",

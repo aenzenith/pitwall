@@ -1037,6 +1037,8 @@
   "track.crashed": "{count} crashed",
   "track.working": "{count} working",
   "track.tower": "Standings",
+  "track.rowTitle": "Double-click to open in the editor",
+  "track.rowTitleFiles": "Double-click to open its files",
   "track.wall": "Pit wall",
   "track.empty": "Nothing on track. Start a project from the list.",
   "track.unsupported": "The circuit can't be drawn on this machine. The list beside it works without it.",

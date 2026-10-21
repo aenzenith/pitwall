@@ -4,27 +4,26 @@ import { computed } from "vue";
 import ClaudeLogo from "../../components/ClaudeLogo.vue";
 import Icon from "../../components/Icon.vue";
 import Marquee from "../../components/Marquee.vue";
-import { editorName, gitLine, heldLine, phase, turnLine } from "../../lib/format";
+import { serverLines, useAddress } from "../../lib/address";
+import { filesShown, toggleFiles } from "../../lib/explorer";
+import { editorName, gitLine, heldLine, turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
+import { keys } from "../../lib/platform";
 import { sessionTitle } from "../../lib/sessions";
 import { api, now, sessions, snapshot } from "../../lib/store";
 import { sessionsIn } from "../../lib/track";
 import type { Project } from "../../lib/types";
-import SwapLabel from "../team/SwapLabel.vue";
+import AddressLine from "../detail/AddressLine.vue";
 
 /** The selected project, under the tower: its server, what Claude waits with, and the way to it.
- * Laid out as the project's details on the Projects page are (detail/ServerBlock). */
+ * Laid out as the project's details on the Projects page are (detail/DetailHeader, ServerBlock). */
 const props = defineProps<{ project: Project }>();
 const emit = defineEmits<{ open: [path: string] }>();
 
-const editor = computed(() => editorName(snapshot.value?.settings.editor));
+const editorLabel = computed(() => t("detail.openInEditorName", { editor: editorName(snapshot.value?.settings.editor) }));
 
-const server = computed(() => {
-  const p = props.project;
-  const title = p.status === "busy" ? phase(p) : t(`status.${p.status}`);
-  if (p.issue && p.status !== "running") return { title, sub: p.issue.text };
-  return { title, sub: [p.runCommand, p.status === "running" && p.port ? `:${p.port}` : ""].filter(Boolean).join(" · ") };
-});
+const address = useAddress(() => props.project);
+const server = computed(() => serverLines(props.project, address.value, now.value));
 
 /** The commands that started with the server and wait for the user: a box each, under it. */
 const held = computed(() => props.project.commands.flatMap((command) => (command.held ? [{ ...command, why: heldLine(command.held) }] : [])));
@@ -40,35 +39,40 @@ function nameOf(id: string): string {
   const row = sessions.value?.sessions.find((entry) => entry.id === id);
   return row ? sessionTitle(row) : id.slice(0, 8);
 }
-
-/** The toggle's labels, all of them in its box: it keeps the widest one's width. */
-const toggleLabels = computed(() => [
-  { id: "start", text: t("common.start"), icon: "play" as const },
-  { id: "stop", text: t("common.stop"), icon: "stop" as const },
-]);
-
-function toggle(): void {
-  void api.act(props.project.path, props.project.status === "running" ? "stop" : "start");
-}
 </script>
 
 <template>
   <section class="card" :aria-label="project.name">
     <div class="card-head">
-      <span class="card-name">{{ project.name }}</span>
+      <!-- The way to the project (↵ in the tower), its editor and its files, as the details' head has them. -->
+      <div class="card-title">
+        <span class="card-name">{{ project.name }}</span>
+        <button type="button" class="icon" :aria-label="t('switcher.goToProject')" :title="t('switcher.goToProject')" @click="emit('open', project.path)">
+          <Icon name="arrow-up-right" :size="14" />
+        </button>
+        <button type="button" class="icon" :aria-label="editorLabel" :title="editorLabel" @click="api.openEditor(project.path)">
+          <Icon name="editor" :size="14" />
+        </button>
+        <button
+          type="button"
+          :class="['icon', { on: filesShown(project.path) }]"
+          :aria-pressed="filesShown(project.path)"
+          data-files-toggle
+          :aria-label="t('files.title')"
+          :title="t('files.toggle', { keys: keys('mod+Shift+E') })"
+          @click="toggleFiles(project.path)"
+        >
+          <Icon name="folder" :size="14" />
+        </button>
+      </div>
       <span v-if="project.git" class="card-git">{{ gitLine(project.git) }}</span>
     </div>
 
-    <div class="card-server">
-      <div class="server-text">
-        <span class="server-title"><span :class="['state', project.status]" aria-hidden="true"></span>{{ server.title }}</span>
-        <span :class="['server-sub', { bad: project.status === 'crashed' }]"><Marquee :text="server.sub" /></span>
-      </div>
-      <!-- Start, its spinner and Stop in one width, as in the project's details. -->
-      <button v-if="project.status === 'busy'" type="button" class="control busy" :aria-label="server.title" disabled><SwapLabel :labels="toggleLabels" :show="null" /></button>
-      <button v-else-if="project.status === 'running'" type="button" class="control stop" @click="toggle"><SwapLabel :labels="toggleLabels" show="stop" /></button>
-      <button v-else type="button" class="control start" @click="toggle"><SwapLabel :labels="toggleLabels" show="start" /></button>
+    <div class="server-text">
+      <span class="server-title"><span :class="['state', project.status]" aria-hidden="true"></span>{{ server.title }}</span>
+      <span :class="['server-sub', { bad: project.status === 'crashed' }]"><Marquee :text="server.sub" /></span>
     </div>
+    <AddressLine :project="project" :address="address" compact />
 
     <!-- A command that started with the server and waits: what it is and why in its tooltip, the
          way to run it or let it be. -->
@@ -83,24 +87,6 @@ function toggle(): void {
           <span class="control-text">{{ t("common.run") }}</span>
         </button>
       </div>
-    </div>
-
-    <div class="card-actions">
-      <button type="button" class="control grow" @click="api.openBrowser(project.path)">
-        <Icon name="external" :size="12" /> <span class="control-text">{{ t("common.openInBrowser") }}</span>
-      </button>
-      <button v-if="project.status === 'running'" type="button" class="control square" :aria-label="t('common.restart')" :title="t('common.restart')" @click="api.act(project.path, 'restart')">
-        <Icon name="restart" :size="13" />
-      </button>
-    </div>
-
-    <div class="card-actions">
-      <button type="button" class="control go grow" @click="emit('open', project.path)">
-        <span class="control-text">{{ t("switcher.goToProject") }}</span>
-        <!-- Claude waiting: Return in the tower brings its session up instead. -->
-        <kbd v-if="!waiting.length" aria-hidden="true">↵</kbd>
-      </button>
-      <button type="button" class="control" @click="api.openEditor(project.path)"><Icon name="editor" :size="13" /> {{ editor }}</button>
     </div>
 
     <!-- Each session, by its name, a line each: those that wait first, in Claude's colour, the whole
@@ -150,7 +136,43 @@ function toggle(): void {
   min-width: 0;
 }
 
+/* The name, and its three buttons at the card's right edge. */
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  height: 22px;
+  margin-right: -6px;
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.icon:hover {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+/* The files' window shows this project. */
+.icon.on {
+  background: var(--bg-control-on);
+  color: var(--text-strong);
+}
+
 .card-name {
+  flex-grow: 1;
+  min-width: 0;
   font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
@@ -167,16 +189,8 @@ function toggle(): void {
   text-overflow: ellipsis;
 }
 
-/* The server's state over its command, its start or stop beside them. */
-.card-server {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
+/* The server's state over its command; its address line under them (detail/AddressLine). */
 .server-text {
-  flex-grow: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -258,42 +272,10 @@ function toggle(): void {
   flex-shrink: 0;
 }
 
-/* Start, stop and the wait between them, coloured as in the project's details. */
-.control.start {
-  background: var(--run-bg);
-  border-color: var(--run-line);
-  color: var(--btn-start-text);
-}
-
-.control.stop {
-  background: var(--crash-bg);
-  border-color: var(--crash-line);
-  color: var(--btn-stop-text);
-}
-
-.control.busy {
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
-.control.square {
-  width: 28px;
-  padding: 0;
-}
-
-/* A long label gives way before the button beside it does. */
-.control.grow {
-  flex: 1 1 auto;
-}
-
 .control-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.control.go {
-  justify-content: space-between;
 }
 
 /* A command that waits beside the server: its name in Claude's soft colour over its two buttons,
@@ -343,13 +325,6 @@ function toggle(): void {
 
 .control.run:hover {
   background: var(--btn-primary-hover);
-}
-
-kbd {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-subtle);
 }
 
 /* The sessions, a line each: its mark, its name, and across from it the way to one that waits. */

@@ -1059,6 +1059,8 @@
   "track.crashed": "Caídos: {count}",
   "track.working": "{count} trabajando",
   "track.tower": "Clasificación",
+  "track.rowTitle": "Haz doble clic para abrir en el editor",
+  "track.rowTitleFiles": "Haz doble clic para abrir sus archivos",
   "track.wall": "Muro de boxes",
   "track.empty": "No hay nadie en pista. Arranca un proyecto desde la lista.",
   "track.unsupported": "El circuito no se puede dibujar en esta computadora. La lista de al lado funciona sin él.",

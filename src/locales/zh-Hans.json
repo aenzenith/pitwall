@@ -1000,6 +1000,8 @@
   "track.crashed": "{count} 个已崩溃",
   "track.working": "{count} 个工作中",
   "track.tower": "排位",
+  "track.rowTitle": "双击在编辑器中打开",
+  "track.rowTitleFiles": "双击打开文件",
   "track.wall": "维修墙",
   "track.empty": "赛道上空无一车。从列表启动一个项目。",
   "track.unsupported": "这台机器无法绘制赛道。旁边的列表不受影响。",

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import StatusIcon from "../../components/StatusIcon.vue";
+import { showFiles, toggleFiles } from "../../lib/explorer";
 import { claudeState, meta } from "../../lib/format";
 import { t } from "../../lib/i18n";
+import { useNativeMenu } from "../../lib/nativeMenu";
+import { projectSettings } from "../../lib/projectSettings";
 import { rowKeys } from "../../lib/rows";
 import { api, now } from "../../lib/store";
 import { sessionsIn } from "../../lib/track";
@@ -35,9 +38,26 @@ function line(project: Project): { server: string; claude: string } {
   return { server: project.status === "running" && project.port ? `:${project.port}` : meta(project, now.value), claude };
 }
 
+/** A double click, as on the project list's row: the project's Files window, or its editor when
+ * its settings say so. */
+function openRow(project: Project): void {
+  if (projectSettings(project).doubleClick === "editor") void api.openEditor(project.path);
+  else showFiles(project.path);
+}
+
+const menu = useNativeMenu();
+
+/** Right-click: the project's files or its editor, as the project list's row menu begins. */
+function rowMenu(event: MouseEvent, project: Project): void {
+  emit("select", project.path);
+  void menu.popup(event, [
+    { text: t("files.show"), accelerator: "CmdOrCtrl+Shift+E", action: () => toggleFiles(project.path) },
+    { text: t("common.openInEditor"), action: () => void api.openEditor(project.path) },
+  ]);
+}
+
 /** One Tab stop: arrows move the selection, ↵ goes to the project (to its session, when Claude
- * waits on you there), Space starts or stops it. A double click opens the editor, as in the
- * project list. */
+ * waits on you there), Space starts or stops it. */
 function onKey(event: KeyboardEvent): void {
   rowKeys(event, {
     move: (path) => emit("select", path),
@@ -65,8 +85,10 @@ function onKey(event: KeyboardEvent): void {
         :tabindex="project.path === selected || (!selected && index === 0) ? 0 : -1"
         :aria-selected="project.path === selected"
         :class="['tower-row', { on: project.path === selected }]"
+        :title="t(projectSettings(project).doubleClick === 'editor' ? 'track.rowTitle' : 'track.rowTitleFiles')"
         @click="emit('select', project.path)"
-        @dblclick="api.openEditor(project.path)"
+        @dblclick="openRow(project)"
+        @contextmenu="rowMenu($event, project)"
         @mouseenter="emit('hover', project.path)"
       >
         <span class="place" role="gridcell">{{ index + 1 }}</span>

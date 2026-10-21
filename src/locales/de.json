@@ -1037,6 +1037,8 @@
   "track.crashed": "Abgestürzt: {count}",
   "track.working": "In Arbeit: {count}",
   "track.tower": "Rangliste",
+  "track.rowTitle": "Zum Öffnen im Editor doppelklicken",
+  "track.rowTitleFiles": "Zum Öffnen der Dateien doppelklicken",
   "track.wall": "Boxenmauer",
   "track.empty": "Niemand auf der Strecke. Starte ein Projekt aus der Liste.",
   "track.unsupported": "Die Strecke lässt sich auf diesem Rechner nicht zeichnen. Die Liste daneben funktioniert auch ohne sie.",
