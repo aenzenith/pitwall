@@ -200,11 +200,6 @@ export function nudgeTeam(id: string, by: -1 | 1): void {
   orderTeams(ids);
 }
 
-export function foldTeam(id: string, collapsed: boolean): void {
-  change(id, (team) => ({ ...team, collapsed }));
-  void send(api.teamCollapse(id, collapsed));
-}
-
 export function launchTeam(id: string, on: boolean): void {
   change(id, (team) => ({ ...team, startAtLaunch: on }));
   void send(api.teamLaunch(id, on));
@@ -267,12 +262,8 @@ function placeBeside(path: string, beside: string, after: boolean): void {
   void (team ? setTeamProjects(team.id, order) : orderLoose(order));
 }
 
-/**
- * A row dropped in the list drawn in groups: it belongs to the head above it now, at the place it
- * was dropped. `hidden` tells whether a group's rows aren't drawn (a folded team): a row dropped
- * under such a head goes to that group's end.
- */
-function placeUnder(path: string, keys: string[], hidden: (group: string) => boolean): void {
+/** A row dropped in the list drawn in groups: it belongs to the head above it now, at the place it was dropped. */
+function placeUnder(path: string, keys: string[]): void {
   let group = "";
   let to: string | null = null;
   const rows: Record<string, string[]> = {};
@@ -288,15 +279,12 @@ function placeUnder(path: string, keys: string[], hidden: (group: string) => boo
   const from = teamOf(path);
   const target = teams.value.find((team) => team.id === to);
   if (target) {
-    const drawn = rows[to];
-    const order = hidden(to) ? [...membersOf(target).map((project) => project.path).filter((member) => !drawn.includes(member)), ...drawn] : drawn;
-    void setTeamProjects(target.id, order);
+    void setTeamProjects(target.id, rows[to]);
     return;
   }
 
   // Into the projects in no team: out of its team first, then to its place among them.
-  const drawn = rows[""] ?? [];
-  const loose = hidden("") ? [...looseProjects.value.map((project) => project.path).filter((member) => !drawn.includes(member)), ...drawn] : drawn;
+  const loose = rows[""] ?? [];
   if (from) {
     const left = from.projects.filter((member) => member !== path);
     show(teams.value.map((team) => (team.id === from.id ? { ...team, projects: left } : team)));
@@ -306,14 +294,14 @@ function placeUnder(path: string, keys: string[], hidden: (group: string) => boo
 }
 
 /** What a drop in the project list changes: the teams' order (a head), or a project's place and team (a row). */
-export function applyDrop(change: Drop, hidden: (group: string) => boolean): void {
+export function applyDrop(change: Drop): void {
   const moved = parseKey(change.moved);
   if (moved.kind === "head") {
     orderTeams(change.keys.map(parseKey).filter((key) => key.kind === "head" && key.id !== "").map((key) => key.id));
     return;
   }
   if (moved.kind !== "row") return;
-  if (change.keys.some((key) => parseKey(key).kind === "head")) placeUnder(moved.id, change.keys, hidden);
+  if (change.keys.some((key) => parseKey(key).kind === "head")) placeUnder(moved.id, change.keys);
   else placeBeside(moved.id, parseKey(change.beside).id, change.after);
 }
 

@@ -33,8 +33,8 @@ const SCREEN_GAP = 16;
 const panel = ref<HTMLElement | null>(null);
 const strip = ref<InstanceType<typeof FuelStrip> | null>(null);
 const list = ref<HTMLElement | null>(null);
-/** Drag to reorder, as the window's list drawn without its heads: no group is folded here. */
-const reorder = useGroupReorder(list, (change) => applyDrop(change, () => false));
+/** Drag to reorder, as the window's list drawn without its heads. */
+const reorder = useGroupReorder(list, applyDrop);
 const projects = computed(() => snapshot.value?.projects ?? []);
 /** A turn held while it was quiet is listed under what was missed, not here a second time. */
 const held = computed(() => new Set(missed.value.filter((entry) => waits(entry.kind)).map((entry) => entry.path)));

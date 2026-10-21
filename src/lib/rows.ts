@@ -31,9 +31,10 @@ export function rowKeys(
 
   const rows = Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-path]"));
 
-  /** The line above or below: a row, or a group's head. */
+  /** The line above or below: a row, or a team's head (where the projects in no team begin,
+   * `data-group` empty, takes no keyboard). */
   const step = (by: 1 | -1): void => {
-    const lines = Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-path], :scope > [data-group]"));
+    const lines = Array.from(list.querySelectorAll<HTMLElement>(':scope > [data-path], :scope > [data-group]:not([data-group=""])'));
     const to = lines[lines.indexOf(row) + by];
     if (to?.dataset.group === undefined) return go(to ?? row);
     event.preventDefault();

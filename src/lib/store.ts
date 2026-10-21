@@ -376,7 +376,6 @@ export const api = {
   teamProjects: (id: string, projects: string[]) => invoke("team_projects", { id, projects }),
   /** The teams' own order. */
   teamOrder: (ids: string[]) => invoke("team_order", { ids }),
-  teamCollapse: (id: string, collapsed: boolean) => invoke("team_collapse", { id, collapsed }),
   /** Whether its servers start when Pitwall does. */
   teamLaunch: (id: string, on: boolean) => invoke("team_launch", { id, on }),
   /** Starts its projects that don't run, one after the other in the team's order: the next

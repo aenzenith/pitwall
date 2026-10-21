@@ -2,45 +2,35 @@
 import { computed } from "vue";
 
 import Icon from "../../components/Icon.vue";
+import Spinner from "../../components/Spinner.vue";
 import { t } from "../../lib/i18n";
-import { startTeam, stopTeam, teamLine, type ClaudeNote } from "../../lib/teams";
+import { startTeam, stopTeam } from "../../lib/teams";
 import type { Team } from "../../lib/types";
-import SwapLabel from "./SwapLabel.vue";
-import TeamClaude from "./TeamClaude.vue";
 
 /**
- * A group's head in the project list: the fold arrow, the name, how many projects it has and how
- * many run, what Claude is at in them (`claude`: folded, its rows don't say), and for a team the
- * button that starts or stops it. `team` null: the head of the
- * projects in no team, which only folds. A click anywhere else on a team's head selects the
- * team (`select`), and a double click there folds or unfolds the group as its arrow does
- * (`fold`); the list drags a head by the same place (the buttons at its ends stay out of all
- * three). The head stands on a ground of its own, a shade off the list's, so the teams tell
- * apart from the rows between them.
+ * A team's head in the project list: no band of its own, a pill on the line that ties the team's
+ * projects together. The pill holds the name in capitals and how many of its projects run; a team
+ * of one project shows the count alone (its name is the pill's title and its spoken label). From
+ * the pill's left end the line turns down with a round corner into the axis the rows' branches
+ * leave (WindowApp: `.trow.branch`), and from its right end it runs on across the list, fading
+ * out. Under the pointer anywhere on the team (`lit`), while it is selected or holds the
+ * keyboard, the team's start or stop shows at the line's far right, over the rows' own.
  *
- * `foldable` false: the team's own view, where its rows always show. `busy`: a start or a stop
- * of the team is under way, and the button spins until the servers are really up or down.
- * `tabStop`: this head is the list's Tab stop. The head itself takes the keyboard, as a row does,
- * never a button of its own: WebKit's Tab passes buttons by unless the system's keyboard
- * navigation is on. Return and Space on it do what its own button did (`press`).
+ * `team` null: the place where the projects in no team begin. It draws nothing and takes no
+ * keyboard; it is there so a row dragged below it leaves its team (lib/groupReorder counts the
+ * heads to tell a row's group).
+ *
+ * A click anywhere on the head selects the team (`select`); the list drags it by the same place.
+ * `busy`: a start or a stop of the team is under way, and the button spins until the servers are
+ * really up or down. `tabStop`: this head is the list's Tab stop. The head itself takes the
+ * keyboard, as a row does, never its button: WebKit's Tab passes buttons by unless the system's
+ * keyboard navigation is on. Return and Space on it select the team.
  */
-const props = defineProps<{ team: Team | null; total: number; running: number; claude: ClaudeNote[]; busy: boolean; folded: boolean; selected: boolean; foldable: boolean; tabStop: boolean }>();
-const emit = defineEmits<{ select: []; fold: [] }>();
+const props = defineProps<{ team: Team | null; total: number; running: number; busy: boolean; selected: boolean; lit: boolean; tabStop: boolean }>();
+const emit = defineEmits<{ select: [] }>();
 
-const name = computed(() => props.team?.name ?? t("team.loose"));
-const line = computed(() => teamLine(props.total, props.running));
-
-/** Both labels, so the button is as wide with either. */
-const labels = computed(() => [
-  { id: "start", text: t("team.start"), icon: "play" as const },
-  { id: "stop", text: t("team.stop"), icon: "stop" as const },
-]);
-
-/** Return or Space on the head: the team is selected; the head with no team to select folds. */
-function press(): void {
-  if (props.team) emit("select");
-  else emit("fold");
-}
+const name = computed(() => props.team?.name ?? "");
+const count = computed(() => `${props.running}/${props.total}`);
 
 function toggle(): void {
   if (!props.team) return;
@@ -50,185 +40,206 @@ function toggle(): void {
 </script>
 
 <template>
-  <div class="ghead" role="row" :tabindex="tabStop ? 0 : -1" :data-group="team?.id ?? ''" :aria-selected="team ? selected : undefined" @keydown.enter.self.prevent="press" @keydown.space.self.prevent="press">
-    <div :class="['ghead-box', { selected }]" role="gridcell" aria-colspan="5" @click="team && emit('select')" @dblclick="foldable && emit('fold')">
-      <!-- The arrow and the team's button are reached with ←/→ from the head, like a row's buttons. -->
-      <button
-        v-if="foldable"
-        type="button"
-        class="ghead-fold"
-        data-no-drag
-        tabindex="-1"
-        :aria-expanded="!folded"
-        :aria-label="t(folded ? 'team.unfoldName' : 'team.foldName', { name })"
-        :title="t(folded ? 'common.expand' : 'common.collapse')"
-        @click.stop="emit('fold')"
-        @dblclick.stop
-      >
-        <Icon :name="folded ? 'chevron' : 'chevron-down'" :size="13" />
-      </button>
-      <span v-else class="ghead-mark"><Icon name="users" :size="13" /></span>
-
-      <span class="ghead-main">
-        <span class="ghead-name">{{ name }}</span>
-        <span class="ghead-sub">{{ line }}<span v-if="claude.length" class="sep" aria-hidden="true">·</span></span>
-        <TeamClaude :notes="claude" />
+  <div v-if="!team" class="ghead loose" data-group="" role="presentation"></div>
+  <div
+    v-else
+    :class="['ghead', { selected, lit, busy }]"
+    role="row"
+    :tabindex="tabStop ? 0 : -1"
+    :data-group="team.id"
+    :aria-selected="selected"
+    @click="emit('select')"
+    @keydown.enter.self.prevent="emit('select')"
+    @keydown.space.self.prevent="emit('select')"
+  >
+    <div class="ghead-box" role="gridcell" aria-colspan="5">
+      <span class="tie" aria-hidden="true"></span>
+      <span class="pill" :title="name">
+        <span v-if="total !== 1" class="pill-name">{{ name }}</span>
+        <span v-else class="sr">{{ name }}</span>
+        <span :class="['pill-count', { live: running > 0 }]" :aria-label="t('team.runningOf', { running, total })">{{ count }}</span>
       </span>
-
+      <span class="trail" aria-hidden="true"></span>
+      <!-- At the line's far end, over the rows' own start and stop. Reached with ←/→ from the
+           head, like a row's buttons. -->
       <button
-        v-if="team"
         type="button"
-        class="ghead-act"
+        class="act"
         data-no-drag
         tabindex="-1"
         :disabled="busy || !total"
         :aria-busy="busy"
         :aria-label="t(running ? 'team.stopName' : 'team.startName', { name })"
+        :title="t(running ? 'team.stop' : 'team.start')"
         @click.stop="toggle"
-        @dblclick.stop
       >
-        <SwapLabel :labels="labels" :show="busy ? null : running ? 'stop' : 'start'" :icon="12" />
+        <Spinner v-if="busy" />
+        <Icon v-else :name="running ? 'stop' : 'play'" :size="14" />
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* The room above a head is its own padding, not a margin: every line of the list begins where
-   the one before ends, which the drag counts on (lib/groupReorder). */
+/* The lines' colour: faint at rest, a step up while the pointer is on the team, bright while it is
+   selected. The rows of the team take the same (WindowApp: `.trow.branch`). */
 .ghead {
-  padding-top: 6px;
-}
-
-.ghead-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 6px 0 10px;
-  border-radius: 8px;
-  background: var(--bg-group);
+  --tie: var(--team-line);
+  position: relative;
+  height: 40px;
+  padding-top: 10px;
+  box-sizing: border-box;
   cursor: pointer;
 }
 
-.ghead-box:hover {
-  background: var(--bg-group-hover);
+.ghead.lit {
+  --tie: var(--team-line-hover);
 }
 
-/* The rows' selected look. */
-.ghead-box.selected {
-  background: var(--bg-selected);
-  box-shadow: inset 0 0 0 1px var(--line-selected);
+.ghead.selected {
+  --tie: var(--team-line-selected);
 }
 
-/* The keyboard's place is the whole head: the ring is its box's, inside as on a row. */
+/* The projects in no team begin here: the room between groups, and nothing drawn. */
+.ghead.loose {
+  height: 10px;
+  padding: 0;
+  cursor: default;
+}
+
 .ghead:focus-visible {
   outline: none;
 }
 
-.ghead:focus-visible .ghead-box {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+.ghead-box {
+  height: 30px;
+  display: flex;
+  align-items: flex-start;
+  padding-left: 42px;
 }
 
-/* A larger box around the 13px arrow, which stays where the head's padding puts it. */
-.ghead-fold {
-  width: 20px;
+/* From the pill's left end, round down into the axis at x 8; the first row carries it on. */
+.tie {
+  position: absolute;
+  left: 7px;
+  top: 21px;
+  bottom: 0;
+  width: 37px;
+  box-sizing: border-box;
+  border-left: 2px solid var(--tie);
+  border-top: 2px solid var(--tie);
+  border-top-left-radius: 10px;
+}
+
+.pill {
+  position: relative;
+  min-width: 0;
   height: 20px;
-  flex-shrink: 0;
-  margin: 0 -3.5px;
+  margin-top: 2px;
+  box-sizing: border-box;
   display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 2px solid var(--tie);
+  border-radius: 10px;
+  background: var(--bg-app);
+}
+
+/* A long name gives way; the count never does. */
+.pill-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-nav);
+}
+
+:lang(zh) .pill-name,
+:lang(ja) .pill-name {
+  letter-spacing: 0;
+}
+
+.ghead.selected .pill-name {
+  color: var(--text-strong);
+}
+
+.pill-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.pill-count.live {
+  color: var(--run-text);
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The team's start or stop at the line's far end, centred over the rows' own (a row's is 30px,
+   its middle 25px from the row's right edge): only while the team is under the pointer,
+   selected, holds the keyboard or is starting or stopping. The line runs on under it. */
+.act {
+  position: absolute;
+  right: 10px;
+  top: 7px;
+  width: 30px;
+  height: 30px;
+  display: none;
   align-items: center;
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-subtle);
-}
-
-.ghead-fold:hover {
-  background: var(--bg-icon-hover);
-  color: var(--text-strong);
-}
-
-.ghead-mark {
-  flex-shrink: 0;
-  display: inline-flex;
-  color: var(--text-subtle);
-}
-
-/* The name and the count: all the room between the arrow and the button, so a click there
-   selects the team. A long name gives way after the count has. */
-.ghead-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-size: 12px;
-  text-align: left;
-}
-
-/* Its room from the count is its own, so the count and what follows it stay one line of words. */
-.ghead-name {
-  min-width: 0;
-  margin-right: 8px;
-  font-weight: 600;
-  color: var(--text-nav);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ghead-box.selected .ghead-name {
-  color: var(--text-strong);
-}
-
-.ghead-sub {
-  flex: 0 1000 auto;
-  min-width: 0;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The dot between the count and what Claude is at (team/TeamClaude), the count's own: a space
-   before it (the one after is TeamClaude's), and gone with the count once that is squeezed away. */
-.sep {
-  margin-left: 0.25em;
-}
-
-.ghead-act {
-  flex-shrink: 0;
-  height: 24px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12px;
+  border-radius: 7px;
+  background: var(--bg-app);
   color: var(--text-muted);
 }
 
-.ghead-act:hover:not(:disabled) {
+.ghead:is(.lit, .selected, .busy, :focus-within) .act {
+  display: inline-flex;
+}
+
+.act:hover:not(:disabled) {
   background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
 
 /* Nothing to start: dimmed. Spinning, it keeps its colour. */
-.ghead-act:disabled:not([aria-busy="true"]) {
+.act:disabled:not([aria-busy="true"]) {
   opacity: 0.4;
 }
 
-/* In hand: lifted like a dragged row, the shadow below only. */
-.ghead.dragging .ghead-box {
+/* From the pill's right end the line runs on across the list, fading out. */
+.trail {
+  flex: 1 1 0;
+  min-width: 24px;
+  height: 2px;
+  margin-top: 11px;
+  background: linear-gradient(90deg, var(--tie), transparent);
+}
+
+/* The keyboard's place is the whole head; the ring goes round the pill. */
+.ghead:focus-visible .pill {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* In hand: the pill lifts, the shadow below only. */
+.ghead.dragging .pill {
   background: var(--bg-selected);
-  box-shadow:
-    0 14px 22px -14px var(--shade-drag),
-    inset 0 0 0 1px var(--line-selected);
+  box-shadow: 0 10px 18px -10px var(--shade-drag);
 }
 </style>

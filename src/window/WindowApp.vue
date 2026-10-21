@@ -16,7 +16,7 @@ import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
 import { filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
 import { onBoard } from "../lib/board";
-import { headKey, hintKey, rowKey, useGroupReorder } from "../lib/groupReorder";
+import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
 import { cardRequest, outputRequest, terminalRequest, trackTerminals } from "../lib/panel";
@@ -24,7 +24,7 @@ import { dragRegion, keys, terminalChord } from "../lib/platform";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
-import { applyDrop, claudeNotes, createTeam, deleteTeam, foldTeam, leaveTeam, looseProjects, membersOf, moveToTeam, nudgeTeam, orderTeams, renameTeam, startTeam, stopTeam, teamAsk, teamOf, teams, teamState, type ClaudeNote } from "../lib/teams";
+import { applyDrop, createTeam, deleteTeam, leaveTeam, looseProjects, membersOf, moveToTeam, nudgeTeam, orderTeams, renameTeam, startTeam, stopTeam, teamAsk, teamOf, teams, teamState } from "../lib/teams";
 import type { Card, Project, Team } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
@@ -190,12 +190,33 @@ const selectedPath = ref<string | null>(null);
 const teamFilter = ref<string | null>(null);
 /** The team selected in the list: its details show in place of a project's. */
 const selectedTeamId = ref<string | null>(null);
-/** The projects in no team, folded under their head: for as long as the window lasts. */
-const looseFolded = ref(false);
 const tbody = ref<HTMLElement | null>(null);
-/** Drag to reorder: a row in its group or into another, a team's head among the teams. A row
- * dropped under a folded head goes to that group's end. */
-const drag = useGroupReorder(tbody, (change) => applyDrop(change, (group) => sections.value.some((section) => section.head && (section.team?.id ?? "") === group && section.folded)));
+/** Drag to reorder: a row in its group or into another, a team's head among the teams. */
+const drag = useGroupReorder(tbody, applyDrop);
+/** The team the pointer is on, on its head or one of its rows: its lines light up and its head
+ * shows the team's start or stop. */
+const litTeam = ref<string | null>(null);
+
+function onListPointer(event: PointerEvent): void {
+  const line = (event.target as HTMLElement).closest<HTMLElement>("[data-team], [data-group]");
+  litTeam.value = line?.dataset.team || line?.dataset.group || null;
+}
+
+/** A team's row (or its empty line) while a drag is on: the row moves as the drag says, the
+ * team's line drawn beside it only as its head does (`--tie-shift`). The line stands still while
+ * the team's rows trade places, and goes with the team when the team is carried. */
+function teamLineStyle(key: string, team: Team): Record<string, string> {
+  return { ...drag.lineStyle(key), "--tie-shift": `${drag.offset(headKey(team.id)) - drag.offset(key)}px` };
+}
+
+/** A row away from its piece of the line while a project is dragged: the one in hand, or one
+ * slid aside to make room. Its branch draws back as a selected row's does, so it doesn't reach
+ * into whatever row is passing its place. */
+function offLine(key: string, team: Team): boolean {
+  const dragged = drag.dragging.value;
+  if (!dragged || parseKey(dragged).kind !== "row") return false;
+  return key === dragged || drag.offset(key) !== drag.offset(headKey(team.id));
+}
 
 function selectProject(path: string): void {
   selectedPath.value = path;
@@ -206,8 +227,7 @@ function select(path: string): void {
   if (drag.isClick()) selectProject(path);
 }
 
-/** A click on a team's head selects the team: its details show. (A double click folds or
- * unfolds the group, as its arrow does: `fold`.) */
+/** A click on a team's head selects the team: its details show. */
 function pressHead(section: Section): void {
   if (drag.isClick() && section.team) selectedTeamId.value = section.team.id;
 }
@@ -245,9 +265,9 @@ function onTeamNavKey(event: KeyboardEvent, id: string): void {
  * there are teams. The other filters and a search stay flat, as with no team at all. */
 const grouped = computed(() => query.value.trim() === "" && (shownTeam.value !== null || (filter.value === "all" && teams.value.length > 0)));
 
-/** A stretch of the list: a group under its head (`team` null: the projects in no team), or the
- * whole flat list (`head` false). A folded group shows its head alone. */
-type Section = { key: string; head: boolean; team: Team | null; rows: Project[]; folded: boolean; total: number; running: number; busy: boolean; claude: ClaudeNote[] };
+/** A stretch of the list: a group under its head (`team` null: the projects in no team, whose
+ * head draws nothing), or the whole flat list (`head` false). Groups never fold. */
+type Section = { key: string; head: boolean; team: Team | null; rows: Project[]; total: number; running: number; busy: boolean };
 
 const sections = computed<Section[]>(() => {
   if (!grouped.value) {
@@ -255,28 +275,23 @@ const sections = computed<Section[]>(() => {
     const pool = shownTeam.value ? membersOf(shownTeam.value) : projects.value.filter((p) => current.value.test(p));
     // Searching: the quick switcher's fuzzy match and order (lib/fuzzy); else the list's own order.
     const found = q ? searchProjects(pool, q).map((match) => match.project) : pool;
-    return [{ key: "flat", head: false, team: null, rows: found, folded: false, total: found.length, running: 0, busy: false, claude: [] }];
+    return [{ key: "flat", head: false, team: null, rows: found, total: found.length, running: 0, busy: false }];
   }
 
-  const ofTeam = (team: Team, folded: boolean): Section => {
+  const ofTeam = (team: Team): Section => {
     const state = teamState(team);
-    return { key: `team:${team.id}`, head: true, team, rows: membersOf(team), folded, total: state.total, running: state.running, busy: state.busy, claude: state.claude };
+    return { key: `team:${team.id}`, head: true, team, rows: membersOf(team), total: state.total, running: state.running, busy: state.busy };
   };
-  // Its own view shows a team's rows whether it is folded in the list or not.
-  if (shownTeam.value) return [ofTeam(shownTeam.value, false)];
+  if (shownTeam.value) return [ofTeam(shownTeam.value)];
 
-  const list = teams.value.map((team) => ofTeam(team, team.collapsed));
+  const list = teams.value.map(ofTeam);
   const loose = looseProjects.value;
-  if (loose.length) {
-    list.push({ key: "loose", head: true, team: null, rows: loose, folded: looseFolded.value, total: loose.length, running: loose.filter((p) => p.status === "running").length, busy: false, claude: claudeNotes(loose) });
-  }
+  if (loose.length) list.push({ key: "loose", head: true, team: null, rows: loose, total: loose.length, running: 0, busy: false });
   return list;
 });
 
-/** The rows drawn, top to bottom: a folded group's aren't. */
-const rows = computed(() => sections.value.flatMap((section) => (section.folded ? [] : section.rows)));
-/** Every project the list holds, a folded group's too. */
-const listed = computed(() => sections.value.flatMap((section) => section.rows));
+/** The rows drawn, top to bottom. */
+const rows = computed(() => sections.value.flatMap((section) => section.rows));
 /** Something to draw: a flat list with a row, the groups while a project is listed, a team's own view always. */
 const listShown = computed(() => (grouped.value ? shownTeam.value !== null || projects.value.length > 0 : rows.value.length > 0));
 const selected = computed(() => projects.value.find((p) => p.path === selectedPath.value) ?? null);
@@ -302,12 +317,11 @@ watch(
   { immediate: true },
 );
 
-// Keep a selection while there is something to show. A project folded away under its head stays
-// selected: only one the list holds no more gives way.
+// Keep a selection while there is something to show: only a project the list holds no more gives way.
 watch(
-  listed,
+  rows,
   (list) => {
-    if (!list.some((p) => p.path === selectedPath.value)) selectedPath.value = rows.value[0]?.path ?? list[0]?.path ?? null;
+    if (!list.some((p) => p.path === selectedPath.value)) selectedPath.value = list[0]?.path ?? null;
   },
   { immediate: true },
 );
@@ -339,16 +353,6 @@ function pickTeam(id: string): void {
   selectedTeamId.value = id;
 }
 
-/** A head's arrow. Folding a team away with the selected project in it selects the team. */
-function fold(section: Section): void {
-  if (!section.team) {
-    looseFolded.value = !looseFolded.value;
-    return;
-  }
-  if (!section.folded && !selectedTeam.value && section.rows.some((p) => p.path === selectedPath.value)) selectedTeamId.value = section.team.id;
-  foldTeam(section.team.id, !section.folded);
-}
-
 /** The toolbar's Start all and Stop all are the shown team's in its own view, else everyone's. */
 const shownState = computed(() => (shownTeam.value ? teamState(shownTeam.value) : null));
 const acting = computed(() => shownState.value?.busy ?? anyBusy.value);
@@ -378,7 +382,7 @@ const keyLine = ref<string | null>(null);
 /** The list's one Tab stop: the line the keyboard is on; coming in, the selected team's head or
  * the selected row, and the first line while neither is drawn. */
 const tabStop = computed(() => {
-  const drawn = sections.value.flatMap((section) => [...(section.head ? [headKey(section.team?.id ?? "")] : []), ...(section.folded ? [] : section.rows.map((p) => rowKey(p.path)))]);
+  const drawn = sections.value.flatMap((section) => [...(section.team ? [headKey(section.team.id)] : []), ...section.rows.map((p) => rowKey(p.path))]);
   const wanted = [keyLine.value, selectedTeam.value && headKey(selectedTeam.value.id), selectedPath.value && rowKey(selectedPath.value)];
   return wanted.find((key) => key && drawn.includes(key)) ?? drawn[0] ?? null;
 });
@@ -392,9 +396,10 @@ function onListBlur(event: FocusEvent): void {
   if (!tbody.value?.contains(event.relatedTarget as Node | null)) keyLine.value = null;
 }
 
-/** The list's rows and heads, top to bottom. */
+/** The list's rows and teams' heads, top to bottom (where the projects in no team begin, nothing
+ * takes the keyboard). */
 function lines(): HTMLElement[] {
-  return Array.from(tbody.value?.querySelectorAll<HTMLElement>(":scope > [data-path], :scope > [data-group]") ?? []);
+  return Array.from(tbody.value?.querySelectorAll<HTMLElement>(':scope > [data-path], :scope > [data-group]:not([data-group=""])') ?? []);
 }
 
 /**
@@ -568,10 +573,6 @@ function revealProject(path: string): void {
     filter.value = "all";
     teamFilter.value = null;
     query.value = "";
-    // Folded away under its head: that group opens.
-    const team = teamOf(path);
-    if (team?.collapsed) foldTeam(team.id, false);
-    else if (!team) looseFolded.value = false;
   }
   selectProject(path);
 }
@@ -805,7 +806,7 @@ function server(project: Project): string {
         <!-- The list is one Tab stop: the selected row (or team's head) takes the focus; ↑/↓ move
              it along rows and heads, ←/→ reach a line's buttons. -->
         <div v-if="listShown" class="table" role="grid" :aria-label="heading" aria-describedby="rows-keys">
-          <div class="thead" role="row">
+          <div :class="['thead', { grouped }]" role="row">
             <span role="columnheader">{{ t("window.col.project") }}</span>
             <span role="columnheader">{{ t("window.col.branch") }}</span>
             <span role="columnheader">{{ t("window.col.server") }}</span>
@@ -814,96 +815,115 @@ function server(project: Project): string {
           </div>
           <!-- Heads, rows and the line of an empty team are all the list's own children, one under
                the other: the keyboard (lib/rows) and the drag (lib/groupReorder) count on it. -->
-          <div ref="tbody" :class="['tbody', { grouped }, drag.listClass()]" role="rowgroup" @keydown="onTableKey" @focusin="onListFocus" @focusout="onListBlur">
+          <div
+            ref="tbody"
+            :class="['tbody', { grouped }, drag.listClass()]"
+            role="rowgroup"
+            @keydown="onTableKey"
+            @focusin="onListFocus"
+            @focusout="onListBlur"
+            @pointerover="onListPointer"
+            @pointerleave="litTeam = null"
+          >
             <template v-for="section in sections" :key="section.key">
               <TeamHead
                 v-if="section.head"
                 :team="section.team"
                 :total="section.total"
                 :running="section.running"
-                :claude="section.claude"
                 :busy="section.busy"
-                :folded="section.folded"
                 :selected="section.team !== null && section.team.id === selectedTeam?.id"
-                :foldable="!shownTeam"
+                :lit="section.team !== null && section.team.id === litTeam"
                 :tab-stop="tabStop === headKey(section.team?.id ?? '')"
                 :class="drag.lineClass(headKey(section.team?.id ?? ''))"
                 :style="drag.lineStyle(headKey(section.team?.id ?? ''))"
                 @pointerdown="section.team && drag.down($event, headKey(section.team.id))"
                 @contextmenu="section.team && teamMenu($event, section.team)"
                 @select="pressHead(section)"
-                @fold="fold(section)"
               />
-              <template v-if="!section.folded">
-                <div
-                  v-for="project in section.rows"
-                  :key="project.path"
-                  role="row"
-                  :aria-selected="project.path === shown?.path"
-                  :tabindex="tabStop === rowKey(project.path) ? 0 : -1"
-                  :data-path="project.path"
-                  :data-zone="zone(project)"
-                  :class="['trow', { selected: project.path === shown?.path }, drag.lineClass(rowKey(project.path))]"
-                  :style="drag.lineStyle(rowKey(project.path))"
-                  :title="t('window.rowTitle')"
-                  @pointerdown="drag.down($event, rowKey(project.path))"
-                  @click="select(project.path)"
-                  @dblclick="api.openEditor(project.path)"
-                  @contextmenu="rowMenu($event, project)"
-                >
-                  <span class="cell-project" role="gridcell">
-                    <StatusIcon :project="project" ring="var(--bg-app)" />
-                    <span class="names">
-                      <span class="name">
-                        <span class="name-text">{{ project.name }}</span>
-                        <MutedMark v-if="project.muted" />
-                        <span v-if="heldCount(project)" class="held-badge" role="img" :aria-label="t('detail.held.count', { count: heldCount(project) })" :title="t('detail.held.count', { count: heldCount(project) })">
-                          <Icon name="clock" :size="10" /><span class="badge-count">{{ heldCount(project) }}</span>
-                        </span>
-                        <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ <span class="badge-count">{{ project.terminals.length }}</span></span>
+              <!-- A team's rows carry its line: the axis down their left and a branch to each dot,
+                   the last one turning in round (`branch`, `last`); the projects in no team, none. -->
+              <div
+                v-for="(project, at) in section.rows"
+                :key="project.path"
+                role="row"
+                :aria-selected="project.path === shown?.path"
+                :tabindex="tabStop === rowKey(project.path) ? 0 : -1"
+                :data-path="project.path"
+                :data-zone="zone(project)"
+                :data-team="section.team?.id"
+                :class="[
+                  'trow',
+                  {
+                    selected: project.path === shown?.path,
+                    branch: section.team !== null,
+                    last: at === section.rows.length - 1,
+                    lit: section.team !== null && section.team.id === litTeam,
+                    chosen: section.team !== null && section.team.id === selectedTeam?.id,
+                    'off-line': section.team !== null && offLine(rowKey(project.path), section.team),
+                  },
+                  drag.lineClass(rowKey(project.path)),
+                ]"
+                :style="section.team ? teamLineStyle(rowKey(project.path), section.team) : drag.lineStyle(rowKey(project.path))"
+                :title="t('window.rowTitle')"
+                @pointerdown="drag.down($event, rowKey(project.path))"
+                @click="select(project.path)"
+                @dblclick="api.openEditor(project.path)"
+                @contextmenu="rowMenu($event, project)"
+              >
+                <span class="cell-project" role="gridcell">
+                  <StatusIcon :project="project" ring="var(--bg-app)" />
+                  <span class="names">
+                    <span class="name">
+                      <span class="name-text">{{ project.name }}</span>
+                      <MutedMark v-if="project.muted" />
+                      <span v-if="heldCount(project)" class="held-badge" role="img" :aria-label="t('detail.held.count', { count: heldCount(project) })" :title="t('detail.held.count', { count: heldCount(project) })">
+                        <Icon name="clock" :size="10" /><span class="badge-count">{{ heldCount(project) }}</span>
                       </span>
-                      <span class="path">{{ project.path }}</span>
+                      <span v-if="project.terminals.length" class="term-badge" role="img" :aria-label="t('window.openTerminals', { count: project.terminals.length })" :title="t('window.openTerminals', { count: project.terminals.length })">>_ <span class="badge-count">{{ project.terminals.length }}</span></span>
                     </span>
+                    <span class="path">{{ project.path }}</span>
                   </span>
-                  <span :class="['cell-git', { dirty: project.git?.changes }]" role="gridcell">{{ gitLine(project.git) || "—" }}</span>
-                  <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]" role="gridcell"><Marquee :text="server(project)" /></span>
-                  <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]" role="gridcell"><Marquee :text="claudeState(project, now) || '—'" /></span>
-                  <span class="cell-actions" role="gridcell" data-no-drag @click.stop @dblclick.stop>
-                    <button
-                      type="button"
-                      class="icon"
-                      tabindex="-1"
-                      :aria-label="t(project.favourite ? 'window.unfavouriteName' : 'window.favouriteName', { name: project.name })"
-                      :title="t(project.favourite ? 'window.favourite' : 'window.addFavourite')"
-                      @click="api.setFavourite(project.path, !project.favourite)"
-                    >
-                      <Icon :name="project.favourite ? 'star-filled' : 'star'" :size="14" />
-                    </button>
-                    <button
-                      type="button"
-                      class="icon"
-                      tabindex="-1"
-                      :disabled="project.status === 'busy'"
-                      :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
-                      @click="toggleFrom($event, project)"
-                    >
-                      <Spinner v-if="project.status === 'busy'" />
-                      <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
-                    </button>
-                  </span>
-                </div>
-                <!-- A team with no project yet: one line under its head says how one gets in; in the
-                     team's own view, where there is no row to drag, only that it has none. -->
-                <div
-                  v-if="section.team && !section.rows.length"
-                  role="row"
-                  :data-hint="section.team.id"
-                  :class="['ghint', drag.lineClass(hintKey(section.team.id))]"
-                  :style="drag.lineStyle(hintKey(section.team.id))"
-                >
-                  <span role="gridcell" aria-colspan="5">{{ t(shownTeam ? "team.noMembers" : "team.empty") }}</span>
-                </div>
-              </template>
+                </span>
+                <span :class="['cell-git', { dirty: project.git?.changes }]" role="gridcell">{{ gitLine(project.git) || "—" }}</span>
+                <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]" role="gridcell"><Marquee :text="server(project)" /></span>
+                <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]" role="gridcell"><Marquee :text="claudeState(project, now) || '—'" /></span>
+                <span class="cell-actions" role="gridcell" data-no-drag @click.stop @dblclick.stop>
+                  <button
+                    type="button"
+                    class="icon"
+                    tabindex="-1"
+                    :aria-label="t(project.favourite ? 'window.unfavouriteName' : 'window.favouriteName', { name: project.name })"
+                    :title="t(project.favourite ? 'window.favourite' : 'window.addFavourite')"
+                    @click="api.setFavourite(project.path, !project.favourite)"
+                  >
+                    <Icon :name="project.favourite ? 'star-filled' : 'star'" :size="14" />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon"
+                    tabindex="-1"
+                    :disabled="project.status === 'busy'"
+                    :aria-label="t(project.status === 'running' ? 'common.stopName' : 'common.startName', { name: project.name })"
+                    @click="toggleFrom($event, project)"
+                  >
+                    <Spinner v-if="project.status === 'busy'" />
+                    <Icon v-else :name="project.status === 'running' ? 'stop' : 'play'" :size="14" />
+                  </button>
+                </span>
+              </div>
+              <!-- A team with no project yet: one line under its head says how one gets in; in the
+                   team's own view, where there is no row to drag, only that it has none. -->
+              <div
+                v-if="section.team && !section.rows.length"
+                role="row"
+                :data-hint="section.team.id"
+                :data-team="section.team.id"
+                :class="['ghint', { lit: section.team.id === litTeam, chosen: section.team.id === selectedTeam?.id }, drag.lineClass(hintKey(section.team.id))]"
+                :style="teamLineStyle(hintKey(section.team.id), section.team)"
+              >
+                <span role="gridcell" aria-colspan="5">{{ t(shownTeam ? "team.noMembers" : "team.empty") }}</span>
+              </div>
             </template>
           </div>
         </div>
@@ -1396,6 +1416,11 @@ input[type="search"]::placeholder {
   letter-spacing: 0;
 }
 
+/* In groups the rows stand 20px further in, for their team's line (`.trow.branch`). */
+.thead.grouped {
+  padding-left: 40px;
+}
+
 /* Fills the panel down to the terminals, so a row can be dragged anywhere in it (dropped in the
    empty space it slides up to the last place) and its shadow is never cut. The same room on
    every side; a dragged row keeps it from the edges too (lib/groupReorder). */
@@ -1407,10 +1432,9 @@ input[type="search"]::placeholder {
   padding: 10px;
 }
 
-/* In groups, each head brings its own room above it (team/TeamHead): the first sits as far from
-   the table's head line as a first row does. */
+/* In groups, each head brings its own room above it (team/TeamHead). */
 .tbody.grouped {
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .trow {
@@ -1419,14 +1443,181 @@ input[type="search"]::placeholder {
   cursor: pointer;
 }
 
-/* The line of a team with no project yet, under its head, level with the team's name. */
+/* In groups every row stands 20px in: room for its team's line, at x 8 of the list (the head
+   draws its top), or for nothing (the projects in no team). */
+.tbody.grouped > :is(.trow, .ghint) {
+  margin-left: 20px;
+}
+
+/* A team's line through its rows: the axis down the row's left (-13..-11, the head's x 8) and a
+   square branch to the dot, stopping 4px short of it (the dot's middle is at 18). The last row's
+   axis turns into its branch round. Faint at rest, a step up while the pointer is on the team,
+   bright while it is selected (the head's colours: team/TeamHead). */
+.trow.branch,
 .ghint {
-  padding: 4px 10px 8px 31px;
+  --tie: var(--team-line);
+  position: relative;
+}
+
+:is(.trow.branch, .ghint).lit {
+  --tie: var(--team-line-hover);
+}
+
+:is(.trow.branch, .ghint).chosen {
+  --tie: var(--team-line-selected);
+}
+
+.trow.branch::before,
+.trow.branch::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  transform: translateY(var(--tie-shift, 0px));
+}
+
+.trow.branch::before {
+  left: -13px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--tie);
+}
+
+.trow.branch::after {
+  left: -11px;
+  top: calc(50% - 1px);
+  width: 20px;
+  height: 2px;
+  background: var(--tie);
+}
+
+.trow.branch.last::before {
+  bottom: auto;
+  width: 22px;
+  height: calc(50% + 1px);
+  box-sizing: border-box;
+  border-left: 2px solid var(--tie);
+  border-bottom: 2px solid var(--tie);
+  border-bottom-left-radius: 10px;
+  background: none;
+}
+
+.trow.branch.last::after {
+  content: none;
+}
+
+/* A row on its own ground (selected, or under the pointer while nothing is dragged), and a row
+   away from its piece of the line while a project is dragged (`off-line`: the one in hand, one
+   slid aside): its branch stops 4px short of the ground's edge (x -4) instead of running in to
+   the dot, drawing back and out again as that comes and goes. */
+.trow.branch::after,
+.trow.branch.last::before {
+  transition:
+    width 140ms ease-out,
+    border-bottom-left-radius 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trow.branch::after,
+  .trow.branch.last::before {
+    transition: none;
+  }
+}
+
+.trow.branch.selected::after,
+.trow.branch.off-line::after,
+.tbody:not(.reordering) > .trow.branch:hover::after {
+  width: 7px;
+}
+
+.trow.branch.last.selected::before,
+.trow.branch.last.off-line::before,
+.tbody:not(.reordering) > .trow.branch.last:hover::before {
+  width: 9px;
+  border-bottom-left-radius: 9px;
+}
+
+/* While a drag is on, a team's line stands still where its head is (`--tie-shift`:
+   teamLineStyle): each piece takes back its row's move at the row's own pace, so the two cancel
+   out, and the row in hand leaves its piece in its place. A carried row follows the pointer at
+   once and settles at the pace it settles at. Only the branches' length moves. */
+.tbody.reordering > .trow.branch::before,
+.tbody.reordering > .trow.branch::after,
+.tbody.reordering > .ghint::before {
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 140ms ease-out,
+    border-bottom-left-radius 140ms ease-out;
+}
+
+.tbody.reordering > .trow.branch.carried::before,
+.tbody.reordering > .trow.branch.carried::after,
+.tbody.reordering > .ghint.carried::before {
+  transition:
+    width 140ms ease-out,
+    border-bottom-left-radius 140ms ease-out;
+}
+
+.tbody.reordering > .trow.branch.carried.settling::before,
+.tbody.reordering > .trow.branch.carried.settling::after,
+.tbody.reordering > .ghint.carried.settling::before {
+  transition:
+    transform 160ms ease-out,
+    width 140ms ease-out,
+    border-bottom-left-radius 140ms ease-out;
+}
+
+/* The new order takes over: nothing moves, the branches still reach out again. */
+.tbody.frozen > .trow.branch::before,
+.tbody.frozen > .trow.branch::after,
+.tbody.frozen > .ghint::before {
+  transition:
+    width 140ms ease-out,
+    border-bottom-left-radius 140ms ease-out !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tbody.reordering > .trow.branch::before,
+  .tbody.reordering > .trow.branch::after,
+  .tbody.reordering > .ghint::before,
+  .tbody.frozen > .trow.branch::before,
+  .tbody.frozen > .trow.branch::after,
+  .tbody.frozen > .ghint::before {
+    transition: none !important;
+  }
+}
+
+/* The line of a team with no project yet: its head's line comes down dashed and turns toward
+   the words, where a row's dot would be. The words, not the line, are cut short. */
+.ghint {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px 0 14px;
   font-size: 12px;
   color: var(--text-subtle);
   white-space: nowrap;
+}
+
+.ghint > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ghint::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  transform: translateY(var(--tie-shift, 0px));
+  left: -13px;
+  top: 0;
+  width: 22px;
+  height: calc(50% + 1px);
+  box-sizing: border-box;
+  border-left: 2px dashed var(--tie);
+  border-bottom: 2px dashed var(--tie);
+  border-bottom-left-radius: 10px;
 }
 
 /* The keyboard's row: the ring inside, so neighbours and the list's edge never cut it. */

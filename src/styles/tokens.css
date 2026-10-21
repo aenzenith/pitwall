@@ -24,10 +24,11 @@
   --bg-control-on: #2c3039;
   /* A row under the pointer (a project, a session, a link, a tab). */
   --bg-row-hover: #1b1e24;
-  /* A group's head in the project list (a team's, the projects' in none): a shade off the
-     list's ground, so the heads tell apart from the rows; a step further under the pointer. */
-  --bg-group: #16181d;
-  --bg-group-hover: #1c1f25;
+  /* The line that ties a team's projects together in the project list (team/TeamHead, a row's
+     branch): faint at rest, a step up under the pointer, bright for the selected team. */
+  --team-line: #2b2f36;
+  --team-line-hover: #4a4f58;
+  --team-line-selected: #9aa0aa;
   /* The sidebar's rows: under the pointer, and the page shown (the chosen tab too). */
   --bg-nav-hover: #1f2228;
   --bg-lit: #23272e;
@@ -263,8 +264,9 @@
   --bg-control-hover: #eaedf0;
   --bg-control-on: #e1e4e8;
   --bg-row-hover: #eff1f3;
-  --bg-group: #f0f2f4;
-  --bg-group-hover: #e8ebee;
+  --team-line: #d4d8dd;
+  --team-line-hover: #b2b8c0;
+  --team-line-selected: #5b626d;
   --bg-nav-hover: #e5e8eb;
   --bg-lit: #dfe3e7;
   --bg-icon-hover: #e1e4e8;

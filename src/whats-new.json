@@ -44,6 +44,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "A team's projects hang on one line",
+        "tr": "Takımın projeleri tek bir çizgiye bağlı",
+        "de": "Die Projekte eines Teams hängen an einer Linie",
+        "es": "Los proyectos de un equipo cuelgan de una línea",
+        "ru": "Проекты группы соединены одной линией",
+        "ja": "チームのプロジェクトが 1 本の線でつながります",
+        "zh-Hans": "团队的项目连在同一条线上"
+      },
+      "body": {
+        "en": "In All projects, a team no longer has a heading row that looks like one more project. Its name and how many of its projects run sit at the start of a line that reaches each of them, and the projects in no team come last, with no line. Point at a team to start or stop it from the right end of its line; click its name for its details. Teams no longer fold.",
+        "tr": "Tüm projeler'de takımın, bir projeyle karışan başlık satırı artık yok. Takımın adı ve kaç projesinin çalıştığı, her projesine uzanan bir çizginin başında duruyor; takımı olmayan projeler en sonda, çizgisiz. Takımı başlatmak ya da durdurmak için imleci üstüne getir, düğme çizginin sağ ucunda çıkar; ayrıntılar için adına tıkla. Takımlar artık daraltılmıyor.",
+        "de": "In Alle Projekte hat ein Team keine Kopfzeile mehr, die wie ein weiteres Projekt aussieht. Sein Name und die Zahl seiner laufenden Projekte stehen am Anfang einer Linie, die zu jedem davon führt, und die Projekte ohne Team kommen zuletzt, ohne Linie. Zeig auf ein Team, um es am rechten Ende seiner Linie zu starten oder zu stoppen; ein Klick auf seinen Namen öffnet seine Details. Teams lassen sich nicht mehr zuklappen.",
+        "es": "En Todos los proyectos, un equipo ya no tiene una fila de cabecera que parece un proyecto más. Su nombre y cuántos de sus proyectos están en ejecución encabezan una línea que llega a cada uno de ellos, y los proyectos sin equipo van al final, sin línea. Pasa el puntero por un equipo para iniciarlo o detenerlo desde el extremo derecho de su línea; haz clic en su nombre para ver sus detalles. Los equipos ya no se pliegan.",
+        "ru": "В «Все проекты» у группы больше нет строки-шапки, похожей на ещё один проект. Её название и число запущенных в ней проектов стоят в начале линии, которая ведёт к каждому из них, а проекты без группы идут последними, без линии. Наведите указатель на группу, чтобы запустить или остановить её кнопкой на правом конце линии; щелчок по названию открывает её сведения. Группы больше не сворачиваются.",
+        "ja": "すべてのプロジェクトで、プロジェクトと見分けにくかったチームのヘッダー行がなくなりました。チームの名前と実行中の数は、各プロジェクトにつながる線の先頭にあり、どのチームにも入っていないプロジェクトは線なしで最後に並びます。チームにポインタを合わせると線の右端に起動・停止のボタンが出て、名前をクリックすると詳細が開きます。チームは折りたためなくなりました。",
+        "zh-Hans": "在“所有项目”中，团队不再有一行容易被看成项目的标题。团队名称和运行中的项目数位于一条线的开头，这条线连到它的每个项目；不属于任何团队的项目排在最后，不带线条。把指针移到团队上，线条右端会出现启动或停止按钮；点击名称会打开它的详情。团队不再能收起。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Garage leaves Poetry and Pipenv environments alone",

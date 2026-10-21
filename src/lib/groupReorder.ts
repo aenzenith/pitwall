@@ -338,5 +338,10 @@ export function useGroupReorder(list: Ref<HTMLElement | null>, drop: (change: Dr
     return offset ? { transform: `translateY(${offset}px)` } : undefined;
   }
 
-  return { dragging, down, isClick, listClass, lineClass, lineStyle };
+  /** How far a line is moved while a drag is on (0: it keeps its place). */
+  function offset(key: string): number {
+    return offsets.value[key] ?? 0;
+  }
+
+  return { dragging, down, isClick, listClass, lineClass, lineStyle, offset };
 }
