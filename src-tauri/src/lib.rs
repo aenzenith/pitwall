@@ -472,6 +472,8 @@ pub fn run() {
             commands::mark_seen,
             commands::set_settings,
             commands::set_project_settings,
+            commands::work_folder,
+            commands::pick_work_folder,
             commands::reorder,
             commands::set_board_scope,
             commands::set_board_view,

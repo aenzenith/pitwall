@@ -16,13 +16,16 @@ impl Core {
             return configured;
         }
 
-        let env = crate::files::read_regular_string(&Path::new(path).join(".env"), crate::files::ENV_BYTES);
-        if let Some(app_url) = env.as_deref().and_then(parse_app_url) {
-            return Some(app_url);
-        }
+        // From the folder it runs in.
+        if let Some(dir) = self.work_dir(path) {
+            let env = crate::files::read_regular_string(&dir.join(".env"), crate::files::ENV_BYTES);
+            if let Some(app_url) = env.as_deref().and_then(parse_app_url) {
+                return Some(app_url);
+            }
 
-        if Path::new(path).join("artisan").exists() {
-            return Some(herd_fallback_url(&folder_name(path)));
+            if dir.join("artisan").exists() {
+                return Some(herd_fallback_url(&folder_name(path)));
+            }
         }
 
         local

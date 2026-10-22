@@ -182,18 +182,34 @@ impl Core {
         self.notify();
     }
 
-    pub fn set_project_settings(&self, path: &str, project: ProjectSettings) {
-        {
+    /// Where the project at `path` runs (`ProjectSettings::work_dir`): its settings read under
+    /// the lock, its folder looked at after it.
+    pub fn work_dir(&self, path: &str) -> Option<PathBuf> {
+        let project = self.lock().settings.project(path);
+        project.work_dir(path)
+    }
+
+    pub fn set_project_settings(self: &Arc<Self>, path: &str, project: ProjectSettings) {
+        let moved = {
             let mut inner = self.lock();
+            // Its lock file is looked for again where it runs now (`detect_managers`).
+            let moved = inner.settings.project(path).folder != project.folder;
+            if moved {
+                inner.managers.remove(path);
+            }
             if project == ProjectSettings::default() {
                 inner.settings.projects.remove(path);
             } else {
                 inner.settings.projects.insert(path.to_string(), project);
             }
-        }
+            moved
+        };
 
         self.save_settings();
         self.notify();
+        if moved {
+            self.refresh_git(vec![path.to_string()]);
+        }
     }
 
     /// This version's notes, in the language spoken.

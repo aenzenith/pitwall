@@ -38,6 +38,9 @@ export type NotifyAccess = "allowed" | "off" | "notAsked" | "borrowed" | "unknow
 export type LinkSuggestion = { name: string; url: string; source: string };
 
 export type ProjectSettings = {
+  /** The folder inside the project its dev server and commands run in, written from the
+   * project's folder (`apps/web`); unset: the project's own. */
+  folder?: string;
   script?: string;
   port?: number;
   url?: string;

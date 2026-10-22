@@ -6,7 +6,7 @@ import { t, type Key } from "../../lib/i18n";
 import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../../lib/open";
 import { projectSettings, updateProjectSettings } from "../../lib/projectSettings";
 import { MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice } from "../../lib/start";
-import { snapshot } from "../../lib/store";
+import { api, snapshot } from "../../lib/store";
 import { codes } from "../../lib/track";
 import type { ClaudeMode, ClaudeModel, Project } from "../../lib/types";
 
@@ -18,14 +18,52 @@ const emit = defineEmits<{ edit: [id: string | null]; remove: [id: string]; clos
 const settings = computed(() => projectSettings(props.project));
 
 // Dev server fields, as the settings were when the pane opened.
+const folder = ref(settings.value.folder ?? "");
 const script = ref(settings.value.script ?? "");
 const port = ref(settings.value.port ? String(settings.value.port) : "");
 const url = ref(settings.value.url ?? "");
 
-/** Only the dev server fields: commands are saved on their own, as they change. */
-function saveSettings(): void {
+/** Why the folder typed or picked can't be the one it runs in. */
+const folderError = ref<string | null>(null);
+/** The folder is being looked at, or picked. */
+const folderBusy = ref(false);
+
+/** The folder picked in a dialog that opens in the project's; saved with the other fields. */
+async function pickFolder(): Promise<void> {
+  if (folderBusy.value) return;
+  folderBusy.value = true;
+  try {
+    const picked = await api.pickWorkFolder(props.project.path);
+    if (picked !== null) {
+      folder.value = picked;
+      folderError.value = null;
+    }
+  } catch (reason) {
+    folderError.value = String(reason);
+  } finally {
+    folderBusy.value = false;
+  }
+}
+
+/** Only the dev server fields: commands are saved on their own, as they change. A folder typed
+ * anew is looked at first, and kept as written from the project's folder. */
+async function saveSettings(): Promise<void> {
+  if (folderBusy.value) return;
+  let kept = settings.value.folder;
+  if (folder.value.trim() !== (kept ?? "")) {
+    folderBusy.value = true;
+    try {
+      kept = (await api.workFolder(props.project.path, folder.value)) || undefined;
+    } catch (reason) {
+      folderError.value = String(reason);
+      return;
+    } finally {
+      folderBusy.value = false;
+    }
+  }
   const parsed = Number(port.value);
   const server = {
+    folder: kept,
     script: script.value.trim() || undefined,
     port: Number.isInteger(parsed) && parsed > 0 && parsed < 65536 ? parsed : undefined,
     url: url.value.trim() || undefined,
@@ -111,12 +149,30 @@ function setOpen(from: OpenFrom, value: string): void {
     <!-- Project settings, grouped: each per-project setting has its own fieldset. -->
     <form class="group" :aria-label="t('detail.serverSettings')" @submit.prevent="saveSettings">
       <div class="section-label">{{ t("common.devServer") }}</div>
+      <div class="field">
+        <label for="project-folder">{{ t("detail.folder") }}</label>
+        <div class="folder">
+          <input
+            id="project-folder"
+            v-model="folder"
+            class="mono"
+            :placeholder="t('detail.folderPlaceholder')"
+            spellcheck="false"
+            autocomplete="off"
+            :aria-invalid="folderError !== null"
+            @input="folderError = null"
+          />
+          <button type="button" class="control" :disabled="folderBusy" @click="pickFolder">{{ t("settings.choose") }}</button>
+        </div>
+        <p v-if="folderError" class="error" role="alert">{{ folderError }}</p>
+        <p class="hint">{{ t("detail.folderHint") }}</p>
+      </div>
       <label class="field">{{ t("common.script") }} <input v-model="script" class="mono" :placeholder="project.script" spellcheck="false" /></label>
       <label class="field">{{ t("detail.port") }} <input v-model="port" class="mono" inputmode="numeric" :placeholder="t('detail.portPlaceholder')" /></label>
       <label class="field">{{ t("detail.address") }} <input v-model="url" class="mono" :placeholder="t('detail.addressPlaceholder')" spellcheck="false" /></label>
       <p class="hint">{{ t("detail.settingsHint") }}</p>
       <div class="form-actions">
-        <button type="submit" class="control primary">{{ t("common.save") }}</button>
+        <button type="submit" class="control primary" :disabled="folderBusy">{{ t("common.save") }}</button>
       </div>
     </form>
 
@@ -248,6 +304,22 @@ function setOpen(from: OpenFrom, value: string): void {
 .field input.mono {
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+/* The folder's field, with the button that picks it at its end. */
+.folder {
+  display: flex;
+  gap: 8px;
+}
+
+.folder input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.folder .control {
+  flex-shrink: 0;
+  color: var(--text);
 }
 
 .hint {

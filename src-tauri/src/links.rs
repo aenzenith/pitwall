@@ -83,8 +83,9 @@ fn forge_pages(web: &str) -> Vec<(String, String)> {
 }
 
 /// Addresses the project itself names: its git remote's pages, `APP_URL` in `.env`, and
-/// `homepage` in `package.json`.
-pub fn suggestions(path: &str) -> Vec<LinkSuggestion> {
+/// `homepage` in `package.json`, those two in `dir`, the folder it runs in (none: one that
+/// isn't there).
+pub fn suggestions(path: &str, dir: Option<&Path>) -> Vec<LinkSuggestion> {
     let mut found = Vec::new();
     let mut add = |name: String, url: String, source: &str| {
         if !found.iter().any(|s: &LinkSuggestion| s.url == url) {
@@ -102,12 +103,12 @@ pub fn suggestions(path: &str) -> Vec<LinkSuggestion> {
         }
     }
 
-    let folder = Path::new(path);
-    if let Some(url) = crate::files::read_regular_string(&folder.join(".env"), crate::files::ENV_BYTES).as_deref().and_then(parse_app_url) {
+    if let Some(url) = dir.and_then(|dir| crate::files::read_regular_string(&dir.join(".env"), crate::files::ENV_BYTES)).as_deref().and_then(parse_app_url) {
         add("APP_URL".into(), url, ".env");
     }
 
-    let homepage = crate::files::read_regular(&folder.join("package.json"), crate::files::MANIFEST_BYTES)
+    let homepage = dir
+        .and_then(|dir| crate::files::read_regular(&dir.join("package.json"), crate::files::MANIFEST_BYTES))
         .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
         .and_then(|json| json.get("homepage").and_then(|h| h.as_str()).map(str::to_string))
         .filter(|url| url.starts_with("http"));

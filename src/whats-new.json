@@ -107,6 +107,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "A working folder for apps in a subfolder",
+        "tr": "Alt klasördeki uygulamalar için çalışma klasörü",
+        "de": "Ein Arbeitsordner für Apps in einem Unterordner",
+        "es": "Una carpeta de trabajo para apps en una subcarpeta",
+        "ru": "Рабочая папка для приложений в подпапке",
+        "ja": "サブフォルダにあるアプリのための作業フォルダ",
+        "zh-Hans": "为子文件夹中的应用设置工作文件夹"
+      },
+      "body": {
+        "en": "When a project's app sits in a subfolder of it, type or choose that folder as its Working folder in Project Settings. Its dev server and commands run there, its package.json, lock file, Vite config and .env are read from there, and the Garage checks it there.",
+        "tr": "Projenin uygulaması bir alt klasörde duruyorsa, Proje Ayarları'nda o klasörü Çalışma klasörü olarak yaz ya da seç. Dev sunucusu ve komutlar orada çalışır; package.json, kilit dosyası, Vite ayarı ve .env oradan okunur, Garaj da denetimini orada yapar.",
+        "de": "Liegt die App eines Projekts in einem seiner Unterordner, gib diesen Ordner in den Projekteinstellungen als Arbeitsordner ein oder wähle ihn aus. Dev-Server und Befehle laufen dann dort, package.json, Lockfile, Vite-Konfiguration und .env werden von dort gelesen, und die Garage prüft dort.",
+        "es": "Si la app de un proyecto está en una de sus subcarpetas, escribe o elige esa carpeta como Carpeta de trabajo en Ajustes del proyecto. El servidor de desarrollo y los comandos se ejecutan ahí, su package.json, archivo de bloqueo, configuración de Vite y .env se leen de ahí, y el Garaje lo revisa ahí.",
+        "ru": "Если приложение проекта лежит в его подпапке, укажите или выберите эту папку как «Рабочую папку» в настройках проекта. Dev-сервер и команды запускаются там, package.json, lock-файл, конфигурация Vite и .env читаются оттуда, и «Гараж» проверяет проект там же.",
+        "ja": "プロジェクトのアプリがサブフォルダにある場合は、プロジェクト設定の「作業フォルダ」にそのフォルダを入力するか選択します。開発サーバーとコマンドはそこで実行され、package.json、ロックファイル、Vite の設定、.env もそこから読み込まれ、ガレージもそこをチェックします。",
+        "zh-Hans": "如果项目的应用位于它的某个子文件夹中，请在项目设置的“工作文件夹”中输入或选择该文件夹。开发服务器和命令会在那里运行，package.json、锁文件、Vite 配置和 .env 也从那里读取，车库也会在那里检查。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Lists in Claude's last message sit tight again",

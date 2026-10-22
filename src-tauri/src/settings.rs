@@ -38,6 +38,12 @@ pub struct ProjectLink {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ProjectSettings {
+    /// The folder inside the project its dev server and commands run in, and whose files are
+    /// read for them (`ProjectSettings::work_dir`): written from the project's folder, its
+    /// parts joined by `/` (`project`, `apps/web`); none: the project's own folder. Whatever a
+    /// file says that isn't such a path (absolute, with `..`) is none.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "folder_or_none")]
+    pub folder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,6 +107,52 @@ fn code_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Opt
     Ok((!code.is_empty()).then_some(code))
 }
 
+/// A project's folder as a file has it: a path under the project's folder, its parts joined by
+/// `/`; none for one that is empty, absolute or climbs out with `..`.
+fn folder_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    Ok(value.as_str().and_then(plain_folder))
+}
+
+fn plain_folder(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.starts_with(['/', '\\']) || text.contains('\0') {
+        return None;
+    }
+    let parts: Vec<&str> = text.split(['/', '\\']).filter(|part| !part.is_empty() && *part != ".").collect();
+    // `..`, or a drive (`C:`) or a stream of Windows'.
+    if parts.iter().any(|part| *part == ".." || part.contains(':')) {
+        return None;
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+/// The folder `picked` (absolute, or written from the project's folder) as `ProjectSettings::
+/// folder` keeps it: from the project's folder, once every link and `..` is followed; `Ok(None)`
+/// for the project's own folder. Refused when it isn't a folder there or ends outside the
+/// project's.
+pub fn folder_within(root: &Path, picked: &str) -> Result<Option<String>, FolderRefused> {
+    let picked = picked.trim();
+    if picked.is_empty() {
+        return Ok(None);
+    }
+    let real_root = fs::canonicalize(root).map_err(|_| FolderRefused::Missing)?;
+    let real = fs::canonicalize(root.join(picked)).map_err(|_| FolderRefused::Missing)?;
+    let within = real.strip_prefix(&real_root).map_err(|_| FolderRefused::Outside)?;
+    if !real.is_dir() {
+        return Err(FolderRefused::Missing);
+    }
+    let parts: Vec<String> = within.components().map(|part| part.as_os_str().to_string_lossy().into_owned()).collect();
+    Ok(plain_folder(&parts.join("/")))
+}
+
+/// Why a folder can't be a project's own (`folder_within`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FolderRefused {
+    Missing,
+    Outside,
+}
+
 /// A row's double click as an older file has it: `editor`, or none for anything else (the Files
 /// window).
 fn editor_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
@@ -112,6 +164,21 @@ impl ProjectSettings {
     /// How a Claude session of the project starts when nothing else was chosen.
     pub fn start(&self) -> Start {
         Start { model: self.claude_model, mode: self.claude_mode }
+    }
+
+    /// Where the project at `path` runs its dev server and commands, and whose files are read
+    /// for them (`package.json`, its lock file, the Vite config, `.env`, what the Dependencies
+    /// page checks): its `folder`, else its own. None when that folder isn't there or, with its
+    /// links followed, ends outside the project's. It asks the file system: never under the
+    /// core's lock.
+    pub fn work_dir(&self, path: &str) -> Option<PathBuf> {
+        let root = Path::new(path);
+        let Some(folder) = self.folder.as_deref() else {
+            return Some(root.to_path_buf());
+        };
+        let dir = root.join(folder);
+        let real = fs::canonicalize(&dir).ok()?;
+        (real.is_dir() && real.starts_with(fs::canonicalize(root).ok()?)).then_some(dir)
     }
 
     /// An older file's double click as the places it reached then: the list's row and the Track
@@ -746,5 +813,45 @@ mod tests {
         let contents: Vec<String> = found.iter().map(|name| fs::read_to_string(dir.path().join(name)).unwrap()).collect();
         assert!(contents.iter().any(|c| c.starts_with("{\"projects\"")));
         assert!(contents.iter().any(|c| c == mixed));
+    }
+
+    /// The folder a project runs in never leads out of it: not as the settings file writes it,
+    /// not as it is typed or picked, not through a link inside the project.
+    #[cfg(unix)]
+    #[test]
+    fn the_folder_a_project_runs_in_stays_inside_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("hotel");
+        fs::create_dir_all(root.join("project/public")).unwrap();
+        fs::create_dir_all(tmp.path().join("hotel-admin")).unwrap();
+        std::os::unix::fs::symlink(tmp.path().join("hotel-admin"), root.join("out")).unwrap();
+        std::os::unix::fs::symlink(root.join("project"), root.join("app")).unwrap();
+        let path = root.to_string_lossy().into_owned();
+
+        // As the file has it.
+        let file = tmp.path().join("settings.json");
+        let folders = ["project", "./project/", "/etc", "../hotel-admin", "project/../../hotel-admin", "C:/Windows", ""];
+        let projects: Map<String, Value> = folders.iter().enumerate().map(|(i, folder)| (format!("/p{i}"), serde_json::json!({ "folder": folder }))).collect();
+        fs::write(&file, serde_json::json!({ "projects": projects }).to_string()).unwrap();
+        let read: Vec<Option<String>> = (0..folders.len()).map(|i| Settings::load(&file).project(&format!("/p{i}")).folder).collect();
+        assert_eq!(read, [Some("project".into()), Some("project".into()), None, None, None, None, None]);
+
+        // As it is typed or picked.
+        let real = |relative: &str| fs::canonicalize(&root).unwrap().join(relative).to_string_lossy().into_owned();
+        assert_eq!(folder_within(&root, "project"), Ok(Some("project".into())));
+        assert_eq!(folder_within(&root, &real("project/public")), Ok(Some("project/public".into())), "absolute, inside");
+        assert_eq!(folder_within(&root, "app"), Ok(Some("project".into())), "a link inside, as where it leads");
+        assert_eq!(folder_within(&root, &path), Ok(None), "the project's own");
+        assert_eq!(folder_within(&root, "../hotel-admin"), Err(FolderRefused::Outside));
+        assert_eq!(folder_within(&root, &tmp.path().join("hotel-admin").to_string_lossy()), Err(FolderRefused::Outside), "a neighbour whose name begins as the project's");
+        assert_eq!(folder_within(&root, "out"), Err(FolderRefused::Outside), "a link that leads out");
+        assert_eq!(folder_within(&root, "nowhere"), Err(FolderRefused::Missing));
+
+        // Where it runs.
+        let at = |folder: &str| ProjectSettings { folder: Some(folder.into()), ..Default::default() }.work_dir(&path);
+        assert_eq!(at("project"), Some(root.join("project")));
+        assert_eq!(ProjectSettings::default().work_dir(&path), Some(root.clone()));
+        assert_eq!(at("out"), None, "a link made after it was set, leading out");
+        assert_eq!(at("nowhere"), None);
     }
 }

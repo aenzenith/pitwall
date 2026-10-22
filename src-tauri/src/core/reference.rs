@@ -24,7 +24,9 @@ impl Core {
         if !self.listed_paths().iter().any(|listed| listed == path) {
             return false;
         }
-        let Some(found) = resolve(Path::new(path), file) else {
+        // A path written from the folder it runs in, as its dev server and commands print them.
+        let work = self.work_dir(path);
+        let Some(found) = resolve(Path::new(path), work.as_deref(), file) else {
             return false;
         };
         let scheme = self.lock().settings.editor_scheme().to_string();
@@ -37,9 +39,10 @@ impl Core {
 }
 
 /// The file `printed` names in the project at `project`: the path itself when it leads to a
-/// file, taken from the project's folder unless it is absolute (one written from the project's
-/// root with a leading slash, as Vite does, is tried there too); with nothing at that place,
-/// the one file of that name in the folder (`find_named`).
+/// file, taken from the folder the project runs in (`work`, inside it) and then from the
+/// project's folder unless it is absolute (one written from either with a leading slash, as
+/// Vite does, is tried there too); with nothing at those places, the one file of that name in
+/// the folder (`find_named`).
 ///
 /// Always an existing regular file inside the project's folder once every symlink and `..` is
 /// followed. Whatever else the path leads to is refused and not looked for by name: that would
@@ -53,7 +56,7 @@ impl Core {
 /// container's `/var/www/html/src/a.ts`), which is found by name together with its folder,
 /// unless it is written into the user's own home, where it is this machine's file and not the
 /// project's.
-fn resolve(project: &Path, printed: &str) -> Option<PathBuf> {
+fn resolve(project: &Path, work: Option<&Path>, printed: &str) -> Option<PathBuf> {
     let root = fs::canonicalize(project).ok()?;
     let printed = printed.trim().trim_matches(['"', '\'', '`']);
     let printed = printed.strip_prefix("file://").unwrap_or(printed);
@@ -64,10 +67,15 @@ fn resolve(project: &Path, printed: &str) -> Option<PathBuf> {
     let wanted = Path::new(printed);
     // Joined to the folder as it is spelled: Windows reads no `/` in a canonical path.
     let under_root = project.join(printed.trim_start_matches(['/', '\\']));
+    let under_work = work.filter(|work| *work != project).map(|work| (work, work.join(printed.trim_start_matches(['/', '\\']))));
     let own = wanted.has_root() && (wanted.starts_with(project) || wanted.starts_with(&root));
     let elsewhere = wanted.has_root() && !own;
     // On Windows an absolute path joined to the folder is that path again: no place of the project's.
-    let places = [own.then(|| wanted.to_path_buf()), under_root.starts_with(project).then_some(under_root)];
+    let places = [
+        own.then(|| wanted.to_path_buf()),
+        under_work.and_then(|(work, place)| place.starts_with(work).then_some(place)),
+        under_root.starts_with(project).then_some(under_root),
+    ];
 
     let real = match places.into_iter().flatten().find_map(|place| fs::canonicalize(place).ok()) {
         Some(real) => real,

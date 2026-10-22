@@ -172,7 +172,14 @@ impl Core {
 
         let failed = |code| JobResult { ok: false, code, stopped: false, finished_at: now_ms() };
 
-        let child = match process::spawn_shell(command_line, path) {
+        // In the folder its server runs in.
+        let Some(dir) = self.work_dir(path) else {
+            self.push_job_line(path, id, format!("[pitwall] {}", t!("core.issue.workFolderGone")));
+            drop(start);
+            self.finish_job(path, id, failed(None));
+            return true;
+        };
+        let child = match process::spawn_shell(command_line, &dir.to_string_lossy()) {
             Ok(child) => child,
             Err(error) => {
                 self.push_job_line(path, id, format!("[pitwall] {}", t!("core.issue.couldNotStart", error = error)));

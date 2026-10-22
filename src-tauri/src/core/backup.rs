@@ -415,6 +415,7 @@ fn take_project(settings: &mut Settings, path: &str) -> Option<ProjectSettings> 
 fn move_project(settings: &mut Settings, from: &str, to: &str) {
     if let Some(theirs) = take_project(settings, from) {
         let mut ours = take_project(settings, to).unwrap_or_default();
+        ours.folder = ours.folder.or(theirs.folder);
         ours.script = ours.script.or(theirs.script);
         ours.port = ours.port.or(theirs.port);
         ours.url = ours.url.or(theirs.url);
@@ -1295,6 +1296,7 @@ mod tests {
             ..core.settings()
         });
         let kept = ProjectSettings {
+            folder: Some("web".into()),
             script: Some("serve".into()),
             port: None,
             url: Some("https://paddock.test".into()),

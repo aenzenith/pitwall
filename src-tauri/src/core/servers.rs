@@ -94,15 +94,19 @@ impl Core {
         if !Path::new(path).is_dir() {
             return self.set_issue(path, "error", || t!("core.issue.folderGone"), IssueEnd::Final);
         }
+        // The folder inside it that it runs in (Settings › its dev server).
+        let Some(dir) = project.work_dir(path) else {
+            return self.set_issue(path, "error", || t!("core.issue.workFolderGone"), IssueEnd::Final);
+        };
 
-        let package_json = crate::files::read_regular_string(&Path::new(path).join("package.json"), crate::files::MANIFEST_BYTES).unwrap_or_default();
+        let package_json = crate::files::read_regular_string(&dir.join("package.json"), crate::files::MANIFEST_BYTES).unwrap_or_default();
 
         if !has_script(&package_json, &script) {
             return self.set_issue(path, "error", move || t!("core.error.noScript", script = script), IssueEnd::Final);
         }
 
         let manager = PackageManager::parse(&settings.package_manager).unwrap_or_else(|| {
-            let detected = detect_manager(path);
+            let detected = detect_manager(&dir);
             self.lock().managers.insert(path.to_string(), detected);
             detected
         });
@@ -113,7 +117,7 @@ impl Core {
         let (args, port) = if !extra_args.is_empty() {
             let port = extra_args.iter().skip_while(|a| *a != "--port").nth(1).and_then(|p| p.parse().ok());
             (extra_args, port)
-        } else if let Some(base) = project.port.filter(|p| *p > 0).or_else(|| vite_port(path)) {
+        } else if let Some(base) = project.port.filter(|p| *p > 0).or_else(|| vite_port(&dir)) {
             let free = self.reservations.lock().ok().and_then(|mut r| r.reserve_free(base, path));
 
             match free {
@@ -129,7 +133,7 @@ impl Core {
             Err(message) => return self.set_issue(path, "error", move || build_command(manager, &script, &args).err().unwrap_or_else(|| message.clone()), IssueEnd::Final),
         };
 
-        let child = match process::spawn_shell(&command, path) {
+        let child = match process::spawn_shell(&command, &dir.to_string_lossy()) {
             Ok(child) => child,
             Err(error) => {
                 let error = error.to_string();
@@ -163,7 +167,7 @@ impl Core {
         // The run before stays in the output, above these.
         self.mark_run(path, None);
         self.push_line(path, format!("$ {command}"));
-        self.push_line(path, format!("  {path}"));
+        self.push_line(path, format!("  {}", dir.display()));
         self.record_pids();
         self.publish_changed();
         self.notify();
@@ -390,11 +394,11 @@ pub(super) fn describe_exit(status: Option<std::process::ExitStatus>) -> (String
     (code, signal)
 }
 
-/// The package manager a project's lock file names (npm without one). It lists the folder, so
-/// never under the core's lock.
-pub(super) fn detect_manager(path: &str) -> PackageManager {
+/// The package manager the lock file in the folder a project runs in names (npm without one).
+/// It lists the folder, so never under the core's lock.
+pub(super) fn detect_manager(dir: &Path) -> PackageManager {
     let files: Vec<String> =
-        fs::read_dir(path).map(|entries| entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect()).unwrap_or_default();
+        fs::read_dir(dir).map(|entries| entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect()).unwrap_or_default();
     detect_package_manager(&files)
 }
 
@@ -411,11 +415,11 @@ pub(super) fn run_command(inner: &Inner, path: &str) -> String {
 }
 
 /// The port a Vite project wants: `server.port` in its Vite config, else Vite's own 5173. None
-/// for a project without a Vite config.
-fn vite_port(path: &str) -> Option<u16> {
+/// for a project without a Vite config in the folder it runs in.
+fn vite_port(dir: &Path) -> Option<u16> {
     let sources: Vec<String> = ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs"]
         .iter()
-        .filter_map(|name| fs::read_to_string(Path::new(path).join(name)).ok())
+        .filter_map(|name| fs::read_to_string(dir.join(name)).ok())
         .collect();
 
     (!sources.is_empty()).then(|| sources.iter().find_map(|source| parse_vite_port(source)).unwrap_or(5173))

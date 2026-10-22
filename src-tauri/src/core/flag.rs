@@ -415,7 +415,7 @@ mod tests {
     }
 
     /// Each kind of thing left open, put into a core that has nothing open, by its name.
-    fn leave_open(core: &Core, project: &str, kind: &str) {
+    fn leave_open(core: &Arc<Core>, project: &str, kind: &str) {
         let git = |changes, ahead| GitInfo { branch: "main".into(), changes, ahead, behind: 0 };
         match kind {
             "commit" => drop(core.lock().git.insert(project.into(), git(2, 0))),

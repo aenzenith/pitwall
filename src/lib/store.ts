@@ -315,6 +315,10 @@ export const api = {
   markSeen: (path: string) => invoke("mark_seen", { path }),
   setSettings: (settings: Settings) => invoke("set_settings", { settings }),
   setProjectSettings: (path: string, settings: ProjectSettings) => invoke("set_project_settings", { path, settings }),
+  /** The folder typed for a project to run in as its settings keep it (`""`: its own); rejects with why it can't be. */
+  workFolder: (path: string, folder: string) => invoke<string>("work_folder", { path, folder }),
+  /** The same, picked in a dialog; null when it was cancelled. */
+  pickWorkFolder: (path: string) => invoke<string | null>("pick_work_folder", { path }),
   reorder: (paths: string[]) => invoke("reorder", { paths }),
   /** The board picked on the Board page: `all`, or a project's path. */
   setBoardScope: (scope: string) => invoke("set_board_scope", { scope }),

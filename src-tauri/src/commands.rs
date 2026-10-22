@@ -115,8 +115,9 @@ pub fn copy_text(app: AppHandle, text: String) {
 
 /// Addresses the project names itself (git remote, `.env`, `package.json`), offered as links.
 #[tauri::command]
-pub async fn link_suggestions(path: String) -> Vec<crate::links::LinkSuggestion> {
-    tauri::async_runtime::spawn_blocking(move || crate::links::suggestions(&path)).await.unwrap_or_default()
+pub async fn link_suggestions(app: AppHandle, path: String) -> Vec<crate::links::LinkSuggestion> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || crate::links::suggestions(&path, core.work_dir(&path).as_deref())).await.unwrap_or_default()
 }
 
 /// Whether `editor` (as in Settings) has Pitwall for VS Code.
@@ -496,6 +497,36 @@ pub fn set_track(state: State<'_, AppState>, track: TrackSettings) {
 #[tauri::command]
 pub fn set_project_settings(state: State<'_, AppState>, path: String, settings: ProjectSettings) {
     state.core.set_project_settings(&path, settings);
+}
+
+/// The folder typed for the project at `path` to run in, as its settings keep it
+/// (`ProjectSettings::folder`; `""` for the project's own), or why it can't be.
+#[tauri::command]
+pub async fn work_folder(path: String, folder: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || work_folder_within(&path, &folder)).await.map_err(|error| error.to_string())?
+}
+
+/// Asks for that folder, the project's own shown first: as `work_folder` gives it, or None
+/// when the dialog was cancelled.
+#[tauri::command]
+pub async fn pick_work_folder(app: AppHandle, path: String) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dialog = app.dialog().file().set_title(t!("core.dialog.workFolder")).set_directory(&path);
+        let Some(picked) = dialog.blocking_pick_folder().and_then(|folder| folder.into_path().ok()) else {
+            return Ok(None);
+        };
+        work_folder_within(&path, &picked.to_string_lossy()).map(Some)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn work_folder_within(path: &str, folder: &str) -> Result<String, String> {
+    match crate::settings::folder_within(std::path::Path::new(path), folder) {
+        Ok(folder) => Ok(folder.unwrap_or_default()),
+        Err(crate::settings::FolderRefused::Missing) => Err(t!("core.error.workFolderMissing", folder = folder.trim())),
+        Err(crate::settings::FolderRefused::Outside) => Err(t!("core.error.workFolderOutside")),
+    }
 }
 
 #[tauri::command]

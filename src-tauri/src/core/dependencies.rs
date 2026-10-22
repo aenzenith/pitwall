@@ -142,11 +142,14 @@ fn fingerprint(dir: &Path) -> Print {
     deps::watched().iter().map(|name| stat(&fs::metadata(dir.join(name)).ok()?)).collect()
 }
 
-/// Reads the project's files; their sizes and times first, so a change while reading shows at
-/// the next poll.
-fn inspected(path: &str) -> (Print, Inspection) {
-    let dir = Path::new(path);
-    (fingerprint(dir), deps::inspect(dir))
+/// Reads the project's files, in the folder it runs in (`Core::work_dir`; none: one that isn't
+/// there, read as an empty one); their sizes and times first, so a change while reading shows
+/// at the next poll.
+fn inspected(dir: Option<PathBuf>) -> (Print, Inspection) {
+    match dir {
+        Some(dir) => (fingerprint(&dir), deps::inspect(&dir)),
+        None => (Vec::new(), Inspection { checks: Vec::new(), runtimes: Vec::new(), migrations: Vec::new(), framework: None, checked_at: now_ms() }),
+    }
 }
 
 /// The names, times and sizes of a tool's migration files (`MigrationTool::sources`: a folder's
@@ -247,7 +250,7 @@ impl Core {
                 return Err(t!("core.error.depsServerStarting"));
             }
         }
-        let (command, needs) = deps::install_command(ecosystem, Path::new(path))?;
+        let (command, needs) = deps::install_command(ecosystem, &self.deps_dir(path)?)?;
         self.deps_on_path(needs)?;
         self.deps_run(path, &install_job(ecosystem.id()), command, Some(ecosystem.id()), None)
     }
@@ -259,7 +262,7 @@ impl Core {
     pub fn deps_migrate(self: &Arc<Self>, path: &str, tool: &str) -> Result<(), String> {
         let tool = deps::migration_tool(tool).ok_or_else(|| t!("core.error.depsTool", tool = tool))?;
         self.deps_listed(path)?;
-        let commands = deps::migrate_command(tool, Path::new(path))?;
+        let commands = deps::migrate_command(tool, &self.deps_dir(path)?)?;
         self.deps_on_path(commands.needs)?;
         let command = commands.migrate;
         let job = migrate_job(tool.id());
@@ -300,9 +303,9 @@ impl Core {
     pub fn deps_scan(self: &Arc<Self>, path: &str, ecosystem: &str) -> Result<(), String> {
         let ecosystem = deps::ecosystem(ecosystem).ok_or_else(|| t!("core.error.depsEcosystem", ecosystem = ecosystem))?;
         self.deps_listed(path)?;
-        let dir = Path::new(path);
-        let manager = ecosystem.detect(dir).ok_or_else(|| t!("core.error.depsNothing", file = ecosystem.manifest()))?;
-        self.deps_on_path(ecosystem.needs(dir, manager))?;
+        let dir = self.deps_dir(path)?;
+        let manager = ecosystem.detect(&dir).ok_or_else(|| t!("core.error.depsNothing", file = ecosystem.manifest()))?;
+        self.deps_on_path(ecosystem.needs(&dir, manager))?;
         let started = now_ms();
         {
             let mut state = self.deps_lock();
@@ -320,7 +323,7 @@ impl Core {
         let path = path.to_string();
         thread::spawn(move || {
             // `at` is when this attempt began.
-            let scan = DepScan { at: started, ..deps::scan(ecosystem, Path::new(&path)) };
+            let scan = DepScan { at: started, ..deps::scan(ecosystem, &dir) };
             core.deps_lock().scans.entry(path).or_default().insert(ecosystem.id().to_string(), scan);
             core.save_scans();
             core.deps_send();
@@ -334,6 +337,12 @@ impl Core {
         let mut state = self.deps_lock();
         self.load_scans(&mut state);
         state.scans.get(path)?.get(ecosystem)?.details.clone()
+    }
+
+    /// The folder the project at `path` runs in (`Core::work_dir`), for what the page runs or
+    /// asks there; an error when it isn't there.
+    fn deps_dir(&self, path: &str) -> Result<PathBuf, String> {
+        self.work_dir(path).ok_or_else(|| t!("core.issue.workFolderGone"))
     }
 
     fn deps_listed(&self, path: &str) -> Result<(), String> {
@@ -490,7 +499,8 @@ impl Core {
 
         thread::spawn(move || {
             let paths = core.listed_paths();
-            let prints: Vec<(String, Print)> = paths.iter().map(|path| (path.clone(), fingerprint(Path::new(path)))).collect();
+            let dirs: HashMap<String, PathBuf> = paths.iter().filter_map(|path| Some((path.clone(), core.work_dir(path)?))).collect();
+            let prints: Vec<(String, Print)> = paths.iter().map(|path| (path.clone(), dirs.get(path).map(|dir| fingerprint(dir)).unwrap_or_default())).collect();
             let tools: Vec<(String, &'static str)> = {
                 let state = core.deps_lock();
                 let checked = paths.iter().filter_map(|path| Some((path, state.checked.get(path)?)));
@@ -498,7 +508,7 @@ impl Core {
             };
             let listings: Vec<(Option<u64>, (String, &'static str))> = tools
                 .into_iter()
-                .filter_map(|(path, id)| Some((migrations_listing(deps::migration_tool(id)?, Path::new(&path)), (path, id))))
+                .filter_map(|(path, id)| Some((migrations_listing(deps::migration_tool(id)?, dirs.get(&path)?), (path, id))))
                 .collect();
             let installing: Vec<(String, &'static str)> = core.deps_lock().installing.iter().cloned().collect();
             let gone: HashSet<(String, &'static str)> =
@@ -570,7 +580,7 @@ impl Core {
         let core = Arc::clone(self);
         thread::spawn(move || {
             while let Some(paths) = core.deps.inspect.next() {
-                let read: Vec<(Print, Inspection)> = paths.iter().map(|path| inspected(path)).collect();
+                let read: Vec<(Print, Inspection)> = paths.iter().map(|path| inspected(core.work_dir(path))).collect();
                 core.deps_probe(Wanted::of(read.iter().map(|(_, inspection)| inspection)), false);
                 for (path, read) in paths.iter().zip(read) {
                     core.deps_store(path, read, |_| {});
@@ -646,7 +656,8 @@ impl Core {
             let found = state.checked.get(path).into_iter().flat_map(|inspection| &inspection.migrations);
             found.map(|found| found.tool).collect()
         };
-        if tools.is_empty() || self.lock().disposed {
+        let dir = if tools.is_empty() || self.lock().disposed { None } else { self.work_dir(path) };
+        let Some(dir) = dir else {
             let mut state = self.deps_lock();
             for read in state.migrations.get_mut(path).into_iter().flat_map(|reads| reads.values_mut()) {
                 read.running = false;
@@ -654,16 +665,15 @@ impl Core {
             drop(state);
             self.deps_send();
             return;
-        }
+        };
 
-        let dir = Path::new(path);
         for id in tools {
             let Some(tool) = deps::migration_tool(id) else {
                 continue;
             };
             let started = now_ms();
-            let listing = migrations_listing(tool, dir);
-            let status = deps::status_command(tool, dir);
+            let listing = migrations_listing(tool, &dir);
+            let status = deps::status_command(tool, &dir);
             let lacking = {
                 let mut state = self.deps_lock();
                 state.listings.insert((path.to_string(), id), listing);
@@ -677,7 +687,7 @@ impl Core {
             let result = match status {
                 Err(error) => Err(error),
                 Ok(_) if lacking => Err(MigrationsError::ToolMissing),
-                Ok(_) => deps::migration_status(tool, dir),
+                Ok(_) => deps::migration_status(tool, &dir),
             };
             // Asked for again meanwhile: still `running`, read once more right after.
             let again = self.deps.status.contains(path);
@@ -706,7 +716,7 @@ impl Core {
 
     /// Inspects, then applies `then` under the same lock that stores the result.
     fn deps_inspect_then(&self, path: &str, then: impl FnOnce(&mut DepsState)) {
-        self.deps_store(path, inspected(path), then);
+        self.deps_store(path, inspected(self.work_dir(path)), then);
     }
 
     /// Stores what `inspected` read and applies `then` under the same lock. A result older than

@@ -333,7 +333,7 @@ impl Core {
 
     /// Branch and changes of these projects, off the caller's thread. One thread at a time
     /// reads them; projects asked for meanwhile are read right after.
-    fn refresh_git(self: &Arc<Self>, paths: Vec<String>) {
+    pub(super) fn refresh_git(self: &Arc<Self>, paths: Vec<String>) {
         if paths.is_empty() {
             return;
         }
@@ -386,18 +386,20 @@ impl Core {
     /// Nothing is listed while Settings names the manager. A start that read the folder
     /// meanwhile is kept.
     fn detect_managers(&self, paths: &[String]) {
-        let unknown: Vec<&String> = {
+        let unknown: Vec<(&String, ProjectSettings)> = {
             let inner = self.lock();
             if PackageManager::parse(&inner.settings.package_manager).is_some() {
                 return;
             }
-            paths.iter().filter(|path| !inner.managers.contains_key(*path)).collect()
+            paths.iter().filter(|path| !inner.managers.contains_key(*path)).map(|path| (path, inner.settings.project(path))).collect()
         };
         if unknown.is_empty() {
             return;
         }
 
-        let detected: Vec<(&String, PackageManager)> = unknown.into_iter().map(|path| (path, servers::detect_manager(path))).collect();
+        // In the folder it runs in; one whose folder isn't there is looked for again at the next poll.
+        let detected: Vec<(&String, PackageManager)> =
+            unknown.into_iter().filter_map(|(path, project)| Some((path, servers::detect_manager(&project.work_dir(path)?)))).collect();
         let mut inner = self.lock();
         for (path, manager) in detected {
             inner.managers.entry(path.clone()).or_insert(manager);
