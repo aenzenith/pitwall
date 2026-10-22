@@ -191,10 +191,12 @@ export const cardRequest = ref<{ id: string; path: string } | null>(null);
 /**
  * The terminals' history column (window/TerminalHistory), beside the terminal: shown or not, and
  * how wide (its handle drags it, a double click puts the default back), the same for every
- * project. Every launch starts it hidden, at the default width.
+ * project. Every launch starts it shown (the user's word, 2026-10-22), at the default width.
  */
-export const terminalHistoryShown = ref(false);
-export const HISTORY_WIDTH = 296;
+export const terminalHistoryShown = ref(true);
+/** The default puts the terminal's right edge on the line before a page's 380 px details: the
+ * history (348), the gap before it (12) and the panel's right margin (20) take the 380. */
+export const HISTORY_WIDTH = 348;
 export const HISTORY_MIN = 240;
 export const historyWidth = ref(HISTORY_WIDTH);
 
