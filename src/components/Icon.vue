@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right";
     size?: number;
   }>(),
   { size: 15 },
@@ -54,6 +54,7 @@ withDefaults(
     <g v-else-if="name === 'clock'"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></g>
     <g v-else-if="name === 'eye'"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" /><circle cx="12" cy="12" r="2.8" /></g>
     <g v-else-if="name === 'download'"><path d="M12 4v11" /><path d="m7.5 11 4.5 4.5 4.5-4.5" /><path d="M5 19.5h14" /></g>
+    <g v-else-if="name === 'user'"><circle cx="12" cy="8.5" r="3.5" /><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" /></g>
     <g v-else-if="name === 'users'"><circle cx="9" cy="8.5" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M15.5 5.8a3 3 0 0 1 0 5.4" /><path d="M17.5 14.2a5.5 5.5 0 0 1 3 4.8" /></g>
     <g v-else-if="name === 'sun'"><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></g>
     <path v-else-if="name === 'moon'" d="M19.5 14.2A7.8 7.8 0 0 1 9.8 4.5a7.8 7.8 0 1 0 9.7 9.7z" />

@@ -120,6 +120,7 @@
   "window.emptyLine2": "VS Codeで開いているプロジェクトは自動的に表示されます。",
   "window.projectDetails": "プロジェクトの詳細",
   "team.section": "チーム",
+  "team.loose": "チームなし",
   "team.new": "新しいチーム",
   "team.newMenu": "新しいチーム…",
   "team.create": "作成",

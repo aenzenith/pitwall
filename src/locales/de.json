@@ -122,6 +122,7 @@
   "window.emptyLine2": "In VS Code geöffnete Projekte erscheinen von selbst.",
   "window.projectDetails": "Projektdetails",
   "team.section": "Teams",
+  "team.loose": "Ohne Team",
   "team.new": "Neues Team",
   "team.newMenu": "Neues Team …",
   "team.create": "Erstellen",

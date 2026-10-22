@@ -120,6 +120,7 @@
   "window.emptyLine2": "在 VS Code 中打开的项目会自动显示在这里。",
   "window.projectDetails": "项目详情",
   "team.section": "团队",
+  "team.loose": "未分组",
   "team.new": "新建团队",
   "team.newMenu": "新建团队…",
   "team.create": "创建",

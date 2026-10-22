@@ -128,6 +128,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "Projects in no team, in the sidebar",
+        "tr": "Takımsız projeler kenar çubuğunda",
+        "de": "Projekte ohne Team in der Seitenleiste",
+        "es": "Los proyectos sin equipo, en la barra lateral",
+        "ru": "Проекты без группы в боковой панели",
+        "ja": "チームに入っていないプロジェクトをサイドバーに",
+        "zh-Hans": "侧边栏里的未分组项目"
+      },
+      "body": {
+        "en": "Under Teams, the last entry, No team, shows the projects that are in no team on their own, with their running count. It stays at the bottom, below the teams.",
+        "tr": "Takımlar'ın en altındaki Takımsızlar, hiçbir takımda olmayan projeleri tek başına gösterir; kaçının çalıştığı da yanında yazar. Takımların altında hep yerinde durur.",
+        "de": "Unter „Teams“ zeigt der letzte Eintrag, „Ohne Team“, die Projekte, die in keinem Team sind, für sich, mit der Zahl der laufenden. Er bleibt unten, unter den Teams.",
+        "es": "En Equipos, la última entrada, Sin equipo, muestra solo los proyectos que no están en ningún equipo, con cuántos están en marcha. Se queda abajo, debajo de los equipos.",
+        "ru": "В разделе «Группы» последний пункт, «Без группы», показывает только проекты, которые не входят ни в одну группу, и сколько из них запущено. Он всегда внизу, под группами.",
+        "ja": "「チーム」の一番下の「チームなし」で、どのチームにも入っていないプロジェクトだけを表示できます。実行中の数も並びます。チームの下にいつも固定されています。",
+        "zh-Hans": "“团队”下最后一项“未分组”单独显示不属于任何团队的项目，并显示其中正在运行的数量。它始终固定在各团队下方。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Lists in Claude's last message sit tight again",

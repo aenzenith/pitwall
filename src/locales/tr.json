@@ -122,6 +122,7 @@
   "window.emptyLine2": "VS Code'da açık projeler kendiliğinden görünür.",
   "window.projectDetails": "Proje ayrıntıları",
   "team.section": "Takımlar",
+  "team.loose": "Takımsızlar",
   "team.new": "Yeni takım",
   "team.newMenu": "Yeni takım…",
   "team.create": "Oluştur",

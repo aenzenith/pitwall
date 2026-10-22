@@ -26,7 +26,7 @@ import { listRequest, openInWindow, openTarget } from "../lib/open";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
-import { applyDrop, createTeam, deleteTeam, leaveTeam, looseProjects, membersOf, moveToTeam, nudgeTeam, orderTeams, renameTeam, startTeam, stopTeam, teamAsk, teamOf, teams, teamState } from "../lib/teams";
+import { applyDrop, claudeNotes, createTeam, deleteTeam, leaveTeam, looseProjects, membersOf, moveToTeam, nudgeTeam, orderTeams, renameTeam, startTeam, stopTeam, teamAsk, teamOf, teams, teamState } from "../lib/teams";
 import type { Card, Project, Team } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
@@ -191,6 +191,8 @@ const query = ref("");
 const selectedPath = ref<string | null>(null);
 /** The team whose own view the list shows (its sidebar entry), in place of a filter's. */
 const teamFilter = ref<string | null>(null);
+/** The projects in no team, shown on their own (the last entry under the sidebar's teams). */
+const looseShown = ref(false);
 /** The team selected in the list: its details show in place of a project's. */
 const selectedTeamId = ref<string | null>(null);
 const tbody = ref<HTMLElement | null>(null);
@@ -239,11 +241,20 @@ const projects = computed(() => snapshot.value?.projects ?? []);
 const anyBusy = computed(() => projects.value.some((p) => p.status === "busy"));
 const current = computed(() => filters.find((f) => f.id === filter.value) ?? filters[0]);
 const shownTeam = computed(() => teams.value.find((team) => team.id === teamFilter.value) ?? null);
-/** The toolbar's heading and the list's name: the team shown, else the filter. */
-const heading = computed(() => shownTeam.value?.name ?? t(current.value.label));
+/** The toolbar's heading and the list's name: the team shown, the projects in no team, else the filter. */
+const heading = computed(() => shownTeam.value?.name ?? t(looseShown.value ? "team.loose" : current.value.label));
+/** What the list draws from before a search: the team shown, the projects in no team, else the
+ * filter's. */
+const pool = computed(() => (shownTeam.value ? membersOf(shownTeam.value) : looseShown.value ? looseProjects.value : projects.value.filter((p) => current.value.test(p))));
 
 /** The sidebar's teams, each with how many of its projects run. */
 const teamNav = computed(() => teams.value.map((team) => ({ team, ...teamState(team) })));
+/** The sidebar's last entry under the teams, the projects in no team: counted as a team is. */
+const looseNav = computed(() => ({
+  total: looseProjects.value.length,
+  running: looseProjects.value.filter((project) => project.status === "running").length,
+  claude: claudeNotes(looseProjects.value),
+}));
 
 /** The sidebar's team entries, dragged into order as the list's rows are (lib/reorder): the
  * teams' own order, the same one their heads are dragged into in the list. */
@@ -265,8 +276,9 @@ function onTeamNavKey(event: KeyboardEvent, id: string): void {
 }
 
 /** The list is drawn in groups, each under its head: a team's own view, and every project while
- * there are teams. The other filters and a search stay flat, as with no team at all. */
-const grouped = computed(() => query.value.trim() === "" && (shownTeam.value !== null || (filter.value === "all" && teams.value.length > 0)));
+ * there are teams. The other filters, the projects in no team and a search stay flat, as with no
+ * team at all. */
+const grouped = computed(() => query.value.trim() === "" && (shownTeam.value !== null || (!looseShown.value && filter.value === "all" && teams.value.length > 0)));
 
 /** A stretch of the list: a group under its head (`team` null: the projects in no team, whose
  * head draws nothing), or the whole flat list (`head` false). Groups never fold. */
@@ -275,9 +287,8 @@ type Section = { key: string; head: boolean; team: Team | null; rows: Project[];
 const sections = computed<Section[]>(() => {
   if (!grouped.value) {
     const q = query.value.trim().toLowerCase();
-    const pool = shownTeam.value ? membersOf(shownTeam.value) : projects.value.filter((p) => current.value.test(p));
     // Searching: the quick switcher's fuzzy match and order (lib/fuzzy); else the list's own order.
-    const found = q ? searchProjects(pool, q).map((match) => match.project) : pool;
+    const found = q ? searchProjects(pool.value, q).map((match) => match.project) : pool.value;
     return [{ key: "flat", head: false, team: null, rows: found, total: found.length, running: 0, busy: false }];
   }
 
@@ -334,14 +345,17 @@ function count(id: Filter): number {
   return f ? projects.value.filter(f.test).length : 0;
 }
 
-// A team that is gone takes its own view with it: the list is back on its filter.
+// A team that is gone takes its own view with it, and the last team the projects in no team's
+// view: the list is back on its filter.
 watch(teams, (list) => {
   if (teamFilter.value && !list.some((team) => team.id === teamFilter.value)) teamFilter.value = null;
+  if (!list.length) looseShown.value = false;
 });
 
 function pick(id: Filter): void {
   filter.value = id;
   teamFilter.value = null;
+  looseShown.value = false;
   view.value = "projects";
   // The list itself, not the setup steps in its place.
   setupOpen.value = false;
@@ -350,10 +364,21 @@ function pick(id: Filter): void {
 /** A team's sidebar entry: the list shows that team alone, selected until a row is clicked. */
 function pickTeam(id: string): void {
   teamFilter.value = id;
+  looseShown.value = false;
   query.value = "";
   view.value = "projects";
   setupOpen.value = false;
   selectedTeamId.value = id;
+}
+
+/** The sidebar's entry for the projects in no team: the list shows them alone, flat. */
+function pickLoose(): void {
+  teamFilter.value = null;
+  looseShown.value = true;
+  query.value = "";
+  view.value = "projects";
+  setupOpen.value = false;
+  selectedTeamId.value = null;
 }
 
 /** The toolbar's Start all and Stop all are the shown team's in its own view, else everyone's. */
@@ -615,6 +640,7 @@ function revealProject(path: string): void {
   if (!rows.value.some((p) => p.path === path)) {
     filter.value = "all";
     teamFilter.value = null;
+    looseShown.value = false;
     query.value = "";
   }
   selectProject(path);
@@ -766,8 +792,8 @@ function server(project: Project): string {
             v-for="f in filters"
             :key="f.id"
             type="button"
-            :class="{ on: view === 'projects' && !shownTeam && filter === f.id }"
-            :aria-current="view === 'projects' && !shownTeam && filter === f.id ? 'page' : undefined"
+            :class="{ on: view === 'projects' && !shownTeam && !looseShown && filter === f.id }"
+            :aria-current="view === 'projects' && !shownTeam && !looseShown && filter === f.id ? 'page' : undefined"
             @click="pick(f.id)"
           >
             <Icon :name="f.icon" /> {{ t(f.label) }}
@@ -805,6 +831,18 @@ function server(project: Project): string {
               <span :class="['team-count', { live: entry.running > 0 }]" :aria-label="t('team.runningOf', { running: entry.running, total: entry.total })">{{ entry.running }}/{{ entry.total }}</span>
             </button>
           </div>
+          <!-- The projects in no team, last and never dragged: there while there is a team. -->
+          <button
+            v-if="teams.length"
+            type="button"
+            :class="{ on: view === 'projects' && looseShown }"
+            :aria-current="view === 'projects' && looseShown ? 'page' : undefined"
+            @click="pickLoose"
+          >
+            <Icon name="user" /> <span class="nav-label">{{ t("team.loose") }}</span>
+            <ClaudeDot v-if="looseNav.claude.length" :live="{ phase: looseNav.claude[0].phase, text: looseNav.claude.map((note) => note.text).join(' · ') }" />
+            <span :class="['team-count', { live: looseNav.running > 0 }]" :aria-label="t('team.runningOf', { running: looseNav.running, total: looseNav.total })">{{ looseNav.running }}/{{ looseNav.total }}</span>
+          </button>
         </nav>
         <div class="nav today">
           <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
@@ -1012,7 +1050,10 @@ function server(project: Project): string {
 
         <section v-else class="empty">
           <PitwallGlyph :size="44" lamps="var(--idle-ring)" />
-          <template v-if="projects.length">
+          <template v-if="looseShown && !pool.length">
+            <p>{{ t("team.pickNone") }}</p>
+          </template>
+          <template v-else-if="projects.length">
             <p>{{ t("window.noMatch") }}</p>
           </template>
           <template v-else>
