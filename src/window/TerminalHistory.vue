@@ -73,7 +73,7 @@ watch(
   { immediate: true },
 );
 
-// A session that starts or ends is read again with the rest: a new one has a log by then.
+// A session that starts or ends is read again with the rest: one that ended has its log by then.
 watch(
   () => [...live.value.keys()].sort().join(" "),
   (ids, was) => {
@@ -81,14 +81,30 @@ watch(
   },
 );
 
+/**
+ * The list as read, under the project's open sessions it doesn't have yet (Claude Code writes a
+ * session's log with its first message), the last heard of first: those that run in the
+ * project's own folder, the one `claude --resume` finds them from.
+ */
+const shown = computed<PastSession[] | null>(() => {
+  if (list.value === null) return null;
+  const read = new Set(list.value.map((session) => session.id));
+  const fresh = [...live.value.values()]
+    .filter((row) => !read.has(row.id) && row.folder === props.project.path)
+    .map((row) => ({ id: row.id, title: row.title, at: row.since ?? now.value }))
+    .sort((a, b) => b.at - a.at);
+  return [...fresh, ...list.value];
+});
+
 type Item = { session: PastSession; name: string; hits: Set<number> | null };
 
-/** The sessions the search keeps, in the list's order, each with its name's matched letters. */
+/** The sessions the search keeps, in the list's order, each with its name's matched letters; an
+ * open one by the name it has now. */
 const items = computed<Item[]>(() => {
   const q = query.value.trim();
   const out: Item[] = [];
-  for (const session of list.value ?? []) {
-    const name = session.title ?? t("terminal.historyUntitled");
+  for (const session of shown.value ?? []) {
+    const name = live.value.get(session.id)?.title ?? session.title ?? t("terminal.historyUntitled");
     if (!q) {
       out.push({ session, name, hits: null });
       continue;
@@ -210,8 +226,8 @@ defineExpose({ focus });
       />
     </label>
     <div :id="`past-${project.path}`" ref="listbox" class="rows" role="listbox" :aria-label="t('terminal.historyTitle')">
-      <div v-if="list === null" class="note"><Spinner :size="13" /></div>
-      <div v-else-if="!list.length" class="note">{{ t("terminal.historyEmpty") }}</div>
+      <div v-if="shown === null" class="note"><Spinner :size="13" /></div>
+      <div v-else-if="!shown.length" class="note">{{ t("terminal.historyEmpty") }}</div>
       <div v-else-if="!items.length" class="note">{{ t("terminal.historyNoMatch", { query: query.trim() }) }}</div>
       <template v-for="group in days" :key="group.day">
         <div v-if="group.label" class="day" role="presentation">{{ group.label }}</div>
