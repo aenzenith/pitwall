@@ -110,6 +110,7 @@ const form = reactive<Settings>({
   fuelInBar: true,
   fuelInPopover: true,
   barProjects: "working",
+  terminalProjects: "open",
   fuelEvery: 15,
   serversInBar: true,
   claudesInBar: true,
@@ -143,6 +144,13 @@ const RESUME: Array<{ id: Settings["resume"]; label: Key }> = [
 const BAR_PROJECTS: Array<{ id: string; label: Key }> = [
   { id: "all", label: "settings.barAll" },
   { id: "working", label: "settings.barWorking" },
+];
+
+/** Which projects the terminal panel's picker lists: every one, or the favourites and those open
+ * or at work, as the list's "Favourites and open". */
+const TERMINAL_PROJECTS: Array<{ id: string; label: Key }> = [
+  { id: "all", label: "settings.barAll" },
+  { id: "open", label: "window.scopeOpen" },
 ];
 
 /** Where a project opens from each place unless it chose its own (lib/open); `hint` says what
@@ -466,6 +474,15 @@ function setBarProjects(choice: string): void {
   void save();
 }
 
+/** A value it doesn't know reads as `open`, as the terminal panel reads it. */
+const terminalProjects = computed(() => (form.terminalProjects === "all" ? "all" : "open"));
+
+function setTerminalProjects(choice: string): void {
+  if (terminalProjects.value === choice) return;
+  form.terminalProjects = choice;
+  void save();
+}
+
 function setResume(mode: Settings["resume"]): void {
   if (form.resume === mode) return;
   form.resume = mode;
@@ -552,6 +569,17 @@ function setTheme(theme: Theme): void {
             </div>
             <span class="seg" role="group" aria-labelledby="bar-projects">
               <button v-for="choice in BAR_PROJECTS" :key="choice.id" type="button" :aria-pressed="barProjects === choice.id" @click="setBarProjects(choice.id)">
+                {{ t(choice.label) }}
+              </button>
+            </span>
+          </div>
+          <div class="hook">
+            <div class="hook-text">
+              <span id="terminal-projects">{{ t("settings.terminalProjects") }}</span>
+              <small>{{ t("settings.terminalProjectsHint") }}</small>
+            </div>
+            <span class="seg" role="group" aria-labelledby="terminal-projects">
+              <button v-for="choice in TERMINAL_PROJECTS" :key="choice.id" type="button" :aria-pressed="terminalProjects === choice.id" @click="setTerminalProjects(choice.id)">
                 {{ t(choice.label) }}
               </button>
             </span>

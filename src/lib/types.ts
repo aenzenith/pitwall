@@ -149,6 +149,9 @@ export type Settings = {
   /** Which projects the menu bar's window lists: `all`, or `working` (the favourites and the
    * projects at work), the default; read leniently. */
   barProjects?: string;
+  /** Which projects the terminal panel's picker lists: `all`, or `open` (the favourites and the
+   * projects open or at work), the default; read leniently. */
+  terminalProjects?: string;
   /** Minutes between asking Anthropic for the limits: 1, 5 or 15. */
   fuelEvery: number;
   /** The count of running dev servers in the menu bar, in green. */

@@ -30,6 +30,13 @@ export function atWork(project: Project): boolean {
   );
 }
 
+/** Open or at work: its server crashed too, a VS Code window on it, a terminal of it here. With the
+ * favourites, what the list's "Favourites and open" and the terminal panel's picker (Settings ›
+ * Projects) show. */
+export function openOrAtWork(project: Project): boolean {
+  return atWork(project) || project.status === "crashed" || project.openIn !== null || project.terminals.length > 0;
+}
+
 /** One row of the switcher's `/`; a filter brings its `test`, for the count the sidebar shows. */
 export type PageEntry = {
   id: Page;

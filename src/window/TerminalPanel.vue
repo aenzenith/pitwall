@@ -13,6 +13,7 @@ import { useNativeMenu } from "../lib/nativeMenu";
 import { plainText, shownLines } from "../lib/outputLines";
 import { useOutputSearch } from "../lib/outputSearch";
 import { useOutputStream } from "../lib/outputStream";
+import { openOrAtWork } from "../lib/pages";
 import {
   chooseTab,
   chosenTab,
@@ -289,7 +290,13 @@ const cardProjects = computed(() => [{ path: props.project.path, name: props.pro
 
 /* ---------- the project ---------- */
 
-const projects = computed(() => snapshot.value?.projects ?? []);
+/** What the picker lists, as Settings › Projects says: every project, or the favourites and the
+ * projects open or at work (lib/pages), the default; the panel's own always. */
+const projects = computed(() => {
+  const all = snapshot.value?.projects ?? [];
+  if (snapshot.value?.settings.terminalProjects === "all") return all;
+  return all.filter((p) => p.path === props.project.path || p.favourite || openOrAtWork(p));
+});
 /** What Claude waits on you with in each project: the picker marks the others with Claude's dot. */
 const waits = computed(() => sessionWaits(sessions.value?.sessions ?? []));
 
@@ -938,7 +945,7 @@ defineExpose({ openTerminal });
     <div class="tabs" @click="onRowClick">
       <!-- The panel's project: the page's, or another picked here. -->
       <div class="where">
-        <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain @pick="pickProject" />
+        <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain working @pick="pickProject" />
       </div>
       <span id="terminal-tab-keys" class="sr-only">{{ t("terminal.tabKeys") }}</span>
       <!-- Each tab and its close button side by side, never one inside the other; the list holds

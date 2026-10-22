@@ -21,6 +21,27 @@
         "ja": "「履歴」には、始めたばかりのセッションがしばらくしてから表示されていました。今は始めた瞬間から、最初のメッセージを送る前でもいちばん上に表示されます。",
         "zh-Hans": "以前“历史”要过一会儿才会列出刚启动的会话。现在它从启动那一刻起就显示在最上面，甚至在第一条消息之前。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "The terminal's project picker lists your favourites and open projects",
+        "tr": "Terminalin proje seçicisinde favorilerin ve açık projeler var",
+        "de": "Die Projektauswahl des Terminals zeigt Favoriten und offene Projekte",
+        "es": "El selector de proyecto de los terminales muestra tus favoritos y los proyectos abiertos",
+        "ru": "Выбор проекта в терминалах показывает избранное и открытые проекты",
+        "ja": "ターミナルのプロジェクト選択にお気に入りと開いているプロジェクトが並びます",
+        "zh-Hans": "终端的项目选择器列出你的收藏和已打开的项目"
+      },
+      "body": {
+        "en": "The project picker at the start of the terminal panel now lists your favourites and the projects open or at work, as Favourites and open does in the list, and the project the panel shows. Settings › Projects › Projects in the terminal shows them all again. Where Claude is working, its breathing ring is beside the project's name in the picker.",
+        "tr": "Terminal panelinin başındaki proje seçici artık, listedeki Favoriler ve açıklar gibi, favorilerini, açık ya da çalışan projeleri ve panelin gösterdiği projeyi listeliyor. Hepsini görmek istersen Ayarlar › Projeler › Terminaldeki projeler'de Tümü'nü seç. Claude'un çalıştığı projelerde, seçicide de adın yanında Claude'un yanıp sönen halkası var.",
+        "de": "Die Projektauswahl am Anfang des Terminalbereichs listet jetzt deine Favoriten und die Projekte, die offen sind oder arbeiten, wie „Favoriten und offene“ in der Liste, dazu das Projekt, das der Bereich zeigt. Unter Einstellungen › Projekte › Projekte im Terminal zeigt „Alle“ wieder jedes. Wo Claude arbeitet, steht sein pulsierender Ring in der Auswahl neben dem Namen des Projekts.",
+        "es": "El selector de proyecto al principio del panel de terminales lista ahora tus favoritos y los proyectos abiertos o en marcha, como «Favoritos y abiertos» en la lista, y el proyecto que muestra el panel. En Ajustes › Proyectos › Proyectos en el terminal, «Todos» los vuelve a mostrar todos. Donde Claude está trabajando, su anillo que late aparece junto al nombre del proyecto en el selector.",
+        "ru": "Выбор проекта в начале панели терминалов теперь показывает избранное и проекты, которые открыты или в работе, как «Избранное и открытые» в списке, и проект, который показывает панель. В «Настройки › Проекты › Проекты в терминале» вариант «Все» снова показывает все проекты. Там, где работает Claude, рядом с названием проекта в списке мерцает его кольцо.",
+        "ja": "ターミナルパネルの先頭にあるプロジェクト選択には、一覧の「お気に入りと開いているもの」と同じく、お気に入りと、開いているか動いているプロジェクト、それにパネルが表示しているプロジェクトが並ぶようになりました。「設定 › プロジェクト › ターミナルのプロジェクト」で「すべて」を選ぶと、すべて表示されます。Claude が作業中のプロジェクトには、選択の中でも名前の横に Claude の明滅するリングが付きます。",
+        "zh-Hans": "终端面板开头的项目选择器现在像列表中的“收藏和已打开”一样，列出你的收藏、已打开或正在运行的项目，以及面板正在显示的项目。在“设置 › 项目 › 终端中的项目”中选择“全部”即可再次显示所有项目。Claude 正在工作的项目，在选择器中名字旁边也会有 Claude 闪烁的圆环。"
+      }
     }
   ]
 }

@@ -14,7 +14,7 @@ import { claudeState, gitLine, meta } from "../lib/format";
 import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
-import { atWork, filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
+import { filters, isFilter, openOrAtWork, type Filter, type Page, type View } from "../lib/pages";
 import { onBoard } from "../lib/board";
 import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
@@ -277,12 +277,6 @@ function onTeamNavKey(event: KeyboardEvent, id: string): void {
 /** "Only favourites and open" (the toolbar's switch, kept in the settings): the favourites, and
  * another project only while it is open or at work. */
 const favouritesOnly = computed(() => snapshot.value?.settings.favouritesOnly === true);
-
-/** Open or at work (lib/pages): its server crashed too, a VS Code window on it, a terminal of it
- * here. */
-function openOrAtWork(project: Project): boolean {
-  return atWork(project) || project.status === "crashed" || project.openIn !== null || project.terminals.length > 0;
-}
 
 function drawn(project: Project): boolean {
   return !favouritesOnly.value || project.favourite || openOrAtWork(project);

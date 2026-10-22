@@ -23,8 +23,9 @@ import type { Project, Turn } from "../lib/types";
  * alone, its name still its tooltip and read out.
  *
  * The terminal panel's (window/TerminalPanel) is `plain`, its name alone on the panel's tab row,
- * and offers no "every project" (`every` false). A picker in the window's lower half opens its
- * list above it.
+ * and offers no "every project" (`every` false); its list also gives a project Claude works in
+ * Claude's breathing ring (`working`), the one shown too, unless Claude waits on you there. A
+ * picker in the window's lower half opens its list above it.
  */
 const props = withDefaults(
   defineProps<{
@@ -37,23 +38,27 @@ const props = withDefaults(
     label: Key;
     every?: boolean;
     plain?: boolean;
+    /** Claude's breathing ring on a project it works in. */
+    working?: boolean;
   }>(),
-  { every: true, plain: false },
+  { every: true, plain: false, working: false },
 );
 const emit = defineEmits<{ pick: [path: string | null] }>();
 
 /** A typed name is forgotten this long after its last letter (ms). */
 const TYPED_MS = 700;
 
-type Option = { path: string | null; name: string; label: string; waits: boolean };
+type Option = { path: string | null; name: string; label: string; phase: "waiting" | "working" | null };
 
 /** Every project, then each one: with Claude's dot, what it waits on you with too. The one shown
- * has none. */
+ * has none; with `working`, a ring where Claude works and doesn't wait. */
 const options = computed<Option[]>(() => [
-  ...(props.every ? [{ path: null, name: t("board.allProjects"), label: t("board.allProjects"), waits: false }] : []),
+  ...(props.every ? [{ path: null, name: t("board.allProjects"), label: t("board.allProjects"), phase: null }] : []),
   ...props.projects.map((p) => {
     const wait = p.path === props.scope ? undefined : props.waits.get(p.path);
-    return { path: p.path, name: p.name, label: wait ? t(WAIT_LABELS[wait], { name: p.name }) : p.name, waits: !!wait };
+    if (wait) return { path: p.path, name: p.name, label: t(WAIT_LABELS[wait], { name: p.name }), phase: "waiting" as const };
+    if (props.working && p.claudeWorking) return { path: p.path, name: p.name, label: t("board.picker.working", { name: p.name }), phase: "working" as const };
+    return { path: p.path, name: p.name, label: p.name, phase: null };
   }),
 ]);
 
@@ -242,13 +247,13 @@ onBeforeUnmount(() => {
           role="option"
           :aria-selected="option.path === scope"
           :aria-label="option.label"
-          :title="option.waits ? option.label : undefined"
+          :title="option.phase ? option.label : undefined"
           @mousemove="active = i"
           @click="pick(option)"
         >
           <span class="ppick-check"><Icon v-if="option.path === scope" name="check" :size="12" /></span>
           <span class="ppick-name">{{ option.name }}</span>
-          <ClaudeDot v-if="option.waits" :live="{ phase: 'waiting', text: '' }" />
+          <ClaudeDot v-if="option.phase" :live="{ phase: option.phase, text: '' }" />
         </li>
       </template>
     </ul>
