@@ -583,6 +583,11 @@ fn an_added_project_stays_listed_without_its_star_until_it_is_removed() {
 
     core.set_favourite(&pit_lane, false);
     core.remove_project(&paddock);
+    // Added from the quick switcher: listed, with no star.
+    let pits = folder("pits");
+    core.add_unstarred(&pits).unwrap();
+    assert!(view(&core, &pits).added && !view(&core, &pits).favourite);
+    core.remove_project(&pits);
     let unstarred = view(&core, &pit_lane);
     assert!(unstarred.added && !unstarred.favourite);
     assert_eq!(listed(&core), [garage.clone(), pit_lane.clone()]);

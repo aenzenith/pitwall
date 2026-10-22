@@ -80,6 +80,8 @@
   "switcher.chooseFolderHint": "在“设置”中选择一个项目文件夹，即可同时搜索其中的文件夹。",
   "switcher.noProjects": "还没有项目。请在 Pitwall 窗口中添加项目。",
   "switcher.addToPitwall": "添加到 Pitwall",
+  "switcher.addAndGo": "添加并前往项目",
+  "switcher.addAndShowFiles": "添加并显示文件",
   "switcher.openPitwall": "打开 Pitwall",
   "switcher.openMarkSeen": "打开并标为已读",
   "switcher.browser": "浏览器",

@@ -4,7 +4,7 @@
 //!
 //! A project added to Pitwall stays in its list (`Settings::added`) until it is removed from it;
 //! its star (`favorites.json`, shared with the VS Code extension) is a mark on top. Adding one
-//! stars it too.
+//! stars it too, but from the quick switcher (`add_unstarred`).
 
 use super::*;
 
@@ -39,6 +39,20 @@ impl Core {
 
         self.registry.set_favourite(Favourite { path: path.to_string(), name: folder_name(path) }, true);
         self.reload_favourites();
+        self.notify();
+        Ok(())
+    }
+
+    /// A folder added from the quick switcher: one of Pitwall's projects, with no star.
+    pub fn add_unstarred(&self, path: &str) -> Result<(), String> {
+        if !Path::new(path).is_dir() {
+            return Err(t!("core.error.notFolder", path = path));
+        }
+
+        let favourite = Favourite { path: path.to_string(), name: folder_name(path) };
+        if keep_favourites(&mut self.lock().settings, std::slice::from_ref(&favourite)) {
+            self.save_settings();
+        }
         self.notify();
         Ok(())
     }

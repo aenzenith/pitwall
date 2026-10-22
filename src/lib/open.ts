@@ -33,7 +33,7 @@ function known(from: OpenFrom, value: unknown): OpenTarget | undefined {
 }
 
 /** Pitwall's choice for `from`. */
-function generalOpen(from: OpenFrom): OpenTarget {
+export function generalOpen(from: OpenFrom): OpenTarget {
   return known(from, snapshot.value?.settings.open?.[from]) ?? OPEN_TARGETS[from][0];
 }
 
@@ -57,10 +57,24 @@ export function openInWindow(path: string, from: "list" | "pages"): void {
  * project in the list. */
 export function openFromOutside(path: string): void {
   const target = openTarget(path, "outside");
+  if (target === "editor") void api.openEditor(path);
+  else revealOutside(path, target);
+}
+
+/** A folder of the projects folder that isn't listed, opened from the quick switcher: as Pitwall's
+ * choice for outside the window says. Its editor; else it is added to Pitwall first, as the window
+ * shows a listed project only. */
+export async function openFolderFromOutside(path: string): Promise<void> {
+  const target = generalOpen("outside");
   if (target === "editor") {
     void api.openEditor(path);
     return;
   }
+  await api.addProject(path);
+  revealOutside(path, target);
+}
+
+function revealOutside(path: string, target: "list" | "files"): void {
   void emitTo("main", target === "files" ? "reveal-files" : "reveal-project", { path });
   void api.openWindow();
 }

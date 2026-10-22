@@ -251,6 +251,7 @@ export type Action = "start" | "stop" | "restart";
 export const api = {
   act: (path: string, action: Action) => invoke("act", { path, action }),
   pickFolder: () => invoke("pick_folder"),
+  /** A folder added from the quick switcher: listed, with no star. */
   addProject: (path: string) => invoke("add_project", { path }),
   pickProjectsDir: () => invoke("pick_projects_dir"),
   clearProjectsDir: () => invoke("clear_projects_dir"),

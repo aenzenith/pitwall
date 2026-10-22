@@ -80,6 +80,8 @@
   "switcher.chooseFolderHint": "設定でプロジェクトフォルダを選択すると、その中のフォルダも検索できます。",
   "switcher.noProjects": "プロジェクトはまだありません。Pitwallのウインドウからプロジェクトを追加してください。",
   "switcher.addToPitwall": "Pitwallに追加",
+  "switcher.addAndGo": "追加してプロジェクトへ移動",
+  "switcher.addAndShowFiles": "追加してファイルを表示",
   "switcher.openPitwall": "Pitwallを開く",
   "switcher.openMarkSeen": "開いて既読にする",
   "switcher.browser": "ブラウザ",

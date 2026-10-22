@@ -14,7 +14,7 @@ import { composing, draft } from "../lib/capture";
 import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
 import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
-import { openFromOutside, openTarget } from "../lib/open";
+import { generalOpen, openFolderFromOutside, openFromOutside, openTarget } from "../lib/open";
 import { pages, type Page, type PageEntry } from "../lib/pages";
 import { keys, primary } from "../lib/platform";
 import { api, now, snapshot } from "../lib/store";
@@ -298,12 +298,20 @@ function toggle(p: Project | null): void {
   void api.act(p.path, p.status === "running" ? "stop" : "start");
 }
 
-/** A folder from the projects folder: ↵ opens it in the editor, ⌘↵ (Ctrl+Enter) adds it to Pitwall. */
+/** A folder from the projects folder: ↵ opens it as Settings › Projects says for the switcher (in
+ * Pitwall's window it is added first, lib/open), ⌘↵ (Ctrl+Enter) only adds it to Pitwall. */
 function openFolder(folder: Folder | null, add: boolean): void {
   if (!folder) return;
-  if (!add) conceal();
-  void (add ? api.addProject(folder.path) : api.openEditor(folder.path));
+  if (add) {
+    void api.addProject(folder.path);
+    return;
+  }
+  conceal();
+  void openFolderFromOutside(folder.path);
 }
+
+/** What ↵ on a folder does, for the foot. */
+const FOLDER_HINTS = { list: "switcher.addAndGo", editor: "common.openInEditor", files: "switcher.addAndShowFiles" } as const;
 
 function mark(command: CommandView): string {
   return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[command.status];
@@ -694,7 +702,7 @@ onBeforeUnmount(() => {
       <span><kbd>{{ keys("Escape") }}</kbd> {{ t("common.close") }}</span>
     </footer>
     <footer v-else-if="current?.kind === 'folder'" class="foot">
-      <span><kbd>{{ keys("Enter") }}</kbd> {{ t("common.openInEditor") }}</span>
+      <span><kbd>{{ keys("Enter") }}</kbd> {{ t(FOLDER_HINTS[generalOpen("outside")]) }}</span>
       <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("switcher.addToPitwall") }}</span>
       <span class="grow"></span>
       <span><kbd>{{ keys("mod+P") }}</kbd> {{ t("switcher.openPitwall") }}</span>

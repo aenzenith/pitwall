@@ -81,6 +81,8 @@
   "switcher.chooseFolderHint": "Klasörlerinde de aramak için Ayarlar'dan bir projeler klasörü seç.",
   "switcher.noProjects": "Henüz proje yok. Projeleri Pitwall penceresinden ekle.",
   "switcher.addToPitwall": "Pitwall'a ekle",
+  "switcher.addAndGo": "Ekle ve projeye git",
+  "switcher.addAndShowFiles": "Ekle ve dosyaları göster",
   "switcher.openPitwall": "Pitwall'ı aç",
   "switcher.openMarkSeen": "Aç, görüldü say",
   "switcher.browser": "Tarayıcı",

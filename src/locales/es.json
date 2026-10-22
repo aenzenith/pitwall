@@ -82,6 +82,8 @@
   "switcher.chooseFolderHint": "Elige una carpeta de proyectos en Ajustes para buscar también en sus carpetas.",
   "switcher.noProjects": "Aún no hay proyectos. Agrégalos desde la ventana de Pitwall.",
   "switcher.addToPitwall": "Agregar a Pitwall",
+  "switcher.addAndGo": "Agregar e ir al proyecto",
+  "switcher.addAndShowFiles": "Agregar y mostrar archivos",
   "switcher.openPitwall": "Abrir Pitwall",
   "switcher.openMarkSeen": "Abrir y marcar como visto",
   "switcher.browser": "Navegador",

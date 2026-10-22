@@ -336,9 +336,10 @@ pub async fn board_link(app: AppHandle, id: String, session: String) -> Result<(
     tauri::async_runtime::spawn_blocking(move || core.board_link(&id, &session)).await.map_err(|error| error.to_string())?
 }
 
+/// A folder of the projects folder added from the quick switcher: listed, not starred.
 #[tauri::command]
 pub fn add_project(state: State<'_, AppState>, path: String) -> Result<(), String> {
-    state.core.add_project(&path)
+    state.core.add_unstarred(&path)
 }
 
 #[tauri::command]
