@@ -503,8 +503,10 @@ fn a_past_days_tokens_come_from_its_file_split_by_project() {
     let (start, _) = activity::day_bounds(&yesterday).unwrap();
     let (earlier, _) = activity::day_bounds(&before).unwrap();
 
-    // Written by a version without tokens: the day shows as it did, with none.
-    let claude = |t: u64, state: &str| format!(r#"{{"t":{t},"path":"{}","kind":"claude","state":"{state}","session":"s1"}}"#, fx.project);
+    // Written by a version without tokens: the day shows as it did, with none. The path goes in as
+    // JSON writes it: a Windows path's backslashes, put in bare, would make the lines unreadable.
+    let path = serde_json::to_string(&fx.project).unwrap();
+    let claude = |t: u64, state: &str| format!(r#"{{"t":{t},"path":{path},"kind":"claude","state":"{state}","session":"s1"}}"#);
     fs::write(dir.join(format!("{before}.jsonl")), format!("{}\n{}\n", claude(earlier + 3_600_000, "working"), claude(earlier + 7_200_000, "idle"))).unwrap();
     fs::write(dir.join(format!("{yesterday}.jsonl")), format!("{}\n{}\n", claude(start + 3_600_000, "working"), claude(start + 7_200_000, "idle"))).unwrap();
 
