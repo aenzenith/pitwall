@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/aenzenith/pitwall/compare/v1.15.0...v1.16.0) (2026-10-22)
+
+
+### Features
+
+* **terminal:** a web address in a terminal opens in the browser on ⌘-click ([02b53e8](https://github.com/aenzenith/pitwall/commit/02b53e8ce37b2ad057551f4c3b55bdae3c6c0dad))
+
 ## [1.15.0](https://github.com/aenzenith/pitwall/compare/v1.14.0...v1.15.0) (2026-10-22)
 
 
