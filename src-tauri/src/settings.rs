@@ -192,12 +192,13 @@ impl ProjectSettings {
 }
 
 /// Where a project opens from each place (Settings › Projects): `list`, a double click or Return
-/// on its row in the list (`files`, its Files window, or `editor`); `pages`, a double click on it
-/// on the window's other pages (the Track page, the Today page), and `outside`, a click in the
-/// menu bar's popover or the tray's menu (`tray.rs`), Return in the quick switcher or a double
-/// click in the mini tower (`list`, the project in the list, `editor` or `files`). A project may
-/// choose its own (`ProjectOpen`). The window and the tray's menu read them leniently
-/// (`src/lib/open.ts`, `Settings::open_outside`): a value not known is the default.
+/// on its row in the list (`terminal`, its terminal in the terminal panel, the keyboard in it;
+/// `files`, its Files window, or `editor`); `pages`, a double click on it on the window's other
+/// pages (the Track page, the Today page), and `outside`, a click in the menu bar's popover or the
+/// tray's menu (`tray.rs`), Return in the quick switcher or a double click in the mini tower
+/// (`terminal`, `list`, the project in the list, `editor` or `files`). `terminal` is every place's
+/// default. A project may choose its own (`ProjectOpen`). The window and the tray's menu read them
+/// leniently (`src/lib/open.ts`, `Settings::open_outside`): a value not known is the default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct OpenSettings {
@@ -208,7 +209,7 @@ pub struct OpenSettings {
 
 impl Default for OpenSettings {
     fn default() -> Self {
-        Self { list: "files".into(), pages: "list".into(), outside: "list".into() }
+        Self { list: "terminal".into(), pages: "terminal".into(), outside: "terminal".into() }
     }
 }
 
@@ -649,8 +650,8 @@ impl Settings {
     /// Where the project at `path` opens from outside the window (`OpenSettings::outside`): its
     /// own choice, else Pitwall's, a value not known being the default, as the window reads it.
     pub fn open_outside(&self, path: &str) -> &'static str {
-        let known = |value: &str| ["list", "editor", "files"].into_iter().find(|target| *target == value);
-        self.project(path).open.outside.as_deref().and_then(known).or_else(|| known(&self.open.outside)).unwrap_or("list")
+        let known = |value: &str| ["terminal", "list", "editor", "files"].into_iter().find(|target| *target == value);
+        self.project(path).open.outside.as_deref().and_then(known).or_else(|| known(&self.open.outside)).unwrap_or("terminal")
     }
 
     pub fn script_for(&self, path: &str) -> String {

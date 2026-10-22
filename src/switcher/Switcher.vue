@@ -291,7 +291,7 @@ function open(p: Project | null): void {
 }
 
 /** What ↵ on the selected project does, for the foot. */
-const OPEN_HINTS = { list: "switcher.goToProject", editor: "common.openInEditor", files: "files.show" } as const;
+const OPEN_HINTS = { terminal: "open.terminal", list: "switcher.goToProject", editor: "common.openInEditor", files: "files.show" } as const;
 
 function toggle(p: Project | null): void {
   if (!p || p.status === "busy") return;
@@ -311,7 +311,7 @@ function openFolder(folder: Folder | null, add: boolean): void {
 }
 
 /** What ↵ on a folder does, for the foot. */
-const FOLDER_HINTS = { list: "switcher.addAndGo", editor: "common.openInEditor", files: "switcher.addAndShowFiles" } as const;
+const FOLDER_HINTS = { terminal: "switcher.addAndFocusTerminal", list: "switcher.addAndGo", editor: "common.openInEditor", files: "switcher.addAndShowFiles" } as const;
 
 function mark(command: CommandView): string {
   return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[commandStatus(command, now.value)];

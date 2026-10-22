@@ -1,12 +1,13 @@
-// Where a project opens from each place (Settings › Projects, a project's settings): its Files
-// window, its editor, or the project in Pitwall's list. Pitwall's choice is in its settings, a
-// project's own in its settings; both are read leniently here, a value not known being the
-// default.
+// Where a project opens from each place (Settings › Projects, a project's settings): its terminal
+// in the terminal panel, its Files window, its editor, or the project in Pitwall's list. Pitwall's
+// choice is in its settings, a project's own in its settings; both are read leniently here, a
+// value not known being the default.
 
 import { emitTo } from "@tauri-apps/api/event";
 import { ref } from "vue";
 
 import { showFiles } from "./explorer";
+import { chosenTab, openPanelOn, revealTab } from "./panel";
 import { projectSettings } from "./projectSettings";
 import { api, snapshot } from "./store";
 import type { OpenSettings, OpenTarget } from "./types";
@@ -16,14 +17,15 @@ import type { OpenSettings, OpenTarget } from "./types";
  * the menu bar's popover, the quick switcher, the mini tower). */
 export type OpenFrom = keyof OpenSettings;
 
-/** What each place can open, its default first. The list doesn't open a project in itself. */
+/** What each place can open, its default first: its terminal, everywhere (the user's word,
+ * 2026-10-22). The list doesn't open a project in itself. */
 export const OPEN_TARGETS: Record<OpenFrom, readonly OpenTarget[]> = {
-  list: ["files", "editor"],
-  pages: ["list", "editor", "files"],
-  outside: ["list", "editor", "files"],
+  list: ["terminal", "files", "editor"],
+  pages: ["terminal", "list", "editor", "files"],
+  outside: ["terminal", "list", "editor", "files"],
 };
 
-export const OPEN_LABELS = { files: "open.files", editor: "open.editor", list: "open.list" } as const;
+export const OPEN_LABELS = { terminal: "open.terminal", files: "open.files", editor: "open.editor", list: "open.list" } as const;
 
 /** A page asks the window for the project in the list (WindowApp takes it). */
 export const listRequest = ref<{ path: string; at: number } | null>(null);
@@ -45,16 +47,31 @@ export function openTarget(path: string, from: OpenFrom): OpenTarget {
   return known(from, projectSettings(project).open?.[from]) ?? generalOpen(from);
 }
 
+/**
+ * The project's terminal in the terminal panel, the panel open and the keyboard in it, on the page
+ * shown: the tab picked last in it, else its last. With none, the panel only opens on the project:
+ * no tab is opened for it (the user's word, 2026-10-22).
+ */
+export function focusTerminal(path: string): void {
+  const terminals = snapshot.value?.projects.find((p) => p.path === path)?.terminals ?? [];
+  const chosen = chosenTab.value[path];
+  const picked = chosen?.kind === "terminal" && terminals.some((term) => term.id === chosen.id) ? chosen.id : undefined;
+  const id = picked ?? terminals[terminals.length - 1]?.id;
+  if (id !== undefined) revealTab(path, id);
+  else openPanelOn(path);
+}
+
 /** Opened in Pitwall's window: from its row in the list, or from another page. */
 export function openInWindow(path: string, from: "list" | "pages"): void {
   const target = openTarget(path, from);
   if (target === "editor") void api.openEditor(path);
   else if (target === "files") showFiles(path);
+  else if (target === "terminal") focusTerminal(path);
   else listRequest.value = { path, at: Date.now() };
 }
 
-/** Opened from outside the window: its editor, or Pitwall's window on its Files window or on the
- * project in the list. */
+/** Opened from outside the window: its editor, or Pitwall's window on its terminal, its Files
+ * window or the project in the list. */
 export function openFromOutside(path: string): void {
   const target = openTarget(path, "outside");
   if (target === "editor") void api.openEditor(path);
@@ -74,7 +91,7 @@ export async function openFolderFromOutside(path: string): Promise<void> {
   revealOutside(path, target);
 }
 
-function revealOutside(path: string, target: "list" | "files"): void {
-  void emitTo("main", target === "files" ? "reveal-files" : "reveal-project", { path });
+function revealOutside(path: string, target: "list" | "files" | "terminal"): void {
+  void emitTo("main", target === "files" ? "reveal-files" : target === "terminal" ? "focus-terminal" : "reveal-project", { path });
   void api.openWindow();
 }

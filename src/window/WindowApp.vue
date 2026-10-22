@@ -22,7 +22,7 @@ import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu
 import { cardRequest, COLLAPSED_HEIGHT, followProject, openInPanel, panelOver, panelPath, revealTab, showOutput } from "../lib/panel";
 import { dragRegion, isMac, keys, terminalChord } from "../lib/platform";
 import { closeFiles, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
-import { listRequest, openInWindow, openTarget } from "../lib/open";
+import { focusTerminal, listRequest, openInWindow, openTarget } from "../lib/open";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
@@ -636,6 +636,9 @@ let unlistenResize: UnlistenFn | null = null;
 
 const terminalPanel = ref<InstanceType<typeof TerminalPanel> | null>(null);
 
+/** A row's title: what a double click on it opens (lib/open; the list never opens a project in itself). */
+const ROW_TITLES = { terminal: "window.rowTitleTerminal", files: "window.rowTitleFiles", editor: "window.rowTitle", list: "window.rowTitle" } as const;
+
 /** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the
  * terminal panel's project, on whatever page. */
 function onKey(event: KeyboardEvent): void {
@@ -655,6 +658,7 @@ let unlistenProject: UnlistenFn | null = null;
 let unlistenFiles: UnlistenFn | null = null;
 let unlistenFuelReveal: UnlistenFn | null = null;
 let unlistenTerminal: UnlistenFn | null = null;
+let unlistenFocus: UnlistenFn | null = null;
 let unlistenPage: UnlistenFn | null = null;
 
 /** From the switcher (`/`): that page of the window. Settings opens over the page shown and "Add
@@ -748,6 +752,11 @@ onMounted(async () => {
   unlistenFuelReveal = await listen("reveal-fuel", () => (view.value = "fuel"));
   // Bringing up a Claude session that runs in one of Pitwall's terminals: that terminal.
   unlistenTerminal = await listen<{ path: string; id: number }>("reveal-terminal", (event) => void revealTerminal(event.payload.path, event.payload.id));
+  // Opened from outside the window where Settings › Projects says its terminal (lib/open).
+  unlistenFocus = await listen<{ path: string }>("focus-terminal", (event) => {
+    settingsOpen.value = false;
+    focusTerminal(event.payload.path);
+  });
   // `/` in the switcher: one of the sidebar's pages.
   unlistenPage = await listen<{ page: Page; tab?: "notifications" }>("reveal-page", (event) => revealPage(event.payload.page, event.payload.tab));
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
@@ -767,6 +776,7 @@ onBeforeUnmount(() => {
   unlistenFiles?.();
   unlistenFuelReveal?.();
   unlistenTerminal?.();
+  unlistenFocus?.();
   unlistenPage?.();
   unlistenResize?.();
 });
@@ -1015,7 +1025,7 @@ function server(project: Project): string {
                   drag.lineClass(rowKey(project.path)),
                 ]"
                 :style="section.team ? teamLineStyle(rowKey(project.path), section.team) : drag.lineStyle(rowKey(project.path))"
-                :title="t(openTarget(project.path, 'list') === 'editor' ? 'window.rowTitle' : 'window.rowTitleFiles')"
+                :title="t(ROW_TITLES[openTarget(project.path, 'list')])"
                 @pointerdown="drag.down($event, rowKey(project.path))"
                 @click="select(project.path)"
                 @dblclick="openRow(project.path)"

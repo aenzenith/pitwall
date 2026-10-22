@@ -44,7 +44,7 @@ function openRow(project: Project): void {
   openInWindow(project.path, "pages");
 }
 
-const ROW_TITLES = { list: "track.rowTitleList", editor: "track.rowTitle", files: "track.rowTitleFiles" } as const;
+const ROW_TITLES = { terminal: "track.rowTitleTerminal", list: "track.rowTitleList", editor: "track.rowTitle", files: "track.rowTitleFiles" } as const;
 
 const menu = useNativeMenu();
 

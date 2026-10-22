@@ -11,7 +11,7 @@ const props = defineProps<{ lane: Lane; on: boolean; ticks: Tick[]; nowLeft: str
 const emit = defineEmits<{ select: [] }>();
 
 /** The hint on its name: what a double click opens (lib/open). */
-const LANE_TITLES = { list: "day.laneTitleList", editor: "day.laneTitle", files: "day.laneTitleFiles" } as const;
+const LANE_TITLES = { terminal: "day.laneTitleTerminal", list: "day.laneTitleList", editor: "day.laneTitle", files: "day.laneTitleFiles" } as const;
 
 const tooltip = useTooltip();
 /** The block the arrows are on, oldest first; `null` once the tooltip goes. */

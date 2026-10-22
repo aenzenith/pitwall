@@ -964,7 +964,11 @@ mod menu {
                         "editor" => state.core.open_editor(path),
                         target => {
                             super::show_main(app);
-                            let event = if target == "files" { "reveal-files" } else { "reveal-project" };
+                            let event = match target {
+                                "files" => "reveal-files",
+                                "terminal" => "focus-terminal",
+                                _ => "reveal-project",
+                            };
                             let _ = app.emit(event, serde_json::json!({ "path": path }));
                         }
                     }

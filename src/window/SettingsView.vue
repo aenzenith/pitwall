@@ -123,7 +123,7 @@ const form = reactive<Settings>({
   resume: "ask",
   onboarded: false,
   suggestProjects: false,
-  open: { list: "files", pages: "list", outside: "list" },
+  open: { list: "terminal", pages: "terminal", outside: "terminal" },
 });
 const error = ref("");
 const hookBusy = ref(false);

@@ -61,7 +61,7 @@ function openProject(project: Project): void {
   else openFromOutside(project.path);
 }
 
-const ROW_TITLES = { list: "popover.rowTitleList", editor: "popover.rowTitle", files: "popover.rowTitleFiles" } as const;
+const ROW_TITLES = { terminal: "popover.rowTitleTerminal", list: "popover.rowTitleList", editor: "popover.rowTitle", files: "popover.rowTitleFiles" } as const;
 
 /** While there are teams a row is dragged among its own team's rows only, or among those of the
  * projects in no team (lib/groupReorder: `data-zone`); with no team it goes anywhere. */

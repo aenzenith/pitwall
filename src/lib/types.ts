@@ -58,7 +58,7 @@ export type ProjectSettings = {
 };
 
 /** What opening a project opens: its Files window, its editor, or the project in Pitwall's list. */
-export type OpenTarget = "files" | "editor" | "list";
+export type OpenTarget = "terminal" | "files" | "editor" | "list";
 
 /** Where a project opens from each place (Settings › Projects, lib/open): a double click or ↵ on
  * its row in the list (`files` or `editor`), a double click on it on the window's other pages, and
