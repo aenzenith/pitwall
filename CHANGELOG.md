@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.14.0](https://github.com/aenzenith/pitwall/compare/v1.13.0...v1.14.0) (2026-10-22)
+
+
+### Features
+
+* **popover:** the menu bar's window lists the favourites and running projects, or every one ([c147ea9](https://github.com/aenzenith/pitwall/commit/c147ea98b5b6e6eb19e6414f2b871a7e032c3df8))
+* **projects:** a project stays listed without its star, and the list shows all or the favourites and open ones ([d2b254a](https://github.com/aenzenith/pitwall/commit/d2b254aad0736a48de8924b5db3c3cbe7f625ca6))
+* **projects:** a working folder for a project whose app sits in a subfolder ([8db7371](https://github.com/aenzenith/pitwall/commit/8db737155f41033ba9e2aacb194f484c64305688))
+* **projects:** Focus the terminal, every place's way to open a project ([68bb891](https://github.com/aenzenith/pitwall/commit/68bb89125c9546a5e2f7f75462248614b2df8eac))
+* **projects:** what opening a project opens, picked per place in Settings › Projects ([9579ba3](https://github.com/aenzenith/pitwall/commit/9579ba3f069d10086d4b1b7e8f2712ef1fa313d9))
+* **sessions:** terminals under the Sessions page's list, and a session no longer running opens again in one ([c94732e](https://github.com/aenzenith/pitwall/commit/c94732e0b73b8200106909cffcff4b4a64ef05c4))
+* **switcher:** a folder of the projects folder opens as Settings › Projects says, added without a star ([588c837](https://github.com/aenzenith/pitwall/commit/588c837090a6d6ae70b5b641ea8ee9a9d3fe6082))
+* **teams:** the projects in no team get their own entry, last under the sidebar's teams ([b0cff9d](https://github.com/aenzenith/pitwall/commit/b0cff9d74a193bf4cb936c0eb698ce1961d06543))
+* **terminal:** one terminal panel under every page, its outputs among its tabs ([0377009](https://github.com/aenzenith/pitwall/commit/0377009fabe89bc803c090ed307cf7aae258dd13))
+* **terminal:** past Claude sessions beside the terminal, picked up again in a tab ([fccdbbe](https://github.com/aenzenith/pitwall/commit/fccdbbe0abaae9fe07d4114a87dfca064fd6ef73))
+* **terminal:** tabs that drag into order, and one + for a shell or Claude ([b9f2332](https://github.com/aenzenith/pitwall/commit/b9f2332c0eb36eefa7c80dee95da18e99c515386))
+* **today:** the day's Claude tokens and their share of the weekly limit ([30286c7](https://github.com/aenzenith/pitwall/commit/30286c754f9721e995f071f2cd2d2d32a3180ad4))
+
+
+### Bug Fixes
+
+* **files:** the Markdown preview's styles stay in the preview ([d2dc4fc](https://github.com/aenzenith/pitwall/commit/d2dc4fc0284106ca1792c9caf6cfc46c3984789f))
+* **terminal:** picking a project on the Track page keeps the panel open, and the standings no longer stretch ([3ae824e](https://github.com/aenzenith/pitwall/commit/3ae824ea0ad03a757bdb0778d36a0896f75c90fb))
+
 ## [1.13.0](https://github.com/aenzenith/pitwall/compare/v1.12.3...v1.13.0) (2026-10-21)
 
 
