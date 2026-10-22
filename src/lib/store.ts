@@ -250,8 +250,6 @@ export type Action = "start" | "stop" | "restart";
 
 export const api = {
   act: (path: string, action: Action) => invoke("act", { path, action }),
-  startAll: () => invoke("start_all"),
-  stopAll: () => invoke("stop_all"),
   pickFolder: () => invoke("pick_folder"),
   addProject: (path: string) => invoke("add_project", { path }),
   pickProjectsDir: () => invoke("pick_projects_dir"),
@@ -283,6 +281,8 @@ export const api = {
   closeTerminal: (id: number) => invoke("close_terminal", { id }),
   terminalBuffer: (id: number) => invoke<{ data: string; seq: number }>("terminal_buffer", { id }),
   setFavourite: (path: string, on: boolean) => invoke("set_favourite", { path, on }),
+  /** "Remove from Pitwall": no added project and no favourite any more. */
+  removeProject: (path: string) => invoke("remove_project", { path }),
   openBrowser: (path: string) => invoke("open_browser", { path }),
   openEditor: (path: string) => invoke("open_editor", { path }),
   openClaude: (path: string) => invoke("open_claude", { path }),
@@ -325,6 +325,8 @@ export const api = {
   /** How a project's board is drawn: `columns` or `list`. */
   setBoardView: (view: string) => invoke("set_board_view", { view }),
   setFilesPreview: (on: boolean) => invoke("set_files_preview", { on }),
+  /** The list's "Only favourites and open". */
+  setFavouritesOnly: (on: boolean) => invoke("set_favourites_only", { on }),
   /** The Track page's own settings: its circuit, what the cars carry, how much moves. */
   setTrack: (track: TrackSettings) => invoke("set_track", { track }),
   setShortcut: (keys: string) => invoke("set_shortcut", { keys }),

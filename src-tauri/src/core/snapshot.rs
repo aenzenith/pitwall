@@ -36,6 +36,9 @@ pub struct ProjectView {
     pub path: String,
     pub name: String,
     pub favourite: bool,
+    /// Among the projects added to Pitwall (`Settings::added`): listed while no window has it open
+    /// and nothing of it runs, and "Remove from Pitwall" takes it out.
+    pub added: bool,
     /// `running` | `stopped` | `crashed` | `busy`
     pub status: &'static str,
     /// While busy: `starting…` | `stopping…` | `restarting…`
@@ -180,6 +183,7 @@ pub(super) fn listed_path(inner: &Inner, path: &str) -> String {
         .favourites
         .iter()
         .map(|favourite| favourite.path.as_str())
+        .chain(inner.settings.added.iter().flatten().map(String::as_str))
         .chain(inner.peers.iter().flat_map(|peer| peer.owned().map(|project| project.folder_path.as_str())))
         .chain(inner.runs.keys().map(String::as_str))
         .find(|known| same_path(known, path))
@@ -187,7 +191,8 @@ pub(super) fn listed_path(inner: &Inner, path: &str) -> String {
         .to_string()
 }
 
-/// Every project the app shows: favourites, projects of open editor windows, and whatever runs.
+/// Every project the app shows: favourites, the other projects added to it, projects of open
+/// editor windows, and whatever runs.
 pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
     let mut order: Vec<String> = Vec::new();
     let mut names: HashMap<String, String> = HashMap::new();
@@ -201,6 +206,9 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
 
     for favourite in &inner.favourites {
         add(&favourite.path, &favourite.name);
+    }
+    for path in inner.settings.added.iter().flatten() {
+        add(path, &folder_name(path));
     }
     for peer in &inner.peers {
         for project in peer.owned() {
@@ -253,6 +261,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
                 path: path.clone(),
                 name: names.get(path).cloned().unwrap_or_else(|| folder_name(path)),
                 favourite: inner.favourites.iter().any(|f| same_path(&f.path, path)),
+                added: inner.settings.added.iter().flatten().any(|known| same_path(known, path)),
                 status,
                 phase,
                 port,

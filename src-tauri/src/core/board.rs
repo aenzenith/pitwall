@@ -1893,7 +1893,7 @@ mod tests {
         core.board_rehome("/Users/me/projects/elsewhere", &project).unwrap();
         assert_eq!(schedule_of(&core, &rehomed), None);
         let unlisted = waiting(&core, &project, "Unlisted", at);
-        core.set_favourite(&project, false);
+        core.remove_project(&project);
         assert_eq!(look(&core, at), []);
         assert_eq!(schedule_of(&core, &unlisted), None);
     }

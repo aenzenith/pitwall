@@ -123,6 +123,7 @@ struct General {
     auto_update: bool,
     board_view: Option<String>,
     files_preview: bool,
+    favourites_only: bool,
     track: Option<TrackSettings>,
     theme: String,
     resume: String,
@@ -137,12 +138,12 @@ impl General {
         // backups or kept out of them on purpose.
         let Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, track,
             theme, resume, suggest_projects, flag, open,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
-            projects: _, order: _, teams: _,
+            projects: _, order: _, added: _, teams: _,
             // Kept out: what is told and when is this Mac's own, every event's switch with the
             // quiet period under way and the muted projects' paths (Settings › Notifications:
             // Claude waiting and the fuel alert are two of its switches).
@@ -155,7 +156,7 @@ impl General {
 
         Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, track,
             theme, resume, suggest_projects, flag, open,
         }
     }
@@ -180,24 +181,27 @@ impl General {
 
         let Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, track,
             theme, resume, suggest_projects, flag, open,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, track,
+            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, track,
             theme, resume, suggest_projects, flag, open,
             ..settings.clone()
         })
     }
 }
 
-/// The projects part: the listed projects, the list's order, each project's settings, the teams.
+/// The projects part: the listed projects (the favourites and the others added), the list's
+/// order, each project's settings, the teams.
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default)]
 struct ProjectsPart {
     favourites: Vec<Favourite>,
+    /// A backup of an older version has none: its favourites are all it listed.
+    added: Vec<String>,
     order: Vec<String>,
     settings: BTreeMap<String, ProjectSettings>,
     teams: Vec<Team>,
@@ -297,7 +301,7 @@ impl Backup {
             for favourite in &mut part.favourites {
                 favourite.path = homes.here(&favourite.path);
             }
-            for path in part.order.iter_mut().chain(part.teams.iter_mut().flat_map(|team| team.projects.iter_mut())) {
+            for path in part.added.iter_mut().chain(part.order.iter_mut()).chain(part.teams.iter_mut().flat_map(|team| team.projects.iter_mut())) {
                 *path = homes.here(path);
             }
             part.settings = std::mem::take(&mut part.settings).into_iter().map(|(path, project)| (homes.here(&path), project)).collect();
@@ -376,7 +380,8 @@ fn unique(paths: Vec<String>) -> Vec<String> {
 
 /// The projects part of a backup put into `settings`. A project's settings in the file take the
 /// place of those kept for the same folder, the others stay (an entry that holds nothing takes
-/// no place). The order is the file's, then the paths here it doesn't name. A team in the file
+/// no place). The order is the file's, then the paths here it doesn't name; the projects added
+/// are those added here and the file's. A team in the file
 /// takes the place of the team with its id, the others stay, and a project is in one team at
 /// most: where the file puts it. Whether a team starts with Pitwall is never the file's to say:
 /// one it brings or replaces doesn't, until that is switched on here.
@@ -389,6 +394,8 @@ fn put_projects(settings: &mut Settings, part: &ProjectsPart) {
     }
 
     settings.order = unique(part.order.iter().chain(&settings.order).cloned().collect());
+    let added = settings.added.take().unwrap_or_default();
+    settings.added = Some(unique(added.into_iter().chain(part.added.iter().cloned()).collect()));
 
     for team in &part.teams {
         for other in settings.teams.iter_mut().filter(|other| other.id != team.id) {
@@ -450,11 +457,13 @@ fn move_project(settings: &mut Settings, from: &str, to: &str) {
         }
     }
 
-    if let Some(at) = settings.order.iter().position(|path| same_path(path, from)) {
-        if settings.order.iter().any(|path| same_path(path, to)) {
-            settings.order.remove(at);
-        } else {
-            settings.order[at] = to.to_string();
+    for list in std::iter::once(&mut settings.order).chain(settings.added.as_mut()) {
+        if let Some(at) = list.iter().position(|path| same_path(path, from)) {
+            if list.iter().any(|path| same_path(path, to)) {
+                list.remove(at);
+            } else {
+                list[at] = to.to_string();
+            }
         }
     }
 
@@ -506,6 +515,7 @@ impl Core {
             settings: parts.settings.then(|| General::of(&settings).fields()),
             projects: parts.projects.then(|| ProjectsPart {
                 favourites: self.registry.read_favourites(),
+                added: settings.added.clone().unwrap_or_default(),
                 order: settings.order.clone(),
                 settings: settings.projects.clone(),
                 teams: settings.teams.clone(),
@@ -723,9 +733,10 @@ impl Core {
             for favourite in &part.favourites {
                 self.registry.set_favourite(favourite.clone(), true);
             }
-            let listed = self.registry.read_favourites();
-            report.projects = part.favourites.iter().filter(|favourite| listed.iter().any(|known| same_path(&known.path, &favourite.path))).count();
-            self.lock().favourites = listed;
+            self.reload_favourites();
+            let theirs = unique(part.favourites.iter().map(|favourite| favourite.path.clone()).chain(part.added.iter().cloned()).collect());
+            let added = self.lock().settings.added.clone().unwrap_or_default();
+            report.projects = theirs.iter().filter(|path| added.iter().any(|known| same_path(known, path))).count();
         }
 
         if let Some(cards) = cards {
@@ -854,13 +865,18 @@ impl Core {
         };
         let cards = self.board_state();
 
-        let named = favourites.iter().map(|favourite| &favourite.path).chain(settings.projects.keys()).chain(settings.teams.iter().flat_map(|team| &team.projects));
+        let named = favourites
+            .iter()
+            .map(|favourite| &favourite.path)
+            .chain(settings.added.iter().flatten())
+            .chain(settings.projects.keys())
+            .chain(settings.teams.iter().flat_map(|team| &team.projects));
         let mut missing: Vec<MissingProject> = unique(named.cloned().collect())
             .into_iter()
             .filter(|path| !Path::new(path).is_dir())
             .filter_map(|path| {
                 let kept = settings.projects.iter().find(|(known, _)| same_path(known, &path)).map(|(_, project)| project.clone()).unwrap_or_default();
-                let listed = favourites.iter().any(|favourite| same_path(&favourite.path, &path));
+                let listed = favourites.iter().map(|favourite| &favourite.path).chain(settings.added.iter().flatten()).any(|known| same_path(known, &path));
                 let teamed = settings.teams.iter().any(|team| team.projects.iter().any(|member| same_path(member, &path)));
                 let cards = cards.iter().filter(|card| same_path(&card.path, &path)).count();
 
@@ -902,7 +918,7 @@ impl Core {
             self.registry.set_favourite(Favourite { path: to.to_string(), name: folder_name(to) }, true);
             self.registry.set_favourite(Favourite { path: from.to_string(), name: folder_name(from) }, false);
         }
-        self.lock().favourites = self.registry.read_favourites();
+        self.reload_favourites();
 
         {
             let mut board = self.board();
@@ -936,6 +952,9 @@ impl Core {
             let mut inner = self.lock();
             take_project(&mut inner.settings, path);
             inner.settings.order.retain(|known| !same_path(known, path));
+            if let Some(added) = &mut inner.settings.added {
+                added.retain(|known| !same_path(known, path));
+            }
             for team in &mut inner.settings.teams {
                 team.projects.retain(|known| !same_path(known, path));
             }
@@ -945,7 +964,7 @@ impl Core {
         self.save_settings();
 
         self.registry.set_favourite(Favourite { path: path.to_string(), name: folder_name(path) }, false);
-        self.lock().favourites = self.registry.read_favourites();
+        self.reload_favourites();
         self.notify();
         Ok(())
     }
@@ -1127,6 +1146,7 @@ mod tests {
         let config = tmp.path().join("config");
         let core = core_in(tmp.path());
         let (here, shared, theirs) = ("/Users/me/projects/here", "/Users/me/projects/shared", "/Users/me/projects/theirs");
+        let unstarred = "/Users/me/projects/unstarred";
         let team = |id: &str, projects: &[&str]| Team { id: id.into(), name: id.to_uppercase(), projects: projects.iter().map(|path| path.to_string()).collect(), ..Default::default() };
 
         core.set_favourite(here, true);
@@ -1143,6 +1163,7 @@ mod tests {
             "settings": { "script": "dev", "launchAtLogin": true, "onboarded": false, "seenVersion": "0.0.1", "notify": false, "fuelAlert": false },
             "projects": {
                 "favourites": [{ "path": theirs, "name": "theirs" }],
+                "added": [theirs, unstarred],
                 "order": [theirs],
                 "settings": { (theirs): { "commands": [command("c2", "tests")] } },
                 "teams": [team("t2", &[theirs, shared])],
@@ -1153,7 +1174,7 @@ mod tests {
         fs::write(&file, backup(parts)).unwrap();
 
         let report = core.backup_import(&file, ALL).unwrap();
-        assert_eq!(report, ImportReport { projects: 1, cards: 2, days: 1, settings: true });
+        assert_eq!(report, ImportReport { projects: 2, cards: 2, days: 1, settings: true });
 
         // The file's preference came; what is this Mac's own stayed.
         let settings = core.settings();
@@ -1164,6 +1185,7 @@ mod tests {
         // Projects, their settings and teams: the file's beside those that were here, and the
         // project both teams named is in the file's alone.
         assert_eq!(listed(&core), [here, theirs]);
+        assert_eq!(settings.added.as_deref(), Some(&[here, theirs, unstarred].map(String::from)[..]), "a project without its star arrives too");
         assert_eq!(settings.project(here).commands, [command("c1", "worker")]);
         assert_eq!(settings.project(theirs).commands, [command("c2", "tests")]);
         assert_eq!(settings.order, [theirs, here]);

@@ -346,21 +346,17 @@ pub fn set_favourite(state: State<'_, AppState>, path: String, on: bool) {
     state.core.set_favourite(&path, on);
 }
 
+/// "Remove from Pitwall" on a row.
+#[tauri::command]
+pub fn remove_project(state: State<'_, AppState>, path: String) {
+    state.core.remove_project(&path);
+}
+
 #[tauri::command]
 pub fn act(state: State<'_, AppState>, path: String, action: String) -> Result<(), String> {
     let action = Action::parse(&action).ok_or_else(|| format!("unknown action: {action}"))?;
     state.core.act(&path, action, Origin::User);
     Ok(())
-}
-
-#[tauri::command]
-pub fn start_all(state: State<'_, AppState>) {
-    state.core.start_all();
-}
-
-#[tauri::command]
-pub fn stop_all(state: State<'_, AppState>) {
-    state.core.stop_all();
 }
 
 /// Off the main thread, as the project's `.env` is read for the address.
@@ -480,6 +476,12 @@ pub fn set_board_scope(state: State<'_, AppState>, scope: String) {
 #[tauri::command]
 pub fn set_board_view(state: State<'_, AppState>, view: String) {
     state.core.set_board_view(view);
+}
+
+/// The list's "Only favourites and open", kept until it is turned off.
+#[tauri::command]
+pub fn set_favourites_only(state: State<'_, AppState>, on: bool) {
+    state.core.set_favourites_only(on);
 }
 
 /// Whether the Files window shows a Markdown or SVG file as its preview, kept until it is turned off.

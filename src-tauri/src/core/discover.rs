@@ -151,7 +151,7 @@ impl Core {
         for path in paths.iter().filter(|path| Path::new(path).is_dir()) {
             self.registry.set_favourite(Favourite { path: path.clone(), name: folder_name(path) }, true);
         }
-        self.lock().favourites = self.registry.read_favourites();
+        self.reload_favourites();
         self.notify();
         self.refresh_suggestions();
     }

@@ -543,3 +543,51 @@ fn a_past_days_tokens_come_from_its_file_split_by_project() {
     assert_eq!(project.spend, Some(ProjectSpend { tokens: 3_000_000, week: Some(3.0) }));
     assert!(past.projects.iter().all(|p| !p.path.is_empty()), "the projects not listed are in the total alone");
 }
+
+/// Pitwall keeps its own list of the projects added to it, made at the first start that has it
+/// from what the settings knew (the order, the teams; a folder that is gone and the projects
+/// folder itself are none) and the favourites. Taking a star off leaves a project in it and
+/// "Remove from Pitwall" takes it out, for good: were the list made again at the next start, a
+/// removed project would come back, and an unstarred one would vanish with no word.
+#[test]
+fn an_added_project_stays_listed_without_its_star_until_it_is_removed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = |name: &str| {
+        let path = tmp.path().join(name);
+        fs::create_dir_all(&path).unwrap();
+        path.to_string_lossy().into_owned()
+    };
+    let (garage, paddock, pit_lane) = (folder("garage"), folder("paddock"), folder("pit-lane"));
+    let gone = tmp.path().join("gone").to_string_lossy().into_owned();
+    let projects_dir = tmp.path().to_string_lossy().into_owned();
+    let config = || CoreConfig {
+        registry_dir: tmp.path().join("registry"),
+        claude_dir: tmp.path().join("claude"),
+        settings_file: tmp.path().join("settings.json"),
+        claude_settings: tmp.path().join("claude-settings.json"),
+        legacy_registries: Vec::new(),
+        title: "Pitwall".into(),
+    };
+    // An older version's settings, and a project starred in a VS Code window.
+    let older = serde_json::json!({ "order": [paddock, gone, projects_dir], "projectsDir": projects_dir, "teams": [{ "id": "t", "name": "T", "projects": [garage] }] });
+    fs::write(config().settings_file, older.to_string()).unwrap();
+    Registry::new(config().registry_dir, "Code").set_favourite(Favourite { path: pit_lane.clone(), name: "pit-lane".into() }, true);
+    let listed = |core: &Core| {
+        let mut paths: Vec<String> = core.snapshot().projects.into_iter().map(|project| project.path).collect();
+        paths.sort();
+        paths
+    };
+
+    let core = Core::new(config(), Arc::new(|_| {}));
+    assert_eq!(listed(&core), [garage.clone(), paddock.clone(), pit_lane.clone()]);
+
+    core.set_favourite(&pit_lane, false);
+    core.remove_project(&paddock);
+    let unstarred = view(&core, &pit_lane);
+    assert!(unstarred.added && !unstarred.favourite);
+    assert_eq!(listed(&core), [garage.clone(), pit_lane.clone()]);
+
+    drop(core);
+    let core = Core::new(config(), Arc::new(|_| {}));
+    assert_eq!(listed(&core), [garage, pit_lane], "the list is made once");
+}

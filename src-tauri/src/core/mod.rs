@@ -291,8 +291,16 @@ impl Core {
         if first_start && settings.seen_version.is_none() {
             settings.seen_version = Some(crate::whatsnew::CURRENT.to_string());
         }
-        if first_start {
-            // Written at once: the next start is no first one, whatever was changed meanwhile.
+        // Pitwall's own list of added projects: made once from what the settings knew of
+        // projects, and every favourite in it (`projects.rs`).
+        let first_list = settings.added.is_none();
+        if first_list {
+            settings.added = Some(settings.known_projects());
+        }
+        let listed = projects::keep_favourites(&mut settings, &favourites) || first_list;
+        if first_start || listed {
+            // Written at once: the next start is no first one and finds the list made, whatever
+            // was changed meanwhile.
             settings.save(&cfg.settings_file);
         }
         let whats_new = crate::whatsnew::is_pending(settings.seen_version.as_deref());

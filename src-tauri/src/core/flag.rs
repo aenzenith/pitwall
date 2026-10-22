@@ -323,7 +323,7 @@ impl Core {
         self.notify();
     }
 
-    /// "Stop all" in the dialog: every server, as the list's own does it, and every command
+    /// "Stop all" in the dialog: every server, those on their way up too, and every command
     /// that runs. Each stop shows in the snapshot until its process group is gone.
     pub fn flag_stop_all(self: &Arc<Self>) {
         let commands = self.flag().running.commands;

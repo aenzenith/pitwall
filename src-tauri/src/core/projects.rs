@@ -1,8 +1,27 @@
 //! The projects the app lists and how they are set up: projects added and made favourite, the
 //! app's and each project's settings, the order dragged into place, and the folders of the
 //! projects folder for the quick switcher.
+//!
+//! A project added to Pitwall stays in its list (`Settings::added`) until it is removed from it;
+//! its star (`favorites.json`, shared with the VS Code extension) is a mark on top. Adding one
+//! stars it too.
 
 use super::*;
+
+/// Every favourite among the added projects, so that taking its star off later, here or in a VS
+/// Code window, leaves it in the list. Whether one was missing. Only where Pitwall reads the
+/// favourites for itself (at its start, after its own writes): a heartbeat's read may be older
+/// than a removal and would put the project back.
+pub(super) fn keep_favourites(settings: &mut Settings, favourites: &[Favourite]) -> bool {
+    let added = settings.added.get_or_insert_with(Vec::new);
+    let before = added.len();
+    for favourite in favourites {
+        if !added.iter().any(|path| same_path(path, &favourite.path)) {
+            added.push(favourite.path.clone());
+        }
+    }
+    added.len() != before
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Folder {
@@ -19,15 +38,51 @@ impl Core {
         }
 
         self.registry.set_favourite(Favourite { path: path.to_string(), name: folder_name(path) }, true);
-        self.lock().favourites = self.registry.read_favourites();
+        self.reload_favourites();
         self.notify();
         Ok(())
     }
 
+    /// A star put on or taken off. Either way the project is one of the added ones from then: the
+    /// star taken off leaves it in the list (`remove_project` takes it out).
     pub fn set_favourite(&self, path: &str, on: bool) {
-        self.registry.set_favourite(Favourite { path: path.to_string(), name: folder_name(path) }, on);
-        self.lock().favourites = self.registry.read_favourites();
+        let favourite = Favourite { path: path.to_string(), name: folder_name(path) };
+        if keep_favourites(&mut self.lock().settings, std::slice::from_ref(&favourite)) {
+            self.save_settings();
+        }
+        self.registry.set_favourite(favourite, on);
+        self.reload_favourites();
         self.notify();
+    }
+
+    /// "Remove from Pitwall": the project is no added one and no favourite any more. A VS Code
+    /// window that has it open, or a server of it that runs, still shows it, as for any project.
+    pub fn remove_project(&self, path: &str) {
+        self.registry.set_favourite(Favourite { path: path.to_string(), name: folder_name(path) }, false);
+        self.reload_favourites();
+        {
+            let mut inner = self.lock();
+            if let Some(added) = &mut inner.settings.added {
+                added.retain(|known| !same_path(known, path));
+            }
+        }
+        self.save_settings();
+        self.notify();
+    }
+
+    /// The favourites read again after a write of Pitwall's own, each kept among the added
+    /// projects (`keep_favourites`).
+    pub(super) fn reload_favourites(&self) {
+        let favourites = self.registry.read_favourites();
+        let grew = {
+            let mut inner = self.lock();
+            let grew = keep_favourites(&mut inner.settings, &favourites);
+            inner.favourites = favourites;
+            grew
+        };
+        if grew {
+            self.save_settings();
+        }
     }
 
     /// The Settings page's form takes hold. Project overrides, the list order, the shortcut
@@ -53,6 +108,8 @@ impl Core {
                 board_scope: kept.board_scope,
                 board_view: kept.board_view,
                 files_preview: kept.files_preview,
+                favourites_only: kept.favourites_only,
+                added: kept.added,
                 track: kept.track,
                 teams: kept.teams,
                 seen_version: kept.seen_version,
@@ -147,6 +204,21 @@ impl Core {
                 return;
             }
             inner.settings.board_view = Some(view);
+        }
+
+        self.save_settings();
+        self.notify();
+    }
+
+    /// Whether the list shows only the favourites and the projects at work, kept until it is
+    /// turned off.
+    pub fn set_favourites_only(&self, on: bool) {
+        {
+            let mut inner = self.lock();
+            if inner.settings.favourites_only == on {
+                return;
+            }
+            inner.settings.favourites_only = on;
         }
 
         self.save_settings();

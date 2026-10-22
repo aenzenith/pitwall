@@ -100,6 +100,9 @@ export type Project = {
   path: string;
   name: string;
   favourite: boolean;
+  /** Among the projects added to Pitwall: listed while no window has it open and nothing of it
+   * runs; "Remove from Pitwall" takes it out. */
+  added: boolean;
   status: Status;
   /** While busy: what is happening. */
   phase: "starting…" | "stopping…" | "restarting…" | null;
@@ -168,6 +171,8 @@ export type Settings = {
   boardView?: string;
   /** The Files window shows a Markdown or SVG file as its preview, until its eye is pressed again. */
   filesPreview?: boolean;
+  /** The list shows the favourites and the projects at work only ("Only favourites and open"). */
+  favouritesOnly?: boolean;
   /** The Track page's own settings (lib/track: TrackSettings), read leniently. */
   track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
   /** How the app is drawn (lib/theme). */

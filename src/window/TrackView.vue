@@ -5,6 +5,7 @@ import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
 import { openInWindow } from "../lib/open";
+import { atWork } from "../lib/pages";
 import { COLLAPSED_HEIGHT, terminalRequest } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, setTrack, snapshot, track as settings } from "../lib/store";
@@ -18,10 +19,11 @@ import TrackPicker from "./track/TrackPicker.vue";
 import TrackTower from "./track/TrackTower.vue";
 
 /**
- * The Track page: every project on a circuit. A running dev server is a green light lapping it,
- * each Claude session at work an orange one; one waiting on you has driven to the pit wall and
- * stands there, a crashed server stands where it stopped, and a stopped project is off the circuit, in the tower
- * only. The tower beside the circuit lists every project for the keyboard, and the card under it
+ * The Track page: the favourites and the projects at work on a circuit. A running dev server is a
+ * green light lapping it, each Claude session at work an orange one; one waiting on you has driven
+ * to the pit wall and stands there, a crashed server stands where it stopped, and a stopped
+ * project is off the circuit, in the tower only. The tower beside the circuit lists every one
+ * drawn for the keyboard, and the card under it
  * acts on the one selected. That project's terminals are along the page's bottom. Its settings are
  * in Settings, under Track.
  */
@@ -46,11 +48,17 @@ const straight = computed(() => shown.value === "straight");
 
 /* ---------- the projects ---------- */
 
-const listed = computed(() => snapshot.value?.projects ?? []);
+const all = computed(() => snapshot.value?.projects ?? []);
+/** The favourites and the projects at work (lib/pages), always: one that only sits in the list
+ * would make the tower longer for nothing. */
+const listed = computed(() => all.value.filter((project) => project.favourite || atWork(project)));
 const projects = computed(() => towerOrder(listed.value));
-/** By the list's own order, so a project keeps its letters while the tower's order changes. */
-const letters = computed(() => codes(listed.value));
-const tags = computed(() => (settings.value.labels === "name" ? new Map(listed.value.map((project) => [project.path, project.name])) : letters.value));
+/** The crashed servers drawn: one that isn't drawn (no favourite) isn't counted over the circuit. */
+const crashed = computed(() => listed.value.filter((project) => project.status === "crashed").length);
+/** By the list's own order and from all of it, so a project keeps its letters while the tower's
+ * order changes and others come and go. */
+const letters = computed(() => codes(all.value));
+const tags = computed(() => (settings.value.labels === "name" ? new Map(all.value.map((project) => [project.path, project.name])) : letters.value));
 
 const selectedPath = ref<string | null>(null);
 /** The project pointed at in the tower: its light brightens, its tag shows. */
@@ -191,7 +199,7 @@ const inset = computed<Inset>(() => ({
         <span v-if="snapshot" class="subtitle">
           <span class="tally"><span class="dot run" aria-hidden="true"></span>{{ t("popover.running", { count: snapshot.running }) }}</span>
           <span v-if="snapshot.waiting" class="tally"><span class="dot claude" aria-hidden="true"></span>{{ t("popover.waiting", { count: snapshot.waiting }) }}</span>
-          <span v-if="snapshot.crashed" class="tally"><span class="dot crash" aria-hidden="true"></span>{{ t("track.crashed", { count: snapshot.crashed }) }}</span>
+          <span v-if="crashed" class="tally"><span class="dot crash" aria-hidden="true"></span>{{ t("track.crashed", { count: crashed }) }}</span>
         </span>
       </div>
       <TrackPicker :picked="settings.circuit" :shown="shown" @pick="setTrack({ ...settings, circuit: $event })" />
@@ -232,7 +240,7 @@ const inset = computed<Inset>(() => ({
 
       <TrackLegend v-if="listed.length" ref="legend" class="legend" :style="{ left: `${EDGE * 2 + column}px`, bottom: `${LEGEND_EDGE}px` }" />
 
-      <p v-if="snapshot && !listed.length" class="none">{{ t("window.emptyLine1") }}</p>
+      <p v-if="snapshot && !all.length" class="none">{{ t("window.emptyLine1") }}</p>
     </div>
 
     <!-- The selected project's terminals, over the page's bottom: its tab row's height (`ROOM`) is theirs. -->

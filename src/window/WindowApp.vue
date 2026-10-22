@@ -14,7 +14,7 @@ import { claudeState, gitLine, meta } from "../lib/format";
 import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
-import { filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
+import { atWork, filters, isFilter, type Filter, type Page, type View } from "../lib/pages";
 import { onBoard } from "../lib/board";
 import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
@@ -238,13 +238,12 @@ function pressHead(section: Section): void {
 }
 
 const projects = computed(() => snapshot.value?.projects ?? []);
-const anyBusy = computed(() => projects.value.some((p) => p.status === "busy"));
 const current = computed(() => filters.find((f) => f.id === filter.value) ?? filters[0]);
 const shownTeam = computed(() => teams.value.find((team) => team.id === teamFilter.value) ?? null);
 /** The toolbar's heading and the list's name: the team shown, the projects in no team, else the filter. */
 const heading = computed(() => shownTeam.value?.name ?? t(looseShown.value ? "team.loose" : current.value.label));
-/** What the list draws from before a search: the team shown, the projects in no team, else the
- * filter's. */
+/** What the list draws from before a search and "Only favourites and open": the team shown, the
+ * projects in no team, else the filter's. */
 const pool = computed(() => (shownTeam.value ? membersOf(shownTeam.value) : looseShown.value ? looseProjects.value : projects.value.filter((p) => current.value.test(p))));
 
 /** The sidebar's teams, each with how many of its projects run. */
@@ -275,6 +274,26 @@ function onTeamNavKey(event: KeyboardEvent, id: string): void {
   void nextTick(() => Array.from(teamList.value?.querySelectorAll<HTMLElement>("[data-path]") ?? []).find((entry) => entry.dataset.path === id)?.focus());
 }
 
+/** "Only favourites and open" (the toolbar's switch, kept in the settings): the favourites, and
+ * another project only while it is open or at work. */
+const favouritesOnly = computed(() => snapshot.value?.settings.favouritesOnly === true);
+
+/** Open or at work (lib/pages): its server crashed too, a VS Code window on it, a terminal of it
+ * here. */
+function openOrAtWork(project: Project): boolean {
+  return atWork(project) || project.status === "crashed" || project.openIn !== null || project.terminals.length > 0;
+}
+
+function drawn(project: Project): boolean {
+  return !favouritesOnly.value || project.favourite || openOrAtWork(project);
+}
+
+/** The switch turned: drawn at once, kept by the core. */
+function setFavouritesOnly(on: boolean): void {
+  if (snapshot.value) snapshot.value.settings.favouritesOnly = on;
+  void api.setFavouritesOnly(on);
+}
+
 /** The list is drawn in groups, each under its head: a team's own view, and every project while
  * there are teams. The other filters, the projects in no team and a search stay flat, as with no
  * team at all. */
@@ -287,27 +306,35 @@ type Section = { key: string; head: boolean; team: Team | null; rows: Project[];
 const sections = computed<Section[]>(() => {
   if (!grouped.value) {
     const q = query.value.trim().toLowerCase();
+    const listed = pool.value.filter(drawn);
     // Searching: the quick switcher's fuzzy match and order (lib/fuzzy); else the list's own order.
-    const found = q ? searchProjects(pool.value, q).map((match) => match.project) : pool.value;
+    const found = q ? searchProjects(listed, q).map((match) => match.project) : listed;
     return [{ key: "flat", head: false, team: null, rows: found, total: found.length, running: 0, busy: false }];
   }
 
   const ofTeam = (team: Team): Section => {
     const state = teamState(team);
-    return { key: `team:${team.id}`, head: true, team, rows: membersOf(team), total: state.total, running: state.running, busy: state.busy };
+    return { key: `team:${team.id}`, head: true, team, rows: membersOf(team).filter(drawn), total: state.total, running: state.running, busy: state.busy };
   };
   if (shownTeam.value) return [ofTeam(shownTeam.value)];
 
-  const list = teams.value.map(ofTeam);
-  const loose = looseProjects.value;
+  // A team none of whose rows the switch leaves is left out whole; one with no project yet stays.
+  const list = teams.value.map(ofTeam).filter((section) => section.rows.length || !section.total);
+  const loose = looseProjects.value.filter(drawn);
   if (loose.length) list.push({ key: "loose", head: true, team: null, rows: loose, total: loose.length, running: 0, busy: false });
   return list;
 });
 
 /** The rows drawn, top to bottom. */
 const rows = computed(() => sections.value.flatMap((section) => section.rows));
-/** Something to draw: a flat list with a row, the groups while a project is listed, a team's own view always. */
-const listShown = computed(() => (grouped.value ? shownTeam.value !== null || projects.value.length > 0 : rows.value.length > 0));
+/** Something to draw: a flat list with a row, the groups while a project is listed and one of them
+ * is drawn, a team's own view always. */
+const listShown = computed(() => (grouped.value ? shownTeam.value !== null || (projects.value.length > 0 && sections.value.length > 0) : rows.value.length > 0));
+/** The projects "Only favourites and open" leaves out of what the filter or the team shows. */
+const hiddenCount = computed(() => {
+  if (!favouritesOnly.value) return 0;
+  return pool.value.filter((p) => !drawn(p)).length;
+});
 const selected = computed(() => projects.value.find((p) => p.path === selectedPath.value) ?? null);
 /** The selected team, while its head is drawn. */
 const selectedTeam = computed(() => sections.value.find((section) => section.head && section.team !== null && section.team.id === selectedTeamId.value)?.team ?? null);
@@ -381,19 +408,6 @@ function pickLoose(): void {
   selectedTeamId.value = null;
 }
 
-/** The toolbar's Start all and Stop all are the shown team's in its own view, else everyone's. */
-const shownState = computed(() => (shownTeam.value ? teamState(shownTeam.value) : null));
-const acting = computed(() => shownState.value?.busy ?? anyBusy.value);
-
-function startAll(): void {
-  if (shownTeam.value) startTeam(shownTeam.value.id);
-  else void api.startAll();
-}
-
-function stopAll(): void {
-  if (shownTeam.value) stopTeam(shownTeam.value.id);
-  else void api.stopAll();
-}
 
 function toggle(project: Project): void {
   void api.act(project.path, project.status === "running" ? "stop" : "start");
@@ -512,6 +526,8 @@ function rowMenu(event: MouseEvent, project: Project): void {
   entries.push({ text: t("team.newMenu"), action: () => (teamAsk.value = { kind: "create", projects: [project.path], show: false }) });
   if (own) entries.push("separator", { text: t("team.leave"), action: () => void leaveTeam(project.path) });
   entries.push("separator", { text: t(project.muted ? "notifications.unmute" : "notifications.mute"), action: () => void api.muteProject(project.path, !project.muted) });
+  // Out of the list, star and all; a VS Code window that has it open, or a server of it that runs, still shows it.
+  if (project.added || project.favourite) entries.push("separator", { text: t("window.removeProject"), action: () => void api.removeProject(project.path) });
   // While `pitwall://` links are answered: the project's own, to copy (Raycast, Shortcuts, scripts).
   // Not for a name another listed project shares: a link on it does nothing.
   const named = projects.value.filter((other) => other.name === project.name).length;
@@ -632,8 +648,8 @@ function revealPage(page: Page, tab?: "notifications"): void {
   }
 }
 
-/** From the switcher (⌘↵ on a link) or a notification: select the project, even if a filter or
- * search hid it. Settings, which would cover it, closes. */
+/** From the switcher (⌘↵ on a link) or a notification: select the project, even if a filter,
+ * search or "Only favourites and open" hid it. Settings, which would cover it, closes. */
 function revealProject(path: string): void {
   settingsOpen.value = false;
   view.value = "projects";
@@ -642,6 +658,8 @@ function revealProject(path: string): void {
     teamFilter.value = null;
     looseShown.value = false;
     query.value = "";
+    const project = projects.value.find((p) => p.path === path);
+    if (project && !drawn(project)) setFavouritesOnly(false);
   }
   selectProject(path);
 }
@@ -908,15 +926,17 @@ function server(project: Project): string {
         <!-- Its heading and free space drag the window; the search box and buttons stay clickable. -->
         <div class="toolbar" :data-tauri-drag-region="dragRegion">
           <div class="heading">{{ heading }}</div>
-          <label class="sr" for="search">{{ t("common.searchProjects") }}</label>
-          <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" @keydown.down.prevent="focusSelected" />
-          <Spinner v-if="acting" class="busy-spin" />
-          <button type="button" class="control all" :title="t('common.startAll')" :disabled="!(shownState ? shownState.total : projects.length) || acting" @click="startAll">
-            <Icon name="play" :size="13" class="all-icon" /><span class="all-text">{{ t("common.startAll") }}</span>
-          </button>
-          <button type="button" class="control all" :title="t('common.stopAll')" :disabled="!(shownState ? shownState.running : snapshot?.running) || acting" @click="stopAll">
-            <Icon name="stop" :size="13" class="all-icon" /><span class="all-text">{{ t("common.stopAll") }}</span>
-          </button>
+          <!-- Every project, or the favourites and those open or at work: the one shown is lit. -->
+          <div class="list-scope" role="group" :aria-label="t('window.favouritesOnly')">
+            <button type="button" :class="{ on: !favouritesOnly }" :aria-pressed="!favouritesOnly" @click="setFavouritesOnly(false)">{{ t("window.scopeAll") }}</button>
+            <button type="button" :class="{ on: favouritesOnly }" :aria-pressed="favouritesOnly" :title="t('window.favouritesOnly')" @click="setFavouritesOnly(true)">
+              <Icon :name="favouritesOnly ? 'star-filled' : 'star'" :size="13" class="scope-icon" /><span class="scope-text">{{ t("window.scopeOpen") }}</span>
+            </button>
+          </div>
+          <label class="list-search">
+            <Icon name="search" :size="13" />
+            <input id="search" v-model="query" type="search" :placeholder="t('common.searchProjects')" :aria-label="t('common.searchProjects')" @keydown.down.prevent="focusSelected" />
+          </label>
         </div>
 
         <span id="rows-keys" class="sr-only">
@@ -1042,7 +1062,7 @@ function server(project: Project): string {
                 :class="['ghint', { lit: section.team.id === litTeam, chosen: section.team.id === selectedTeam?.id }, drag.lineClass(hintKey(section.team.id))]"
                 :style="teamLineStyle(hintKey(section.team.id), section.team)"
               >
-                <span role="gridcell" aria-colspan="5">{{ t(shownTeam ? "team.noMembers" : "team.empty") }}</span>
+                <span role="gridcell" aria-colspan="5">{{ t(section.total ? "window.favouritesHidden" : shownTeam ? "team.noMembers" : "team.empty") }}</span>
               </div>
             </template>
           </div>
@@ -1050,7 +1070,10 @@ function server(project: Project): string {
 
         <section v-else class="empty">
           <PitwallGlyph :size="44" lamps="var(--idle-ring)" />
-          <template v-if="looseShown && !pool.length">
+          <template v-if="hiddenCount && !query.trim()">
+            <p>{{ t("window.favouritesHidden") }}</p>
+          </template>
+          <template v-else-if="looseShown && !pool.length">
             <p>{{ t("team.pickNone") }}</p>
           </template>
           <template v-else-if="projects.length">
@@ -1438,8 +1461,8 @@ function server(project: Project): string {
   border-bottom: 1px solid var(--line);
 }
 
-/* A narrow list gives the heading's room and then the search box's to the buttons, whose labels
-   are never cut. */
+/* A narrow list gives the heading's room and then the search box's to the list's two choices,
+   whose names are never cut. */
 .heading {
   font-size: 15px;
   font-weight: 600;
@@ -1450,16 +1473,11 @@ function server(project: Project): string {
   white-space: nowrap;
 }
 
-.busy-spin {
-  color: var(--text-muted);
-}
-
-.sr {
-  position: absolute;
-  left: -9999px;
-}
-
-input[type="search"] {
+/* The search box, as the Board page's: its glass, then the field. */
+.list-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   width: 220px;
   min-width: 64px;
   height: 30px;
@@ -1467,12 +1485,34 @@ input[type="search"] {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   background: var(--bg-input);
+  color: var(--text-subtle);
+  cursor: text;
+}
+
+.list-search svg {
+  flex-shrink: 0;
+}
+
+.list-search input {
+  -webkit-appearance: none;
+  appearance: none;
+  flex-grow: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   color: var(--text);
   font: inherit;
   font-size: 13px;
 }
 
-input[type="search"]::placeholder {
+.list-search:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.list-search input::placeholder {
   color: var(--text-faint);
 }
 
@@ -1495,30 +1535,69 @@ input[type="search"]::placeholder {
   cursor: default;
 }
 
-/* Without room for their names once the heading and the search box have given theirs, Start all
-   and Stop all are their icons alone (still their tooltips, and read out). */
-.control.all {
+/* All, or the favourites and those open: the Board page's columns-or-list trough, with words. */
+.list-scope {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-input);
+}
+
+.list-scope button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
 }
 
-.all-icon {
+.list-scope button:hover {
+  color: var(--text);
+}
+
+.list-scope button.on {
+  background: var(--bg-control-on);
+  color: var(--text-strong);
+}
+
+/* In the light theme, the segmented control the settings have: a grey trough, the one chosen white. */
+:root[data-theme="light"] .list-scope {
+  background: var(--bg-seg);
+}
+
+:root[data-theme="light"] .list-scope button.on {
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
+}
+
+.scope-icon {
   display: none;
 }
 
+/* Without room for its words once the heading and the search box have given theirs, the second
+   choice is its star alone (still its tooltip, and read out). */
 @container (max-width: 409px) {
-  .control.all {
-    flex-shrink: 0;
+  .list-scope button:last-child {
     width: 30px;
     padding: 0;
   }
 
-  .all-icon {
+  .scope-icon {
     display: block;
   }
 
-  .all-text {
+  .scope-text {
     position: absolute;
     width: 1px;
     height: 1px;

@@ -3,8 +3,7 @@
 //! orders from them run here. The spinner shows each action until it is visibly done.
 
 use super::*;
-use super::snapshot::{build_snapshot, listed_path};
-use super::teams::{call_off, stands};
+use super::snapshot::listed_path;
 use crate::registry::RemoteCommand;
 
 /// A start counts as done once the server printed its address, or after this long.
@@ -12,8 +11,6 @@ const SETTLE_LIMIT: Duration = Duration::from_secs(15);
 /// The spinner never outlives this, whatever happens (for a project that waits for its turn in
 /// a team's start, counted from that turn).
 const PENDING_LIMIT: Duration = Duration::from_secs(30);
-/// Start all's run among the teams' starts (`Inner::team_runs`): no team's id is empty.
-const START_ALL: &str = "";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -46,8 +43,8 @@ impl Action {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Origin {
-    /// A click: the list's row, the details, the Track page, Start all, a team's start, the
-    /// popover, the mini tower, the quick switcher; a VS Code window's work order.
+    /// A click: the list's row, the details, the Track page, a team's start, the popover, the
+    /// mini tower, the quick switcher; a VS Code window's work order.
     User,
     /// A team that starts with Pitwall.
     Launch,
@@ -149,50 +146,6 @@ impl Core {
             }
         }
         true
-    }
-
-    /// Every project that isn't running, one a second. Kept as a team's start is (`teams.rs`,
-    /// under a key no team has), so that Stop all calls off what it hasn't begun.
-    pub fn start_all(self: &Arc<Self>) {
-        let (idle, run) = {
-            let mut inner = self.lock();
-            // A Start all still under way ends here; what it hadn't begun is this one's.
-            call_off(&mut inner, START_ALL);
-            let idle: Vec<String> =
-                build_snapshot(&inner).projects.into_iter().filter(|p| p.status != "running" && p.status != "busy").map(|p| p.path).collect();
-            inner.next_run += 1;
-            let run = inner.next_run;
-            inner.team_runs.insert(START_ALL.to_string(), run);
-            for path in &idle {
-                inner.pending.insert(path.clone(), Pending::start(Some(run)));
-            }
-            (idle, run)
-        };
-        self.notify();
-
-        let core = Arc::clone(self);
-
-        thread::spawn(move || {
-            for (index, path) in idle.iter().enumerate() {
-                if index > 0 {
-                    thread::sleep(Duration::from_secs(1));
-                }
-                // Its turn, unless a Stop all came meanwhile.
-                {
-                    let mut inner = core.lock();
-                    if !stands(&inner, START_ALL, run) {
-                        return;
-                    }
-                    inner.pending.insert(path.clone(), Pending::start(None));
-                }
-                core.act_now(path, Action::Start, Origin::User);
-            }
-
-            let mut inner = core.lock();
-            if stands(&inner, START_ALL, run) {
-                inner.team_runs.remove(START_ALL);
-            }
-        });
     }
 
     /// Every server goes, those still on their way up too, and a team's start under way goes

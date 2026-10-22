@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::registry::{now_ms, write_atomic};
+use crate::registry::{now_ms, same_path, write_atomic};
 use crate::start::{Mode, Model, Start};
 
 /// A project's own command (queue worker, migrations, tests…), run from the detail panel.
@@ -449,6 +449,11 @@ pub struct Settings {
     pub projects: BTreeMap<String, ProjectSettings>,
     /// The project list order the user dragged into place.
     pub order: Vec<String>,
+    /// The projects added to Pitwall, starred or not: taking a star off leaves the project here,
+    /// "Remove from Pitwall" takes it out (`core/projects.rs`). None until it is first made from
+    /// what the settings knew of projects (`known_projects`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added: Option<Vec<String>>,
     /// The folder whose subfolders the quick switcher searches when no project matches.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub projects_dir: Option<String>,
@@ -476,6 +481,8 @@ pub struct Settings {
     /// The Files window shows a Markdown or SVG file as its preview rather than its text, from
     /// the moment its eye is pressed until it is pressed again.
     pub files_preview: bool,
+    /// The list shows the favourites and the projects at work only ("Only favourites and open").
+    pub favourites_only: bool,
     /// The Track page's own settings. None until one is changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<TrackSettings>,
@@ -534,6 +541,7 @@ impl Default for Settings {
             shortcut_keys: "Ctrl+Alt+KeyP".into(),
             projects: BTreeMap::new(),
             order: Vec::new(),
+            added: None,
             projects_dir: None,
             fuel_alert: true,
             fuel_in_bar: true,
@@ -545,6 +553,7 @@ impl Default for Settings {
             board_scope: None,
             board_view: None,
             files_preview: false,
+            favourites_only: false,
             track: None,
             theme: "system".into(),
             teams: Vec::new(),
@@ -618,6 +627,20 @@ impl Settings {
 
     pub fn project(&self, path: &str) -> ProjectSettings {
         self.projects.get(path).cloned().unwrap_or_default()
+    }
+
+    /// The projects these settings knew of before Pitwall kept a list of its own (`added`): those
+    /// in the order, in a team or with settings of their own, whose folder is there; the projects
+    /// folder itself is none.
+    pub fn known_projects(&self) -> Vec<String> {
+        let mut known: Vec<String> = Vec::new();
+        for path in self.order.iter().chain(self.teams.iter().flat_map(|team| &team.projects)).chain(self.projects.keys()) {
+            let projects_dir = self.projects_dir.as_deref().is_some_and(|dir| same_path(dir, path));
+            if !projects_dir && Path::new(path).is_dir() && !known.iter().any(|seen| same_path(seen, path)) {
+                known.push(path.clone());
+            }
+        }
+        known
     }
 
     /// Where the project at `path` opens from outside the window (`OpenSettings::outside`): its

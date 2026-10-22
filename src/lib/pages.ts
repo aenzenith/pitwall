@@ -17,6 +17,19 @@ export const filters: Array<{ id: Filter; label: Key; icon: "grid" | "pulse" | "
   { id: "waiting", label: "window.filter.waiting", icon: "chat", test: (p) => p.claude !== null },
 ];
 
+/** At work: its server up or on its way, a command of it running, Claude at work or waiting there.
+ * With the favourites, all the Track page draws, and part of what the list's "Favourites and open"
+ * shows. */
+export function atWork(project: Project): boolean {
+  return (
+    project.status === "running" ||
+    project.status === "busy" ||
+    project.commands.some((command) => command.status === "running" || command.status === "busy") ||
+    project.claude !== null ||
+    project.claudeWorking
+  );
+}
+
 /** One row of the switcher's `/`; a filter brings its `test`, for the count the sidebar shows. */
 export type PageEntry = {
   id: Page;

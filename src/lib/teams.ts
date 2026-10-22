@@ -139,11 +139,12 @@ function send(call: Promise<unknown>): Promise<unknown> {
 
 /** A team's projects, in order: a reorder, one added (it leaves the team it was in) or one
  * dropped (it is in no team then). Its projects that aren't listed right now keep their place. */
-export function setTeamProjects(id: string, listed: string[]): Promise<unknown> {
+export function setTeamProjects(id: string, listed: string[], drawn?: Set<string>): Promise<unknown> {
   const team = teams.value.find((entry) => entry.id === id);
   if (!team) return Promise.resolve();
-  // Of its old order, what stays: the projects kept, and those not listed right now.
-  const shown = new Set((snapshot.value?.projects ?? []).map((project) => project.path));
+  // Of its old order, what stays: the projects kept, and those not listed right now (`drawn`: not
+  // among the list's rows, which "Only favourites and open" may leave out).
+  const shown = drawn ?? new Set((snapshot.value?.projects ?? []).map((project) => project.path));
   const projects = mergeOrder(
     team.projects.filter((path) => !shown.has(path) || listed.includes(path)),
     listed,
@@ -267,11 +268,13 @@ function placeUnder(path: string, keys: string[]): void {
   let group = "";
   let to: string | null = null;
   const rows: Record<string, string[]> = {};
+  const drawn = new Set<string>();
   for (const key of keys) {
     const { kind, id } = parseKey(key);
     if (kind === "head") group = id;
     if (kind !== "row") continue;
     (rows[group] ??= []).push(id);
+    drawn.add(id);
     if (id === path) to = group;
   }
   if (to === null) return;
@@ -279,7 +282,7 @@ function placeUnder(path: string, keys: string[]): void {
   const from = teamOf(path);
   const target = teams.value.find((team) => team.id === to);
   if (target) {
-    void setTeamProjects(target.id, rows[to]);
+    void setTeamProjects(target.id, rows[to], drawn);
     return;
   }
 
