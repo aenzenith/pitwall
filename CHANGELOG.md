@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.15.0](https://github.com/aenzenith/pitwall/compare/v1.14.0...v1.15.0) (2026-10-22)
+
+
+### Features
+
+* **terminal:** the panel's project picker lists the favourites and open projects, or every one ([6a2c563](https://github.com/aenzenith/pitwall/commit/6a2c563ff8b65897210e8b19696abf828c764a4f))
+
+
+### Bug Fixes
+
+* **terminal:** History lists a Claude session from its start, before its log is written ([2c3191b](https://github.com/aenzenith/pitwall/commit/2c3191b3f7882ccbe1247d9c066956aad57c89a6))
+
 ## [1.14.0](https://github.com/aenzenith/pitwall/compare/v1.13.0...v1.14.0) (2026-10-22)
 
 
