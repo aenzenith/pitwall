@@ -146,6 +146,9 @@ export type Settings = {
   fuelInBar: boolean;
   /** The limits' dials in the popover, in its foot. */
   fuelInPopover: boolean;
+  /** Which projects the menu bar's window lists: `all`, or `working` (the favourites and the
+   * projects at work), the default; read leniently. */
+  barProjects?: string;
   /** Minutes between asking Anthropic for the limits: 1, 5 or 15. */
   fuelEvery: number;
   /** The count of running dev servers in the menu bar, in green. */

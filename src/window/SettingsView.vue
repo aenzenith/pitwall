@@ -109,6 +109,7 @@ const form = reactive<Settings>({
   fuelAlert: true,
   fuelInBar: true,
   fuelInPopover: true,
+  barProjects: "working",
   fuelEvery: 15,
   serversInBar: true,
   claudesInBar: true,
@@ -136,6 +137,12 @@ const RESUME: Array<{ id: Settings["resume"]; label: Key }> = [
   { id: "ask", label: "settings.resume.ask" },
   { id: "always", label: "settings.resume.always" },
   { id: "never", label: "settings.resume.never" },
+];
+
+/** Which projects the menu bar's window lists: every one, or the favourites and those at work. */
+const BAR_PROJECTS: Array<{ id: string; label: Key }> = [
+  { id: "all", label: "settings.barAll" },
+  { id: "working", label: "settings.barWorking" },
 ];
 
 /** Where a project opens from each place unless it chose its own (lib/open); `hint` says what
@@ -450,6 +457,15 @@ function setFuelEvery(minutes: number): void {
   void save();
 }
 
+/** A value it doesn't know reads as `working`, as the menu bar's window reads it. */
+const barProjects = computed(() => (form.barProjects === "all" ? "all" : "working"));
+
+function setBarProjects(choice: string): void {
+  if (barProjects.value === choice) return;
+  form.barProjects = choice;
+  void save();
+}
+
 function setResume(mode: Settings["resume"]): void {
   if (form.resume === mode) return;
   form.resume = mode;
@@ -529,6 +545,17 @@ function setTheme(theme: Theme): void {
             <input v-model="form.suggestProjects" type="checkbox" :disabled="!snapshot?.settings.projectsDir" />
             <span>{{ t("settings.suggestProjects") }}</span>
           </label>
+          <div class="hook">
+            <div class="hook-text">
+              <span id="bar-projects">{{ t("settings.barProjects") }}</span>
+              <small>{{ t("settings.barProjectsHint") }}</small>
+            </div>
+            <span class="seg" role="group" aria-labelledby="bar-projects">
+              <button v-for="choice in BAR_PROJECTS" :key="choice.id" type="button" :aria-pressed="barProjects === choice.id" @click="setBarProjects(choice.id)">
+                {{ t(choice.label) }}
+              </button>
+            </span>
+          </div>
 
           <div class="section section-label">{{ t("open.title") }}</div>
           <label v-for="place in OPEN_FROM" :key="place.from" class="field">

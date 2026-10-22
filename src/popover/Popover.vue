@@ -14,6 +14,7 @@ import { rowKey, useGroupReorder } from "../lib/groupReorder";
 import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { openFromOutside, openTarget } from "../lib/open";
+import { atWork } from "../lib/pages";
 import { missed, notifications, quiet, quietLine, waits } from "../lib/quiet";
 import { rowKeys } from "../lib/rows";
 import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
@@ -36,7 +37,10 @@ const strip = ref<InstanceType<typeof FuelStrip> | null>(null);
 const list = ref<HTMLElement | null>(null);
 /** Drag to reorder, as the window's list drawn without its heads. */
 const reorder = useGroupReorder(list, applyDrop);
-const projects = computed(() => snapshot.value?.projects ?? []);
+/** What it lists, as Settings › Projects says: every project, or the favourites and the projects
+ * at work (lib/pages), the default. */
+const all = computed(() => snapshot.value?.projects ?? []);
+const projects = computed(() => (snapshot.value?.settings.barProjects === "all" ? all.value : all.value.filter((p) => p.favourite || atWork(p))));
 /** A turn held while it was quiet is listed under what was missed, not here a second time. */
 const held = computed(() => new Set(missed.value.filter((entry) => waits(entry.kind)).map((entry) => entry.path)));
 const waiting = computed(() => projects.value.filter((p) => p.claude && !held.value.has(p.path)));
@@ -310,6 +314,10 @@ onBeforeUnmount(() => {
       </ul>
     </template>
 
+    <!-- Projects, but none of them a favourite or at work: nothing to add, only nothing to list. -->
+    <section v-else-if="all.length" class="empty">
+      <p>{{ t("popover.noneWorking") }}</p>
+    </section>
     <section v-else class="empty">
       <p>{{ t("popover.empty") }}</p>
       <button type="button" class="primary" @click="api.pickFolder()">{{ t("common.addProject") }}</button>

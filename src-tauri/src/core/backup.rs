@@ -117,6 +117,7 @@ struct General {
     projects_dir: Option<String>,
     fuel_in_bar: bool,
     fuel_in_popover: bool,
+    bar_projects: String,
     fuel_every: u32,
     servers_in_bar: bool,
     claudes_in_bar: bool,
@@ -139,7 +140,7 @@ impl General {
         // backups or kept out of them on purpose.
         let Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
+            fuel_in_bar, fuel_in_popover, bar_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
             theme, resume, suggest_projects, flag, open,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
@@ -157,7 +158,7 @@ impl General {
 
         Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
+            fuel_in_bar, fuel_in_popover, bar_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
             theme, resume, suggest_projects, flag, open,
         }
     }
@@ -182,13 +183,13 @@ impl General {
 
         let Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
+            fuel_in_bar, fuel_in_popover, bar_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
             theme, resume, suggest_projects, flag, open,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
-            fuel_in_bar, fuel_in_popover, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
+            fuel_in_bar, fuel_in_popover, bar_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
             theme, resume, suggest_projects, flag, open,
             ..settings.clone()
         })

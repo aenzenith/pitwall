@@ -464,6 +464,9 @@ pub struct Settings {
     pub fuel_in_bar: bool,
     /// The dials in the popover, in its foot.
     pub fuel_in_popover: bool,
+    /// Which projects the menu bar's window lists (Settings › Projects): `all`, or `working`, the
+    /// favourites and the projects at work (anything else reads as `working`).
+    pub bar_projects: String,
     /// Minutes between two requests for Claude's limits: 1, 5 or 15 (`fuel_every_ms`).
     pub fuel_every: u32,
     /// The count of running dev servers beside the icon in the menu bar, in green (`tray.rs`).
@@ -549,6 +552,7 @@ impl Default for Settings {
             fuel_alert: true,
             fuel_in_bar: true,
             fuel_in_popover: true,
+            bar_projects: "working".into(),
             fuel_every: 15,
             servers_in_bar: true,
             claudes_in_bar: true,
