@@ -510,7 +510,27 @@ function setTheme(theme: Theme): void {
 
       <form ref="body" class="body" @submit.prevent="save" @change="save">
         <fieldset v-show="tab === 'projects'" :aria-label="t('common.projects')">
-          <div class="section-label">{{ t("open.title") }}</div>
+          <!-- Where projects come from: the tab's first part (Settings › General's until 2026-10-22). -->
+          <div class="field">
+            <span>{{ t("settings.projectsFolder") }}</span>
+            <div class="folder">
+              <span :class="['folder-path', { unset: !snapshot?.settings.projectsDir }]" :title="snapshot?.settings.projectsDir">
+                {{ snapshot?.settings.projectsDir ?? t("settings.notSet") }}
+              </span>
+              <button type="button" class="control" @click="api.pickProjectsDir()">{{ t("settings.choose") }}</button>
+              <button v-if="snapshot?.settings.projectsDir" type="button" class="control" @click="api.clearProjectsDir()">
+                {{ t("settings.clear") }}
+              </button>
+            </div>
+            <small>{{ t("settings.projectsFolderHint") }}</small>
+          </div>
+          <!-- Nothing to watch without a projects folder. -->
+          <label class="check">
+            <input v-model="form.suggestProjects" type="checkbox" :disabled="!snapshot?.settings.projectsDir" />
+            <span>{{ t("settings.suggestProjects") }}</span>
+          </label>
+
+          <div class="section section-label">{{ t("open.title") }}</div>
           <label v-for="place in OPEN_FROM" :key="place.from" class="field">
             <span>{{ t(place.label) }}</span>
             <select :value="openChoice(place.from)" @change="pickOpen(place.from, ($event.target as HTMLSelectElement).value)">
@@ -710,24 +730,6 @@ function setTheme(theme: Theme): void {
           </div>
           <p v-if="shortcutError" class="error">{{ shortcutError }}</p>
 
-          <div class="field">
-            <span>{{ t("settings.projectsFolder") }}</span>
-            <div class="folder">
-              <span :class="['folder-path', { unset: !snapshot?.settings.projectsDir }]" :title="snapshot?.settings.projectsDir">
-                {{ snapshot?.settings.projectsDir ?? t("settings.notSet") }}
-              </span>
-              <button type="button" class="control" @click="api.pickProjectsDir()">{{ t("settings.choose") }}</button>
-              <button v-if="snapshot?.settings.projectsDir" type="button" class="control" @click="api.clearProjectsDir()">
-                {{ t("settings.clear") }}
-              </button>
-            </div>
-            <small>{{ t("settings.projectsFolderHint") }}</small>
-          </div>
-          <!-- Nothing to watch without a projects folder. -->
-          <label class="check">
-            <input v-model="form.suggestProjects" type="checkbox" :disabled="!snapshot?.settings.projectsDir" />
-            <span>{{ t("settings.suggestProjects") }}</span>
-          </label>
           <button type="button" class="control quiet" @click="emit('openSetup')">{{ t("settings.openSetup") }}</button>
           <div class="field">
             <label class="check">
