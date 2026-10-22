@@ -245,6 +245,7 @@
   "terminal.resize": "Terminalleri yeniden boyutlandır",
   "terminal.renameHint": "Yeniden adlandırmak için çift tıkla",
   "terminal.tabKeys": "Ok tuşları sekmeler arasında geçer. Return terminale geçer, Delete sekmeyi kapatır, F2 yeniden adlandırır.",
+  "terminal.openLink": "Tarayıcıda açmak için {key} tuşuna basılıyken tıkla",
   "terminal.renameName": "Yeniden adlandır: {name}",
   "terminal.newTab": "Yeni sekme",
   "terminal.newClaude": "Yeni Claude",

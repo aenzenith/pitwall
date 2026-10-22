@@ -246,6 +246,7 @@
   "terminal.resize": "Größe der Terminals ändern",
   "terminal.renameHint": "Zum Umbenennen doppelklicken",
   "terminal.tabKeys": "Die Pfeiltasten wechseln den Tab. Return springt ins Terminal, die Löschtaste schließt den Tab, F2 benennt ihn um.",
+  "terminal.openLink": "{key}-Klick öffnet die Adresse im Browser",
   "terminal.renameName": "{name} umbenennen",
   "terminal.newTab": "Neuer Tab",
   "terminal.newClaude": "Claude starten",

@@ -242,6 +242,7 @@
   "terminal.resize": "ターミナルのサイズを変更",
   "terminal.renameHint": "ダブルクリックで名前を変更",
   "terminal.tabKeys": "矢印キーでタブを切り替えます。returnでターミナルへ移動し、deleteでタブを閉じ、F2で名前を変更します。",
+  "terminal.openLink": "{key}+クリックでブラウザで開く",
   "terminal.renameName": "{name}の名前を変更",
   "terminal.newTab": "新規タブ",
   "terminal.newClaude": "新規Claude",

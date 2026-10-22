@@ -1,46 +1,25 @@
 {
-  "since": "1.14.0",
+  "since": "1.15.0",
   "notes": [
-    {
-      "kind": "fix",
-      "title": {
-        "en": "A Claude session you just started is in History at once",
-        "tr": "Yeni başlattığın Claude oturumu Geçmiş'te hemen görünüyor",
-        "de": "Eine eben gestartete Claude-Sitzung steht sofort im Verlauf",
-        "es": "Una sesión de Claude recién iniciada aparece al instante en Historial",
-        "ru": "Только что запущенная сессия Claude сразу видна в «Истории»",
-        "ja": "始めたばかりの Claude セッションがすぐ「履歴」に出ます",
-        "zh-Hans": "刚启动的 Claude 会话会立即出现在“历史”中"
-      },
-      "body": {
-        "en": "History used to list a session you had just started only some time later. It is now at the top from the moment it starts, even before its first message.",
-        "tr": "Geçmiş, yeni başlattığın bir oturumu ancak bir süre sonra listeliyordu. Artık oturum başladığı anda, daha ilk mesajı gitmeden en üstte.",
-        "de": "Der Verlauf zeigte eine eben gestartete Sitzung erst eine Weile später. Jetzt steht sie vom Start an ganz oben, schon vor ihrer ersten Nachricht.",
-        "es": "Historial mostraba una sesión recién iniciada solo un rato después. Ahora aparece arriba desde que empieza, incluso antes de su primer mensaje.",
-        "ru": "«История» показывала только что запущенную сессию лишь через некоторое время. Теперь она вверху с самого запуска, ещё до первого сообщения.",
-        "ja": "「履歴」には、始めたばかりのセッションがしばらくしてから表示されていました。今は始めた瞬間から、最初のメッセージを送る前でもいちばん上に表示されます。",
-        "zh-Hans": "以前“历史”要过一会儿才会列出刚启动的会话。现在它从启动那一刻起就显示在最上面，甚至在第一条消息之前。"
-      }
-    },
     {
       "kind": "new",
       "title": {
-        "en": "The terminal's project picker lists your favourites and open projects",
-        "tr": "Terminalin proje seçicisinde favorilerin ve açık projeler var",
-        "de": "Die Projektauswahl des Terminals zeigt Favoriten und offene Projekte",
-        "es": "El selector de proyecto de los terminales muestra tus favoritos y los proyectos abiertos",
-        "ru": "Выбор проекта в терминалах показывает избранное и открытые проекты",
-        "ja": "ターミナルのプロジェクト選択にお気に入りと開いているプロジェクトが並びます",
-        "zh-Hans": "终端的项目选择器列出你的收藏和已打开的项目"
+        "en": "Web addresses in a terminal open with ⌘-click",
+        "tr": "Terminaldeki web adresleri ⌘ ile tıklanınca açılıyor",
+        "de": "Webadressen im Terminal öffnen sich mit ⌘-Klick",
+        "es": "Las direcciones web de un terminal se abren con ⌘+clic",
+        "ru": "Веб-адреса в терминале открываются по ⌘+щелчку",
+        "ja": "ターミナルの Web アドレスが ⌘+クリックで開きます",
+        "zh-Hans": "终端中的网址可按 ⌘ 点击打开"
       },
       "body": {
-        "en": "The project picker at the start of the terminal panel now lists your favourites and the projects open or at work, as Favourites and open does in the list, and the project the panel shows. Settings › Projects › Projects in the terminal shows them all again. Where Claude is working, its breathing ring is beside the project's name in the picker.",
-        "tr": "Terminal panelinin başındaki proje seçici artık, listedeki Favoriler ve açıklar gibi, favorilerini, açık ya da çalışan projeleri ve panelin gösterdiği projeyi listeliyor. Hepsini görmek istersen Ayarlar › Projeler › Terminaldeki projeler'de Tümü'nü seç. Claude'un çalıştığı projelerde, seçicide de adın yanında Claude'un yanıp sönen halkası var.",
-        "de": "Die Projektauswahl am Anfang des Terminalbereichs listet jetzt deine Favoriten und die Projekte, die offen sind oder arbeiten, wie „Favoriten und offene“ in der Liste, dazu das Projekt, das der Bereich zeigt. Unter Einstellungen › Projekte › Projekte im Terminal zeigt „Alle“ wieder jedes. Wo Claude arbeitet, steht sein pulsierender Ring in der Auswahl neben dem Namen des Projekts.",
-        "es": "El selector de proyecto al principio del panel de terminales lista ahora tus favoritos y los proyectos abiertos o en marcha, como «Favoritos y abiertos» en la lista, y el proyecto que muestra el panel. En Ajustes › Proyectos › Proyectos en el terminal, «Todos» los vuelve a mostrar todos. Donde Claude está trabajando, su anillo que late aparece junto al nombre del proyecto en el selector.",
-        "ru": "Выбор проекта в начале панели терминалов теперь показывает избранное и проекты, которые открыты или в работе, как «Избранное и открытые» в списке, и проект, который показывает панель. В «Настройки › Проекты › Проекты в терминале» вариант «Все» снова показывает все проекты. Там, где работает Claude, рядом с названием проекта в списке мерцает его кольцо.",
-        "ja": "ターミナルパネルの先頭にあるプロジェクト選択には、一覧の「お気に入りと開いているもの」と同じく、お気に入りと、開いているか動いているプロジェクト、それにパネルが表示しているプロジェクトが並ぶようになりました。「設定 › プロジェクト › ターミナルのプロジェクト」で「すべて」を選ぶと、すべて表示されます。Claude が作業中のプロジェクトには、選択の中でも名前の横に Claude の明滅するリングが付きます。",
-        "zh-Hans": "终端面板开头的项目选择器现在像列表中的“收藏和已打开”一样，列出你的收藏、已打开或正在运行的项目，以及面板正在显示的项目。在“设置 › 项目 › 终端中的项目”中选择“全部”即可再次显示所有项目。Claude 正在工作的项目，在选择器中名字旁边也会有 Claude 闪烁的圆环。"
+        "en": "A web address in a terminal, the ones Claude prints too, now opens in your browser when you click it with ⌘ held (Ctrl on Windows and Linux). A plain click or a double-click still only selects it, so copying an address never opens it.",
+        "tr": "Terminaldeki web adresleri, Claude'un yazdıkları da, artık ⌘ basılıyken (Windows ve Linux'ta Ctrl) tıklayınca tarayıcıda açılıyor. Düz tıklama ya da çift tıklama yine yalnızca seçiyor; adresi kopyalarken tarayıcı açılmaz.",
+        "de": "Eine Webadresse im Terminal, auch eine, die Claude ausgibt, öffnet sich jetzt im Browser, wenn du sie mit gedrückter ⌘-Taste anklickst (unter Windows und Linux Strg). Ein einfacher Klick oder ein Doppelklick markiert sie weiterhin nur, damit beim Kopieren nichts aufgeht.",
+        "es": "Una dirección web en un terminal, también las que escribe Claude, ahora se abre en el navegador al hacer clic con ⌘ pulsada (Ctrl en Windows y Linux). Un clic normal o un doble clic siguen solo seleccionándola, así que copiarla nunca la abre.",
+        "ru": "Веб-адрес в терминале, в том числе выведенный Claude, теперь открывается в браузере щелчком с нажатой ⌘ (в Windows и Linux — Ctrl). Обычный или двойной щелчок по-прежнему только выделяет его, так что при копировании ничего не открывается.",
+        "ja": "ターミナルの Web アドレスは、Claude が出力したものも含め、⌘（Windows と Linux では Ctrl）を押しながらクリックするとブラウザで開くようになりました。普通のクリックやダブルクリックでは選択されるだけなので、コピーするときに開いてしまうことはありません。",
+        "zh-Hans": "终端中的网址（包括 Claude 输出的）现在按住 ⌘（Windows 和 Linux 上为 Ctrl）点击即可在浏览器中打开。普通单击或双击仍只会选中它，复制网址时不会打开。"
       }
     }
   ]

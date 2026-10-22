@@ -248,6 +248,7 @@
   "terminal.resize": "Cambiar el tamaño de las terminales",
   "terminal.renameHint": "Haz doble clic para renombrar",
   "terminal.tabKeys": "Las flechas cambian de pestaña. Retorno va al terminal, Borrar cierra la pestaña y F2 le cambia el nombre.",
+  "terminal.openLink": "{key}+clic para abrir en el navegador",
   "terminal.renameName": "Renombrar {name}",
   "terminal.newTab": "Nueva pestaña",
   "terminal.newClaude": "Nuevo Claude",

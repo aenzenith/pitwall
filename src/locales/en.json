@@ -246,6 +246,7 @@
   "terminal.resize": "Resize terminals",
   "terminal.renameHint": "Double-click to rename",
   "terminal.tabKeys": "Arrow keys switch tabs. Return goes to the terminal, Delete closes the tab, F2 renames it.",
+  "terminal.openLink": "{key}-click to open in the browser",
   "terminal.renameName": "Rename {name}",
   "terminal.newTab": "New tab",
   "terminal.newClaude": "New Claude",

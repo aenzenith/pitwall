@@ -1,10 +1,12 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { watch } from "vue";
 
-import { isLinux, isMac, isWindows, terminalChord } from "./platform";
+import { t } from "./i18n";
+import { isLinux, isMac, isWindows, keys, primary, terminalChord } from "./platform";
 import { api } from "./store";
 import { resolvedTheme, themeAt, type ResolvedTheme } from "./theme";
 
@@ -160,15 +162,40 @@ function copySelection(term: Terminal, event: KeyboardEvent): void {
   term.clearSelection();
 }
 
+/**
+ * A web address in a terminal: one it printed (`WebLinksAddon`) or a program's own link (OSC 8),
+ * http and https only. ⌘-click (Ctrl-click on Windows and Linux) opens it in the browser through
+ * the core (`open_url`), as Terminal.app, iTerm and VS Code do; a plain click stays the
+ * terminal's, so selecting the address (a double-click too) never opens it. Over it, a tooltip
+ * says so.
+ */
+function openLink(event: MouseEvent, uri: string): void {
+  if (primary(event) && /^https?:\/\//i.test(uri)) void api.openUrl(uri);
+}
+
+/** The tooltip over a link of the terminal in `element`. */
+function linkHint(element: HTMLElement): { hover: () => void; leave: () => void } {
+  return {
+    hover() {
+      element.title = t("terminal.openLink", { key: keys("mod") });
+    },
+    leave() {
+      element.removeAttribute("title");
+    },
+  };
+}
+
 function create(id: number): View {
   const element = document.createElement("div");
   element.className = "terminal-host";
 
   // The app's theme for now; `attach` looks again once it stands in its panel.
   const theme = resolvedTheme.value;
-  const term = new Terminal({ ...options, theme: THEMES[theme], minimumContrastRatio: CONTRAST[theme] });
+  const hint = linkHint(element);
+  const term = new Terminal({ ...options, theme: THEMES[theme], minimumContrastRatio: CONTRAST[theme], linkHandler: { activate: openLink, ...hint } });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  term.loadAddon(new WebLinksAddon(openLink, hint));
   term.open(element);
 
   // The panel's own keys; everything else goes to the shell. Returning false keeps a key from

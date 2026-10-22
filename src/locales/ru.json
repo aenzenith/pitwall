@@ -254,6 +254,7 @@
   "terminal.resize": "Изменить размер терминалов",
   "terminal.renameHint": "Дважды нажмите, чтобы переименовать",
   "terminal.tabKeys": "Стрелки переключают вкладки. Return переходит в терминал, Delete закрывает вкладку, F2 переименовывает её.",
+  "terminal.openLink": "{key}+щелчок — открыть в браузере",
   "terminal.renameName": "Переименовать {name}",
   "terminal.newTab": "Новая вкладка",
   "terminal.newClaude": "Новый Claude",
