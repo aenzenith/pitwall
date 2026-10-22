@@ -90,6 +90,7 @@ function onKey(event: KeyboardEvent): void {
         @click="emit('select', project.path)"
         @dblclick="openRow(project)"
         data-dblopen
+        data-picks-project
         @contextmenu="rowMenu($event, project)"
         @mouseenter="emit('hover', project.path)"
       >
@@ -152,16 +153,7 @@ function onKey(event: KeyboardEvent): void {
   gap: 1px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
-  padding-bottom: var(--panel-over, 0px);
-  scroll-padding-bottom: var(--panel-over, 0px);
 }
-/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
-   shorter (WindowApp: `--panel-over`). */
-.tower-rows::-webkit-scrollbar-track {
-  margin-bottom: var(--panel-over, 0px);
-}
-
 
 .tower-row {
   flex-shrink: 0;

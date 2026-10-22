@@ -763,6 +763,7 @@ watch([scene, () => props.selected, () => props.hot, () => props.settings.glow, 
           @click="emit('select', mover.path)"
           @dblclick="emit('open', mover.path)"
           data-dblopen
+          data-picks-project
         >
           <ClaudeLogo v-if="mover.kind === 'claude' || atWork(mover.path) > 0" :size="10" />
           {{ tag(mover.path) }}<template v-if="atWork(mover.path) > 1"> ({{ atWork(mover.path) }})</template>
@@ -780,6 +781,7 @@ watch([scene, () => props.selected, () => props.hot, () => props.settings.glow, 
           @click="spot.kind === 'waiting' && emit('select', spot.path)"
           @dblclick="spot.kind === 'waiting' && open(spot)"
           data-dblopen
+          :data-picks-project="spot.kind === 'waiting' || undefined"
         ></span>
       </Transition>
       <Transition v-for="spot in named" :key="spot.id" name="stand">
@@ -792,6 +794,7 @@ watch([scene, () => props.selected, () => props.hot, () => props.settings.glow, 
             @click="emit('select', spot.path)"
             @dblclick="open(spot)"
             data-dblopen
+            data-picks-project
           >
             <ClaudeLogo v-if="spot.kind === 'waiting'" :size="10" />
             {{ spot.text }}

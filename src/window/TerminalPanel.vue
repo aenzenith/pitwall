@@ -811,7 +811,8 @@ function onFocusAnywhere(event: FocusEvent): void {
  * a project on the Track and Today pages, a session, a card's state) only once a double click is out
  * of the question (the Track page's rule, every page's since the user's
  * word, 2026-10-22), unless Settings › General turns it off. The sidebar, dialogs, floating
- * windows and a project's row in the list (picking it turns the panel to it) don't. Nor does a press that asks
+ * windows and what picks a project (`data-picks-project`: the list's rows, the Track page's
+ * standings and tags; the panel turns to it) don't. Nor does a press that asks
  * the panel for something of its own ("Show in terminal", a command's output: lib/panel
  * `panelAsks`): it stays open for that.
  */
@@ -819,8 +820,9 @@ function onPressAnywhere(event: PointerEvent): void {
   if (collapsed.value || event.button !== 0 || snapshot.value?.settings.panelFoldOutside === false) return;
   const target = event.target instanceof Element ? event.target : null;
   if (!target?.closest(".page") || panel.value?.contains(target)) return;
-  // A project picked in the list: the panel turns to it and stays as it is (the user's word).
-  if (target.closest(".trow")) return;
+  // A project picked (the list's row, the Track page's standings and tags): the panel turns to it
+  // and stays as it is (the user's word).
+  if (target.closest("[data-picks-project]")) return;
   const asks = panelAsks.value;
   const wait = target.closest("[data-dblopen]") ? FOLD_AFTER_MS : 0;
   window.addEventListener(

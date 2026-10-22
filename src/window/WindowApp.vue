@@ -1010,6 +1010,7 @@ function server(project: Project): string {
                 :aria-selected="project.path === shown?.path"
                 :tabindex="tabStop === rowKey(project.path) ? 0 : -1"
                 :data-path="project.path"
+                data-picks-project
                 :data-zone="zone(project)"
                 :data-team="section.team?.id"
                 :class="[
