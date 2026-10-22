@@ -264,7 +264,16 @@ function setOpen(from: OpenFrom, value: string): void {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(20px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.settings-pane::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 
 .group {
   /* The line between two parts runs the pane's whole width, past its padding: the one line the

@@ -138,7 +138,16 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
   gap: 18px;
   padding: 18px 20px;
   overflow-y: auto;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(18px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.side-body::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 
 .side-name {
   min-width: 0;

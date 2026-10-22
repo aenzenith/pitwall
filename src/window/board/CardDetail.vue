@@ -1,23 +1,28 @@
 <script setup lang="ts">
+import Icon from "../../components/Icon.vue";
 import Markdown from "../../components/Markdown.vue";
 import { COLUMN_LABELS, type CardStatus } from "../../lib/board";
 import type { Shot } from "../../lib/cardImages";
 import { t } from "../../lib/i18n";
+import { revealTab } from "../../lib/panel";
 import { dragRegion } from "../../lib/platform";
 import type { Card, TerminalView } from "../../lib/types";
-import SessionTerminal from "../sessions/SessionTerminal.vue";
 import CardImages from "./CardImages.vue";
 
 /**
  * The board's details for a card with no session in the list (not given yet, or its session only
- * starting): what the card says, and its Pitwall terminal once it has one. A card with a session
- * shows that session's details instead (sessions/SessionDetail). `project`: its project's name;
- * `images`: the images its note names; `lastMessage`: what Claude last said in its session
- * (Markdown), for a card whose session isn't in the list (yet, or any more). `hold`: the keyboard
- * is in its terminal.
+ * starting): what the card says, and once it has a Pitwall terminal, a button that shows that tab
+ * in the terminal panel (TerminalPanel). A card with a session shows that session's details
+ * instead (sessions/SessionDetail). `project`: its project's name; `images`: the images its note
+ * names; `lastMessage`: what Claude last said in its session (Markdown), for a card whose session
+ * isn't in the list (yet, or any more).
  */
-defineProps<{ card: Card; project: string; status: CardStatus | null; terminal: TerminalView | null; images: Shot[]; lastMessage: string }>();
-const emit = defineEmits<{ hold: [on: boolean] }>();
+const props = defineProps<{ card: Card; project: string; status: CardStatus | null; terminal: TerminalView | null; images: Shot[]; lastMessage: string }>();
+
+/** Its tab in the terminal panel, open, the keyboard in it. */
+function showTerminal(): void {
+  if (props.terminal) revealTab(props.card.path, props.terminal.id);
+}
 </script>
 
 <template>
@@ -33,10 +38,11 @@ const emit = defineEmits<{ hold: [on: boolean] }>();
       <div class="path" :title="card.path">{{ card.path }}</div>
     </header>
 
-    <div :class="['body', { 'over-terminal': terminal }]">
-      <section v-if="status" class="block" :aria-label="t('window.col.claude')">
+    <div class="body">
+      <section v-if="status || terminal" class="block" :aria-label="t('window.col.claude')">
         <div class="section-label">{{ t("window.col.claude") }}</div>
-        <span :class="['state', status.tone]">{{ status.text }}</span>
+        <span v-if="status" :class="['state', status.tone]">{{ status.text }}</span>
+        <button v-if="terminal" type="button" class="text-button to-terminal" @click="showTerminal"><Icon name="terminal" :size="12" />{{ t("sessions.showTerminal") }}</button>
       </section>
 
       <section v-if="card.note" class="block" :aria-label="t('board.dialog.note')">
@@ -53,9 +59,6 @@ const emit = defineEmits<{ hold: [on: boolean] }>();
         <span v-if="!terminal" class="said-note">{{ t("sessions.privacy") }}</span>
       </section>
     </div>
-
-    <!-- Under the sections, which scroll above it. -->
-    <SessionTerminal v-if="terminal" :terminal="terminal" @hold="emit('hold', $event)" />
   </section>
 </template>
 

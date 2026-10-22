@@ -282,10 +282,7 @@ defineExpose({ focus });
   color: var(--text-faint);
   cursor: text;
 }
-.search:focus-within {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -1px;
-}
+/* No ring when it has the keyboard (the user's word, 2026-10-22): the caret is enough. */
 .search input {
   flex: 1 1 auto;
   min-width: 0;

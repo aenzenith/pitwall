@@ -1,6 +1,23 @@
 import { language, t, type Key } from "./i18n";
 import { keys } from "./platform";
-import type { GitInfo, HeldBy, Project, Turn } from "./types";
+import type { CommandView, GitInfo, HeldBy, Project, Turn } from "./types";
+
+/** How long a command's run that ended well keeps its ✓ and its output's tab. */
+export const DONE_FOR_MS = 5 * 60_000;
+
+/**
+ * A command's state as shown: a run that ended well (a one-off done, a worker stopped) is done (✓)
+ * for a few minutes after it ended, then idle again, and its output's tab goes from the terminal
+ * panel (TerminalPanel). A failure (✕) stays until the next run.
+ */
+export function commandStatus(command: CommandView, at: number): CommandView["status"] {
+  return commandFaded(command, at) ? "idle" : command.status;
+}
+
+/** Its run ended well longer ago than DONE_FOR_MS. */
+export function commandFaded(command: CommandView, at: number): boolean {
+  return command.status !== "running" && command.status !== "busy" && !!command.result?.ok && at - command.result.finishedAt > DONE_FOR_MS;
+}
 
 export function uptime(startedAt: number | null, now: number): string {
   if (!startedAt) {

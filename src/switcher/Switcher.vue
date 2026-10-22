@@ -11,7 +11,7 @@ import Marquee from "../components/Marquee.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { composing, draft } from "../lib/capture";
-import { bareUrl, claudeState, gitLine, meta, uptime } from "../lib/format";
+import { bareUrl, claudeState, commandStatus, gitLine, meta, uptime } from "../lib/format";
 import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
 import { generalOpen, openFolderFromOutside, openFromOutside, openTarget } from "../lib/open";
@@ -314,10 +314,10 @@ function openFolder(folder: Folder | null, add: boolean): void {
 const FOLDER_HINTS = { list: "switcher.addAndGo", editor: "common.openInEditor", files: "switcher.addAndShowFiles" } as const;
 
 function mark(command: CommandView): string {
-  return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[command.status];
+  return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[commandStatus(command, now.value)];
 }
 
-/** Pitwall's window, on the project, showing this command's output. */
+/** Pitwall's window, its terminal panel showing this command's output, on the page shown. */
 function showOutput(path: string, job: string): void {
   void emitTo("main", "reveal-output", { path, job });
   void api.openWindow();
@@ -618,7 +618,7 @@ onBeforeUnmount(() => {
           </template>
 
           <template v-else-if="item.kind === 'command'">
-            <span :class="['cmd-mark', item.command.status]">
+            <span :class="['cmd-mark', commandStatus(item.command, now)]">
               <Spinner v-if="item.command.status === 'busy'" :size="12" />
               <template v-else>{{ mark(item.command) }}</template>
             </span>

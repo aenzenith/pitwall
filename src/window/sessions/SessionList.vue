@@ -123,6 +123,7 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
           :title="t('sessions.rowTitle')"
           @click="emit('select', item.id)"
           @dblclick="emit('bringUp', item.id)"
+          data-dblopen
           @contextmenu="onMenu($event, item.id)"
         >
           <span :class="['mark', item.row.phase]" aria-hidden="true"></span>

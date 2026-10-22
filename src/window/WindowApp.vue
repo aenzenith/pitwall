@@ -19,7 +19,7 @@ import { onBoard } from "../lib/board";
 import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
-import { cardRequest, outputRequest, terminalRequest, trackTerminals } from "../lib/panel";
+import { cardRequest, COLLAPSED_HEIGHT, followProject, openInPanel, panelOver, panelPath, revealTab, showOutput } from "../lib/panel";
 import { dragRegion, isMac, keys, terminalChord } from "../lib/platform";
 import { closeFiles, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
 import { listRequest, openInWindow, openTarget } from "../lib/open";
@@ -107,8 +107,8 @@ const depsBadge = computed(() => {
 // The sessions' only once a page showing them (Sessions, Board, Track) first opens: until then the
 // core doesn't work them out. The Sessions page asks for a fresh look itself on each opening; the
 // board's cards follow their sessions, so the Board page's opening asks for both here; the Track
-// page names a project's sessions on its card. The list needs them for its terminal tabs alone
-// (`listTabs`).
+// page names a project's sessions on its card. The terminal panel needs them for its tabs alone
+// (`panelTabs`).
 watch(view, (shown) => {
   if (shown === "sessions" || shown === "board" || shown === "track") {
     if (!sessionsLink) sessionsLink = connectSessions();
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
 // up if it is shown.
 watch(visible, (on) => {
   if (!on) return;
-  if (view.value === "sessions" || view.value === "board" || view.value === "track" || listTabs.value) void loadSessions();
+  if (view.value === "sessions" || view.value === "board" || view.value === "track" || panelTabs.value) void loadSessions();
   if (view.value === "board") void loadBoard();
 });
 const settingsOpen = ref(false);
@@ -347,11 +347,34 @@ function zone(project: Project): string | undefined {
   return grouped.value || !teams.value.length ? undefined : (teamOf(project.path)?.id ?? "");
 }
 
-/** The list shows a project with a terminal open: its tabs tell Claude's state in them
- * (TerminalPanel), which the sessions hold. */
-const listTabs = computed(() => view.value === "projects" && (shown.value?.terminals.length ?? 0) > 0);
+/**
+ * The terminal panel's project (TerminalPanel, under every page): the one the pages followed last
+ * or the panel picked (lib/panel: `panelPath`), while it is listed; else the list's selection, else
+ * the first project. None before there is a project, and none for the first run's steps.
+ */
+const panelProject = computed(() => projects.value.find((p) => p.path === panelPath.value) ?? selected.value ?? projects.value[0] ?? null);
+/** The panel is drawn: the page keeps its tab row's height free for it, and no more. */
+const panelShown = computed(() => panelProject.value !== null && !(setupOpen.value && view.value === "projects"));
+
+// The list's selection is the panel's project, on the Projects page: picked there, its terminal
+// takes the keyboard (the panel open), as it always did; coming back to the page, the panel shows
+// it again without.
 watch(
-  listTabs,
+  () => shown.value?.path,
+  (path) => {
+    if (path && view.value === "projects") followProject(path, true);
+  },
+  { immediate: true },
+);
+watch(view, (page) => {
+  if (page === "projects" && shown.value) followProject(shown.value.path);
+});
+
+/** The panel shows a project with a terminal open: its tabs tell Claude's state in them
+ * (TerminalPanel), which the sessions hold. */
+const panelTabs = computed(() => (panelProject.value?.terminals.length ?? 0) > 0);
+watch(
+  panelTabs,
   (tabs) => {
     if (tabs && !sessionsLink) sessionsLink = connectSessions();
   },
@@ -612,13 +635,11 @@ const fullscreen = ref(false);
 let unlistenResize: UnlistenFn | null = null;
 
 const terminalPanel = ref<InstanceType<typeof TerminalPanel> | null>(null);
-const trackPage = ref<InstanceType<typeof TrackView> | null>(null);
-const sessionsPage = ref<InstanceType<typeof SessionsView> | null>(null);
 
 /** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the
- * selected project: the list's, on the Track page the tower's, on the Sessions page its panel's. */
+ * terminal panel's project, on whatever page. */
 function onKey(event: KeyboardEvent): void {
-  const terminals = terminalPanel.value ?? trackPage.value ?? sessionsPage.value;
+  const terminals = terminalPanel.value;
   if (terminalChord(event) && event.code === "KeyT" && terminals) {
     event.preventDefault();
     void terminals.openTerminal();
@@ -676,27 +697,23 @@ watch(listRequest, (asked) => {
   if (asked) revealProject(asked.path);
 });
 
-/** From the switcher (⌘↵ on a command): the project, with that command's output showing. */
+/** From the switcher (⌘↵ on a command) or the Garage page: that command's output in the terminal
+ * panel, open, on the page shown. */
 function revealOutput(path: string, job: string): void {
-  revealProject(path);
-  outputRequest.value = { path, job };
+  settingsOpen.value = false;
+  showOutput(path, job);
 }
 
 /**
  * A Claude session in one of Pitwall's terminals brought up, from whatever page (or the popover,
- * the switcher, a notification): it shows where its work was started. Given to Claude from a
- * card: that card on its project's board, its terminal open in the card's details (BoardView
- * takes the request). Opened in a project's terminal panel: the project, its panel open on that
- * tab (TerminalPanel takes the request), on the page it was opened from: the Track page, else the
- * list. On the Sessions page, while its own terminals are that project's, there. Either way the
- * keyboard is in it.
+ * the switcher, a notification): the terminal panel shows its project and tab, open, the keyboard
+ * in it (TerminalPanel takes the request), on the page shown. On the Board page, given to Claude
+ * from a card, that card is selected too (BoardView takes the request).
  */
 async function revealTerminal(path: string, id: number): Promise<void> {
   settingsOpen.value = false;
-  if (view.value === "sessions" && sessionsPage.value?.panelPath === path) {
-    terminalRequest.value = { path, id, at: Date.now() };
-    return;
-  }
+  revealTab(path, id);
+  if (view.value !== "board") return;
   // The board's cards, to know whether one runs in that terminal.
   if (!boardLink) boardLink = connectBoard();
   await boardLink.then(
@@ -711,24 +728,14 @@ async function revealTerminal(path: string, id: number): Promise<void> {
   const card = cards
     .filter((entry) => entry.terminal === id || (session !== null && entry.session === session))
     .reduce<Card | null>((last, entry) => (!last || (entry.givenAt ?? 0) >= (last.givenAt ?? 0) ? entry : last), null);
-  if (card) {
-    cardRequest.value = { id: card.id, path: card.path };
-    view.value = "board";
-  } else {
-    // Opened from the Track page's panel: there (the page selects the project in its tower).
-    if (trackTerminals.has(id)) view.value = "track";
-    else revealProject(path);
-    terminalRequest.value = { path, id, at: Date.now() };
-  }
+  if (card) cardRequest.value = { id: card.id, path: card.path };
 }
 
-/** The Sessions page's "Open a Claude terminal": one, in the project selected in the list. */
-async function openClaudeTerminal(): Promise<void> {
-  view.value = "projects";
-  // The project's terminals show under the list: a team's details give way to its own.
-  selectedTeamId.value = null;
-  await nextTick();
-  void terminalPanel.value?.openTerminal(true);
+/** The Sessions page's "Open a Claude terminal" with no project of its own: one, in the terminal
+ * panel, for the project selected in the list. */
+function openClaudeTerminal(): void {
+  const project = selected.value ?? panelProject.value;
+  if (project) openInPanel(project.path, true);
 }
 
 onMounted(async () => {
@@ -905,12 +912,15 @@ function server(project: Project): string {
       </div>
     </aside>
 
+    <!-- The page shown, and along its bottom the terminal panel, the same on every page: the page
+         keeps the panel's tab row free (`COLLAPSED_HEIGHT`); open, the panel lies over it. -->
+    <div class="pages">
+    <div class="page" :style="{ marginBottom: panelShown ? `${COLLAPSED_HEIGHT}px` : undefined, '--panel-over': `${panelOver}px` }">
     <DayView v-if="view === 'day'" />
-    <TrackView v-else-if="view === 'track'" ref="trackPage" @open-project="revealProject" @open-settings="openSettings('track')" />
+    <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
     <FuelView v-else-if="view === 'fuel'" />
     <SessionsView
       v-else-if="view === 'sessions'"
-      ref="sessionsPage"
       :claude-project="selected?.name ?? null"
       @open-project="revealProject"
       @open-settings="openSettings('claude')"
@@ -1087,9 +1097,6 @@ function server(project: Project): string {
 
         <!-- Projects that appeared in the projects folder, offered under the list. -->
         <ProjectSuggestions />
-
-        <!-- The selected project's terminals, level with the output panel beside it. -->
-        <TerminalPanel v-if="shown" ref="terminalPanel" :project="shown" />
       </main>
 
       <!-- A selected team's details take the pane; else the selected project's. -->
@@ -1099,6 +1106,12 @@ function server(project: Project): string {
            The middle panel already shows the glyph and what to do. -->
       <section v-else class="detail-empty" :aria-label="t('window.projectDetails')"></section>
     </template>
+    </div>
+
+    <!-- The panel's project's outputs and terminals; not before there is a project, nor over the
+         first run's steps. -->
+    <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" />
+    </div>
 
     <!-- The selected project's files, floating over whatever page is up (⇧⌘E, the details' button). -->
     <FilesWindows />
@@ -1122,6 +1135,24 @@ function server(project: Project): string {
 <style scoped>
 .shell {
   height: 100%;
+  display: flex;
+  overflow: clip;
+}
+
+/* Right of the sidebar: the page, and along its bottom the terminal panel (TerminalPanel). */
+.pages {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The page, less the panel's tab row; its own parts lie side by side, as they did in the
+   window. */
+.page {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   overflow: clip;
 }
@@ -1662,7 +1693,16 @@ function server(project: Project): string {
   min-height: 0;
   overflow-y: auto;
   padding: 10px;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(10px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.tbody::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 
 /* In groups, each head brings its own room above it (team/TeamHead). */
 .tbody.grouped {

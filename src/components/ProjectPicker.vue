@@ -21,16 +21,25 @@ import type { Project, Turn } from "../lib/types";
  * Where the page has no room for its name, the page's container query hides `ppick-text` and
  * `ppick-more` and shows `ppick-every` (every project's icon, out of sight otherwise): its icon
  * alone, its name still its tooltip and read out.
+ *
+ * The terminal panel's (window/TerminalPanel) is `plain`, its name alone on the panel's tab row,
+ * and offers no "every project" (`every` false). A picker in the window's lower half opens its
+ * list above it.
  */
-const props = defineProps<{
-  projects: Project[];
-  /** The project shown; null for every project. */
-  scope: string | null;
-  /** What Claude waits on you with in each project, by the project's path. */
-  waits: Map<string, Turn["kind"]>;
-  /** What the picker is read out as; `{name}` is the project shown. */
-  label: Key;
-}>();
+const props = withDefaults(
+  defineProps<{
+    projects: Project[];
+    /** The project shown; null for every project. */
+    scope: string | null;
+    /** What Claude waits on you with in each project, by the project's path. */
+    waits: Map<string, Turn["kind"]>;
+    /** What the picker is read out as; `{name}` is the project shown. */
+    label: Key;
+    every?: boolean;
+    plain?: boolean;
+  }>(),
+  { every: true, plain: false },
+);
 const emit = defineEmits<{ pick: [path: string | null] }>();
 
 /** A typed name is forgotten this long after its last letter (ms). */
@@ -41,7 +50,7 @@ type Option = { path: string | null; name: string; label: string; waits: boolean
 /** Every project, then each one: with Claude's dot, what it waits on you with too. The one shown
  * has none. */
 const options = computed<Option[]>(() => [
-  { path: null, name: t("board.allProjects"), label: t("board.allProjects"), waits: false },
+  ...(props.every ? [{ path: null, name: t("board.allProjects"), label: t("board.allProjects"), waits: false }] : []),
   ...props.projects.map((p) => {
     const wait = p.path === props.scope ? undefined : props.waits.get(p.path);
     return { path: p.path, name: p.name, label: wait ? t(WAIT_LABELS[wait], { name: p.name }) : p.name, waits: !!wait };
@@ -85,12 +94,20 @@ function move(index: number): void {
 function show(): void {
   const box = button.value?.getBoundingClientRect();
   if (!box || open.value) return;
-  place.value = {
-    top: `${box.bottom + 4}px`,
-    right: `${window.innerWidth - box.right}px`,
-    minWidth: `${box.width}px`,
-    maxHeight: `${Math.max(120, window.innerHeight - box.bottom - 16)}px`,
-  };
+  const above = box.top > window.innerHeight / 2;
+  place.value = above
+    ? {
+        bottom: `${window.innerHeight - box.top + 4}px`,
+        left: `${box.left}px`,
+        minWidth: `${box.width}px`,
+        maxHeight: `${Math.max(120, box.top - 16)}px`,
+      }
+    : {
+        top: `${box.bottom + 4}px`,
+        right: `${window.innerWidth - box.right}px`,
+        minWidth: `${box.width}px`,
+        maxHeight: `${Math.max(120, window.innerHeight - box.bottom - 16)}px`,
+      };
   open.value = true;
   move(Math.max(0, options.value.findIndex((option) => option.path === props.scope)));
   window.addEventListener("pointerdown", onOutside, true);
@@ -181,7 +198,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="ppick">
+  <div ref="root" :class="['ppick', { plain }]">
     <button
       ref="button"
       type="button"
@@ -194,8 +211,10 @@ onBeforeUnmount(() => {
       @keydown.down.prevent="show"
       @keydown.up.prevent="show"
     >
-      <Icon v-if="shown" name="folder" :size="13" />
-      <Icon v-else name="grid" :size="13" class="ppick-every" />
+      <template v-if="!plain">
+        <Icon v-if="shown" name="folder" :size="13" />
+        <Icon v-else name="grid" :size="13" class="ppick-every" />
+      </template>
       <span class="ppick-text">{{ name }}</span>
       <Icon name="chevron-down" :size="11" class="ppick-more" />
       <span v-if="elsewhere.length" class="ppick-mark" aria-hidden="true"></span>
@@ -216,7 +235,7 @@ onBeforeUnmount(() => {
     >
       <template v-for="(option, i) in options" :key="option.path ?? ''">
         <!-- Every project, then a line, then the projects. -->
-        <li v-if="i === 1" class="ppick-line" role="presentation"></li>
+        <li v-if="every && i === 1" class="ppick-line" role="presentation"></li>
         <li
           :id="optionId(i)"
           :class="['ppick-option', { on: i === active }]"
@@ -275,6 +294,35 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* On the terminal panel's tab row: the project's name, as bold as a heading, with no box. */
+.ppick.plain {
+  min-width: 0;
+  max-width: none;
+}
+
+.ppick.plain .ppick-button {
+  gap: 5px;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.ppick.plain .ppick-button:hover,
+.ppick.plain .ppick-button[aria-expanded="true"] {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+.ppick.plain .ppick-mark {
+  top: 1px;
+  right: 1px;
+  box-shadow: 0 0 0 2px var(--bg-app);
 }
 
 /* Every project's icon: only where the page shows the picker without its name. */

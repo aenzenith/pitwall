@@ -173,6 +173,8 @@ export type Settings = {
   filesPreview?: boolean;
   /** The list shows the favourites and the projects at work only ("Only favourites and open"). */
   favouritesOnly?: boolean;
+  /** A press on the page folds the open terminal panel (Settings › General); on unless turned off. */
+  panelFoldOutside?: boolean;
   /** The Track page's own settings (lib/track: TrackSettings), read leniently. */
   track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
   /** How the app is drawn (lib/theme). */

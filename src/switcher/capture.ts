@@ -7,7 +7,7 @@ import { computed, nextTick, ref, toRef, watch, type Ref } from "vue";
 
 import { captureOrder, cardTitle, draft, hasDraft, queuedCounts, useAdd } from "../lib/capture";
 import { useNoteImages } from "../lib/cardImages";
-import { detailTerminalHeight } from "../lib/panel";
+import { TAB_ROOM } from "../lib/panel";
 import { primary } from "../lib/platform";
 import { api, snapshot } from "../lib/store";
 import { measure } from "../lib/terminals";
@@ -36,13 +36,13 @@ export type CaptureHost = {
 };
 
 /**
- * The size the card's details give a new Claude tab, so its shell starts at that size: what the
- * Board page measures before it gives a card (BoardView: `terminalSize`), with the height the
- * details' terminal starts every launch at.
+ * The size the terminal panel gives a new Claude tab, so its shell starts near that size: what the
+ * Board page measures before it gives a card (BoardView: `terminalSize`), as the window and the
+ * panel are at their defaults (this window can't measure that one).
  */
 function tabSize(): { cols: number; rows: number } | null {
   const host = document.createElement("div");
-  host.style.cssText = `position: fixed; left: -10000px; top: 0; width: 323px; height: ${detailTerminalHeight.value - 76}px; visibility: hidden`;
+  host.style.cssText = `position: fixed; left: -10000px; top: 0; width: ${TAB_ROOM.width}px; height: ${TAB_ROOM.height}px; visibility: hidden`;
   document.body.appendChild(host);
   try {
     return measure(host);

@@ -120,5 +120,14 @@ const nowLeft = computed(() => (props.day.today ? `${pct(props.day.now, props.ra
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: var(--panel-over, 0px);
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.lanes::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 </style>

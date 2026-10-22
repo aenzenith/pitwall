@@ -1,78 +1,197 @@
-import { ref, type Ref } from "vue";
+import { ref, watch, type Ref } from "vue";
 
 /**
- * The bottom panels: the output (details) and the terminals (list), each with its own height
- * covering handle, tabs and content. Every launch starts both at the default; either can be
- * dragged down to the minimum.
+ * The panel along the window's bottom (window/TerminalPanel), under every page: one project's
+ * outputs (the dev server, its commands) and terminals as tabs, with one height and one collapsed
+ * state whatever the page. Every launch starts it collapsed, its tab row alone, and expanded at the
+ * default; it can be dragged down to the minimum and up to the page's bar.
  */
 /** Room for two terminal rows: tabs and a prompt stay usable. */
 export const PANEL_MIN = 120;
-/** Room for about seven terminal rows. */
-const PANEL_DEFAULT = 240;
+/** Room for a Claude session. */
+const PANEL_DEFAULT = 300;
 
-export const outputHeight = ref(PANEL_DEFAULT);
 export const terminalHeight = ref(PANEL_DEFAULT);
-/**
- * A session's terminal under its details (sessions/SessionTerminal): pinned there with its own
- * height, as the terminals are under the list, and the same for every session. Every launch
- * starts it at this default; its handle takes it down to the minimum and up to the details' top.
- * Collapsed, it keeps only its handle and label row, as a bottom panel does.
- */
-const DETAIL_TERMINAL_DEFAULT = 350;
-export const detailTerminalHeight = ref(DETAIL_TERMINAL_DEFAULT);
-export const detailTerminalCollapsed = ref(false);
-/** The output is on screen (not while the project's settings fill the details). */
-export const outputShown = ref(false);
+export const terminalCollapsed = ref(true);
+
+/** A collapsed panel keeps only its handle and tab row; its height waits for its return. */
+export const COLLAPSED_HEIGHT = 42;
+
+/** How far the panel, open, lies over the page (its height as drawn, less its tab row's, which the
+ * page keeps free): the page's lists keep that much room under their end, so every row can be
+ * scrolled above it (WindowApp: `--panel-over`). */
+export const panelOver = ref(0);
+/** Collapsing and expanding animate for this long (ms). */
+export const COLLAPSE_MS = 220;
+
+/** What the open panel takes around a terminal's rows: its handle (9), its tab row (24), the
+ * terminal's margins (6 above, 20 under), padding (16) and border (2). */
+export const TAB_CHROME = 77;
 
 /**
- * The switcher's ⌘↵ on a command: the window selects that project and shows the command's
- * output tab, its panel open. Whoever shows it clears it.
+ * A new tab's room where the panel can't be measured (the quick switcher, another window, gives a
+ * card): the window's default width less the sidebar and the panel's margins, and the panel's
+ * default height less what it takes around the rows.
  */
-export const outputRequest = ref<{ path: string; job: string } | null>(null);
+export const TAB_ROOM = { width: 1280 - 232 - 56, height: PANEL_DEFAULT - TAB_CHROME };
 
 /**
- * A Claude session in one of Pitwall's terminals was brought up (`reveal-terminal`): the window
- * selects that project, opens its terminal panel on that tab and focuses it. Whoever shows it
+ * The panel's project: the one the page shown last followed (the list's selection, the Track
+ * page's tower, the Sessions page's session, the Board page's card) or the one picked in the
+ * panel itself. Kept while Pitwall runs; a page with no project of its own (Today, Fuel, Garage)
+ * leaves it as it is.
+ */
+export const panelPath = ref<string | null>(null);
+
+/** What the panel shows of a project: one of its outputs (`job`: null for the dev server, otherwise
+ * a command's id) or one of its terminals. */
+export type PanelTab = { kind: "output"; job: string | null } | { kind: "terminal"; id: number };
+
+/**
+ * The tab shown, per project, so coming back to a project shows the same one. Without one, the
+ * project's last terminal, else its dev server's output.
+ */
+export const chosenTab = ref<Record<string, PanelTab>>({});
+
+/** The terminal an output took the place of, per project: picked again, the output goes back to it. */
+export const outputFrom: Record<string, number> = {};
+
+export function chooseTab(path: string, tab: PanelTab): void {
+  const was = chosenTab.value[path];
+  if (tab.kind === "output" && was?.kind === "terminal") outputFrom[path] = was.id;
+  chosenTab.value = { ...chosenTab.value, [path]: tab };
+}
+
+/** The keyboard is in the panel: a page that moves it from project to project holds still meanwhile. */
+export const panelTyping = ref(false);
+
+/** A tab is being opened: its shell starts at the open panel's size, so the panel stays open. */
+export const panelOpening = ref(false);
+
+/** The project whose terminal takes the keyboard once it shows (`followProject` with `focus`). */
+export const panelFocus = ref<string | null>(null);
+
+/** The tab a page followed to (`followTab`): it shows without the keyboard. */
+export const followedTab = ref<number | null>(null);
+
+/**
+ * The page's project: the panel shows it. `focus`: its terminal takes the keyboard, the panel
+ * open (a project picked in the list). Not while the keyboard is in the panel.
+ */
+export function followProject(path: string, focus = false): void {
+  if (panelTyping.value) return;
+  panelFocus.value = focus ? path : null;
+  panelPath.value = path;
+}
+
+/** The page's session runs in one of the project's terminals: the panel shows that tab, without
+ * the keyboard. Not while the keyboard is in the panel. */
+export function followTab(path: string, id: number): void {
+  if (panelTyping.value) return;
+  const chosen = chosenTab.value[path];
+  if (chosen?.kind !== "terminal" || chosen.id !== id) {
+    followedTab.value = id;
+    chooseTab(path, { kind: "terminal", id });
+  }
+  panelFocus.value = null;
+  panelPath.value = path;
+}
+
+/**
+ * A page's part in what the panel shows: the project and, while its selection runs in one of
+ * Pitwall's terminals, that tab (`target`). Followed when it changes; while the keyboard is in the
+ * panel what changed waits, and comes once the keyboard leaves. Nothing else moves the panel: a
+ * project picked in the panel stays until the page's selection moves on.
+ */
+export function usePanelFollow(target: () => { path: string; tab: number | null } | null): void {
+  let behind = false;
+  function apply(): void {
+    const to = target();
+    if (!to) return;
+    if (to.tab === null) followProject(to.path);
+    else followTab(to.path, to.tab);
+  }
+  watch(
+    () => {
+      const to = target();
+      return to ? `${to.path}\u0000${to.tab ?? ""}` : "";
+    },
+    () => {
+      behind = panelTyping.value;
+      if (!behind) apply();
+    },
+    { immediate: true },
+  );
+  watch(panelTyping, (on) => {
+    if (on || !behind) return;
+    behind = false;
+    apply();
+  });
+}
+
+/** Something asked the panel to show a tab of its, open (an output, a session, a new tab): counted,
+ * so that the press that asked doesn't fold it (TerminalPanel: a press outside). */
+export const panelAsks = ref(0);
+
+/** An output asked for (a command run or its row's button, the switcher's ⌘↵, the Garage page): its
+ * project and tab in the panel, open. */
+export function showOutput(path: string, job: string | null): void {
+  panelAsks.value++;
+  chooseTab(path, { kind: "output", job });
+  panelPath.value = path;
+  terminalCollapsed.value = false;
+}
+
+/** The panel on `path`'s project, open, showing what it shows there (a project opened where its
+ * terminal is the choice, with no terminal: no tab is opened for it). */
+export function openPanelOn(path: string): void {
+  panelAsks.value++;
+  panelPath.value = path;
+  terminalCollapsed.value = false;
+}
+
+/** The panel folds to its tab row (a press outside it, TerminalPanel). Not while a tab is opening. */
+export function foldPanel(): void {
+  if (!panelOpening.value) terminalCollapsed.value = true;
+}
+
+/**
+ * A Claude session in one of Pitwall's terminals was brought up (`reveal-terminal`): the panel
+ * shows that project and tab, open, the keyboard in it, on whatever page is shown. Whoever shows it
  * clears it; `at` lets one that never finds its tab lapse.
  */
 export const terminalRequest = ref<{ path: string; id: number; at: number } | null>(null);
 
+export function revealTab(path: string, id: number): void {
+  panelAsks.value++;
+  panelPath.value = path;
+  terminalRequest.value = { path, id, at: Date.now() };
+}
+
+/** A new tab asked for from a page (the Sessions page's "Open a Claude terminal"): the panel's
+ * project becomes `path` and opens it as its "+" would. Whoever opens it clears it. */
+export const openRequest = ref<{ path: string; claude: boolean; at: number } | null>(null);
+
+export function openInPanel(path: string, claude: boolean): void {
+  panelAsks.value++;
+  panelPath.value = path;
+  openRequest.value = { path, claude, at: Date.now() };
+}
+
+/** The size a new tab gets in the panel, measured by the panel (`register`): the Board page gives
+ * a card to Claude at it. */
+export const panelMeasure: { size: () => { cols: number; rows: number } | null } = { size: () => null };
+
 /**
- * The same, when that terminal is a board card's (the card was given to Claude in it): the Board
- * page shows the card on its project's board, its terminal open in the card's details and the
- * keyboard in it. Whoever shows it clears it.
+ * A card's Claude session was brought up while the Board page shows: the page selects that card
+ * (an empty id: the project's board alone). Whoever shows it clears it.
  */
 export const cardRequest = ref<{ id: string; path: string } | null>(null);
-
-/** A collapsed panel keeps only its handle and tab row; its height waits for its return. */
-export const COLLAPSED_HEIGHT = 42;
-export const outputCollapsed = ref(false);
-export const terminalCollapsed = ref(false);
-
-/**
- * The Track page's terminals: the list's panel (window/TerminalPanel), pinned to the page's bottom
- * with a height and a collapsed state of its own. Every launch starts it collapsed, its tab row
- * alone, and expanded at this default: room for a Claude session, where the least height leaves
- * two rows. Only its tab row's height of the page is its room: open, it lies over the circuit and
- * the tower, which stay as they are, and a press on them collapses it again.
- */
-const TRACK_TERMINAL_DEFAULT = 350;
-export const trackTerminalHeight = ref(TRACK_TERMINAL_DEFAULT);
-export const trackTerminalCollapsed = ref(true);
-
-/**
- * The Sessions page's terminals: the list's panel, under the page's list with a height and a
- * collapsed state of its own, its project the one picked or else the selected session's. Every
- * launch starts it collapsed, its tab row alone, and expanded at this default, as the Track page's.
- */
-const SESSIONS_TERMINAL_DEFAULT = 350;
-export const sessionsTerminalHeight = ref(SESSIONS_TERMINAL_DEFAULT);
-export const sessionsTerminalCollapsed = ref(true);
 
 /**
  * The terminals' history column (window/TerminalHistory), beside the terminal: shown or not, and
  * how wide (its handle drags it, a double click puts the default back), the same for every
- * project and both panels. Every launch starts it hidden, at the default width.
+ * project. Every launch starts it hidden, at the default width.
  */
 export const terminalHistoryShown = ref(false);
 export const HISTORY_WIDTH = 296;
@@ -86,28 +205,10 @@ export const historyWidth = ref(HISTORY_WIDTH);
 export const terminalOrder = ref<Record<string, number[]>>({});
 
 /**
- * The terminal tab shown, per project, so coming back to a project shows the same one: its panel
- * goes away meanwhile (a team selected, another page shown).
+ * Handle behaviour for the panel: drag or arrow keys change its `height`, up to what `max()`
+ * allows (the room under the page's bar).
  */
-export const chosenTerminal = ref<Record<string, number>>({});
-
-/**
- * The terminals opened from the Track page's panel, by id (ids are never used twice). A Claude
- * session brought up shows where its work was started: one of these, on the Track page.
- */
-export const trackTerminals = new Set<number>();
-/** Collapsing and expanding animate for this long (ms). */
-export const COLLAPSE_MS = 220;
-
-/** While dragging, a height this close to the other panel's takes it: the top lines line up. */
-const SNAP = 12;
-
-/**
- * Handle behaviour for a bottom panel: drag or arrow keys change its `height`, up to what
- * `max()` allows (the area under the header). `snapTo()` is the other panel's height, or null
- * when it isn't on screen; near it, the height snaps to it, and arrow keys stop at it.
- */
-export function useResizer(height: Ref<number>, max: () => number, snapTo: () => number | null = () => null) {
+export function useResizer(height: Ref<number>, max: () => number) {
   let drag: { startY: number; startHeight: number; max: number } | null = null;
   /** While a drag is on, the panel follows the pointer without animating. */
   const dragging = ref(false);
@@ -125,10 +226,7 @@ export function useResizer(height: Ref<number>, max: () => number, snapTo: () =>
 
   function move(event: PointerEvent): void {
     if (!drag) return;
-    let wanted = drag.startHeight + (drag.startY - event.clientY);
-    const target = snapTo();
-    if (target !== null && Math.abs(wanted - target) <= SNAP) wanted = target;
-    height.value = Math.min(drag.max, Math.max(PANEL_MIN, wanted));
+    height.value = Math.min(drag.max, Math.max(PANEL_MIN, drag.startHeight + (drag.startY - event.clientY)));
   }
 
   function end(): void {
@@ -142,11 +240,7 @@ export function useResizer(height: Ref<number>, max: () => number, snapTo: () =>
     event.preventDefault();
     const top = limit();
     const step = event.key === "ArrowUp" ? 24 : -24;
-    const current = Math.min(height.value, top);
-    let next = Math.min(top, Math.max(PANEL_MIN, current + step));
-    const target = snapTo();
-    if (target !== null && (current - target) * (next - target) < 0) next = target;
-    height.value = next;
+    height.value = Math.min(top, Math.max(PANEL_MIN, Math.min(height.value, top) + step));
   }
 
   return { start, move, end, nudge, dragging };

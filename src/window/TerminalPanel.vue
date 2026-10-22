@@ -4,38 +4,55 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import ClaudeDot from "../components/ClaudeDot.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
+import ProjectPicker from "../components/ProjectPicker.vue";
+import { depJobName, depJobs } from "../lib/deps";
+import { commandFaded } from "../lib/format";
 import { shellRequest } from "../lib/flag";
 import { t } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
-import { isMac } from "../lib/platform";
+import { plainText, shownLines } from "../lib/outputLines";
+import { useOutputSearch } from "../lib/outputSearch";
+import { useOutputStream } from "../lib/outputStream";
 import {
-  chosenTerminal,
+  chooseTab,
+  chosenTab,
+  foldPanel,
+  followedTab,
   COLLAPSED_HEIGHT,
   COLLAPSE_MS,
-  outputCollapsed,
-  outputHeight,
-  outputShown,
+  HISTORY_MIN,
+  HISTORY_WIDTH,
+  historyWidth,
+  openRequest,
+  outputErrorsOnly,
+  panelAsks,
+  outputFrom,
+  panelFocus,
+  panelMeasure,
+  panelOpening,
+  panelOver,
+  panelPath,
+  panelTyping,
+  TAB_CHROME,
+  TAB_ROOM,
   terminalCollapsed,
   terminalHeight,
   terminalHistoryShown,
   terminalOrder,
-  HISTORY_MIN,
-  HISTORY_WIDTH,
-  historyWidth,
   terminalRequest,
-  sessionsTerminalCollapsed,
-  sessionsTerminalHeight,
-  trackTerminalCollapsed,
-  trackTerminalHeight,
-  trackTerminals,
   useResizer,
 } from "../lib/panel";
-import { statusLine } from "../lib/sessions";
+import { isMac, primary } from "../lib/platform";
+import { sessionWaits, statusLine } from "../lib/sessions";
 import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
-import { api, now, sessions } from "../lib/store";
+import { api, now, sessions, snapshot } from "../lib/store";
+import { tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
 import { attach, fitView, focusView, measure } from "../lib/terminals";
 import type { Project, StartChoice } from "../lib/types";
+import CardDialog from "./board/CardDialog.vue";
+import OutputLog from "./detail/OutputLog.vue";
+import OutputSearch from "./detail/OutputSearch.vue";
 import RenameDialog from "./RenameDialog.vue";
 import TerminalHistory from "./TerminalHistory.vue";
 
@@ -43,28 +60,22 @@ import TerminalHistory from "./TerminalHistory.vue";
 const REQUEST_MS = 5_000;
 
 /**
- * The selected project's terminals. `place`: the page they are on, the list's by default. The Track
- * page's is the same panel with one difference: it lies over the page's bottom instead of taking
- * its room from what is above it, so nothing there is laid out again (or scrolls in less room) as
- * it grows, and a press on what it lies over folds it away (`collapse`). The Sessions page's takes
- * its room under that page's list, as the list's does; the page moves it from session to session,
- * so it never takes the keyboard by itself. Each has a height and a collapsed state of its own
- * (lib/panel).
+ * The panel along the window's bottom, under every page (WindowApp): one project's outputs (the
+ * dev server, the commands that ran, the Garage page's jobs) and its terminals, as tabs in one
+ * row. Its project is the one the page shown follows (lib/panel: `followProject`), or the one
+ * picked at the row's start. One height and one collapsed state for every page (lib/panel).
  */
-const props = withDefaults(defineProps<{ project: Project; place?: "list" | "track" | "sessions" }>(), { place: "list" });
+const props = defineProps<{ project: Project }>();
 
-/** Room above the panel that always stays: the toolbar (56), and under it the list's table header
- * (38) or the Sessions page's filters (44). */
-const PLACES = {
-  list: { header: 94, height: terminalHeight, collapsed: terminalCollapsed },
-  track: { header: 56, height: trackTerminalHeight, collapsed: trackTerminalCollapsed },
-  sessions: { header: 100, height: sessionsTerminalHeight, collapsed: sessionsTerminalCollapsed },
-};
-const { header: HEADER, height, collapsed } = PLACES[props.place];
+/** Room above the panel that always stays: the page's bar. */
+const HEADER = 56;
+const height = terminalHeight;
+const collapsed = terminalCollapsed;
 
 const panel = ref<HTMLElement | null>(null);
+const body = ref<HTMLElement | null>(null);
 const viewport = ref<HTMLElement | null>(null);
-const opening = ref(false);
+const opening = panelOpening;
 /** The tab being renamed: double-click opens the rename dialog for it. */
 const renaming = ref<{ id: number; name: string } | null>(null);
 
@@ -90,16 +101,17 @@ const live = computed(() => {
   }
   return states;
 });
+/** The tab chosen in this project (lib/panel), if any. */
+const chosen = computed(() => chosenTab.value[props.project.path]);
+/** The terminal shown: the one chosen, else (one chosen that closed, or nothing chosen) the last;
+ * none while an output is chosen. */
 const active = computed(() => {
-  const id = chosenTerminal.value[props.project.path];
-  return terminals.value.find((t) => t.id === id) ?? terminals.value[terminals.value.length - 1] ?? null;
+  const choice = chosen.value;
+  if (choice?.kind === "output") return null;
+  return terminals.value.find((t) => t.id === choice?.id) ?? terminals.value[terminals.value.length - 1] ?? null;
 });
 
-const resizer = useResizer(
-  height,
-  () => (panel.value?.parentElement?.clientHeight ?? 0) - HEADER,
-  () => (props.place === "list" && outputShown.value && !outputCollapsed.value ? outputHeight.value : null),
-);
+const resizer = useResizer(height, () => (panel.value?.parentElement?.clientHeight ?? 0) - HEADER);
 const dragging = resizer.dragging;
 
 /** Collapsed, only the tab row shows; the chosen height comes back on expanding. */
@@ -110,20 +122,179 @@ let settle: ReturnType<typeof setTimeout> | undefined;
 
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value;
-  animating.value = true;
-  clearTimeout(settle);
-  settle = setTimeout(() => {
-    animating.value = false;
-    if (!collapsed.value && active.value) fitView(active.value.id);
-  }, COLLAPSE_MS + 40);
 }
 
+// Collapsed or expanded, from here or from a page (lib/panel: `foldPanel`, an output asked for):
+// the panel slides with its shell at the size it had, and a terminal or an output going out of
+// sight lets the keyboard go.
+watch(
+  collapsed,
+  (folded) => {
+    if (folded && body.value?.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    animating.value = true;
+    clearTimeout(settle);
+    settle = setTimeout(() => {
+      animating.value = false;
+      if (!collapsed.value && active.value) fitView(active.value.id);
+    }, COLLAPSE_MS + 40);
+  },
+  { flush: "sync" },
+);
+
+/* ---------- the outputs ---------- */
+
+/** The outputs' tabs: the dev server, then every command that ran in this session, then the Garage
+ * page's installs and migrations that did (lib/deps) and the core doesn't list as commands. Each
+ * with its state: running, or failed (a crashed server). */
+const outputs = computed(() => {
+  const project = props.project;
+  const server = { id: null as string | null, name: t("common.devServer"), state: project.status === "running" ? "on" : project.status === "crashed" ? "bad" : null };
+  // A run that ended well a while ago leaves the row, unless its output is the one picked here.
+  const picked = chosen.value?.kind === "output" ? chosen.value.job : undefined;
+  const commands = (project.commands ?? [])
+    .filter((c) => (c.status !== "idle" || c.result) && (!commandFaded(c, now.value) || c.id === picked))
+    .map((c) => ({ id: c.id as string | null, name: c.name, state: c.status === "running" ? "on" : c.status === "failed" ? "bad" : null }));
+  const listed = new Set((project.commands ?? []).map((c) => c.id));
+  const jobs = (depJobs.value[project.path] ?? [])
+    .filter((job) => !listed.has(job))
+    .map((job) => ({ id: job as string | null, name: depJobName(project.path, job) ?? job, state: null }));
+  return [server, ...commands, ...jobs];
+});
+/** The output picked: the one chosen while it is still a tab, else the dev server's. */
+const job = computed<string | null>(() => {
+  const choice = chosen.value;
+  return choice?.kind === "output" && outputs.value.some((item) => item.id === choice.job) ? choice.job : null;
+});
 /**
- * The Track page's panel folds away on a press on the stage behind it (TrackView), its tab row
- * left. Not while a tab is opening: its shell starts at the open panel's size.
+ * An output shows in the place of the terminal only once it was picked (its tab, a command run, an
+ * output asked for); never by itself, a project with no terminal included: that one shows the
+ * empty terminal (the user's word, 2026-10-22).
  */
-function collapse(): void {
-  if (!collapsed.value && !opening.value) toggleCollapsed();
+const showsOutput = computed(() => chosen.value?.kind === "output");
+
+// Nothing of an output is read or followed while none shows: its lines are asked for when it does.
+const { lines, runStart, load: loadOutput } = useOutputStream(
+  () => (showsOutput.value ? props.project.path : ""),
+  job,
+);
+watch(
+  [() => props.project.path, job, showsOutput],
+  ([, , shows]) => {
+    if (shows) void loadOutput();
+  },
+  { immediate: true },
+);
+
+/**
+ * An output's tab asked for: shown, and a collapsed panel comes up with it. The one shown, picked
+ * again, gives its place back: to the terminal it took it from (lib/panel: `outputFrom`), else the
+ * project's last terminal, the keyboard in it; with no terminal, to the empty terminal.
+ */
+function openOutput(id: string | null): void {
+  if (showsOutput.value && job.value === id && !collapsed.value) return closeOutput();
+  // From a terminal (one picked, or the last shown for want of one): that is where it goes back to.
+  if (active.value) outputFrom[props.project.path] = active.value.id;
+  chooseTab(props.project.path, { kind: "output", job: id });
+  if (collapsed.value) toggleCollapsed();
+}
+
+function closeOutput(): void {
+  const list = terminals.value;
+  if (!list.length) {
+    chooseTab(props.project.path, { kind: "terminal", id: -1 });
+    return;
+  }
+  const from = outputFrom[props.project.path];
+  const back = list.find((term) => term.id === from) ?? list[list.length - 1];
+  show(back.id);
+}
+
+/** ←/→, Home and End move between the outputs' tabs. */
+function onOutputKey(event: KeyboardEvent, at: number): void {
+  const next = tabKey(event, outputs.value.length, at);
+  if (next !== null) openOutput(outputs.value[next].id);
+}
+
+/** The output shown: a project's server, or one of its commands. Each has its own filter. */
+const pane = computed(() => `${props.project.path}\u001f${job.value ?? ""}`);
+const errorsOnly = computed({
+  get: () => outputErrorsOnly.value[pane.value] ?? false,
+  set: (on) => (outputErrorsOnly.value = { ...outputErrorsOnly.value, [pane.value]: on }),
+});
+/** The errors of the run that is on: those of a run before are no longer the server's state. */
+const errorCount = computed(() => lines.value.reduce((count, line) => count + (line.level === "error" && line.id >= runStart.value ? 1 : 0), 0));
+const shownOutput = computed(() => shownLines(lines.value, errorsOnly.value));
+const emptyOutput = computed(() => {
+  if (lines.value.length) return t("output.noErrors");
+  if (job.value !== null) return t("detail.noOutput");
+  return t(props.project.owner ? "detail.noServerOutput" : "detail.notRunning");
+});
+
+const log = ref<InstanceType<typeof OutputLog> | null>(null);
+const { open: searching, query, ranges, count: matches, position, current, step, close: closeFind } = useOutputSearch(shownOutput);
+const field = ref<InstanceType<typeof OutputSearch> | null>(null);
+/** What had the keyboard when the search opened: closing gives it back. */
+let before: HTMLElement | null = null;
+
+async function openSearch(): Promise<void> {
+  if (!searching.value) before = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  if (collapsed.value) toggleCollapsed();
+  searching.value = true;
+  await nextTick();
+  field.value?.focus();
+}
+
+/** The marks go with the query; the keyboard goes back where it was, else to the lines. */
+function closeSearch(): void {
+  closeFind();
+  const back = before;
+  before = null;
+  if (back?.isConnected) back.focus({ preventScroll: true });
+  else log.value?.focus();
+}
+
+/** ⌘F while the keyboard is in the output (its lines take it with a click), and Esc there closes
+ * the search: from its own buttons as from its field, else the keyboard stays. */
+function onOutputKeys(event: KeyboardEvent): void {
+  if (event.key === "Escape" && searching.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.target instanceof Node && field.value?.$el.contains(event.target)) return closeSearch();
+    closeFind();
+    before = null;
+    return;
+  }
+  if (!primary(event) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "f") return;
+  event.preventDefault();
+  void openSearch();
+}
+
+// Collapsed, or on another output or a terminal, there is no line to search in.
+watch([collapsed, pane, showsOutput], () => closeFind());
+
+const copied = ref(false);
+let copiedTimer = 0;
+
+/** What the output shows, as text. */
+function copyAll(): void {
+  void api.copyText(plainText(shownOutput.value));
+  copied.value = true;
+  window.clearTimeout(copiedTimer);
+  copiedTimer = window.setTimeout(() => (copied.value = false), 1200);
+}
+
+/** An error of the output on its way to the board: the card dialog, filled in with it. */
+const errorCard = ref<{ title: string; note: string; path: string } | null>(null);
+const cardProjects = computed(() => [{ path: props.project.path, name: props.project.name }]);
+
+/* ---------- the project ---------- */
+
+const projects = computed(() => snapshot.value?.projects ?? []);
+/** What Claude waits on you with in each project: the picker marks the others with Claude's dot. */
+const waits = computed(() => sessionWaits(sessions.value?.sessions ?? []));
+
+function pickProject(path: string | null): void {
+  if (path) panelPath.value = path;
 }
 
 /** The handle doesn't drag a collapsed panel; the button brings it back. */
@@ -253,18 +424,16 @@ async function openTerminal(claude = false, start: StartChoice | null = null): P
     }
     const size = viewport.value ? measure(viewport.value) : null;
     const view = await api.openTerminal(props.project.path, claude, size, start);
-    if (props.place === "track") trackTerminals.add(view.id);
     asked = view.id;
-    chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: view.id };
+    chooseTab(props.project.path, { kind: "terminal", id: view.id });
   } finally {
     opening.value = false;
   }
 }
 
 function show(id: number): void {
-  unasked.delete(id);
   asked = id;
-  chosenTerminal.value = { ...chosenTerminal.value, [props.project.path]: id };
+  chooseTab(props.project.path, { kind: "terminal", id });
 }
 
 /**
@@ -285,41 +454,39 @@ function seeFinished(id: number | undefined): void {
 
 /**
  * A tab that came by itself while this panel was up: one the core opened at a board card's
- * moment (`unasked`). The tab in sight stays in sight and the keyboard stays where it is: whoever
- * is typing here goes on typing where they were. With no tab in sight, the one that came shows,
- * without the keyboard, and only that one is noted here, until it is shown. From then on it is a
- * tab like any other: clicked, brought up, or shown in the place of one that closed, it takes the
- * keyboard. A tab the user asked for (put back, a card given by hand) is shown as any other.
+ * moment (`unasked`). The tab or the output in sight stays in sight and the keyboard stays where
+ * it is: whoever is typing here goes on typing where they were. With only the empty terminal in
+ * sight, the one that came shows, without the keyboard. A tab the user asked for (put back, a card
+ * given by hand) is shown as any other.
  */
-const unasked = new Set<number>();
-
-/**
- * The tab asked for here, until it shows: clicked, picked, opened from "+" or brought up
- * (`terminalRequest`). On the Sessions page only that one takes the keyboard; a tab the page shows
- * for the session selected in its list comes up without it, so the list keeps its arrow keys.
- */
-let asked: number | null = null;
-
 watch(
   () => [props.project.path, terminals.value] as const,
   ([path, list], [wasPath, was]) => {
-    if (path !== wasPath) return unasked.clear();
+    if (path !== wasPath) return;
     const came = list.filter((term) => !was.some((old) => old.id === term.id));
     // One this panel is opening is asked for, and so is any the core doesn't call unasked.
     if (!came.length || opening.value || !came.every((term) => term.unasked)) return;
-    const chosen = chosenTerminal.value[path];
-    if (came.some((term) => term.id === chosen)) return;
-    const shown = was.find((term) => term.id === chosen) ?? was[was.length - 1];
-    // No tab was in sight: the last one is the one shown now.
+    const choice = chosenTab.value[path];
+    if (choice?.kind === "output") return;
+    if (came.some((term) => term.id === choice?.id)) return;
+    const shown = was.find((term) => term.id === choice?.id) ?? was[was.length - 1];
     if (!shown) {
-      unasked.add(list[list.length - 1].id);
-      return;
-    }
-    if (shown.id !== chosen && list.some((term) => term.id === shown.id)) chosenTerminal.value = { ...chosenTerminal.value, [path]: shown.id };
+      const first = came[came.length - 1];
+      followedTab.value = first.id;
+      chooseTab(path, { kind: "terminal", id: first.id });
+    } else if (shown.id !== choice?.id && list.some((term) => term.id === shown.id)) chooseTab(path, { kind: "terminal", id: shown.id });
   },
   // Before the shown tab is worked out again.
   { flush: "sync" },
 );
+
+/**
+ * The tab asked for here, until it shows: clicked, picked, opened from "+" or brought up
+ * (`terminalRequest`). Only that one takes the keyboard, and the one a project picked in the list
+ * shows (lib/panel: `panelFocus`); a tab a page shows for its own selection (`followProject`,
+ * `followTab`) comes up without it, so the page keeps its arrow keys.
+ */
+let asked: number | null = null;
 
 /* ---------- "+": a new tab, or a Claude session ---------- */
 
@@ -350,11 +517,27 @@ function addMenu(event: Event): void {
   ]);
 }
 
-/** A double click on the tab row's empty part opens a Claude tab, as "New Claude" does. A tab's
- * own double click renames it, and the project's name and the buttons keep theirs. */
-function newClaudeHere(event: MouseEvent): void {
+/** The tab row's empty part (between and after the tabs), not a tab, a name or a button. */
+function emptyPart(event: MouseEvent): boolean {
   const target = event.target as HTMLElement;
-  if (target === event.currentTarget || target === tablist.value || target.classList.contains("grow")) void openTerminal(true);
+  return target === event.currentTarget || target === tablist.value || target.classList.contains("grow") || target.classList.contains("outlist");
+}
+
+/**
+ * The tab row's empty part, and the handle: a click on a collapsed panel brings it up at once (the
+ * user's word: no need to find the button). A double click on the row's empty part opens a Claude
+ * tab, as "New Claude" does, only on a panel open all the way: folded or still coming up, a double
+ * click is no more than the click that opens it (the user's word). A tab's own double click
+ * renames it, and the project's name and the buttons keep theirs.
+ */
+function onRowClick(event: MouseEvent): void {
+  const empty = emptyPart(event);
+  if (event.detail >= 2) {
+    if (empty && !collapsed.value && !animating.value) void openTerminal(true);
+    return;
+  }
+  if (!collapsed.value || !(empty || (event.target as HTMLElement).classList.contains("grip"))) return;
+  toggleCollapsed();
 }
 
 
@@ -492,6 +675,9 @@ function onTabKey(event: KeyboardEvent, id: number): void {
   focusTab(to);
 }
 
+/** The project the shown terminal was last worked out for. */
+let shownPath = "";
+
 // The shown terminal goes into the viewport; the others keep running out of sight. It takes the
 // keyboard, unless the arrows on the tabs are picking it, or the panel is collapsed: a terminal
 // out of sight leaves the keyboard where it is.
@@ -502,10 +688,17 @@ watch(
     stayOnTabs = false;
     const wanted = id !== undefined && asked === id;
     asked = null;
+    const path = props.project.path;
+    const moved = path !== shownPath;
+    shownPath = path;
+    const arrived = moved && panelFocus.value === path;
+    if (moved) panelFocus.value = null;
+    const followed = id !== undefined && followedTab.value === id;
+    followedTab.value = null;
     await nextTick();
-    // A tab that came by itself is shown without the keyboard; on the Sessions page, so is any
-    // tab not asked for here.
-    const quiet = (id !== undefined && unasked.delete(id)) || (props.place === "sessions" && !wanted);
+    // Another project's, or the tab a page follows to: without the keyboard, unless asked for (a
+    // project picked in the list). One shown in the place of a tab that closed takes it.
+    const quiet = !wanted && (moved ? !arrived : followed);
     showTab(id);
     if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value && !quiet);
     if (onTabs) focusTab(id);
@@ -555,12 +748,15 @@ watch(
 watch(
   () => [shellRequest.value, props.project.path] as const,
   async ([request, path]) => {
-    if (!request || props.place !== "list") return;
+    if (!request) return;
     if (Date.now() - request.at > REQUEST_MS) {
       shellRequest.value = null;
       return;
     }
-    if (request.path !== path) return;
+    if (request.path !== path) {
+      panelPath.value = request.path;
+      return;
+    }
     shellRequest.value = null;
     await nextTick();
     void openTerminal();
@@ -568,7 +764,96 @@ watch(
   { immediate: true },
 );
 
-// No terminal opens on its own: a project starts with "No terminal in …" until you open one.
+// A page's "Open a Claude terminal" (lib/panel: openRequest): a new tab of the project it names,
+// once that is this panel's project.
+watch(
+  () => [openRequest.value, props.project.path] as const,
+  async ([request, path]) => {
+    if (!request) return;
+    if (Date.now() - request.at > REQUEST_MS) {
+      openRequest.value = null;
+      return;
+    }
+    if (request.path !== path) return;
+    openRequest.value = null;
+    await nextTick();
+    void openTerminal(request.claude);
+  },
+  { immediate: true },
+);
+
+// No terminal opens on its own: a project starts with its dev server's output until you open one.
+
+/* ---------- the keyboard in the panel ---------- */
+
+/** The keyboard came into the panel (lib/panel: `panelTyping`). */
+function onFocusIn(): void {
+  panelTyping.value = true;
+}
+
+/** The keyboard left the panel, and not for another place in it. */
+function onFocusOut(event: FocusEvent): void {
+  const to = event.relatedTarget as Node | null;
+  if (!to || !panel.value?.contains(to)) panelTyping.value = false;
+}
+
+/** The keyboard is somewhere else, though the panel never said it left (a terminal that closed
+ * under it takes its focus along). */
+function onFocusAnywhere(event: FocusEvent): void {
+  if (panelTyping.value && !panel.value?.contains(event.target as Node)) panelTyping.value = false;
+}
+
+/* ---------- a press outside ---------- */
+
+/**
+ * A press anywhere on the page (its bar, its lists, the Track page's stage), the panel open, folds
+ * it to its tab row as soon as the press is over: on something a double click opens (`data-dblopen`:
+ * a project on the Track and Today pages, a session, a card's state) only once a double click is out
+ * of the question (the Track page's rule, every page's since the user's
+ * word, 2026-10-22), unless Settings › General turns it off. The sidebar, dialogs, floating
+ * windows and a project's row in the list (picking it turns the panel to it) don't. Nor does a press that asks
+ * the panel for something of its own ("Show in terminal", a command's output: lib/panel
+ * `panelAsks`): it stays open for that.
+ */
+function onPressAnywhere(event: PointerEvent): void {
+  if (collapsed.value || event.button !== 0 || snapshot.value?.settings.panelFoldOutside === false) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target?.closest(".page") || panel.value?.contains(target)) return;
+  // A project picked in the list: the panel turns to it and stays as it is (the user's word).
+  if (target.closest(".trow")) return;
+  const asks = panelAsks.value;
+  const wait = target.closest("[data-dblopen]") ? FOLD_AFTER_MS : 0;
+  window.addEventListener(
+    "pointerup",
+    () =>
+      window.setTimeout(() => {
+        if (panelAsks.value === asks) foldPanel();
+      }, wait),
+    { once: true },
+  );
+}
+
+/** On something a double click opens, a press folds the panel this long after it is over: a
+ * double click that opens a project's terminal or a session (lib/open, `revealTab`) asks the panel
+ * for it in the meantime, and the panel never bounces. */
+const FOLD_AFTER_MS = 300;
+
+/** The size a new tab gets here, measured as the open panel would hold it: the Board page gives a
+ * card to Claude at it (lib/panel: `panelMeasure`). */
+function newTabSize(): { cols: number; rows: number } | null {
+  const room = viewport.value?.clientWidth || TAB_ROOM.width;
+  const tall = Math.min(height.value, (panel.value?.parentElement?.clientHeight ?? window.innerHeight) - HEADER) - TAB_CHROME;
+  const host = document.createElement("div");
+  host.style.cssText = `position: fixed; left: -10000px; top: 0; width: ${room}px; height: ${Math.max(tall, 40)}px; visibility: hidden`;
+  document.body.appendChild(host);
+  try {
+    return measure(host);
+  } catch {
+    return null;
+  } finally {
+    host.remove();
+  }
+}
 
 let observer: ResizeObserver | null = null;
 /** How wide the panel is: room for the history beside the terminal or not. */
@@ -590,11 +875,16 @@ onMounted(() => {
   const measure = (): void => {
     panelWidth.value = panel.value?.clientWidth ?? 0;
     narrow.value = panelWidth.value < HISTORY_ROOM;
+    // As it slides too, frame by frame: the page's room under its lists follows.
+    panelOver.value = Math.max(0, (panel.value?.offsetHeight ?? 0) - COLLAPSED_HEIGHT);
   };
   panelObserver = new ResizeObserver(measure);
   if (panel.value) panelObserver.observe(panel.value);
   measure();
   requestAnimationFrame(() => requestAnimationFrame(() => (settled.value = true)));
+  panelMeasure.size = newTabSize;
+  document.addEventListener("focusin", onFocusAnywhere);
+  document.addEventListener("pointerdown", onPressAnywhere, true);
 });
 
 // Wide again, the column is as it was; narrow again or collapsed, the history over the terminal
@@ -609,17 +899,25 @@ onBeforeUnmount(() => {
   panelObserver?.disconnect();
   clearTimeout(settle);
   clearTimeout(slid);
+  window.clearTimeout(copiedTimer);
+  panelMeasure.size = () => null;
+  panelTyping.value = false;
+  panelOver.value = 0;
+  document.removeEventListener("focusin", onFocusAnywhere);
+  document.removeEventListener("pointerdown", onPressAnywhere, true);
 });
 
-defineExpose({ openTerminal, collapse });
+defineExpose({ openTerminal });
 </script>
 
 <template>
   <section
     ref="panel"
-    :class="['term-panel', { animated: !dragging, collapsed, over: place === 'track', paged: place === 'sessions' }]"
+    :class="['term-panel', { animated: !dragging, collapsed }]"
     :style="{ height: `${shownHeight}px` }"
     :aria-label="t('terminal.panel', { name: project.name })"
+    @focusin="onFocusIn"
+    @focusout="onFocusOut"
   >
     <div
       class="grip"
@@ -633,9 +931,13 @@ defineExpose({ openTerminal, collapse });
       @pointerup="resizer.end"
       @pointercancel="resizer.end"
       @keydown="resizer.nudge"
+      @click="onRowClick"
     ></div>
-    <div class="tabs" @dblclick="newClaudeHere">
-      <span class="where" :title="project.path">{{ project.name }}</span>
+    <div class="tabs" @click="onRowClick">
+      <!-- The panel's project: the page's, or another picked here. -->
+      <div class="where">
+        <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain @pick="pickProject" />
+      </div>
       <span id="terminal-tab-keys" class="sr-only">{{ t("terminal.tabKeys") }}</span>
       <!-- Each tab and its close button side by side, never one inside the other; the list holds
            tabs only, so the close button is the mouse's (the keyboard closes with Delete). One Tab
@@ -685,8 +987,8 @@ defineExpose({ openTerminal, collapse });
         </div>
         </TransitionGroup>
       </div>
-      <!-- The project, its tabs and right after them the buttons that open one; at the right end,
-           the history and collapse. -->
+      <!-- The terminals' tabs and right after them the button that opens one; at the right end, the
+           outputs' tabs, the shown output's tools, the history and collapse. -->
       <span :class="['divider', { shown: terminals.length }]" aria-hidden="true"></span>
       <!-- A shell tab, a Claude session, or one with a model or mode of its own: a menu under it. -->
       <button
@@ -704,6 +1006,51 @@ defineExpose({ openTerminal, collapse });
         <Icon name="plus" :size="13" />
       </button>
       <span class="grow"></span>
+      <!-- The outputs, always at the right end: the dev server's, then the commands' that ran. -->
+      <div class="outlist" role="tablist" :aria-label="t('detail.output')">
+        <!-- A command's tab comes as a terminal's does, growing to its width. -->
+        <TransitionGroup :key="project.path" :css="false" @enter="tabEnter" @leave="tabLeave">
+        <button
+          v-for="(item, i) in outputs"
+          :key="item.id ?? 'server'"
+          type="button"
+          role="tab"
+          :aria-selected="showsOutput && job === item.id"
+          :tabindex="item.id === job ? 0 : -1"
+          :class="['out-tab', { on: showsOutput && job === item.id }]"
+          :title="item.name"
+          @click="openOutput(item.id)"
+          @keydown="onOutputKey($event, i)"
+        >
+          <span v-if="item.state" :class="['out-state', item.state]" aria-hidden="true"></span>
+          <span class="tab-name">{{ item.name }}</span>
+        </button>
+        </TransitionGroup>
+      </div>
+      <!-- The shown output's tools: they come and go as a tab does, growing to their width and
+           shrinking away, the outputs' tabs sliding along. -->
+      <Transition :css="false" @enter="tabEnter" @leave="tabLeave">
+      <div v-if="showsOutput && !collapsed" class="tools">
+        <span class="divider shown" aria-hidden="true"></span>
+        <button type="button" :class="['icon', 'tool', { on: searching }]" :aria-pressed="searching" :aria-label="t('output.search')" :title="t('output.search')" @click="searching ? closeSearch() : openSearch()">
+          <Icon name="search" :size="13" />
+        </button>
+        <button
+          type="button"
+          :class="['icon', 'tool', { on: errorsOnly }]"
+          :aria-pressed="errorsOnly"
+          :aria-label="errorCount ? `${t('output.errorsOnly')} (${errorCount})` : t('output.errorsOnly')"
+          :title="t('output.errorsOnly')"
+          @click="errorsOnly = !errorsOnly"
+        >
+          <Icon name="filter" :size="13" />
+          <span v-if="errorCount" class="errors">{{ errorCount }}</span>
+        </button>
+        <button type="button" class="icon tool" :disabled="!shownOutput.length" :aria-label="t('output.copyAll')" :title="t(copied ? 'output.copied' : 'output.copyAll')" @click="copyAll">
+          <Icon :name="copied ? 'check' : 'copy'" :size="13" />
+        </button>
+      </div>
+      </Transition>
       <button
         type="button"
         :class="['action', 'history-toggle', { on: historyOpen }]"
@@ -724,11 +1071,40 @@ defineExpose({ openTerminal, collapse });
         <Icon name="chevron" :size="13" />
       </button>
     </div>
-    <div class="body" :style="{ '--history-width': `${historyShown}px` }">
-      <div class="screen">
-        <div ref="viewport" class="viewport" @pointerdown="pressScreen"></div>
-        <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
-          <span>{{ t("terminal.none", { name: project.name }) }}</span>
+    <div ref="body" class="body" :style="{ '--history-width': `${historyShown}px` }">
+      <!-- The terminal, and over it the output shown in its place (one per output, each starting
+           at its end, following); collapsed, out of the keyboard's way. -->
+      <div class="stage">
+        <div :class="['screen', { away: showsOutput }]">
+          <div ref="viewport" class="viewport" @pointerdown="pressScreen"></div>
+          <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
+            <span>{{ t("terminal.none", { name: project.name }) }}</span>
+            <!-- The "+" menu's first two, at hand where there is nothing yet. -->
+            <div class="empty-actions">
+              <button type="button" class="control" :disabled="opening" @click="openTerminal()">
+                <Icon name="terminal" :size="12" /> {{ t("terminal.newTab") }}
+              </button>
+              <button type="button" class="control" :disabled="opening" @click="openTerminal(true)">
+                <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div v-if="showsOutput" class="output" @keydown="onOutputKeys" @pointerdown="overlayOpen = false">
+          <OutputSearch v-if="searching" ref="field" v-model:query="query" :position="position" :count="matches" @step="step" @close="closeSearch" />
+          <OutputLog
+            ref="log"
+            :key="pane"
+            class="log"
+            :inert="collapsed"
+            :path="project.path"
+            :lines="shownOutput"
+            :run-start="runStart"
+            :ranges="ranges"
+            :current="current"
+            :empty="emptyOutput"
+            @card="errorCard = { ...$event, path: project.path }"
+          />
         </div>
       </div>
       <!-- The history's room beside the terminal: the panel's right margin alone while it is
@@ -761,15 +1137,24 @@ defineExpose({ openTerminal, collapse });
     </div>
 
     <RenameDialog v-if="renaming" :name="renaming.name" :project-name="project.name" @save="rename" @close="endRename" />
+    <CardDialog v-if="errorCard" :card="null" :path="errorCard.path" :projects="cardProjects" :prefill="errorCard" @close="errorCard = null" />
   </section>
 </template>
 
 <style scoped>
-/* Pinned under the list with its own height (lib/panel). */
+/* Along the window's bottom, on its own ground, with its own height (lib/panel): up to the page's
+   bar. The page keeps only its tab row's height for it (WindowApp); open, it lies over the page,
+   which is never laid out again or scrolls in less room. Over what the page draws, under its
+   tooltips, pickers and the Files windows. */
 .term-panel {
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   min-height: 0;
-  max-height: calc(100% - 94px);
+  max-height: calc(100% - 56px);
+  background: var(--bg-app);
   overflow: clip;
   display: flex;
   flex-direction: column;
@@ -777,30 +1162,15 @@ defineExpose({ openTerminal, collapse });
   box-shadow: var(--shadow-rise);
 }
 
-/* The Sessions page's: up to its filters, under its bar. Not `.sessions`: that page's own root
-   class, whose scoped rule reaches this root too, would make it grow. */
-.term-panel.paged {
-  max-height: calc(100% - 100px);
-}
-
-/* The Track page's: over the page's bottom, on a ground of its own, up to the page's bar. */
-.term-panel.over {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-  max-height: calc(100% - 56px);
-  background: var(--bg-app);
-}
-
 /* Collapsing and expanding slide (COLLAPSE_MS in lib/panel); a drag follows the pointer. */
 .term-panel.animated {
   transition: height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.term-panel.collapsed .grip {
-  cursor: default;
+/* Collapsed, the handle and the row's empty part bring it up with a click. */
+.term-panel.collapsed .grip,
+.term-panel.collapsed .tabs {
+  cursor: pointer;
 }
 
 .term-panel.collapsed .grip::after {
@@ -992,24 +1362,25 @@ defineExpose({ openTerminal, collapse });
   flex-grow: 1;
 }
 
-/* A button with its label: "History". */
+/* "History", drawn as the outputs' tabs are: no ground, its colour alone says it is hovered or
+   shown. */
 .action {
-  height: 24px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 0;
+  /* The keyboard's ring only: no ground is drawn. */
   border-radius: 6px;
   background: transparent;
   font-size: 12px;
-  color: var(--text-subtle);
+  color: var(--text-faint);
   white-space: nowrap;
 }
 
 .action:hover:not(:disabled) {
-  background: var(--bg-icon-hover);
-  color: var(--text-strong);
+  color: var(--text-muted);
 }
 
 /* "History" keeps its mark whatever the tabs take ("New tab" and "New Claude" are marks alone). */
@@ -1017,11 +1388,10 @@ defineExpose({ openTerminal, collapse });
   flex-shrink: 0;
 }
 
-/* "History" while its list shows. */
+/* "History" while its list shows: lit, as the tab shown is. */
 .action.on,
 .action.on:hover:not(:disabled) {
-  background: var(--bg-icon-hover);
-  color: var(--text-strong);
+  color: var(--text-lit);
 }
 
 /* A narrow row: "History" is its clock alone (still its tooltip, and read out). */
@@ -1046,23 +1416,110 @@ defineExpose({ openTerminal, collapse });
 /* The project, first in the row, set off from its tabs; its name is cut only once they have no
    more room to give. */
 .where {
-  flex-shrink: 1;
-  min-width: 48px;
-  max-width: 180px;
+  flex: 0 1 auto;
+  min-width: 64px;
+  max-width: 200px;
+  display: flex;
   margin-right: 6px;
-  padding: 0 10px 0 6px;
+  padding-right: 6px;
   border-right: 1px solid var(--line);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 14px;
-  color: var(--text-muted);
-  white-space: nowrap;
+}
+
+/* The outputs' tabs, at the row's right end: they give way before the terminals' do. */
+.outlist {
+  flex: 0 100000 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.out-tab {
+  min-width: 0;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.out-tab:hover {
+  color: var(--text-muted);
+}
+
+.out-tab.on {
+  color: var(--text-lit);
+}
+
+/* What the output's run is at: green while it runs, red once it failed (a crashed server). */
+.out-state {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.out-state.on {
+  background: var(--run);
+}
+
+.out-state.bad {
+  background: var(--crash);
+}
+
+/* The shown output's tools, before "History": one piece that grows in and shrinks away. */
+.tools {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tool {
+  position: relative;
+}
+
+.tool:disabled {
+  opacity: 0.45;
+}
+
+.tool.on {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
+}
+
+/* How many errors the output holds, on the corner of the button that shows them alone: the
+   button keeps its width. Inside the row's height, which cuts what leaves it. */
+.errors {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: var(--crash-bg);
+  box-shadow: 0 0 0 1px var(--crash-line);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--crash-text);
+  pointer-events: none;
 }
 
 /* The tabs set off from the buttons after them, as the project is from its tabs (its right
-   border); with no tabs there is nothing to set off, and it comes and goes with the first. */
+   border); with no tabs there is nothing to set off, and it comes and goes with the first. The
+   shown output's tools are set off from the outputs' tabs the same way. */
 .divider {
   flex-shrink: 0;
   width: 0;
@@ -1106,12 +1563,22 @@ defineExpose({ openTerminal, collapse });
   display: flex;
 }
 
-.screen {
+/* The terminal's place, which the output shown takes over. */
+.stage {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   margin: 6px 0 20px 20px;
+  display: flex;
+  transition: opacity 160ms ease;
+}
+
+.screen {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   padding: 8px 4px 8px 10px;
   border-radius: 8px;
   background: var(--bg-log);
@@ -1205,8 +1672,31 @@ defineExpose({ openTerminal, collapse });
   transform: translateX(12px);
 }
 
+/* An output in its place: the terminal keeps its size (it is measured) out of sight. */
+.screen.away {
+  visibility: hidden;
+}
+
+/* The output over the terminal's place: its search, then its lines (detail/OutputLog). */
+.output {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.output > .find {
+  margin: 0;
+}
+
+.output > .log {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* Collapsed, the tab row alone: nothing of the terminal or the history shows under it. */
-.term-panel.collapsed .screen,
+.term-panel.collapsed .stage,
 .term-panel.collapsed .side,
 .term-panel.collapsed .history {
   opacity: 0;
@@ -1214,6 +1704,7 @@ defineExpose({ openTerminal, collapse });
 
 @media (prefers-reduced-motion: reduce) {
   .term-panel.animated,
+  .stage,
   .screen,
   .side,
   .fade-enter-active,
@@ -1244,7 +1735,7 @@ defineExpose({ openTerminal, collapse });
   background-color: var(--bg-log) !important;
 }
 
-/* Over the viewport, so the viewport always keeps its size and can be measured. */
+/* No terminal open: over the viewport, so the viewport always keeps its size and can be measured. */
 .empty {
   position: absolute;
   inset: 0;
@@ -1256,5 +1747,33 @@ defineExpose({ openTerminal, collapse });
   justify-content: center;
   gap: 12px;
   color: var(--text-subtle);
+}
+
+.empty-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.control {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.control:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+}
+
+.control:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 </style>

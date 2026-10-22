@@ -119,7 +119,7 @@ export default defineComponent({
   color: var(--text-subtle);
 }
 
-/* The terminal's screen (sessions/SessionTerminal); a long line scrolls in it. */
+/* As a terminal's screen looks (window/TerminalPanel); a long line scrolls in it. */
 .md-code {
   margin: 0;
   padding: 8px 10px;

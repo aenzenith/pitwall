@@ -52,6 +52,7 @@ function onKey(event: KeyboardEvent): void {
     :aria-describedby="lane.blocks.length ? 'lane-keys' : undefined"
     @click="emit('select')"
     @dblclick="openInWindow(lane.project.path, 'pages')"
+    data-dblopen
     @keydown="onKey"
     @blur="tooltip.hide()"
   >

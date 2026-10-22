@@ -309,7 +309,16 @@ const scanShown = ref<{ ecosystem: string; view: ScanView } | null>(null);
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0 24px 18px;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(18px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.dep-detail-body::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 
 /* A card a topic. No wider than its lines read well (the head above it neither): a button
    stays near what it acts on. */

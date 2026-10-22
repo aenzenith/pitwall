@@ -1,29 +1,28 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 import { useAddress } from "../lib/address";
 import { t } from "../lib/i18n";
-import { useOutputStream } from "../lib/outputStream";
-import { COLLAPSED_HEIGHT, outputCollapsed, outputHeight, outputRequest, terminalCollapsed, terminalHeight, useResizer } from "../lib/panel";
+import { chooseTab, chosenTab, panelPath, showOutput } from "../lib/panel";
 import { forgetProjectSettings, projectSettings, updateProjectSettings } from "../lib/projectSettings";
 import { api } from "../lib/store";
 import type { CustomCommand, LinkSuggestion, Project } from "../lib/types";
-import CardDialog from "./board/CardDialog.vue";
 import CommandDialog from "./CommandDialog.vue";
 import ClaudeCard from "./detail/ClaudeCard.vue";
 import CommandsBlock from "./detail/CommandsBlock.vue";
 import DetailHeader from "./detail/DetailHeader.vue";
 import LinksBlock from "./detail/LinksBlock.vue";
-import OutputPanel from "./detail/OutputPanel.vue";
 import ProjectSettingsPane from "./detail/ProjectSettingsPane.vue";
 import ServerBlock from "./detail/ServerBlock.vue";
 
 const props = defineProps<{ project: Project }>();
 
-const stage = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
-/** Output tab: `null` is the dev server, otherwise a command id. */
-const tab = ref<string | null>(null);
+/** The command whose output the terminal panel shows (lib/panel), its row lit; null for none. */
+const tab = computed(() => {
+  const chosen = chosenTab.value[props.project.path];
+  return panelPath.value === props.project.path && chosen?.kind === "output" ? chosen.job : null;
+});
 /** A command waiting for "Run?" to be confirmed. Kept here, so it outlasts a visit to the settings. */
 const confirming = ref<string | null>(null);
 /** Where "Open in browser" goes. */
@@ -39,45 +38,10 @@ const settings = computed(() => projectSettings(props.project));
 
 /* ---------- output ---------- */
 
-// Kept here rather than in the panel: its lines outlast a visit to the settings.
-const { lines, runStart, load: loadOutput } = useOutputStream(() => props.project.path, tab);
-
-/** An error of the output on its way to the board: the card dialog, filled in with it. */
-const errorCard = ref<{ title: string; note: string } | null>(null);
-/** The card is this project's. */
-const cardProjects = computed(() => [{ path: props.project.path, name: props.project.name }]);
-
-function showTab(id: string | null): void {
-  tab.value = id;
-  void loadOutput();
+/** A command's output (its row's button, a run): in the terminal panel, open. */
+function showTab(id: string): void {
+  showOutput(props.project.path, id);
 }
-
-// The switcher asked for a command's output: that tab, the panel open. After the project
-// switch has reset the tab, hence the tick.
-watch(
-  () => [outputRequest.value, props.project.path] as const,
-  async ([request, path]) => {
-    if (!request || request.path !== path) return;
-    await nextTick();
-    settingsOpen.value = false;
-    outputCollapsed.value = false;
-    showTab(request.job);
-    outputRequest.value = null;
-  },
-  { immediate: true },
-);
-
-// The output keeps the height you gave it, whatever the sections above do. It can grow over
-// them, up to the whole area under the header; the sections scroll on their own.
-const resizer = useResizer(
-  outputHeight,
-  () => stage.value?.clientHeight ?? 0,
-  () => (terminalCollapsed.value ? null : terminalHeight.value),
-);
-const outputDragging = resizer.dragging;
-
-/** Collapsed, only the tab row shows; the chosen height comes back on expanding. */
-const shownOutput = computed(() => (outputCollapsed.value ? COLLAPSED_HEIGHT : outputHeight.value));
 
 /* ---------- links ---------- */
 
@@ -128,7 +92,7 @@ function saveCommand(command: CustomCommand): void {
 function removeCommand(id: string): void {
   if (commands.value.some((c) => c.id === id && c.status === "running")) void api.stopCommand(props.project.path, id);
   changeCommands((list) => list.filter((c) => c.id !== id));
-  if (tab.value === id) showTab(null);
+  if (tab.value === id) chooseTab(props.project.path, { kind: "terminal", id: -1 });
 }
 
 /* ---------- project settings ---------- */
@@ -146,10 +110,7 @@ watch(
     if (left) forgetProjectSettings(left);
     settingsOpen.value = false;
     dialog.value = null;
-    errorCard.value = null;
     confirming.value = null;
-    tab.value = null;
-    void loadOutput();
   },
   { immediate: true },
 );
@@ -161,16 +122,14 @@ watch(
 
     <ProjectSettingsPane v-if="settingsOpen" :project="project" @edit="editCommand" @remove="removeCommand" @close="settingsOpen = false" />
 
-    <!-- The sections scroll on their own; the output sits over their lower part. -->
-    <div v-else ref="stage" :class="['stage', { animated: !outputDragging }]">
-      <div class="sections" :style="{ bottom: `${shownOutput}px` }">
+    <!-- The sections scroll on their own; the outputs are the terminal panel's (TerminalPanel). -->
+    <div v-else class="stage">
+      <div class="sections">
         <ServerBlock :project="project" :address="address" />
         <ClaudeCard :project="project" />
         <LinksBlock :project="project" :found="found" />
         <CommandsBlock v-model:confirming="confirming" :project="project" :tab="tab" @show="showTab" @edit="editCommand" @remove="removeCommand" />
       </div>
-
-      <OutputPanel :project="project" :tab="tab" :lines="lines" :run-start="runStart" :height="shownOutput" :resizer="resizer" @show="showTab" @card="errorCard = $event" />
     </div>
 
     <CommandDialog
@@ -181,7 +140,6 @@ watch(
       @save="saveCommand"
       @close="dialog = null"
     />
-    <CardDialog v-if="errorCard" :card="null" :path="project.path" :projects="cardProjects" :prefill="errorCard" @close="errorCard = null" />
   </section>
 </template>
 
@@ -197,8 +155,7 @@ watch(
   overflow: hidden;
 }
 
-/* Everything under the header. The sections scroll in the part above the output, so their
-   scrollbar ends where the output begins; 24px stays free under their end. */
+/* Everything under the header; the sections scroll in it, 24px free under their end. */
 .stage {
   flex: 1 1 auto;
   min-height: 0;
@@ -210,16 +167,15 @@ watch(
   inset: 0;
   padding-bottom: 24px;
   overflow-y: auto;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(24px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
+}
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.sections::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
 }
 
-/* Collapsing and expanding slide with the output (detail/OutputPanel); a drag follows the pointer. */
-.stage.animated .sections {
-  transition: bottom 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .stage.animated .sections {
-    transition: none;
-  }
-}
 </style>

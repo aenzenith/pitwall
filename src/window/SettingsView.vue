@@ -736,6 +736,11 @@ function setTheme(theme: Theme): void {
             </label>
             <small>{{ t("settings.autoUpdateHint") }}</small>
           </div>
+          <!-- On unless turned off: a settings file from before it holds no value. -->
+          <label class="check">
+            <input type="checkbox" :checked="form.panelFoldOutside !== false" @change="form.panelFoldOutside = ($event.target as HTMLInputElement).checked" />
+            <span>{{ t("settings.panelFoldOutside") }}</span>
+          </label>
 
           <div class="section section-label">{{ t("settings.startup") }}</div>
           <div class="hook">

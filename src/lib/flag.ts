@@ -15,9 +15,9 @@ export function openFlag(): void {
 }
 
 /**
- * A new shell tab asked for from the dialog (a row of "Waiting for push"): the window shows the
- * project in the list, and its terminal panel (window/TerminalPanel) opens the tab as its own
- * "New tab" does, at the panel's size. Whoever opens it clears it; `at` lets one that never finds
+ * A new shell tab asked for from the dialog (a row of "Waiting for push"): the terminal panel
+ * (window/TerminalPanel) takes that project and opens the tab as its own "New tab" does, at the
+ * panel's size. Whoever opens it clears it; `at` lets one that never finds
  * its panel lapse.
  */
 export const shellRequest = ref<{ path: string; at: number } | null>(null);

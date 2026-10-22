@@ -72,7 +72,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Only the details scroll, never the window. A column, so a terminal takes the height left. */
+/* Only the details scroll, never the window. */
 .body {
   flex: 1 1 auto;
   min-height: 0;
@@ -80,10 +80,23 @@
   flex-direction: column;
   overflow-y: auto;
   padding-bottom: 20px;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(20px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
+}
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.body::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
 }
 
-/* Over a terminal (sessions/SessionTerminal), pinned under it with its own height: the sections
-   scroll in what it leaves, down to its top line. */
-.body.over-terminal {
-  padding-bottom: 0;
+
+/* "Show in terminal": the tab it runs in, in the terminal panel (TerminalPanel). A text button,
+   its words level with the section's. */
+.to-terminal {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -8px;
 }

@@ -242,7 +242,16 @@ useSlide(root, order);
   padding: 10px;
   overflow-x: hidden;
   overflow-y: auto;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(10px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.bcol-body::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 
 .bcol-list {
   display: flex;
@@ -263,7 +272,16 @@ useSlide(root, order);
   padding: 0 0 12px;
   overflow-x: hidden;
   overflow-y: auto;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(12px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.bcols.list::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 
 .list .bcol {
   flex-shrink: 0;

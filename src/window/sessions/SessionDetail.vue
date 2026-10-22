@@ -9,6 +9,7 @@ import { ago, editorName } from "../../lib/format";
 import type { Shot } from "../../lib/cardImages";
 import { compactText, moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
+import { revealTab } from "../../lib/panel";
 import { stamp, type Period } from "../../lib/period";
 import { dragRegion, isMac, isWindows } from "../../lib/platform";
 import { endedAt, lastActive, modelsText, runsElsewhere, sessionTerminal, sessionTitle, unlinkedEditor } from "../../lib/sessions";
@@ -19,21 +20,19 @@ import OriginLabel from "./OriginLabel.vue";
 import RadioCalls from "./RadioCalls.vue";
 import SessionDay from "./SessionDay.vue";
 import SessionNotice from "./SessionNotice.vue";
-import SessionTerminal from "./SessionTerminal.vue";
 
 /**
- * One session: what it is doing, its day and its tokens, what Claude last said in it, and under
- * them its terminal when it runs in one of Pitwall's (not on the Sessions page, whose terminal
- * panel shows it). The Sessions page's details, and a board card's once it has a session.
+ * One session: what it is doing, its day and its tokens, what Claude last said in it, and when it
+ * runs in one of Pitwall's terminals, a button that shows that tab in the terminal panel
+ * (TerminalPanel). The Sessions page's details, and a board card's once it has a session.
  * Claude's state reads as a project's Claude card does (detail/ClaudeCard), its one button the
  * same; bringing it up and opening its project are the list's (double-click, Enter, the
  * context menu). `others`: the other sessions of its project that wait on you (seen is kept per
- * project); `terminal`: the Pitwall terminal to show, as
+ * project); `terminal`: the Pitwall terminal it runs in, as
  * the caller knows it (a board card's; null: none), left out: the one its origin names; `note`:
  * a board card's note, shown once its work is over, with `images`, the images it names;
  * `lastMessage`: what Claude last said in it (Markdown); `period`: the days the page shows (left
  * out: today), whose hours its day is, and looking back its tokens, today's alone, are left out.
- * `hold`: the keyboard is in its terminal.
  */
 const props = defineProps<{
   row: SessionRow;
@@ -45,11 +44,19 @@ const props = defineProps<{
   lastMessage?: string;
   period?: Period;
 }>();
-const emit = defineEmits<{ markSeen: []; hold: [on: boolean] }>();
+const emit = defineEmits<{ markSeen: [] }>();
 
 const title = computed(() => sessionTitle(props.row));
-/** Only Pitwall's own terminals show here; a session running anywhere else stays a summary. */
+/** Only Pitwall's own terminals are shown from here; a session running anywhere else stays a summary. */
 const ownTerminal = computed(() => (props.terminal === undefined ? sessionTerminal(props.row, snapshot.value?.projects ?? []) : props.terminal));
+
+/** Its tab in the terminal panel, open, the keyboard in it. */
+function showTerminal(): void {
+  const id = ownTerminal.value?.id;
+  if (id === undefined) return;
+  const project = (snapshot.value?.projects ?? []).find((p) => p.terminals.some((term) => term.id === id));
+  revealTab(project?.path ?? props.row.path ?? props.row.folder, id);
+}
 const waiting = computed(() => props.row.phase === "waiting");
 const permission = computed(() => waiting.value && props.row.turn?.kind === "permission");
 const elsewhere = computed(() => runsElsewhere(props.row));
@@ -149,7 +156,7 @@ const fuel = computed(() => {
       <div class="path" :title="row.folder">{{ row.folder }}</div>
     </header>
 
-    <div :class="['body', { 'over-terminal': ownTerminal }]">
+    <div class="body">
       <section class="block" :aria-label="t('window.col.claude')">
         <div class="section-label">{{ t("window.col.claude") }}</div>
         <div :class="['card', { hot: waiting }]">
@@ -170,6 +177,7 @@ const fuel = computed(() => {
           </button>
         </div>
         <p v-if="seenHint" id="session-seen-hint" class="hint">{{ seenHint }}</p>
+        <button v-if="ownTerminal" type="button" class="text-button to-terminal" @click="showTerminal"><Icon name="terminal" :size="12" />{{ t("sessions.showTerminal") }}</button>
 
         <SessionNotice v-if="elsewhere" compact icon="info" :tag="elsewhereNotice.tag" :title="elsewhereNotice.title">{{ elsewhereNotice.body }}</SessionNotice>
         <template v-else-if="unknown">
@@ -211,9 +219,6 @@ const fuel = computed(() => {
       </section>
       <p v-if="!ownTerminal" class="privacy"><Icon name="lock" :size="12" />{{ t("sessions.privacy") }}</p>
     </div>
-
-    <!-- Under the sections, which scroll above it. -->
-    <SessionTerminal v-if="ownTerminal" :terminal="ownTerminal" @hold="emit('hold', $event)" />
   </section>
 </template>
 

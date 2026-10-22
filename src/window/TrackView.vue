@@ -6,12 +6,11 @@ import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
 import { openInWindow } from "../lib/open";
 import { atWork } from "../lib/pages";
-import { COLLAPSED_HEIGHT, terminalRequest } from "../lib/panel";
+import { terminalRequest, usePanelFollow } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, setTrack, snapshot, track as settings } from "../lib/store";
 import { circuit, CIRCUITS, codes, towerOrder } from "../lib/track";
 import type { Project } from "../lib/types";
-import TerminalPanel from "./TerminalPanel.vue";
 import TrackCanvas from "./track/TrackCanvas.vue";
 import TrackCard from "./track/TrackCard.vue";
 import TrackLegend from "./track/TrackLegend.vue";
@@ -102,17 +101,11 @@ function toggle(project: Project): void {
 
 /* ---------- the terminals ---------- */
 
-const terminals = ref<InstanceType<typeof TerminalPanel> | null>(null);
+// The terminal panel under the page (TerminalPanel) shows the project selected in the tower.
+usePanelFollow(() => (selectedPath.value ? { path: selectedPath.value, tab: null } : null));
 
-/**
- * The page's room for the selected project's terminals (TerminalPanel, the Track page's): its tab
- * row, the panel collapsed, and never more. Open, the panel is a layer of its own over the stage,
- * so the circuit, the tower, the card and the legend stay as they are whatever its height.
- */
-const ROOM = COLLAPSED_HEIGHT;
-
-// A Claude session in a terminal opened here was brought up (WindowApp: `revealTerminal`): its
-// project, and the panel shows its tab.
+// A Claude session in one of Pitwall's terminals was brought up (WindowApp: `revealTerminal`): its
+// project is selected in the tower, as the panel shows its tab.
 watch(
   terminalRequest,
   (request) => {
@@ -120,19 +113,6 @@ watch(
   },
   { immediate: true },
 );
-
-/** A press on the stage, anywhere behind the panel: the terminals fold away to their tab row and
- * the page is the circuit's again. */
-function foldTerminals(): void {
-  terminals.value?.collapse();
-}
-
-/** ⌘T: a new terminal in the selected project (WindowApp: `onKey`). */
-function openTerminal(claude = false): void {
-  void terminals.value?.openTerminal(claude);
-}
-
-defineExpose({ openTerminal });
 
 /* ---------- the stage ---------- */
 
@@ -208,7 +188,7 @@ const inset = computed<Inset>(() => ({
       </button>
     </header>
 
-    <div ref="stage" class="stage" :style="{ marginBottom: selected ? `${ROOM}px` : undefined }" @pointerdown="foldTerminals">
+    <div ref="stage" class="stage">
       <div class="sky" aria-hidden="true"></div>
 
       <TrackCanvas
@@ -243,8 +223,6 @@ const inset = computed<Inset>(() => ({
       <p v-if="snapshot && !all.length" class="none">{{ t("window.emptyLine1") }}</p>
     </div>
 
-    <!-- The selected project's terminals, over the page's bottom: its tab row's height (`ROOM`) is theirs. -->
-    <TerminalPanel v-if="selected" ref="terminals" :project="selected" place="track" />
   </div>
 </template>
 

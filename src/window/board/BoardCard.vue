@@ -177,6 +177,7 @@ function giveMenu(event: Event): void {
         :title="revealable ? t('sessions.action.bringUpTitle') : status.closed ? t('board.closedTitle') : undefined"
         @click="onStatus"
         @dblclick="onStatus"
+        data-dblopen
       >
         <span v-if="status.mark" :class="['bmark', status.mark]" aria-hidden="true"></span>
         <span class="bcard-status-text">{{ status.text }}</span>

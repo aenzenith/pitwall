@@ -3,7 +3,7 @@ import { computed } from "vue";
 
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
-import { heldLine, uptime } from "../../lib/format";
+import { commandStatus, heldLine, uptime } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
 import { api, now } from "../../lib/store";
@@ -20,7 +20,7 @@ const commands = computed(() => props.project.commands ?? []);
 const menu = useNativeMenu();
 
 function mark(c: CommandView): string {
-  return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[c.status];
+  return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[commandStatus(c, now.value)];
 }
 
 function run(c: CommandView): void {
@@ -91,7 +91,7 @@ function commandMenu(c: CommandView, event: MouseEvent): void {
         <button type="button" class="control primary small-btn" @click="run(c)">{{ t("common.run") }}</button>
       </template>
       <template v-else>
-        <span :class="['mark', c.status]">
+        <span :class="['mark', commandStatus(c, now)]">
           <Spinner v-if="c.status === 'busy'" :size="10" />
           <template v-else>{{ mark(c) }}</template>
         </span>

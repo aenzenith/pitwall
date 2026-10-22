@@ -241,7 +241,16 @@ function onMemberKey(event: KeyboardEvent, at: number): void {
   min-height: 0;
   padding-bottom: 24px;
   overflow-y: auto;
+  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
+  padding-bottom: calc(24px + var(--panel-over, 0px));
+  scroll-padding-bottom: var(--panel-over, 0px);
 }
+/* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
+   shorter (WindowApp: `--panel-over`). */
+.sections::-webkit-scrollbar-track {
+  margin-bottom: var(--panel-over, 0px);
+}
+
 
 .block:last-child {
   border-bottom: 0;

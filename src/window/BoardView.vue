@@ -24,14 +24,13 @@ import { SETTLE_MS, useCardDrag, type DropTarget } from "../lib/cardDrag";
 import { useCardImages } from "../lib/cardImages";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu, type MenuPoint } from "../lib/nativeMenu";
-import { cardRequest, detailTerminalHeight } from "../lib/panel";
+import { cardRequest, panelMeasure, panelTyping, revealTab, usePanelFollow } from "../lib/panel";
 import { ALL as EVERY_DAY, type Period } from "../lib/period";
 import { dragRegion, keys, primary } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { originView, othersWaiting, sessionTerminal } from "../lib/sessions";
 import { choiceOf, projectChoice } from "../lib/start";
 import { api, board, now, sessions, snapshot } from "../lib/store";
-import { focusView, measure } from "../lib/terminals";
 import type { BoardColumn, Card, SessionRow, StartChoice, TerminalView } from "../lib/types";
 import BoardCard from "./board/BoardCard.vue";
 import BoardColumns from "./board/BoardColumns.vue";
@@ -246,9 +245,9 @@ const shownIds = computed(() => {
 
 const selectedId = ref<string | null>(null);
 const selected = computed(() => (selectedId.value ? (byId.value.get(selectedId.value) ?? null) : null));
-/** The keyboard is in the selected card's terminal: it stays selected, whatever takes it out of
- * the cards shown meanwhile. */
-const typing = ref(false);
+/** The keyboard is in the terminal panel (TerminalPanel), on the selected card's tab: it stays
+ * selected, whatever takes it out of the cards shown meanwhile. */
+const typing = panelTyping;
 
 // Keep a selection while there is a card to show: the one selected for as long as the page shows
 // it (wherever the board moves it), then the first; the first, on a new board.
@@ -261,10 +260,9 @@ watch(
   { immediate: true },
 );
 
-/** A card whose Claude session was brought up from elsewhere (another page, the popover, a
- * notification): its project's board, the card selected whatever the search or the days shown
- * hid, its terminal open in its details and the keyboard in it, as the card's own button does
- * (`reveal`). */
+/** A card whose Claude session was brought up while this page shows (the popover, a notification,
+ * the chequered flag): its project's board, the card selected whatever the search or the days
+ * shown hid. Its tab shows in the terminal panel (WindowApp: `revealTerminal`). */
 function takeRequest(): void {
   const request = cardRequest.value;
   if (!request) return;
@@ -279,10 +277,7 @@ function takeRequest(): void {
       period.value = null;
     }
     selectedId.value = card.id;
-    const terminal = terminalOf(card);
-    if (!terminal) return;
-    opened.value = card.id;
-    void nextTick(() => focusView(terminal.id));
+    if (terminalOf(card)) opened.value = card.id;
   });
 }
 
@@ -306,8 +301,8 @@ const selectedOver = computed(() => {
   const row = selectedRow.value;
   return card.session !== null && (row ? row.phase === "ended" : terminalOf(card) === null);
 });
-/** The card whose terminal was brought up though its work is over: it shows while the card stays
- * selected. */
+/** The card whose terminal was brought up though its work is over: the terminal panel keeps
+ * showing it while the card stays selected. */
 const opened = ref<string | null>(null);
 const selectedTerminal = computed(() => {
   const card = selected.value;
@@ -343,32 +338,13 @@ watch(selectedOver, (over) => {
   if (over && typing.value) opened.value = selectedId.value;
 });
 
-/** The selected card's details are changing hands with the keyboard in its terminal. */
-let carrying = false;
-
-// Its session's row comes (or goes) with the keyboard in its terminal: the details that take over
-// (the session's for the card's own) attach the terminal anew, without the keyboard. It goes back
-// in once they are drawn.
-watch([selectedId, () => selectedRow.value !== null], ([id], [was]) => {
-  if (id !== was || !typing.value) return;
-  carrying = true;
-  void nextTick(() => {
-    carrying = false;
-    const terminal = selectedTerminal.value;
-    if (terminal) focusView(terminal.id);
-    else typing.value = false;
-  });
+// The terminal panel under the page (TerminalPanel) follows it: the selected card's project and,
+// while its work runs in one of Pitwall's terminals, that tab, without the keyboard; with no card,
+// the board's project.
+usePanelFollow(() => {
+  const path = selected.value?.path ?? scope.value;
+  return path ? { path, tab: selectedTerminal.value?.id ?? null } : null;
 });
-
-// The details taken out say the keyboard has left their terminal. Not while it is carried over:
-// the card stays held, or the board could move the selection off it in between.
-watch(
-  typing,
-  (on) => {
-    if (!on && carrying) typing.value = true;
-  },
-  { flush: "sync" },
-);
 
 watch(scope, () => {
   selectedId.value = visibleIds.value[0] ?? null;
@@ -424,23 +400,10 @@ async function run(id: string, kind: Exclude<CardBusy, null>, work: () => Promis
   busy.value = next;
 }
 
-/** The size the card's details will give the new Claude tab, so its shell starts at that size: the
- * details' width (380) less the terminal's room around it (57), and the height the details'
- * terminal is kept at (lib/panel), as far as the window goes, less its handle, label and room
- * (76). */
+/** The size the terminal panel will give the new Claude tab, so its shell starts at that size
+ * (lib/panel: `panelMeasure`). */
 function terminalSize(): { cols: number; rows: number } | null {
-  const host = document.createElement("div");
-  const width = 323;
-  const height = Math.min(detailTerminalHeight.value, window.innerHeight) - 76;
-  host.style.cssText = `position: fixed; left: -10000px; top: 0; width: ${width}px; height: ${height}px; visibility: hidden`;
-  document.body.appendChild(host);
-  try {
-    return measure(host);
-  } catch {
-    return null;
-  } finally {
-    host.remove();
-  }
+  return panelMeasure.size();
 }
 
 /** A new Claude session in one of the project's Pitwall terminals, with the card's text; the card
@@ -555,8 +518,8 @@ watch(dragging, (id) => {
 });
 
 /**
- * Brought up. In one of Pitwall's terminals: here, in the card's details, the keyboard in it and
- * its project seen (the board stays on screen). Anywhere else: where its session runs.
+ * Brought up. In one of Pitwall's terminals: here, its tab in the terminal panel, the keyboard in
+ * it and its project seen (the board stays on screen). Anywhere else: where its session runs.
  */
 function reveal(id: string): void {
   const card = byId.value.get(id);
@@ -567,7 +530,7 @@ function reveal(id: string): void {
     selectedId.value = id;
     opened.value = id;
     void api.markSeen(card.path).catch(() => undefined);
-    void nextTick(() => focusView(terminal.id));
+    revealTab(card.path, terminal.id);
   } else if (session) void run(id, "reveal", () => api.revealClaude(card.path, session));
   // Its terminal isn't among the project's yet: its details show it once it is.
   else selectedId.value = id;
@@ -1015,7 +978,6 @@ const ghostStyle = computed(() =>
       :images="selectedOver ? selectedImages : []"
       :last-message="lastMessage"
       @mark-seen="markSeen"
-      @hold="typing = $event"
     />
     <CardDetail
       v-else-if="selected"
@@ -1025,7 +987,6 @@ const ghostStyle = computed(() =>
       :terminal="selectedTerminal"
       :images="selectedImages"
       :last-message="lastMessage"
-      @hold="typing = $event"
     />
     <!-- Nothing to show: the panel stays blank but keeps its place, so the layout never jumps. -->
     <section v-else class="board-detail-empty" :aria-label="t('sessions.details')"></section>

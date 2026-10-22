@@ -483,6 +483,8 @@ pub struct Settings {
     pub files_preview: bool,
     /// The list shows the favourites and the projects at work only ("Only favourites and open").
     pub favourites_only: bool,
+    /// A press on the page folds the open terminal panel to its tab row (Settings › General).
+    pub panel_fold_outside: bool,
     /// The Track page's own settings. None until one is changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<TrackSettings>,
@@ -554,6 +556,7 @@ impl Default for Settings {
             board_view: None,
             files_preview: false,
             favourites_only: false,
+            panel_fold_outside: true,
             track: None,
             theme: "system".into(),
             teams: Vec::new(),
