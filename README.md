@@ -38,7 +38,7 @@ whole process tree with it. A build, a worker or the tests can be saved as comma
 marked "Ask before running" waits for your yes.
 
 <p align="center">
-  <img src=".github/readme/popover.png" width="320" alt="The menu bar popover: the projects Claude is waiting on you in, then every project with its port, uptime and branch, and what is left of Claude's limits">
+  <img src=".github/readme/popover.png" width="320" alt="The menu bar popover: the projects Claude is waiting on you in, then the favourite and running ones with their port, uptime and branch, and what is left of Claude's limits">
 </p>
 
 ### Know the moment it's your turn
