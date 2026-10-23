@@ -44,6 +44,16 @@ export function terminalChord(event: KeyboardEvent): boolean {
   return isMac ? event.metaKey : event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey;
 }
 
+/**
+ * ⌘W: closes what is in front, one thing at a time (WindowApp: `closeFront`). On Windows and Linux
+ * Ctrl+W, and in a terminal, where Ctrl+W is the shell's, Ctrl+Shift+W (`terminalChord`), as Windows
+ * Terminal closes a tab with it.
+ */
+export function closeChord(event: KeyboardEvent): boolean {
+  if (event.code !== "KeyW" || event.altKey) return false;
+  return isMac ? event.metaKey && !event.ctrlKey && !event.shiftKey : event.ctrlKey && !event.metaKey;
+}
+
 /** The terminal keys' modifiers, for `keys()`: `mod+Shift+T` reads `Ctrl+Shift+T`. */
 export const TERMINAL_MOD = isMac ? "mod" : "mod+Shift";
 

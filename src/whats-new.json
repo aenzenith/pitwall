@@ -1,25 +1,25 @@
 {
-  "since": "1.15.0",
+  "since": "1.16.0",
   "notes": [
     {
       "kind": "new",
       "title": {
-        "en": "Web addresses in a terminal open with ⌘-click",
-        "tr": "Terminaldeki web adresleri ⌘ ile tıklanınca açılıyor",
-        "de": "Webadressen im Terminal öffnen sich mit ⌘-Klick",
-        "es": "Las direcciones web de un terminal se abren con ⌘+clic",
-        "ru": "Веб-адреса в терминале открываются по ⌘+щелчку",
-        "ja": "ターミナルの Web アドレスが ⌘+クリックで開きます",
-        "zh-Hans": "终端中的网址可按 ⌘ 点击打开"
+        "en": "⌘W closes tabs, then the panel and the Files window",
+        "tr": "⌘W sekmeleri, ardından paneli ve Dosyalar penceresini kapatıyor",
+        "de": "⌘W schließt Tabs, dann den Bereich und das Dateien-Fenster",
+        "es": "⌘W cierra pestañas y luego el panel y la ventana Archivos",
+        "ru": "⌘W закрывает вкладки, затем панель и окно «Файлы»",
+        "ja": "⌘W でタブを閉じ、続けてパネルやファイルウィンドウも閉じられます",
+        "zh-Hans": "⌘W 可关闭标签页，再关闭面板和文件窗口"
       },
       "body": {
-        "en": "A web address in a terminal, the ones Claude prints too, now opens in your browser when you click it with ⌘ held (Ctrl on Windows and Linux). A plain click or a double-click still only selects it, so copying an address never opens it.",
-        "tr": "Terminaldeki web adresleri, Claude'un yazdıkları da, artık ⌘ basılıyken (Windows ve Linux'ta Ctrl) tıklayınca tarayıcıda açılıyor. Düz tıklama ya da çift tıklama yine yalnızca seçiyor; adresi kopyalarken tarayıcı açılmaz.",
-        "de": "Eine Webadresse im Terminal, auch eine, die Claude ausgibt, öffnet sich jetzt im Browser, wenn du sie mit gedrückter ⌘-Taste anklickst (unter Windows und Linux Strg). Ein einfacher Klick oder ein Doppelklick markiert sie weiterhin nur, damit beim Kopieren nichts aufgeht.",
-        "es": "Una dirección web en un terminal, también las que escribe Claude, ahora se abre en el navegador al hacer clic con ⌘ pulsada (Ctrl en Windows y Linux). Un clic normal o un doble clic siguen solo seleccionándola, así que copiarla nunca la abre.",
-        "ru": "Веб-адрес в терминале, в том числе выведенный Claude, теперь открывается в браузере щелчком с нажатой ⌘ (в Windows и Linux — Ctrl). Обычный или двойной щелчок по-прежнему только выделяет его, так что при копировании ничего не открывается.",
-        "ja": "ターミナルの Web アドレスは、Claude が出力したものも含め、⌘（Windows と Linux では Ctrl）を押しながらクリックするとブラウザで開くようになりました。普通のクリックやダブルクリックでは選択されるだけなので、コピーするときに開いてしまうことはありません。",
-        "zh-Hans": "终端中的网址（包括 Claude 输出的）现在按住 ⌘（Windows 和 Linux 上为 Ctrl）点击即可在浏览器中打开。普通单击或双击仍只会选中它，复制网址时不会打开。"
+        "en": "In the terminal panel ⌘W closes the tab shown, and once no tab is left it folds the panel. In a Files window it closes the tab shown, then the window. Where you are typing goes first; with nothing of these up, ⌘W closes Pitwall's window as before. On Windows and Linux it is Ctrl+W, and Ctrl+Shift+W in a terminal.",
+        "tr": "Terminal panelinde ⌘W gösterilen sekmeyi kapatıyor, sekme kalmayınca da paneli daraltıyor. Dosyalar penceresinde gösterilen sekmeyi, sekme kalmayınca da pencereyi kapatıyor. Önce yazdığın yer kapanıyor; bunlardan hiçbiri açık değilse ⌘W eskisi gibi Pitwall penceresini kapatıyor. Windows ve Linux'ta Ctrl+W, terminalde Ctrl+Shift+W.",
+        "de": "Im Terminalbereich schließt ⌘W den gezeigten Tab, und ist keiner mehr offen, klappt der Bereich zu. In einem Dateien-Fenster schließt es den gezeigten Tab, dann das Fenster. Wo du tippst, ist zuerst dran; ist nichts davon offen, schließt ⌘W wie bisher das Fenster von Pitwall. Unter Windows und Linux ist es Strg+W, im Terminal Strg+Umschalt+W.",
+        "es": "En el panel de terminales, ⌘W cierra la pestaña que se ve y, cuando no queda ninguna, pliega el panel. En una ventana Archivos cierra la pestaña que se ve y luego la ventana. Primero va donde escribes; si no hay nada de esto abierto, ⌘W cierra la ventana de Pitwall como antes. En Windows y Linux es Ctrl+W, y Ctrl+Mayús+W en una terminal.",
+        "ru": "В панели терминалов ⌘W закрывает показанную вкладку, а когда вкладок не осталось, сворачивает панель. В окне «Файлы» закрывает показанную вкладку, затем само окно. Сначала закрывается то, где вы печатаете; если ничего из этого не открыто, ⌘W, как и раньше, закрывает окно Pitwall. В Windows и Linux — Ctrl+W, в терминале — Ctrl+Shift+W.",
+        "ja": "ターミナルパネルでは ⌘W で表示中のタブを閉じ、タブがなくなるとパネルを折りたたみます。ファイルウィンドウでは表示中のタブを、続けてウィンドウを閉じます。入力中の場所が先に閉じます。どれも開いていなければ、これまでどおり Pitwall のウィンドウを閉じます。Windows と Linux では Ctrl+W、ターミナルでは Ctrl+Shift+W です。",
+        "zh-Hans": "在终端面板中，⌘W 会关闭当前显示的标签页，没有标签页时收起面板。在文件窗口中，它会关闭当前显示的标签页，然后关闭窗口。先关闭你正在输入的地方；这些都没有打开时，⌘W 会像以前一样关闭 Pitwall 的窗口。Windows 和 Linux 上为 Ctrl+W，在终端中为 Ctrl+Shift+W。"
       }
     }
   ]

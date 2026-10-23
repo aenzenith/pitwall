@@ -563,6 +563,23 @@ function close(id: number): void {
   void api.closeTerminal(id);
 }
 
+/** A tab closed with ⌘W: once it is gone, the one shown in its place takes the keyboard (the
+ * watch on the shown tab gives it); with none left, the empty terminal's "New tab" does, so the
+ * next ⌘W still finds the panel. */
+let closing: number | null = null;
+
+/**
+ * ⌘W with the panel in front (WindowApp: `closeFront`): the output shown gives its place back, as
+ * its tab picked again does; else the terminal shown closes; with no terminal left, the panel folds.
+ */
+function closeShown(): void {
+  if (showsOutput.value) return closeOutput();
+  const id = active.value?.id;
+  if (id === undefined) return foldPanel();
+  closing = id;
+  close(id);
+}
+
 function rename(name: string): void {
   if (renaming.value) void api.renameTerminal(renaming.value.id, name);
 }
@@ -722,6 +739,14 @@ watch(terminals, async (list) => {
   await nextTick();
   if (active.value) focusTab(active.value.id);
   else panel.value?.querySelector<HTMLElement>(".action")?.focus();
+});
+
+// A tab closed with ⌘W (`closing`): with none left, the keyboard goes to "New tab".
+watch(terminals, async (list) => {
+  if (closing === null || list.some((term) => term.id === closing)) return;
+  closing = null;
+  await nextTick();
+  if (!active.value && !collapsed.value) body.value?.querySelector<HTMLElement>(".empty .control")?.focus();
 });
 
 // A Claude session in one of these terminals was brought up (`reveal-terminal`, lib/panel:
@@ -916,7 +941,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onPressAnywhere, true);
 });
 
-defineExpose({ openTerminal });
+defineExpose({ openTerminal, closeShown });
 </script>
 
 <template>

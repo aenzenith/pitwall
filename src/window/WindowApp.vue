@@ -19,9 +19,9 @@ import { onBoard } from "../lib/board";
 import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
-import { cardRequest, COLLAPSED_HEIGHT, followProject, openInPanel, panelOver, panelPath, revealTab, showOutput } from "../lib/panel";
-import { dragRegion, isMac, keys, terminalChord } from "../lib/platform";
-import { closeFiles, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
+import { cardRequest, COLLAPSED_HEIGHT, followProject, openInPanel, panelOver, panelPath, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
+import { closeChord, dragRegion, isMac, keys, terminalChord } from "../lib/platform";
+import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
 import { focusTerminal, listRequest, openInWindow, openTarget } from "../lib/open";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
@@ -634,17 +634,39 @@ const terminalPanel = ref<InstanceType<typeof TerminalPanel> | null>(null);
 const ROW_TITLES = { terminal: "window.rowTitleTerminal", files: "window.rowTitleFiles", editor: "window.rowTitle", list: "window.rowTitle" } as const;
 
 /** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the
- * terminal panel's project, on whatever page. */
+ * terminal panel's project, on whatever page; ⌘W closes what is in front (`closeFront`). */
 function onKey(event: KeyboardEvent): void {
   const terminals = terminalPanel.value;
   if (terminalChord(event) && event.code === "KeyT" && terminals) {
     event.preventDefault();
     void terminals.openTerminal();
+  } else if (closeChord(event)) {
+    closeFront(event);
   } else if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyE" && shown.value) {
     // ⇧⌘E: the selected project's files, in their floating window (files/FilesWindow).
     event.preventDefault();
     toggleFiles(shown.value.path);
   }
+}
+
+/**
+ * ⌘W (lib/platform: closeChord) closes one thing at a time, what is in front: in a Files window the
+ * tab shown, with none left the window (one with the keyboard in it takes the key itself,
+ * files/FilesWindow); in the terminal panel, open, the tab shown, with none left the panel, folded.
+ * The panel goes first when the keyboard is in it, else the Files window in front. With neither up
+ * the key is left to the Window menu's Close Window (macOS): the window closes, Pitwall stays in the
+ * menu bar. So it is while a dialog is up, as before. A held key closes nothing more.
+ */
+function closeFront(event: KeyboardEvent): void {
+  if (event.defaultPrevented || document.querySelector("dialog[open]")) return;
+  const terminals = terminalPanel.value;
+  const panel = terminals && !terminalCollapsed.value ? terminals : null;
+  const files = frontFiles();
+  if (!event.repeat && !panel && !files) return;
+  event.preventDefault();
+  if (event.repeat) return;
+  if (panel && (panelTyping.value || !files)) panel.closeShown();
+  else if (files) closeShownTab(files);
 }
 
 let unlistenReveal: UnlistenFn | null = null;

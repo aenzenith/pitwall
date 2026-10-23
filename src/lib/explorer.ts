@@ -381,6 +381,15 @@ export function closeTabs(files: ProjectFiles, file: string, which: "others" | "
   if (!files.active || !files.tabs.includes(files.active)) files.active = files.tabs.includes(file) ? file : null;
 }
 
+/** ⌘W on a Files window: the tab shown closes, the next one taking its place; with no tab left,
+ * the window. */
+export function closeShownTab(win: FilesWin): void {
+  const files = peekFiles(win.path);
+  const tab = files && (files.active ?? files.tabs[files.tabs.length - 1]);
+  if (files && tab) closeTab(files, tab);
+  else closeFiles(win.path);
+}
+
 function forgetTab(files: ProjectFiles, file: string): void {
   files.tabs.splice(files.tabs.indexOf(file), 1);
   if (files.preview === file) files.preview = null;

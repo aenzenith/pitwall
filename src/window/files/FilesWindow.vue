@@ -3,11 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 
 import Icon from "../../components/Icon.vue";
 import StatusIcon from "../../components/StatusIcon.vue";
-import { absolutePath, changesOf, closeFiles, COMMIT_TAB, forgetFiles, minimizeFiles, peekFiles, raiseFiles, refreshFiles, type FilesWin, type Rect } from "../../lib/explorer";
+import { absolutePath, changesOf, closeFiles, closeShownTab, COMMIT_TAB, forgetFiles, minimizeFiles, peekFiles, raiseFiles, refreshFiles, type FilesWin, type Rect } from "../../lib/explorer";
 import { gitLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../../lib/nativeMenu";
-import { isMac, isWindows } from "../../lib/platform";
+import { closeChord, isMac, isWindows } from "../../lib/platform";
 import { api, snapshot, visible } from "../../lib/store";
 import FileTree from "./FileTree.vue";
 import FileViewer from "./FileViewer.vue";
@@ -207,6 +207,11 @@ function onKey(event: KeyboardEvent): void {
     // On a tab or the tree: nothing to select. The page's own Select All would take the text of
     // the app's window behind (the code and the preview take ⌘A first, for their own text).
     event.preventDefault();
+  } else if (closeChord(event)) {
+    // The tab shown closes, with none left this window; never the app's window behind it (the
+    // Window menu's Close Window, WindowApp: `closeFront`). A held key closes nothing more.
+    event.preventDefault();
+    if (!event.repeat) closeShownTab(win);
   }
 }
 

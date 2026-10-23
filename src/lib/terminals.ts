@@ -200,13 +200,13 @@ function create(id: number): View {
 
   // The panel's own keys; everything else goes to the shell. Returning false keeps a key from
   // the shell: it bubbles to the window, its default (copy, paste) left to the web view.
-  //  - macOS: ⌘T belongs to the window (new tab); ⌘K clears, like Terminal.app; ⌘C and ⌘V
-  //    copy and paste through the web view.
+  //  - macOS: ⌘T and ⌘W belong to the window (new tab, close tab); ⌘K clears, like Terminal.app;
+  //    ⌘C and ⌘V copy and paste through the web view.
   //  - Windows, Linux: Ctrl+letter is the shell's (Ctrl+C, Ctrl+D, Ctrl+K, Ctrl+R, Ctrl+T…), so
   //    the panel's keys take Ctrl+Shift (lib/platform: terminalChord), as Windows Terminal,
-  //    GNOME Terminal and Konsole do: Ctrl+Shift+T new tab, Ctrl+Shift+K clears, Ctrl+Shift+C
-  //    copies the selection, Ctrl+Shift+V pastes. On Windows also Windows Terminal's own: Ctrl+C
-  //    copies while text is selected (^C otherwise), Ctrl+V pastes.
+  //    GNOME Terminal and Konsole do: Ctrl+Shift+T new tab, Ctrl+Shift+W closes it, Ctrl+Shift+K
+  //    clears, Ctrl+Shift+C copies the selection, Ctrl+Shift+V pastes. On Windows also Windows
+  //    Terminal's own: Ctrl+C copies while text is selected (^C otherwise), Ctrl+V pastes.
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== "keydown") return true;
     if (isMac) {
@@ -215,7 +215,7 @@ function create(id: number): View {
         term.clear();
         return false;
       }
-      return event.code !== "KeyT";
+      return event.code !== "KeyT" && event.code !== "KeyW";
     }
     const plainCtrl = event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey;
     if (isWindows && plainCtrl && event.code === "KeyC" && term.hasSelection()) {
@@ -241,6 +241,7 @@ function create(id: number): View {
         }
         return false;
       case "KeyT":
+      case "KeyW":
         return false;
       default:
         return true;
