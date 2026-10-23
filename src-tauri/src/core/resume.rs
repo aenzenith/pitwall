@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::restore::write_private;
 use super::reveal::{is_session_id, Liveness};
-use super::terminal::Launch;
+use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 
 const FILE: &str = "last-session.json";
@@ -188,7 +188,7 @@ impl Core {
                 project.commands.retain(|id| known.iter().any(|command| &command.id == id && command.keep_running && !command.confirm));
                 for tab in &mut project.tabs {
                     tab.session = tab.session.take().filter(|id| is_session_id(id));
-                    tab.name = tab.name.take().map(|name| name.trim().chars().take(40).collect::<String>()).filter(|name| !name.is_empty());
+                    tab.name = tab.name.take().map(|name| name.trim().chars().take(TAB_NAME_MAX).collect::<String>()).filter(|name| !name.is_empty());
                 }
                 project
             })

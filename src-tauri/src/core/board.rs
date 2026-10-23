@@ -46,7 +46,7 @@ use serde_json::Value;
 
 use super::reveal::{is_session_id, Liveness};
 use super::sessions::{row_phase, status_phase, RowPhase, Running};
-use super::terminal::Launch;
+use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 use crate::claude::TurnKind;
 use crate::registry::{base36, write_atomic};
@@ -55,8 +55,6 @@ use crate::start::{Mode, Start};
 
 /// Done cards are dropped this long after they got there.
 const DONE_KEPT_MS: u64 = 30 * 24 * 60 * 60 * 1000;
-/// A tab opened for a card shows this much of its title.
-const TAB_NAME_CHARS: usize = 24;
 const FILE_VERSION: u32 = 1;
 /// A session opened again is given this long to show among the running ones; until then its old
 /// end doesn't send its card on.
@@ -636,14 +634,10 @@ fn new_id(cards: &[Card], now: u64) -> String {
     }
 }
 
-/// A tab's title from a card's, or from its session's name: one line, cut to `TAB_NAME_CHARS`.
+/// A tab's title from a card's, or from its session's name: one line, whole up to
+/// `TAB_NAME_MAX`. The tab cuts what doesn't fit and shows it all on hover.
 pub(super) fn tab_name(title: &str) -> String {
-    let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
-    if title.chars().count() <= TAB_NAME_CHARS {
-        return title;
-    }
-    let cut: String = title.chars().take(TAB_NAME_CHARS - 1).collect();
-    format!("{}…", cut.trim_end())
+    title.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(TAB_NAME_MAX).collect()
 }
 
 impl Core {

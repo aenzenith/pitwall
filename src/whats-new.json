@@ -21,6 +21,27 @@
         "ja": "ターミナルパネルでは ⌘W で表示中のタブを閉じ、タブがなくなるとパネルを折りたたみます。ファイルウィンドウでは表示中のタブを、続けてウィンドウを閉じます。入力中の場所が先に閉じます。どれも開いていなければ、これまでどおり Pitwall のウィンドウを閉じます。Windows と Linux では Ctrl+W、ターミナルでは Ctrl+Shift+W です。",
         "zh-Hans": "在终端面板中，⌘W 会关闭当前显示的标签页，没有标签页时收起面板。在文件窗口中，它会关闭当前显示的标签页，然后关闭窗口。先关闭你正在输入的地方；这些都没有打开时，⌘W 会像以前一样关闭 Pitwall 的窗口。Windows 和 Linux 上为 Ctrl+W，在终端中为 Ctrl+Shift+W。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "A Claude tab keeps its session's whole name",
+        "tr": "Claude sekmesi oturumun adını artık yarıda kesmiyor",
+        "de": "Ein Claude-Tab behält den ganzen Namen seiner Sitzung",
+        "es": "Una pestaña de Claude conserva el nombre entero de su sesión",
+        "ru": "Вкладка Claude хранит название сессии целиком",
+        "ja": "Claude タブがセッション名を最後まで保持します",
+        "zh-Hans": "Claude 标签页保留会话的完整名字"
+      },
+      "body": {
+        "en": "A tab's name was cut after a few words for good, so the rest of a session's or card's name was lost. Now the tab holds it whole: what doesn't fit is cut short only on screen, and holding the pointer over the tab shows all of it.",
+        "tr": "Sekmenin adı birkaç kelimeden sonra kalıcı olarak kesiliyordu; oturumun ya da kartın adının devamı kayboluyordu. Artık sekme adın tamamını tutuyor: sığmayan kısım yalnızca ekranda kısalıyor, imleci sekmenin üzerinde tutunca adın tamamı görünüyor.",
+        "de": "Der Name eines Tabs wurde nach ein paar Wörtern endgültig abgeschnitten, und der Rest des Namens der Sitzung oder Karte ging verloren. Jetzt behält der Tab ihn ganz: Was nicht passt, wird nur auf dem Bildschirm gekürzt, und hältst du den Zeiger über den Tab, siehst du alles.",
+        "es": "El nombre de una pestaña se cortaba para siempre tras unas pocas palabras, y se perdía el resto del nombre de la sesión o de la tarjeta. Ahora la pestaña lo guarda entero: lo que no cabe se recorta solo en pantalla, y con el puntero sobre la pestaña se ve completo.",
+        "ru": "Название вкладки навсегда обрезалось после нескольких слов, и остаток названия сессии или карточки терялся. Теперь вкладка хранит его целиком: то, что не помещается, обрезается только на экране, а при наведении указателя на вкладку видно всё название.",
+        "ja": "タブの名前は数語のところで切り詰められたまま保存され、セッションやカードの名前の続きが失われていました。いまはタブが名前全体を保持し、収まらない部分は画面上でだけ省略されます。タブにポインタを重ねると全体が表示されます。",
+        "zh-Hans": "标签页的名字过去在几个词之后就被永久截断，会话或卡片名字的其余部分随之丢失。现在标签页保留完整的名字：放不下的部分只在屏幕上截断，把指针停在标签页上即可看到全部。"
+      }
     }
   ]
 }

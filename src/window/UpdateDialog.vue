@@ -127,7 +127,7 @@ function onBackdrop(event: MouseEvent): void {
             <Icon v-else :name="row.mark" />
           </span>
           <span class="what">
-            <span class="name">{{ row.name }}</span>
+            <span class="name" :title="row.name">{{ row.name }}</span>
             <span class="sub">{{ row.sub }}</span>
           </span>
           <span class="outcome">{{ row.outcome }}</span>

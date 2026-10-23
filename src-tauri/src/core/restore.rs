@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::reveal::is_session_id;
-use super::terminal::Launch;
+use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 
 const FILE: &str = "restore.json";
@@ -270,7 +270,7 @@ impl Core {
                 Some(session) => Launch::Resume { session: session.clone() },
                 None => Launch::Shell,
             };
-            let name: String = tab.name.trim().chars().take(40).collect();
+            let name: String = tab.name.trim().chars().take(TAB_NAME_MAX).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
             let Ok(view) = self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false) else {
                 continue;

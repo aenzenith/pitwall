@@ -15,6 +15,8 @@ use crate::start::Start;
 
 /// Output kept per terminal to redraw it when its view comes back.
 const SCROLLBACK_BYTES: usize = 512 * 1024;
+/// The longest name a tab keeps, as long as a card's title may be; the tab cuts what doesn't fit.
+pub(super) const TAB_NAME_MAX: usize = 200;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -269,7 +271,7 @@ impl Core {
     /// A new title for a tab, from the user; an empty one keeps the old, and so does the one it
     /// has. The tab keeps that title from here on, whatever its session is called.
     pub fn rename_terminal(&self, id: u64, name: &str) {
-        let name: String = name.trim().chars().take(40).collect();
+        let name: String = name.trim().chars().take(TAB_NAME_MAX).collect();
         if name.is_empty() {
             return;
         }

@@ -986,7 +986,7 @@ defineExpose({ openTerminal, closeShown });
           :style="tabDrag.tabStyle(term.id)"
           :data-tab-id="term.id"
           role="none"
-          :title="t('terminal.renameHint')"
+          :title="`${term.name}\n${t('terminal.renameHint')}`"
           @pointerdown="tabDrag.down($event, term.id)"
           @click="open(term.id)"
           @dblclick="renaming = { id: term.id, name: term.name }"
@@ -1324,7 +1324,9 @@ defineExpose({ openTerminal, closeShown });
   gap: 5px;
 }
 
+/* A tab holds its whole name; what passes this is cut, and the tooltip shows it all. */
 .tab-name {
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
 }

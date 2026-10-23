@@ -43,7 +43,7 @@ function cancel(): void {
       </div>
       <label class="field">
         {{ t("command.name") }}
-        <input ref="input" v-model="draft" maxlength="40" spellcheck="false" />
+        <input ref="input" v-model="draft" maxlength="200" spellcheck="false" />
       </label>
       <div class="actions">
         <button type="button" class="control" @click="cancel">{{ t("common.cancel") }}</button>
