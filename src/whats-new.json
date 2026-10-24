@@ -63,6 +63,27 @@
         "ja": "長い名前が途中で失われなくなりました。タブにポインタを重ねると全体を読めます。",
         "zh-Hans": "长名字不再被永久截断，把指针停在标签页上即可看到全部。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "The fuel alert comes once",
+        "tr": "Yakıt uyarısı bir kez geliyor",
+        "de": "Die Tank-Warnung kommt nur einmal",
+        "es": "El aviso de combustible llega una vez",
+        "ru": "Предупреждение о топливе — один раз",
+        "ja": "燃料の警告は一度だけ",
+        "zh-Hans": "燃料提醒只出现一次"
+      },
+      "body": {
+        "en": "Past 90 % of a session or the week, you're told once per window instead of at every reading.",
+        "tr": "Oturum ya da hafta %90'ı geçince artık her okumada değil, pencere başına bir kez haber veriyor.",
+        "de": "Über 90 % einer Sitzung oder der Woche meldet sich Pitwall einmal pro Fenster, nicht mehr bei jeder Abfrage.",
+        "es": "Al pasar el 90 % de una sesión o de la semana, te avisa una vez por ventana y no en cada lectura.",
+        "ru": "Когда сессия или неделя переваливает за 90 %, Pitwall сообщает об этом один раз за окно, а не при каждом опросе.",
+        "ja": "セッションや週の使用量が 90 % を超えたとき、読み取りのたびではなく、ウィンドウごとに一度だけ知らせます。",
+        "zh-Hans": "会话或本周用量超过 90 % 时，每个窗口只提醒一次，不再每次读取都提醒。"
+      }
     }
   ]
 }

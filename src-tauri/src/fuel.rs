@@ -21,7 +21,7 @@ use crate::i18n::t;
 use crate::registry::now_ms;
 use crate::settings::Settings;
 use crate::spend::{SessionSpend, Spend, SpendToday};
-use crate::usage::{Status, UsageState, UsageWatch};
+use crate::usage::{Status, UsageState, UsageWatch, Window};
 use crate::{AppState, MAIN, POPOVER};
 
 /// How often today's logs are read again and the limits looked at; the limits hold themselves
@@ -35,7 +35,9 @@ const ALERTED: [&str; 2] = ["five_hour", "seven_day"];
 pub const NOTIFICATION_ID: &str = "pitwall:fuel";
 /// At or under this share left, a limit shows red: the page's `LOW_LEFT` (src/lib/fuel.ts).
 const LOW_LEFT: f64 = 10.0;
-/// A week whose refill moves on by more than this is a new week.
+/// A limit whose refill moves by more than this is a new window: a new week, a new session.
+/// Less is the same one: the API's refill moment moves by a fraction of a second from one
+/// reading to the next.
 const HOUR_MS: i64 = 60 * 60 * 1000;
 /// Past this much of the day's use for each of its share measured, the share was worked out
 /// (`DayFuel::estimated`).
@@ -325,7 +327,7 @@ impl Fuel {
             }
             // Held until the door has answered: one notification per window, whoever asks.
             let mut alerted = lock(&self.alerted);
-            let before = alerted.get(&window.id).filter(|(reset, _)| *reset == window.resets_at).map(|(_, told)| *told);
+            let before = told_before(&alerted, window);
             if before == Some(true) {
                 continue;
             }
@@ -342,6 +344,16 @@ impl Fuel {
             alerted.insert(window.id.clone(), (window.resets_at, told));
         }
     }
+}
+
+/// Whether the user was told of `window` passing 90 %: none for a window not met yet. One window
+/// is one refill moment, give or take what the API's moment moves between readings (`HOUR_MS`).
+fn told_before(alerted: &HashMap<String, (Option<i64>, bool)>, window: &Window) -> Option<bool> {
+    let same = |reset: Option<i64>| match (reset, window.resets_at) {
+        (Some(at), Some(next)) => (next - at).abs() <= HOUR_MS,
+        (at, next) => at == next,
+    };
+    alerted.get(&window.id).filter(|(reset, _)| same(*reset)).map(|(_, told)| *told)
 }
 
 /// What the week's limit took in a day, in percent: each stretch from its mark to what the next
