@@ -251,6 +251,18 @@ pub fn rename_terminal(state: State<'_, AppState>, id: u64, name: String) {
     state.core.rename_terminal(id, &name);
 }
 
+/// The terminal panel's height for its panes, kept for the next start.
+#[tauri::command]
+pub fn set_panes_height(state: State<'_, AppState>, height: u32) {
+    state.core.set_panes_height(height);
+}
+
+/// How the panel lays a project's terminals out; none: one at a time.
+#[tauri::command]
+pub fn set_terminal_layout(state: State<'_, AppState>, path: String, layout: Option<crate::core::TerminalLayout>) {
+    state.core.set_terminal_layout(&path, layout);
+}
+
 #[tauri::command]
 pub fn write_terminal(state: State<'_, AppState>, id: u64, data: String) {
     state.core.write_terminal(id, &data);

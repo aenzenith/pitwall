@@ -16,6 +16,8 @@
   --bg-footer: #131519;
   --bg-input: #0e1013;
   --bg-log: #0b0c0f;
+  /* A terminal pane's head (the panel's panes): off the terminal's ground, never past the panel's. */
+  --bg-pane-head: #101216;
   --bg-hover: #20242b;
   --bg-selected: #1d2128;
   --bg-control: #1c1f25;
@@ -277,6 +279,7 @@
   --bg-footer: #eceef1;
   --bg-input: #ffffff;
   --bg-log: #ffffff;
+  --bg-pane-head: #fbfbfc;
   --bg-hover: #e9ecef;
   --bg-selected: #e6e9ec;
   --bg-control: #ffffff;

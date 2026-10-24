@@ -9,6 +9,14 @@ const SETTLE_MS = 160;
 type Layout = { ids: number[]; lefts: number[]; widths: number[]; from: number; shift: number };
 
 /**
+ * Somewhere off the row that takes a tab (the terminal panel's terminal, split where it is let
+ * go): `over` says whether the pointer is over it now (the tab then leaves the row's order alone),
+ * `drop` takes the tab there (false: it isn't taken, and nothing moves), `leave` is told when the
+ * drag ends or comes back to the row.
+ */
+export type Elsewhere = { over: (id: number, x: number, y: number) => boolean; drop: (id: number) => boolean; leave: () => void };
+
+/**
  * Drag-to-reorder for a row of tabs, as lib/reorder does it for the list's rows but sideways: the
  * dragged tab follows the pointer along the row, the others slide aside to show where it will
  * land, and on release it slides into that place before `onDrop` is given the new order. Tabs
@@ -18,7 +26,7 @@ type Layout = { ids: number[]; lefts: number[]; widths: number[]; from: number; 
  *
  * Bind `listClass()` on the row, `tabClass(id)` and `tabStyle(id)` on each tab.
  */
-export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: number[]) => void) {
+export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: number[]) => void, elsewhere?: Elsewhere) {
   const dragging = ref<number | null>(null);
   /** Horizontal offset per tab while a drag is on. */
   const offsets = ref<Record<number, number>>({});
@@ -27,14 +35,16 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
   /** Transitions off for the instant the real order replaces the offsets. */
   const frozen = ref(false);
 
-  let press: { id: number; x: number } | null = null;
+  let press: { id: number; x: number; y: number } | null = null;
   let layout: Layout | null = null;
   let target = -1;
+  /** The pointer is over `elsewhere`, off the row. */
+  let away = false;
 
   function down(event: PointerEvent, id: number): void {
     if (event.button !== 0 || settling.value || (event.target as HTMLElement).closest("[data-no-drag]")) return;
 
-    press = { id, x: event.clientX };
+    press = { id, x: event.clientX, y: event.clientY };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up, { once: true });
     window.addEventListener("pointercancel", abort);
@@ -51,10 +61,11 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
     const lefts = tabs.map((tab) => tab.getBoundingClientRect().left - origin);
     const widths = tabs.map((tab) => tab.getBoundingClientRect().width);
     const from = ids.indexOf(id);
-    if (from < 0 || tabs.length < 2) return null;
+    // A tab alone has no place to move to in the row, only somewhere off it.
+    if (from < 0 || (tabs.length < 2 && !elsewhere)) return null;
 
     // Tabs make room by the dragged tab's width plus the gap between tabs.
-    const gap = Math.max(0, lefts[1] - lefts[0] - widths[0]);
+    const gap = tabs.length > 1 ? Math.max(0, lefts[1] - lefts[0] - widths[0]) : 0;
     return { ids, lefts, widths, from, shift: widths[from] + gap };
   }
 
@@ -64,7 +75,9 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
     if (!(event.buttons & 1)) return abort();
 
     if (dragging.value === null) {
-      if (Math.abs(event.clientX - press.x) < THRESHOLD) return;
+      const sideways = Math.abs(event.clientX - press.x) >= THRESHOLD;
+      const off = !!elsewhere && Math.abs(event.clientY - press.y) >= THRESHOLD;
+      if (!sideways && !off) return;
       layout = measure(press.id);
       if (!layout) return;
       dragging.value = press.id;
@@ -72,6 +85,16 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
       document.body.classList.add("grabbing");
     }
 
+    // Over the place off the row: the tabs stay where they were meanwhile.
+    if (elsewhere?.over(press.id, event.clientX, event.clientY)) {
+      away = true;
+      offsets.value = {};
+      return;
+    }
+    if (away) {
+      away = false;
+      elsewhere?.leave();
+    }
     place(event.clientX);
   }
 
@@ -112,6 +135,10 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
     window.removeEventListener("pointercancel", abort);
     window.removeEventListener("blur", abort);
     document.body.classList.remove("grabbing");
+    if (away) {
+      away = false;
+      elsewhere?.leave();
+    }
   }
 
   /** The press is called off: the tabs are back where they were and the order stays. */
@@ -124,6 +151,14 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
   }
 
   function up(): void {
+    // Let go off the row: taken there, or nothing moves.
+    if (away && dragging.value !== null) {
+      const moved = dragging.value;
+      away = false;
+      const taken = elsewhere?.drop(moved) ?? false;
+      if (!taken) elsewhere?.leave();
+      return abort();
+    }
     release();
 
     const moved = dragging.value;

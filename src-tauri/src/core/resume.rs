@@ -3,13 +3,15 @@
 //! session, `claude --resume`, unless that session isn't known to have ended: it may run
 //! somewhere else by then; a shell tab as a new shell). Unlike a restart for an update
 //! (`restore.rs`) nothing a terminal showed is kept: the record names projects, command ids,
-//! session ids and the tab names the user gave, and is read once and deleted at the next start.
+//! session ids, the tab names the user gave and how the panel laid the tabs out (by their
+//! places, `layout.rs`), and is read once and deleted at the next start.
 //!
 //! Settings' `resume` decides what that start does with it: `ask` offers it (the snapshot's
 //! `resume`) until the user answers, `always` puts it back at once, `never` writes none.
 
 use serde::{Deserialize, Serialize};
 
+use super::layout::SavedLayout;
 use super::restore::write_private;
 use super::reveal::{is_session_id, Liveness};
 use super::terminal::{Launch, TAB_NAME_MAX};
@@ -26,7 +28,7 @@ struct OpenTab {
     session: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 struct OpenProject {
     path: String,
@@ -35,9 +37,12 @@ struct OpenProject {
     /// by id.
     commands: Vec<String>,
     tabs: Vec<OpenTab>,
+    /// The panel's panes, by the places of `tabs`; none while one tab showed at a time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    layout: Option<SavedLayout>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Record {
     v: u32,
     at: u64,
@@ -45,7 +50,7 @@ struct Record {
 }
 
 /// The last quit's record while it waits for an answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct Kept {
     at: u64,
     projects: Vec<OpenProject>,
@@ -136,6 +141,18 @@ impl Core {
             project.server |= server;
             project.commands.extend(command);
             project.tabs.extend(tab);
+        }
+
+        // The panes, by the places of each project's tabs in the record.
+        {
+            let inner = self.lock();
+            for project in &mut projects {
+                let Some(layout) = inner.terminal_layouts.get(&project.path) else {
+                    continue;
+                };
+                let ids: Vec<u64> = standing.tabs.iter().filter(|tab| tab.path == project.path).map(|tab| tab.id).collect();
+                project.layout = layout.saved(|id| ids.iter().position(|own| *own == id));
+            }
         }
 
         let record = match (projects.is_empty(), self.lock().resume.take()) {
@@ -245,18 +262,30 @@ impl Core {
     }
 
     fn put_back(self: &Arc<Self>, kept: Kept) {
+        let mut laid = false;
         for project in &kept.projects {
+            // The terminal each of the record's tabs came back as; none for one that stayed away.
+            let mut opened: Vec<Option<u64>> = Vec::new();
             for tab in &project.tabs {
                 let Some(launch) = self.launch_of(tab) else {
+                    opened.push(None);
                     continue;
                 };
                 let Ok(view) = self.open_terminal_as(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false) else {
+                    opened.push(None);
                     continue;
                 };
+                opened.push(Some(view.id));
                 if let Some(session) = &tab.session {
                     self.board_resumed(session, view.id);
                 }
             }
+            if let Some(saved) = project.layout.clone() {
+                laid |= self.lay_terminals(&project.path, saved, |at| opened.get(at).copied().flatten());
+            }
+        }
+        if laid {
+            self.notify();
         }
 
         // Off the caller's thread: a start resolves the project and waits for a free port. A
@@ -314,8 +343,8 @@ mod tests {
             v: 1,
             at: now_ms(),
             projects: vec![
-                OpenProject { path: unlisted.clone(), server: false, commands: Vec::new(), tabs: vec![tab(None)] },
-                OpenProject { path: listed.clone(), server: false, commands: vec!["gone".into()], tabs: vec![tab(Some("x; touch pwned"))] },
+                OpenProject { path: unlisted.clone(), tabs: vec![tab(None)], ..OpenProject::default() },
+                OpenProject { path: listed.clone(), commands: vec!["gone".into()], tabs: vec![tab(Some("x; touch pwned"))], ..OpenProject::default() },
             ],
         };
         write_private(&core.resume_file(), &serde_json::to_string(&record).unwrap()).unwrap();
@@ -356,7 +385,7 @@ mod tests {
         let commands = vec![command("worker", format!("touch '{}'; sleep 30", worked.display()), false), command("watch", format!("touch '{}'; sleep 30", watched.display()), true)];
         core.set_project_settings(&project, ProjectSettings { commands, ..Default::default() });
 
-        let open = OpenProject { path: project.clone(), server: false, commands: vec!["worker".into(), "watch".into()], tabs: Vec::new() };
+        let open = OpenProject { path: project.clone(), commands: vec!["worker".into(), "watch".into()], ..OpenProject::default() };
         let record = Record { v: 1, at: now_ms(), projects: vec![open] };
         write_private(&core.resume_file(), &serde_json::to_string(&record).unwrap()).unwrap();
 
@@ -372,6 +401,50 @@ mod tests {
         assert!(worked.exists(), "the worker came back");
         thread::sleep(Duration::from_millis(500));
         assert!(!watched.exists(), "an ask-first worker came back unasked");
+
+        core.dispose();
+    }
+
+    /// The panel's panes are written down with the tabs at a quit, by the tabs' places, and come
+    /// back with them, holding the terminals they came back as; a record written before panes
+    /// were puts its tabs back all the same.
+    #[test]
+    fn the_panes_come_back_with_their_tabs() {
+        use super::super::layout::{PaneNode, SplitDir, TerminalLayout};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        let core = core_in(tmp.path());
+        core.add_project(&project).unwrap();
+
+        let open = || core.open_terminal_as(&project, &Launch::Shell, None, false, None, false).unwrap().id;
+        let (first, second) = (open(), open());
+        let pane = |terminal| PaneNode::Pane { terminal: Some(terminal) };
+        let side_by_side = |left, right| PaneNode::Split { dir: SplitDir::Row, sizes: vec![0.25, 0.75], kids: vec![pane(left), pane(right)] };
+        core.set_terminal_layout(&project, Some(TerminalLayout { tree: side_by_side(second, first), focus: Some(first), zoom: None, rev: 0 }));
+        core.save_last_session();
+        core.close_terminal(first);
+        core.close_terminal(second);
+
+        core.resume_start(false);
+        core.resume_restore(false);
+        let tabs: Vec<u64> = core.lock().terminal_list.iter().map(|tab| tab.id).collect();
+        assert_eq!(tabs.len(), 2);
+        let layout = core.snapshot().projects.into_iter().find(|listed| listed.path == project).and_then(|listed| listed.layout).expect("laid out again");
+        assert_eq!((layout.tree, layout.focus), (side_by_side(tabs[1], tabs[0]), Some(tabs[0])));
+        assert!(layout.rev > 0, "the UI takes it over its own");
+        for id in tabs {
+            core.close_terminal(id);
+        }
+
+        // A record of a version that wrote no panes.
+        let old = format!(r#"{{"v":1,"at":{},"projects":[{{"path":{},"server":false,"commands":[],"tabs":[{{}}]}}]}}"#, now_ms(), serde_json::to_string(&project).unwrap());
+        write_private(&core.resume_file(), &old).unwrap();
+        core.resume_start(false);
+        core.resume_restore(false);
+        assert_eq!(core.lock().terminal_list.len(), 1);
 
         core.dispose();
     }

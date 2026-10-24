@@ -31,6 +31,7 @@ import type {
   SignalKind,
   Snapshot,
   StartChoice,
+  TerminalLayout,
   TerminalView,
   UpdateView,
 } from "./types";
@@ -280,6 +281,10 @@ export const api = {
   writeTerminal: (id: number, data: string) => invoke("write_terminal", { id, data }),
   resizeTerminal: (id: number, cols: number, rows: number) => invoke("resize_terminal", { id, cols, rows }),
   closeTerminal: (id: number) => invoke("close_terminal", { id }),
+  /** The terminal panel's height for its panes, kept for the next start. */
+  setPanesHeight: (height: number) => invoke("set_panes_height", { height }),
+  /** How the panel lays a project's terminals out; null: one at a time. */
+  setTerminalLayout: (path: string, layout: TerminalLayout | null) => invoke("set_terminal_layout", { path, layout }),
   terminalBuffer: (id: number) => invoke<{ data: string; seq: number }>("terminal_buffer", { id }),
   setFavourite: (path: string, on: boolean) => invoke("set_favourite", { path, on }),
   /** "Remove from Pitwall": no added project and no favourite any more. */

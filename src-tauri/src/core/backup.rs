@@ -153,8 +153,9 @@ impl General {
             notifications: _, notify: _, fuel_alert: _,
             // This Mac's own too: Claude Code's configuration here is what names this app.
             radio: _,
-            // This Mac's own as well: where its small window stands, the command installed here.
-            tower: _, cli: _,
+            // This Mac's own as well: where its small window stands, the command installed here,
+            // how tall its terminal panel is for panes.
+            tower: _, cli: _, panes_height: _,
         } = settings.clone();
 
         Self {

@@ -42,20 +42,59 @@ import {
   terminalOrder,
   terminalRequest,
   useResizer,
+  PANEL_MIN,
 } from "../lib/panel";
+import {
+  canSplit,
+  claudeTerminals,
+  evenAll,
+  findLeaf,
+  kindOf,
+  leaf,
+  leafOf,
+  leaves,
+  minSize,
+  movePane,
+  paneAction,
+  paneLayouts,
+  PANES_CHROME,
+  PANES_HEIGHT,
+  panesHeight,
+  place,
+  preset,
+  presetOf,
+  PRESETS,
+  removePane,
+  setPanes,
+  setTerminal,
+  splitPane,
+  swapPanes,
+  takeCoreLayouts,
+  type PaneAction,
+  type PaneKind,
+  type PaneNode,
+  type Place,
+  type Placed,
+  type PlacedPane,
+  type PresetId,
+  type Side,
+  type SplitDir,
+} from "../lib/panes";
 import { isMac, primary } from "../lib/platform";
 import { sessionWaits, statusLine } from "../lib/sessions";
 import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
 import { api, now, sessions, snapshot } from "../lib/store";
-import { tabKey } from "../lib/tabs";
+import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
-import { attach, fitView, focusView, measure } from "../lib/terminals";
+import { attach, fitView, focusView, measure, paneKeys } from "../lib/terminals";
 import type { Project, StartChoice } from "../lib/types";
 import CardDialog from "./board/CardDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
+import LayoutMenu from "./LayoutMenu.vue";
 import RenameDialog from "./RenameDialog.vue";
 import TerminalHistory from "./TerminalHistory.vue";
+import TerminalPanes from "./TerminalPanes.vue";
 
 /** How long a `reveal-terminal` request waits for its project and tab to show up. */
 const REQUEST_MS = 5_000;
@@ -70,7 +109,14 @@ const props = defineProps<{ project: Project }>();
 
 /** Room above the panel that always stays: the page's bar. */
 const HEADER = 56;
-const height = terminalHeight;
+/** One height for one terminal at a time, another for panes (lib/panes). */
+const height = computed({
+  get: () => (paneLayouts.value[props.project.path] ? panesHeight.value : terminalHeight.value),
+  set: (value: number) => {
+    if (paneLayouts.value[props.project.path]) panesHeight.value = value;
+    else terminalHeight.value = value;
+  },
+});
 const collapsed = terminalCollapsed;
 
 const panel = ref<HTMLElement | null>(null);
@@ -90,6 +136,61 @@ const terminals = computed(() => {
   return [...list].sort((a, b) => (rank.get(a.id) ?? unranked) - (rank.get(b.id) ?? unranked));
 });
 
+/** The project's panes (lib/panes), or none: one terminal at a time. */
+const layout = computed(() => paneLayouts.value[props.project.path] ?? null);
+const panesOn = computed(() => layout.value !== null);
+/** The panes' room, as they last measured it. */
+const paneRoom = ref({ w: 0, h: 0 });
+
+/** The tabs the row shows: every terminal, or with panes those in none of them, waiting there to
+ * be clicked or dragged into one. */
+const rowTabs = computed(() => {
+  const now = layout.value;
+  if (!now) return terminals.value;
+  const held = new Set(leaves(now.tree).map((pane) => pane.terminal));
+  return terminals.value.filter((term) => !held.has(term.id));
+});
+
+/** The names the row and the panes show: two of the same name told apart ("zsh", "zsh 2"). */
+const names = computed(() => distinctNames(terminals.value));
+
+// A Claude session's pane is larger at least (lib/panes): which of these terminals are Claude's.
+watch(
+  terminals,
+  (list) => {
+    claudeTerminals.value = new Set(list.filter((term) => term.kind === "claude").map((term) => term.id));
+  },
+  { immediate: true },
+);
+
+// The panel's height for panes as it was last left: taken once at the start, and kept for the next
+// one a moment after it changes (dragged, or grown to hold its panes).
+let heightTaken = false;
+let heightKept: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => snapshot.value?.settings.panesHeight,
+  (kept) => {
+    if (heightTaken || !snapshot.value) return;
+    heightTaken = true;
+    if (kept) panesHeight.value = kept;
+  },
+  { immediate: true },
+);
+watch(panesHeight, (tall) => {
+  if (!heightTaken) return;
+  clearTimeout(heightKept);
+  heightKept = setTimeout(() => void api.setPanesHeight(Math.round(tall)).catch(() => undefined), 600);
+});
+
+// Panes the core laid itself (put back after a quit or an update) are taken as they come.
+watch(
+  () => snapshot.value?.projects,
+  (projects) => {
+    if (projects) takeCoreLayouts(projects);
+  },
+  { immediate: true },
+);
+
 /** Claude in a tab's terminal, by the terminal's id: at work, or waiting on you (a turn finished
  * and not looked at yet, a question, a permission prompt). Nothing for a tab with neither. */
 const live = computed(() => {
@@ -105,14 +206,24 @@ const live = computed(() => {
 /** The tab chosen in this project (lib/panel), if any. */
 const chosen = computed(() => chosenTab.value[props.project.path]);
 /** The terminal shown: the one chosen, else (one chosen that closed, or nothing chosen) the last;
- * none while an output is chosen. */
+ * with panes, the focused pane's. None while an output is chosen. */
 const active = computed(() => {
   const choice = chosen.value;
   if (choice?.kind === "output") return null;
+  const now = layout.value;
+  if (now) {
+    const id = findLeaf(now.tree, now.focus)?.terminal;
+    return terminals.value.find((t) => t.id === id) ?? null;
+  }
   return terminals.value.find((t) => t.id === choice?.id) ?? terminals.value[terminals.value.length - 1] ?? null;
 });
 
-const resizer = useResizer(height, () => (panel.value?.parentElement?.clientHeight ?? 0) - HEADER);
+const resizer = useResizer(
+  height,
+  () => (panel.value?.parentElement?.clientHeight ?? 0) - HEADER,
+  // With panes, never lower than they can be.
+  () => (layout.value ? minSize(layout.value.tree).h + PANES_CHROME : PANEL_MIN),
+);
 const dragging = resizer.dragging;
 
 /** Collapsed, only the tab row shows; the chosen height comes back on expanding. */
@@ -136,7 +247,7 @@ watch(
     clearTimeout(settle);
     settle = setTimeout(() => {
       animating.value = false;
-      if (!collapsed.value && active.value) fitView(active.value.id);
+      if (!collapsed.value && active.value && !panesOn.value) fitView(active.value.id);
     }, COLLAPSE_MS + 40);
   },
   { flush: "sync" },
@@ -349,7 +460,7 @@ watch([beside, historyShown], () => {
   clearTimeout(slid);
   slid = setTimeout(() => {
     sliding.value = false;
-    if (!collapsed.value && !animating.value && active.value) fitView(active.value.id);
+    if (!collapsed.value && !animating.value && active.value && !panesOn.value) fitView(active.value.id);
   }, SLIDE_MS + 40);
 });
 
@@ -419,8 +530,9 @@ function pressScreen(): void {
 }
 
 /** A new tab: the shell, or with `claude` a Claude Code session (`start`: with the model and in
- * the mode picked from its list; without one, as the project's settings say). */
-async function openTerminal(claude = false, start: StartChoice | null = null): Promise<void> {
+ * the mode picked from its list; without one, as the project's settings say). With panes, or
+ * `where` asked for, it goes into a pane (`placeTerminal`). */
+async function openTerminal(claude = false, start: StartChoice | null = null, where: Place | null = null): Promise<void> {
   if (opening.value) return;
   opening.value = true;
   try {
@@ -429,9 +541,11 @@ async function openTerminal(claude = false, start: StartChoice | null = null): P
       toggleCollapsed();
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
-    const size = viewport.value ? measure(viewport.value) : null;
+    const size = viewport.value && !panesOn.value && !where ? measure(viewport.value) : null;
     const view = await api.openTerminal(props.project.path, claude, size, start);
     asked = view.id;
+    fresh.add(view.id);
+    if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, claude ? "claude" : "shell");
     chooseTab(props.project.path, { kind: "terminal", id: view.id });
   } finally {
     opening.value = false;
@@ -469,7 +583,8 @@ function seeFinished(id: number | undefined): void {
 watch(
   () => [props.project.path, terminals.value] as const,
   ([path, list], [wasPath, was]) => {
-    if (path !== wasPath) return;
+    // With panes, one that came by itself waits in no pane.
+    if (path !== wasPath || layout.value) return;
     const came = list.filter((term) => !was.some((old) => old.id === term.id));
     // One this panel is opening is asked for, and so is any the core doesn't call unasked.
     if (!came.length || opening.value || !came.every((term) => term.unasked)) return;
@@ -524,6 +639,486 @@ function addMenu(event: Event): void {
   ]);
 }
 
+/* ---------- the panes ---------- */
+
+/** Terminals just opened that the core's list doesn't show yet: their panes wait for them. */
+const fresh = new Set<number>();
+
+/** The stage's width: the panel's, less its margins and the history beside it. */
+const stageWidth = computed(() => Math.max(0, panelWidth.value - 20 - (beside.value ? historyShown.value + 32 : 20)));
+
+/** The room panes would have with the panel `tall` px high. */
+function roomAt(tall: number): { w: number; h: number } {
+  return { w: stageWidth.value, h: tall - PANES_CHROME };
+}
+
+/** How tall the panel can get: up to the page's bar. */
+function tallest(): number {
+  return (panel.value?.parentElement?.clientHeight ?? window.innerHeight) - HEADER;
+}
+
+/** Where the panes are now, as shown. */
+function placedNow(): Placed | null {
+  const now = layout.value;
+  if (!now) return null;
+  return panesView.value?.placed ?? place(now.tree, paneRoom.value.w, paneRoom.value.h);
+}
+
+/** The panes show as they are (not dealt out or squeezed for want of room, none zoomed): only then
+ * is a pane split by the keys or by a terminal coming. */
+function panesAsIs(): boolean {
+  return !layout.value?.zoom && (panesView.value?.shown.mode ?? "as-is") === "as-is";
+}
+
+/** What a terminal is, for the room its pane needs: a Claude session's, or a shell's. */
+function kindOfTerminal(id: number | undefined): PaneKind {
+  return id !== undefined && claudeTerminals.value.has(id) ? "claude" : "shell";
+}
+
+/**
+ * The panes changed: kept, the keyboard's pane `focus`; with fewer than two left, one terminal at
+ * a time again, the one left shown.
+ */
+function commitTree(tree: PaneNode | null, focus: string): void {
+  const path = props.project.path;
+  const panes = tree ? leaves(tree) : [];
+  if (!tree || panes.length < 2) {
+    setPanes(path, null);
+    const left = panes[0]?.terminal ?? null;
+    if (left !== null) chooseTab(path, { kind: "terminal", id: left });
+    return;
+  }
+  const focused = panes.find((pane) => pane.key === focus) ?? panes[0];
+  const zoom = layout.value?.zoom ?? null;
+  setPanes(path, { tree, focus: focused.key, zoom: panes.some((pane) => pane.key === zoom) ? zoom : null, rev: layout.value?.rev ?? 0 });
+  if (focused.terminal !== null) chooseTab(path, { kind: "terminal", id: focused.terminal });
+}
+
+/** A pane taken out of the panes: its terminal, if it has one, stays open and waits. */
+function takeOut(key: string): void {
+  const now = layout.value;
+  if (!now) return;
+  const { tree, neighbour } = removePane(now.tree, key);
+  commitTree(tree, now.focus === key ? (neighbour ?? "") : now.focus);
+}
+
+/** A pane picked (pressed, the keys); `keyboard`: its terminal takes the keyboard. */
+function focusPane(key: string, keyboard: boolean): void {
+  const now = layout.value;
+  if (!now) return;
+  if (now.focus !== key) setPanes(props.project.path, { ...now, focus: key });
+  const id = findLeaf(now.tree, key)?.terminal ?? null;
+  if (id === null) return;
+  const same = active.value?.id === id;
+  if (keyboard) asked = id;
+  chooseTab(props.project.path, { kind: "terminal", id });
+  seeFinished(id);
+  if (keyboard && same) focusView(id);
+}
+
+/**
+ * A new terminal into the panes: beside a pane, into an empty one, or where there is room (an
+ * empty pane, else beside the focused one, to the right, then below, else in its place, the one
+ * there waiting). With one terminal at a time, a split makes panes of the one shown and the new one.
+ */
+function placeTerminal(id: number, where: Place, kind: PaneKind = kindOfTerminal(id)): void {
+  const path = props.project.path;
+  const now = layout.value;
+  const added = leaf(id);
+  if (!now) {
+    const shown = active.value;
+    if (where.kind !== "split" || !shown) return;
+    const first = leaf(shown.id);
+    setPanes(path, { tree: splitPane(first, first.key, where.dir, added, where.before), focus: added.key, zoom: null, rev: 0 });
+    return;
+  }
+  let tree: PaneNode;
+  let focus = added.key;
+  if (where.kind === "split") tree = splitPane(now.tree, where.key, where.dir, added, where.before);
+  else if (where.kind === "cell") {
+    tree = setTerminal(now.tree, where.key, id);
+    focus = where.key;
+  } else {
+    const empty = leaves(now.tree).find((pane) => pane.terminal === null);
+    const rect = panesAsIs() ? placedNow()?.panes.find((pane) => pane.leaf.key === now.focus) : undefined;
+    const kinds: [PaneKind, PaneKind] = [rect ? kindOf(rect.leaf) : "shell", kind];
+    if (empty) {
+      tree = setTerminal(now.tree, empty.key, id);
+      focus = empty.key;
+    } else if (rect && canSplit(rect, "row", kinds)) tree = splitPane(now.tree, now.focus, "row", added);
+    else if (rect && canSplit(rect, "col", kinds)) tree = splitPane(now.tree, now.focus, "col", added);
+    else {
+      tree = setTerminal(now.tree, now.focus, id);
+      focus = now.focus;
+    }
+  }
+  setPanes(path, { ...now, tree, focus, zoom: null });
+}
+
+/** An open terminal in no pane, brought into the pane `into` (its terminal, if it has one, then
+ * waits). It takes the keyboard. */
+function bring(id: number, into: string): void {
+  const now = layout.value;
+  if (!now) return;
+  asked = id;
+  setPanes(props.project.path, { ...now, tree: setTerminal(now.tree, into, id), focus: into, zoom: null });
+  chooseTab(props.project.path, { kind: "terminal", id });
+}
+
+// A terminal that closed leaves its pane, the room going to its neighbour.
+watch(
+  () => [props.project.path, terminals.value.map((term) => term.id).join()] as const,
+  () => {
+    const now = layout.value;
+    const alive = new Set(terminals.value.map((term) => term.id));
+    for (const id of fresh) if (alive.has(id)) fresh.delete(id);
+    if (!now) return;
+    const gone = leaves(now.tree).filter((pane) => pane.terminal !== null && !alive.has(pane.terminal) && !fresh.has(pane.terminal));
+    if (!gone.length) return;
+    let tree: PaneNode | null = now.tree;
+    let focus = now.focus;
+    for (const pane of gone) {
+      if (!tree) break;
+      const out = removePane(tree, pane.key);
+      tree = out.tree;
+      if (focus === pane.key) focus = out.neighbour ?? "";
+    }
+    commitTree(tree, focus);
+  },
+  { immediate: true },
+);
+
+// A terminal chosen elsewhere (a page's selection, a request, the output given back): its pane
+// takes the focus; one asked for that is in no pane comes in where there is room.
+watch(chosen, (choice) => {
+  const now = layout.value;
+  if (!now || choice?.kind !== "terminal") return;
+  const pane = leafOf(now.tree, choice.id);
+  if (pane) {
+    if (pane.key !== now.focus) setPanes(props.project.path, { ...now, focus: pane.key });
+  } else if (asked === choice.id && terminals.value.some((term) => term.id === choice.id)) placeTerminal(choice.id, { kind: "auto" });
+});
+
+// Back to one terminal at a time: the one shown goes into the viewport again.
+watch(panesOn, async (on) => {
+  if (on) return;
+  await nextTick();
+  const id = active.value?.id;
+  if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, panelTyping.value && !collapsed.value);
+});
+
+// Panes that need more room than the panel has: it grows to hold them, as far as it can.
+watch(
+  () => (layout.value ? minSize(layout.value.tree).h : 0),
+  (least) => {
+    if (!least) return;
+    const need = least + PANES_CHROME;
+    if (panesHeight.value < need) panesHeight.value = Math.min(need, Math.max(PANEL_MIN, tallest()));
+  },
+  { immediate: true },
+);
+
+/* The Düzen menu. */
+
+const presetNow = computed(() => presetOf(layout.value?.tree ?? null));
+/** "Tek", the panes' count, or which of them is zoomed. */
+const layoutCount = computed(() => {
+  const now = layout.value;
+  if (!now) return t("panes.single");
+  const panes = leaves(now.tree);
+  // Squeezed for want of room, the pane with the keyboard fills it as a zoomed one does.
+  const filling = now.zoom ?? (panesView.value?.shown.mode === "squeezed" ? now.focus : null);
+  const zoomed = filling ? panes.findIndex((pane) => pane.key === filling) : -1;
+  return zoomed >= 0 ? `${zoomed + 1}/${panes.length}` : String(panes.length);
+});
+const menuRoom = computed(() => roomAt(Math.max(panesHeight.value, PANES_HEIGHT)));
+
+/** A layout fits the panel at its tallest, with the terminals it would hold. */
+function fitsPreset(id: PresetId): boolean {
+  return id === "1" || preset(id, presetOrder(PRESETS.find((each) => each.id === id)?.count ?? 2), stageWidth.value, tallest() - PANES_CHROME) !== null;
+}
+
+/** The terminals a layout of `count` panes holds, in their tabs' order: the one shown among them. */
+function presetOrder(count: number): number[] {
+  const shown = active.value?.id;
+  const order = terminals.value.map((term) => term.id);
+  const at = shown === undefined ? -1 : order.indexOf(shown);
+  if (shown !== undefined && at >= count) {
+    order.splice(at, 1);
+    order.splice(count - 1, 0, shown);
+  }
+  return order;
+}
+
+/**
+ * A layout picked: Tek, one terminal at a time, the focused one shown; else that many panes, the
+ * project's terminals in them in their tabs' order (the one shown among them), empty past them;
+ * the panel grows if it must. Terminals left over wait.
+ */
+function pickLayout(id: PresetId): void {
+  const path = props.project.path;
+  const shown = active.value?.id;
+  if (id === "1") {
+    setPanes(path, null);
+    if (shown !== undefined) chooseTab(path, { kind: "terminal", id: shown });
+    return;
+  }
+  const order = presetOrder(PRESETS.find((each) => each.id === id)?.count ?? 2);
+  const top = tallest();
+  const tall = Math.min(Math.max(panesHeight.value, PANES_HEIGHT), top);
+  const tree = preset(id, order, stageWidth.value, tall - PANES_CHROME) ?? preset(id, order, stageWidth.value, top - PANES_CHROME);
+  if (!tree) return;
+  panesHeight.value = Math.min(top, Math.max(tall, minSize(tree).h + PANES_CHROME));
+  const panes = leaves(tree);
+  const focus = panes.find((pane) => pane.terminal === shown) ?? panes[0];
+  setPanes(path, { tree, focus: focus.key, zoom: null, rev: layout.value?.rev ?? 0 });
+  if (focus.terminal !== null) chooseTab(path, { kind: "terminal", id: focus.terminal });
+  if (collapsed.value) toggleCollapsed();
+}
+
+function evenPanes(): void {
+  const now = layout.value;
+  if (now) setPanes(props.project.path, { ...now, tree: evenAll(now.tree) });
+}
+
+function renameTerminal(id: number): void {
+  const term = terminals.value.find((each) => each.id === id);
+  if (term) renaming.value = { id, name: term.name };
+}
+
+function zoomFocused(): void {
+  const now = layout.value;
+  if (now) setPanes(props.project.path, { ...now, zoom: now.zoom ? null : now.focus });
+}
+
+/** ⌥⌘ and an arrow: the nearest pane that way, the keyboard in it. */
+function moveFocus(act: PaneAction): void {
+  const now = layout.value;
+  const placed = placedNow();
+  if (!now || !placed || now.zoom) return;
+  const from = placed.panes.find((pane) => pane.leaf.key === now.focus);
+  if (!from) return;
+  const across = act === "left-pane" || act === "right-pane";
+  const ahead = placed.panes.filter((pane) => {
+    if (act === "left-pane") return pane.x + pane.w <= from.x;
+    if (act === "right-pane") return pane.x >= from.x + from.w;
+    if (act === "up-pane") return pane.y + pane.h <= from.y;
+    return pane.y >= from.y + from.h;
+  });
+  const middle = (pane: PlacedPane) => ({ x: pane.x + pane.w / 2, y: pane.y + pane.h / 2 });
+  const here = middle(from);
+  const score = (pane: PlacedPane): number => {
+    const there = middle(pane);
+    const overlap = across ? Math.min(pane.y + pane.h, from.y + from.h) - Math.max(pane.y, from.y) : Math.min(pane.x + pane.w, from.x + from.w) - Math.max(pane.x, from.x);
+    const along = across ? Math.abs(there.x - here.x) : Math.abs(there.y - here.y);
+    const aside = across ? Math.abs(there.y - here.y) : Math.abs(there.x - here.x);
+    return (overlap > 0 ? 0 : 100_000) + along + aside / 4;
+  };
+  const next = ahead.sort((a, b) => score(a) - score(b))[0];
+  if (!next) return;
+  focusPane(next.leaf.key, true);
+  if (next.leaf.terminal === null) void nextTick(() => panel.value?.querySelector<HTMLElement>(".pane.on .cell button")?.focus());
+}
+
+/** The panes' keys, pressed anywhere in the panel (lib/panes: `paneAction`). */
+function onPanelKey(event: KeyboardEvent): void {
+  const act = paneAction(event);
+  if (!act || renaming.value || errorCard.value) return;
+  const now = layout.value;
+  if (act === "right" || act === "down") {
+    const dir: SplitDir = act === "right" ? "row" : "col";
+    event.preventDefault();
+    if (opening.value) return;
+    if (now) {
+      const rect = panesAsIs() ? placedNow()?.panes.find((pane) => pane.leaf.key === now.focus) : undefined;
+      if (rect && canSplit(rect, dir, [kindOf(rect.leaf), "shell"])) void openTerminal(false, null, { kind: "split", key: now.focus, dir });
+    } else if (active.value) {
+      const room = roomAt(Math.min(Math.max(panesHeight.value, PANES_HEIGHT), tallest()));
+      if (canSplit({ x: 0, y: 0, ...room }, dir, [kindOfTerminal(active.value.id), "shell"])) void openTerminal(false, null, { kind: "split", key: "", dir });
+    }
+    return;
+  }
+  if (!now) return;
+  event.preventDefault();
+  if (act === "zoom") zoomFocused();
+  else if (act === "even") evenPanes();
+  else moveFocus(act);
+}
+
+/* ---------- dropped onto the terminals ---------- */
+
+/** Something dragged onto the terminals from elsewhere in the panel: a session from the history
+ * (TerminalHistory) or, one terminal at a time, a tab from the row. */
+type Incoming = { kind: "session" | "tab"; id: string | number; name: string; claude: boolean; x: number; y: number };
+const incoming = ref<Incoming | null>(null);
+/** Where it would land: a pane (`pane`; none with one terminal at a time) and its side, or the
+ * middle (`side` none: into that pane, or for a session with one terminal at a time, a tab). */
+type Landing = { pane: string | null; side: Side | null };
+
+const stageEl = ref<HTMLElement | null>(null);
+const panesView = ref<InstanceType<typeof TerminalPanes> | null>(null);
+
+function overStage(x: number, y: number): boolean {
+  const box = stageEl.value?.getBoundingClientRect();
+  return !!box && x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+}
+
+function landingAt(drag: Incoming): Landing | null {
+  const box = stageEl.value?.getBoundingClientRect();
+  if (!box || !overStage(drag.x, drag.y)) return null;
+  if (layout.value) {
+    const at = panesView.value?.dropAt(drag.x, drag.y, "");
+    return at ? { pane: at.key, side: at.side } : null;
+  }
+  const shown = active.value;
+  // A tab beside itself is no split; with nothing shown, a session opens as a tab.
+  if (drag.kind === "tab" && (!shown || shown.id === drag.id)) return null;
+  if (!shown) return { pane: null, side: null };
+  const rx = (drag.x - box.left) / box.width;
+  const ry = (drag.y - box.top) / box.height;
+  const near: [Side, number][] = [
+    ["left", rx],
+    ["right", 1 - rx],
+    ["top", ry],
+    ["bottom", 1 - ry],
+  ];
+  const side = near.sort((a, b) => a[1] - b[1])[0][0];
+  const middle = rx > 0.3 && rx < 0.7 && ry > 0.3 && ry < 0.7;
+  const room = roomAt(Math.min(Math.max(panesHeight.value, PANES_HEIGHT), tallest()));
+  const coming: PaneKind = drag.kind === "session" || drag.claude ? "claude" : "shell";
+  if (!middle && canSplit({ x: 0, y: 0, ...room }, side === "left" || side === "right" ? "row" : "col", [kindOfTerminal(shown.id), coming])) return { pane: null, side };
+  return drag.kind === "tab" ? null : { pane: null, side: null };
+}
+
+const landing = computed(() => (incoming.value ? landingAt(incoming.value) : null));
+/** The panes show their own landing; one terminal at a time shows it here. */
+const paneLanding = computed(() => (landing.value?.pane ? { key: landing.value.pane, side: landing.value.side } : null));
+const OPEN_AT: Record<Side, "panes.openLeft" | "panes.openRight" | "panes.openAbove" | "panes.openBelow"> = { left: "panes.openLeft", right: "panes.openRight", top: "panes.openAbove", bottom: "panes.openBelow" };
+const MOVE_AT: Record<Side, "panes.moveLeft" | "panes.moveRight" | "panes.moveUp" | "panes.moveDown"> = { left: "panes.moveLeft", right: "panes.moveRight", top: "panes.moveUp", bottom: "panes.moveDown" };
+const landingLabel = computed(() => {
+  const at = landing.value;
+  if (!at || at.pane) return "";
+  if (at.side) return t(incoming.value?.kind === "tab" ? MOVE_AT[at.side] : OPEN_AT[at.side]);
+  return t("panes.openTab");
+});
+
+function placeOf(at: Landing): Place | null {
+  if (!at.side) return at.pane === null ? null : { kind: "cell", key: at.pane };
+  return { kind: "split", key: at.pane ?? "", dir: at.side === "left" || at.side === "right" ? "row" : "col", before: at.side === "left" || at.side === "top" };
+}
+
+/**
+ * A terminal put where something was let go: beside a pane, into one (whose terminal then waits),
+ * or with one terminal at a time beside the one shown. One that is in a pane already moves there.
+ */
+function placeDropped(id: number, place: Place): void {
+  const now = layout.value;
+  const own = now ? leafOf(now.tree, id) : undefined;
+  if (now && own) {
+    if (place.kind === "split" && own.key !== place.key) {
+      const edge: Side = place.dir === "row" ? (place.before ? "left" : "right") : place.before ? "top" : "bottom";
+      setPanes(props.project.path, { ...now, tree: movePane(now.tree, own.key, place.key, edge), focus: own.key, zoom: null });
+    } else if (place.kind === "cell" && own.key !== place.key) setPanes(props.project.path, { ...now, tree: swapPanes(now.tree, own.key, place.key), focus: own.key, zoom: null });
+    return;
+  }
+  if (!now && active.value?.id === id) return;
+  placeTerminal(id, place);
+}
+
+/** Where a session let go on the terminals goes, while its tab opens (or comes up): the request
+ * that brings its terminal takes it (`terminalRequest`). */
+let dropPlace: { place: Place; at: number } | null = null;
+
+function sessionDragged(drag: { id: string; name: string; x: number; y: number } | null): void {
+  incoming.value = drag ? { kind: "session", ...drag, claude: true } : null;
+}
+
+/** A session let go on the terminals: it opens there (`resume_claude` in the history), a tab of
+ * Pitwall's it runs in coming there. Let go elsewhere, nothing happens. */
+function sessionDropped(id: string): void {
+  const at = landing.value;
+  incoming.value = null;
+  if (!at) return;
+  const place = placeOf(at);
+  dropPlace = place ? { place, at: Date.now() } : null;
+  const history = side.value ?? over.value;
+  void history?.open(id).then((result) => {
+    if (result !== "shown" && result !== "opened") dropPlace = null;
+  });
+}
+
+/* A pane dragged by its head back onto the tab row: out of the panes, a tab again where it is let
+   go among the others (the line in the row says where). */
+
+const tabsRow = ref<HTMLElement | null>(null);
+/** Where along the row a pane dragged over it would go in, while one is. */
+const rowMark = ref<number | null>(null);
+
+function rowAt(x: number, y: number): boolean {
+  const box = tabsRow.value?.getBoundingClientRect();
+  return !!box && x >= box.left && x <= box.right && y >= box.top - 6 && y <= box.bottom + 4;
+}
+
+/** The row's tab a pane let go at `x` goes before (none: after the last), and where the line is. */
+function rowSlot(x: number): { before: number | null; left: number } {
+  const row = tabsRow.value?.getBoundingClientRect();
+  const list = tablist.value;
+  if (!row || !list) return { before: null, left: 0 };
+  const tabs = [...list.querySelectorAll<HTMLElement>("[data-tab-id]")];
+  for (const tab of tabs) {
+    const box = tab.getBoundingClientRect();
+    if (x < box.left + box.width / 2) return { before: Number(tab.dataset.tabId), left: box.left - row.left - 1 };
+  }
+  const last = tabs[tabs.length - 1]?.getBoundingClientRect();
+  return { before: null, left: (last ? last.right : list.getBoundingClientRect().left) - row.left + 1 };
+}
+
+const rowMarkLeft = computed(() => (rowMark.value === null ? null : rowSlot(rowMark.value).left));
+
+/** A pane let go on the row: its terminal is a tab there again (out of the panes, as "Take out of
+ * the panes" does), in its place among the others. */
+function toRow(key: string, x: number): void {
+  rowMark.value = null;
+  const now = layout.value;
+  const id = now ? findLeaf(now.tree, key)?.terminal : null;
+  if (!now || id === null || id === undefined) return;
+  const { before } = rowSlot(x);
+  const ids = terminals.value.map((term) => term.id).filter((each) => each !== id);
+  const row = rowTabs.value.map((term) => term.id).filter((each) => each !== id);
+  let at = before !== null ? ids.indexOf(before) : row.length ? ids.indexOf(row[row.length - 1]) + 1 : ids.length;
+  if (at < 0) at = ids.length;
+  ids.splice(at, 0, id);
+  terminalOrder.value = { ...terminalOrder.value, [props.project.path]: ids };
+  takeOut(key);
+}
+
+/** A tab dragged off the row onto the terminals: one at a time, it splits the one shown there;
+ * with panes (the row holds the waiting tabs), it goes beside a pane or into it. */
+const tabElsewhere = {
+  over(id: number, x: number, y: number): boolean {
+    if (!overStage(x, y)) {
+      incoming.value = null;
+      return false;
+    }
+    const term = terminals.value.find((each) => each.id === id);
+    incoming.value = { kind: "tab", id, name: names.value.get(id) ?? term?.name ?? "", claude: term?.kind === "claude", x, y };
+    return true;
+  },
+  drop(id: number): boolean {
+    const at = landing.value;
+    incoming.value = null;
+    const place = at ? placeOf(at) : null;
+    if (!place) return false;
+    asked = id;
+    placeDropped(id, place);
+    chooseTab(props.project.path, { kind: "terminal", id });
+    return true;
+  },
+  leave(): void {
+    incoming.value = null;
+  },
+};
+
 /** The tab row's empty part (between and after the tabs), not a tab, a name or a button. */
 function emptyPart(event: MouseEvent): boolean {
   const target = event.target as HTMLElement;
@@ -552,6 +1147,16 @@ function onRowClick(event: MouseEvent): void {
  * tab already shown takes the keyboard here, the watch on the shown tab not running for it: left
  * on the tab's label, a Backspace would close the tab. */
 function open(id: number): void {
+  // With panes, a tab waiting in the row comes into the pane with the keyboard.
+  const now = layout.value;
+  if (now) {
+    const pane = leafOf(now.tree, id);
+    if (pane) focusPane(pane.key, true);
+    else bring(id, now.focus);
+    if (collapsed.value) toggleCollapsed();
+    seeFinished(id);
+    return;
+  }
   const shown = active.value?.id === id;
   show(id);
   if (collapsed.value) toggleCollapsed();
@@ -574,6 +1179,10 @@ let closing: number | null = null;
  */
 function closeShown(): void {
   if (showsOutput.value) return closeOutput();
+  // An empty pane goes.
+  const now = layout.value;
+  const pane = now ? findLeaf(now.tree, now.focus) : undefined;
+  if (pane && pane.terminal === null) return takeOut(pane.key);
   const id = active.value?.id;
   if (id === undefined) return foldPanel();
   closing = id;
@@ -594,9 +1203,18 @@ function endRename(): void {
 const tablist = ref<HTMLElement | null>(null);
 
 /** Tabs dragged into another order keep it, per project, for as long as Pitwall runs. */
-const tabDrag = useTabReorder(tablist, (ids) => {
-  terminalOrder.value = { ...terminalOrder.value, [props.project.path]: ids };
-});
+const tabDrag = useTabReorder(
+  tablist,
+  (ids) => {
+    // With panes the row holds only the waiting tabs: they take their new order in the places
+    // they had among all of them.
+    const moved = new Set(ids);
+    let next = 0;
+    const order = terminals.value.map((term) => (moved.has(term.id) ? ids[next++] : term.id));
+    terminalOrder.value = { ...terminalOrder.value, [props.project.path]: order };
+  },
+  tabElsewhere,
+);
 
 /* A tab opens by growing to its width and closes by shrinking away, the gap beside it too; the
    tabs and the buttons after it follow it frame by frame. Not as the panel comes, nor for a
@@ -653,7 +1271,7 @@ function showTab(id: number | undefined): void {
  * ↵ and Space go into the shown terminal; Delete closes the tab, F2 renames it.
  */
 function onTabKey(event: KeyboardEvent, id: number): void {
-  const list = terminals.value;
+  const list = rowTabs.value;
   const at = list.findIndex((term) => term.id === id);
   let to: number | undefined;
   switch (event.key) {
@@ -693,6 +1311,8 @@ function onTabKey(event: KeyboardEvent, id: number): void {
   }
   event.preventDefault();
   if (to === undefined) return;
+  // With panes, the arrows only move between the waiting tabs: ↵ brings one in.
+  if (panesOn.value) return focusTab(to);
   if (to !== active.value?.id) stayOnTabs = true;
   show(to);
   seeFinished(to);
@@ -724,7 +1344,10 @@ watch(
     // project picked in the list). One shown in the place of a tab that closed takes it.
     const quiet = !wanted && (moved ? !arrived : followed);
     showTab(id);
-    if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value && !quiet);
+    // With panes, every terminal stands in its own pane (TerminalPanes): only the keyboard moves.
+    if (id !== undefined && panesOn.value) {
+      if (!onTabs && !collapsed.value && !quiet) focusView(id);
+    } else if (id !== undefined && viewport.value) attach(id, viewport.value, !collapsed.value && !animating.value, !onTabs && !collapsed.value && !quiet);
     if (onTabs) focusTab(id);
   },
   { immediate: true },
@@ -762,6 +1385,10 @@ watch(
     }
     if (request.path !== path || !list.some((term) => term.id === request.id)) return;
     terminalRequest.value = null;
+    // A session let go on the terminals a moment ago: its terminal goes where it was let go.
+    const dropped = dropPlace && Date.now() - dropPlace.at < REQUEST_MS * 2 ? dropPlace.place : null;
+    dropPlace = null;
+    if (dropped) placeDropped(request.id, dropped);
     if (collapsed.value) toggleCollapsed();
     const shown = active.value?.id === request.id;
     show(request.id);
@@ -901,7 +1528,7 @@ watch(tablist, (list, old) => {
 
 onMounted(() => {
   observer = new ResizeObserver(() => {
-    if (active.value && !collapsed.value && !animating.value) fitView(active.value.id, !sliding.value);
+    if (active.value && !collapsed.value && !animating.value && !panesOn.value) fitView(active.value.id, !sliding.value);
   });
   if (viewport.value) observer.observe(viewport.value);
   tabsObserver = new ResizeObserver(() => showTab(active.value?.id));
@@ -917,6 +1544,11 @@ onMounted(() => {
   measure();
   requestAnimationFrame(() => requestAnimationFrame(() => (settled.value = true)));
   panelMeasure.size = newTabSize;
+  // The panes' keys are the panel's, not the shell's: splitting from one terminal at a time too.
+  paneKeys.claim = (event) => {
+    const act = paneAction(event);
+    return !!act && (panesOn.value || act === "right" || act === "down");
+  };
   document.addEventListener("focusin", onFocusAnywhere);
   document.addEventListener("pointerdown", onPressAnywhere, true);
 });
@@ -935,6 +1567,7 @@ onBeforeUnmount(() => {
   clearTimeout(slid);
   window.clearTimeout(copiedTimer);
   panelMeasure.size = () => null;
+  paneKeys.claim = () => false;
   panelTyping.value = false;
   panelOver.value = 0;
   document.removeEventListener("focusin", onFocusAnywhere);
@@ -952,6 +1585,7 @@ defineExpose({ openTerminal, closeShown });
     :aria-label="t('terminal.panel', { name: project.name })"
     @focusin="onFocusIn"
     @focusout="onFocusOut"
+    @keydown="onPanelKey"
   >
     <div
       class="grip"
@@ -967,7 +1601,7 @@ defineExpose({ openTerminal, closeShown });
       @keydown="resizer.nudge"
       @click="onRowClick"
     ></div>
-    <div class="tabs" @click="onRowClick">
+    <div ref="tabsRow" class="tabs" @click="onRowClick">
       <!-- The panel's project: the page's, or another picked here. -->
       <div class="where">
         <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain working @pick="pickProject" />
@@ -977,10 +1611,12 @@ defineExpose({ openTerminal, closeShown });
            tabs only, so the close button is the mouse's (the keyboard closes with Delete). One Tab
            stop: the shown tab; ←/→ move. Double-click (or F2) renames; a middle click closes; a drag
            moves it. -->
-      <div ref="tablist" :class="['tablist', { some: terminals.length }, tabDrag.listClass()]" role="tablist" :aria-label="t('terminal.tabs')">
+      <!-- With panes the names of the terminals in them are on the panes: the row lists the others,
+           waiting to be clicked or dragged into one. -->
+      <div ref="tablist" :class="['tablist', { some: rowTabs.length }, tabDrag.listClass()]" role="tablist" :aria-label="t('terminal.tabs')">
         <TransitionGroup :key="project.path" :css="false" @enter="tabEnter" @leave="tabLeave">
         <div
-          v-for="term in terminals"
+          v-for="term in rowTabs"
           :key="term.id"
           :class="['tab', { on: active?.id === term.id }, tabDrag.tabClass(term.id)]"
           :style="tabDrag.tabStyle(term.id)"
@@ -997,7 +1633,7 @@ defineExpose({ openTerminal, closeShown });
             role="tab"
             class="tab-label"
             :data-tab="term.id"
-            :tabindex="active?.id === term.id ? 0 : -1"
+            :tabindex="(panesOn ? rowTabs[0]?.id === term.id : active?.id === term.id) ? 0 : -1"
             :aria-selected="active?.id === term.id"
             aria-keyshortcuts="Delete F2"
             aria-describedby="terminal-tab-keys"
@@ -1005,7 +1641,7 @@ defineExpose({ openTerminal, closeShown });
           >
             <ClaudeLogo v-if="term.kind === 'claude'" :size="11" />
             <Icon v-else name="terminal" :size="11" />
-            <span class="tab-name">{{ term.name }}</span>
+            <span class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
             <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
           <button
@@ -1023,7 +1659,7 @@ defineExpose({ openTerminal, closeShown });
       </div>
       <!-- The terminals' tabs and right after them the button that opens one; at the right end, the
            outputs' tabs, the shown output's tools, the history and collapse. -->
-      <span :class="['divider', { shown: terminals.length }]" aria-hidden="true"></span>
+      <span :class="['divider', { shown: rowTabs.length }]" aria-hidden="true"></span>
       <!-- A shell tab, a Claude session, or one with a model or mode of its own: a menu under it. -->
       <button
         type="button"
@@ -1085,6 +1721,7 @@ defineExpose({ openTerminal, closeShown });
         </button>
       </div>
       </Transition>
+      <LayoutMenu :current="presetNow" :count="layoutCount" :room="menuRoom" :fits="fitsPreset" :panes="panesOn" @pick="pickLayout" @even="evenPanes" />
       <button
         type="button"
         :class="['action', 'history-toggle', { on: historyOpen }]"
@@ -1104,12 +1741,14 @@ defineExpose({ openTerminal, closeShown });
       >
         <Icon name="chevron" :size="13" />
       </button>
+      <!-- A pane dragged over the row: where it goes in among the tabs. -->
+      <span v-if="rowMarkLeft !== null" class="row-mark" :style="{ left: `${rowMarkLeft}px` }" aria-hidden="true"></span>
     </div>
     <div ref="body" class="body" :style="{ '--history-width': `${historyShown}px` }">
       <!-- The terminal, and over it the output shown in its place (one per output, each starting
            at its end, following); collapsed, out of the keyboard's way. -->
-      <div class="stage">
-        <div :class="['screen', { away: showsOutput }]">
+      <div ref="stageEl" class="stage">
+        <div v-show="!panesOn" :class="['screen', { away: showsOutput }]">
           <div ref="viewport" class="viewport" @pointerdown="pressScreen"></div>
           <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
             <span>{{ t("terminal.none", { name: project.name }) }}</span>
@@ -1123,6 +1762,34 @@ defineExpose({ openTerminal, closeShown });
               </button>
             </div>
           </div>
+        </div>
+        <TerminalPanes
+          v-if="layout"
+          ref="panesView"
+          :class="{ away: showsOutput }"
+          :incoming="paneLanding"
+          :incoming-moves="incoming?.kind === 'tab'"
+          :row-at="rowAt"
+          :names="names"
+          @over-row="(x) => (rowMark = x)"
+          @to-row="toRow"
+          :project="project"
+          :layout="layout"
+          :terminals="terminals"
+          :live="live"
+          :hold="collapsed || animating"
+          :quiet="sliding"
+          :opening="opening"
+          @open="(where, claude, start) => openTerminal(claude, start, where)"
+          @close="close"
+          @rename="renameTerminal"
+          @focus="focusPane"
+          @remove="takeOut"
+          @room="(w, h) => (paneRoom = { w, h })"
+        />
+        <!-- One terminal at a time: where something dragged onto it would land. -->
+        <div v-if="!panesOn && landing && !landing.pane" :class="['landing', landing.side ?? 'whole']" aria-hidden="true">
+          <span>{{ landingLabel }}</span>
         </div>
         <div v-if="showsOutput" class="output" @keydown="onOutputKeys" @pointerdown="overlayOpen = false">
           <OutputSearch v-if="searching" ref="field" v-model:query="query" :position="position" :count="matches" @step="step" @close="closeSearch" />
@@ -1162,12 +1829,18 @@ defineExpose({ openTerminal, closeShown });
           ></div>
         </Transition>
         <Transition name="fade">
-          <TerminalHistory v-if="beside" ref="side" :project="project" @leave="backToTerminal" />
+          <TerminalHistory v-if="beside" ref="side" :project="project" @leave="backToTerminal" @drag="sessionDragged" @drop="sessionDropped" />
         </Transition>
       </div>
       <Transition name="pop">
-        <TerminalHistory v-if="narrow && overlayOpen" ref="over" :project="project" overlay @close="closeOverlay" @leave="backToTerminal" />
+        <TerminalHistory v-if="narrow && overlayOpen" ref="over" :project="project" overlay @close="closeOverlay" @leave="backToTerminal" @drag="sessionDragged" @drop="sessionDropped" />
       </Transition>
+    </div>
+
+    <div v-if="incoming" class="ghost" :style="{ left: `${incoming.x + 12}px`, top: `${incoming.y + 10}px` }" aria-hidden="true">
+      <ClaudeLogo v-if="incoming.claude" :size="11" />
+      <Icon v-else name="terminal" :size="11" />
+      {{ incoming.name }}
     </div>
 
     <RenameDialog v-if="renaming" :name="renaming.name" :project-name="project.name" @save="rename" @close="endRename" />
@@ -1243,6 +1916,7 @@ defineExpose({ openTerminal, closeShown });
 
 /* A fixed height: renaming a tab (its input) never pushes the terminal down. */
 .tabs {
+  position: relative;
   container-type: inline-size;
   flex-shrink: 0;
   height: 24px;
@@ -1715,8 +2389,80 @@ defineExpose({ openTerminal, closeShown });
 }
 
 /* An output in its place: the terminal keeps its size (it is measured) out of sight. */
-.screen.away {
+.screen.away,
+.panes.away {
   visibility: hidden;
+}
+
+/* Where something dragged onto the one terminal shown would land: beside it, or into it. */
+.landing {
+  position: absolute;
+  inset: 4px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1.5px dashed var(--line-heavy);
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  pointer-events: none;
+}
+
+.landing.left {
+  right: 50%;
+}
+
+.landing.right {
+  left: 50%;
+}
+
+.landing.top {
+  bottom: 50%;
+}
+
+.landing.bottom {
+  top: 50%;
+}
+
+.landing span {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--bg-lit);
+  font-size: 12px;
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+/* Where a pane dragged over the tab row goes in among the tabs. */
+.row-mark {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--text-muted);
+  pointer-events: none;
+}
+
+/* What is being dragged, under the pointer. */
+.ghost {
+  position: fixed;
+  z-index: 70;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 280px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--bg-lit);
+  box-shadow: var(--shadow-menu);
+  font-size: 12px;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 /* The output over the terminal's place: its search, then its lines (detail/OutputLog). */

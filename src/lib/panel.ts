@@ -208,15 +208,15 @@ export const terminalOrder = ref<Record<string, number[]>>({});
 
 /**
  * Handle behaviour for the panel: drag or arrow keys change its `height`, up to what `max()`
- * allows (the room under the page's bar).
+ * allows (the room under the page's bar) and down to what `least()` does (its panes at their least).
  */
-export function useResizer(height: Ref<number>, max: () => number) {
+export function useResizer(height: Ref<number>, max: () => number, least: () => number = () => PANEL_MIN) {
   let drag: { startY: number; startHeight: number; max: number } | null = null;
   /** While a drag is on, the panel follows the pointer without animating. */
   const dragging = ref(false);
 
   function limit(): number {
-    return Math.max(PANEL_MIN, max());
+    return Math.max(least(), max());
   }
 
   function start(event: PointerEvent): void {
@@ -228,7 +228,7 @@ export function useResizer(height: Ref<number>, max: () => number) {
 
   function move(event: PointerEvent): void {
     if (!drag) return;
-    height.value = Math.min(drag.max, Math.max(PANEL_MIN, drag.startHeight + (drag.startY - event.clientY)));
+    height.value = Math.min(drag.max, Math.max(least(), drag.startHeight + (drag.startY - event.clientY)));
   }
 
   function end(): void {
@@ -242,7 +242,7 @@ export function useResizer(height: Ref<number>, max: () => number) {
     event.preventDefault();
     const top = limit();
     const step = event.key === "ArrowUp" ? 24 : -24;
-    height.value = Math.min(top, Math.max(PANEL_MIN, Math.min(height.value, top) + step));
+    height.value = Math.min(top, Math.max(least(), Math.min(height.value, top) + step));
   }
 
   return { start, move, end, nudge, dragging };

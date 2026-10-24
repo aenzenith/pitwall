@@ -448,6 +448,8 @@ pub fn run() {
             commands::play_sound,
             commands::open_terminal,
             commands::rename_terminal,
+            commands::set_terminal_layout,
+            commands::set_panes_height,
             commands::write_terminal,
             commands::resize_terminal,
             commands::close_terminal,

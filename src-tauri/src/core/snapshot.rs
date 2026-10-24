@@ -65,6 +65,8 @@ pub struct ProjectView {
     pub commands: Vec<CommandView>,
     /// The project's open terminals.
     pub terminals: Vec<TerminalView>,
+    /// How the panel lays them out, while not one at a time (`layout.rs`).
+    pub layout: Option<super::TerminalLayout>,
     /// Nothing is told about it (`signals.rs`).
     pub muted: bool,
 }
@@ -283,6 +285,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
                 settings: inner.settings.project(path),
                 commands: jobs::command_views(inner, path),
                 terminals: inner.terminal_list.iter().filter(|t| &t.path == path).cloned().collect(),
+                layout: inner.terminal_layouts.get(path).cloned(),
                 muted: super::signals::muted(inner, path),
             }
         })

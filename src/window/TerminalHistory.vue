@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 import ClaudeDot from "../components/ClaudeDot.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
@@ -17,11 +17,19 @@ import type { PastSession, Project, Resumed, SessionRow } from "../lib/types";
 /**
  * The terminals' history (window/TerminalPanel): the project's Claude sessions that open again in
  * its terminals, the last heard of first, by day. A click brings one up where it runs, or opens it
- * again in a new tab once it has ended (`resume_claude`). `overlay`: a narrow panel's, over the
+ * again in a new tab once it has ended (`resume_claude`). Dragged onto the terminal, it opens where
+ * it is let go (the panel works out where: `drag`, `drop`). `overlay`: a narrow panel's, over the
  * terminal's right side, gone once a session is picked.
  */
 const props = defineProps<{ project: Project; overlay?: boolean }>();
-const emit = defineEmits<{ close: []; leave: [] }>();
+const emit = defineEmits<{
+  close: [];
+  leave: [];
+  /** A row dragged: its session and where the pointer is; none once the drag is called off. */
+  drag: [drag: { id: string; name: string; x: number; y: number } | null];
+  /** A dragged row let go: the panel opens its session where it was let go. */
+  drop: [id: string];
+}>();
 
 /** The last list read per project, shown at once when the column comes back to it. */
 const kept = new Map<string, PastSession[]>();
@@ -141,19 +149,88 @@ function where(row: SessionRow): string {
   return row.origin.kind === "pitwall" ? t("terminal.historyInTab") : originView(row.origin, props.project.name, snapshot.value?.settings.editor).short;
 }
 
-async function open(id: string): Promise<void> {
-  if (opening.value) return;
+async function open(id: string): Promise<Resumed | null> {
+  if (opening.value) return null;
   picked.value = id;
   opening.value = id;
   try {
     const result = await api.resumeClaude(props.project.path, id);
     if (result === "missing" || result === "unsure") failed.value = { ...failed.value, [id]: result };
     else if (props.overlay) emit("close");
+    return result;
   } catch {
     failed.value = { ...failed.value, [id]: "unsure" };
+    return "unsure";
   } finally {
     opening.value = null;
   }
+}
+
+/* A row dragged onto the terminal: the session opens where it is let go. One that runs somewhere
+   else is never opened a second time, so it has nowhere to go here: it is only clicked. */
+
+/** How far the pointer goes before a press on a row becomes a drag. */
+const DRAG_FROM = 5;
+let press: { id: string; name: string; x: number; y: number; started: boolean } | null = null;
+/** A drag just ended: the click that may follow it opens nothing. */
+let dragged = false;
+
+function startDrag(event: PointerEvent, item: Item): void {
+  if (event.button !== 0 || opening.value) return;
+  const row = live.value.get(item.session.id);
+  if (row && row.origin.kind !== "pitwall") return;
+  press = { id: item.session.id, name: item.name, x: event.clientX, y: event.clientY, started: false };
+  window.addEventListener("pointermove", dragMove);
+  window.addEventListener("pointerup", dragEnd);
+  window.addEventListener("pointercancel", dragCancel);
+  window.addEventListener("keydown", dragKey, true);
+}
+
+function dragMove(event: PointerEvent): void {
+  if (!press) return;
+  if (!press.started) {
+    if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < DRAG_FROM) return;
+    press.started = true;
+    document.body.classList.add("grabbing");
+  }
+  emit("drag", { id: press.id, name: press.name, x: event.clientX, y: event.clientY });
+}
+
+function dragEnd(): void {
+  const was = press;
+  stopDrag();
+  if (!was?.started) return;
+  dragged = true;
+  window.setTimeout(() => (dragged = false));
+  emit("drop", was.id);
+}
+
+function dragCancel(): void {
+  const started = press?.started;
+  stopDrag();
+  if (started) emit("drag", null);
+}
+
+function dragKey(event: KeyboardEvent): void {
+  if (event.key !== "Escape" || !press?.started) return;
+  event.preventDefault();
+  event.stopPropagation();
+  dragCancel();
+}
+
+function stopDrag(): void {
+  press = null;
+  document.body.classList.remove("grabbing");
+  window.removeEventListener("pointermove", dragMove);
+  window.removeEventListener("pointerup", dragEnd);
+  window.removeEventListener("pointercancel", dragCancel);
+  window.removeEventListener("keydown", dragKey, true);
+}
+
+onBeforeUnmount(stopDrag);
+
+function clickRow(id: string): void {
+  if (!dragged) void open(id);
 }
 
 function rowId(id: string): string {
@@ -202,7 +279,7 @@ function focus(): void {
   field.value?.focus({ preventScroll: true });
 }
 
-defineExpose({ focus });
+defineExpose({ focus, open });
 </script>
 
 <template>
@@ -239,7 +316,8 @@ defineExpose({ focus });
           role="option"
           :aria-selected="picked === item.session.id"
           :title="item.name"
-          @click="open(item.session.id)"
+          @pointerdown="startDrag($event, item)"
+          @click="clickRow(item.session.id)"
         >
           <ClaudeLogo :size="11" :class="{ dim: !live.has(item.session.id) }" />
           <span class="name"><Highlight v-if="item.hits" :text="item.name" :hits="item.hits" /><template v-else>{{ item.name }}</template></span>

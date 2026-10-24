@@ -9,6 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::layout::SavedLayout;
 use super::reveal::is_session_id;
 use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
@@ -60,6 +61,9 @@ pub struct Restored {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Tab {
+    /// The terminal it is now; a record names tabs by their places instead.
+    #[serde(skip)]
+    pub(super) id: u64,
     pub(super) path: String,
     pub(super) name: String,
     /// The user gave it that name: it doesn't take its session's.
@@ -80,7 +84,14 @@ struct Rerun {
     id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A project's panes, by the places of the record's tabs (`layout.rs`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct Laid {
+    path: String,
+    layout: SavedLayout,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Record {
     v: u32,
@@ -91,6 +102,8 @@ struct Record {
     /// Custom commands that keep running, don't ask first and weren't started by their server.
     commands: Vec<Rerun>,
     tabs: Vec<Tab>,
+    #[serde(default)]
+    layouts: Vec<Laid>,
 }
 
 /// Everything that runs under this app right now.
@@ -165,6 +178,7 @@ impl Core {
                 let session = sessions.get(&view.id);
                 let running = state.foreground || state.pid.is_some_and(|pid| parents.contains(&pid));
                 Some(Tab {
+                    id: view.id,
                     path: view.path.clone(),
                     name: view.name.clone(),
                     renamed: view.renamed,
@@ -227,6 +241,17 @@ impl Core {
     /// Writes down what runs now, for the start that follows a restart to `version`.
     pub fn save_restore(&self, version: &str, window: bool) -> Result<(), String> {
         let standing = self.standing();
+        let layouts = {
+            let inner = self.lock();
+            inner
+                .terminal_layouts
+                .iter()
+                .filter_map(|(path, layout)| {
+                    let layout = layout.saved(|id| standing.tabs.iter().position(|tab| tab.id == id && &tab.path == path))?;
+                    Some(Laid { path: path.clone(), layout })
+                })
+                .collect()
+        };
         let record = Record {
             v: 1,
             at: now_ms(),
@@ -235,6 +260,7 @@ impl Core {
             servers: standing.servers,
             commands: standing.commands.into_iter().filter(|(_, _, _, again)| *again).map(|(path, id, _, _)| Rerun { path, id }).collect(),
             tabs: standing.tabs,
+            layouts,
         };
         let json = serde_json::to_string(&record).map_err(|error| error.to_string())?;
         write_private(&self.restore_file(), &json).map_err(|error| error.to_string())
@@ -263,8 +289,10 @@ impl Core {
         let known = |path: &str| listed.iter().any(|listed| same_path(listed, path)) && Path::new(path).is_dir();
 
         let mut restored = Restored { version: record.version, servers: 0, terminals: 0, sessions: 0, window: record.window };
+        // The terminal each of the record's tabs came back as, and its project.
+        let mut opened: Vec<Option<(u64, String)>> = vec![None; record.tabs.len()];
 
-        for tab in record.tabs.into_iter().filter(|tab| known(&tab.path)) {
+        for (at, tab) in record.tabs.into_iter().enumerate().filter(|(_, tab)| known(&tab.path)) {
             let session = tab.session.filter(|id| is_session_id(id));
             let launch = match &session {
                 Some(session) => Launch::Resume { session: session.clone() },
@@ -275,6 +303,7 @@ impl Core {
             let Ok(view) = self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false) else {
                 continue;
             };
+            opened[at] = Some((view.id, tab.path.clone()));
 
             restored.terminals += 1;
             match session {
@@ -284,6 +313,14 @@ impl Core {
                 }
                 None => self.seed_terminal(view.id, &replay(&tab.scrollback, tab.cut, record.at)),
             }
+        }
+
+        let mut laid = false;
+        for Laid { path, layout } in record.layouts.into_iter().filter(|laid| known(&laid.path)) {
+            laid |= self.lay_terminals(&path, layout, |at| opened.get(at).and_then(|tab| tab.as_ref()).filter(|(_, own)| *own == path).map(|(id, _)| *id));
+        }
+        if laid {
+            self.notify();
         }
 
         let servers: Vec<String> = record.servers.into_iter().filter(|path| known(path)).collect();
@@ -329,11 +366,11 @@ mod tests {
 
     #[cfg(unix)]
     fn tab(path: &str, session: Option<&str>) -> Tab {
-        Tab { path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
+        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
     }
 
     fn write(core: &Core, at: u64, servers: Vec<String>, tabs: Vec<Tab>) {
-        let record = Record { v: 1, at, version: "9.9.9".into(), window: true, servers, commands: Vec::new(), tabs };
+        let record = Record { v: 1, at, version: "9.9.9".into(), window: true, servers, commands: Vec::new(), tabs, layouts: Vec::new() };
         write_private(&core.restore_file(), &serde_json::to_string(&record).unwrap()).unwrap();
     }
 
@@ -426,7 +463,7 @@ mod tests {
 
         let rerun = |id: &str| Rerun { path: project.clone(), id: id.into() };
         let commands = vec![rerun("migrate"), rerun("worker"), rerun("watch")];
-        let record = Record { v: 1, at: now_ms(), version: "9.9.9".into(), window: false, servers: Vec::new(), commands, tabs: Vec::new() };
+        let record = Record { v: 1, at: now_ms(), version: "9.9.9".into(), window: false, servers: Vec::new(), commands, tabs: Vec::new(), layouts: Vec::new() };
         write_private(&core.restore_file(), &serde_json::to_string(&record).unwrap()).unwrap();
         core.restore().expect("a fresh record");
 

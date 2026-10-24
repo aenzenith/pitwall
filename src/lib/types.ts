@@ -128,6 +128,8 @@ export type Project = {
   commands: CommandView[];
   /** Open terminals in this project. */
   terminals: TerminalView[];
+  /** How the terminal panel lays them out, as the core holds it; none: one at a time (lib/panes). */
+  layout: TerminalLayout | null;
   /** Nothing is told about it: no notification, no sound (Settings › Notifications). */
   muted: boolean;
 };
@@ -181,6 +183,8 @@ export type Settings = {
   favouritesOnly?: boolean;
   /** A press on the page folds the open terminal panel (Settings › General); on unless turned off. */
   panelFoldOutside?: boolean;
+  /** The terminal panel's height while it shows panes, as last left (lib/panes). */
+  panesHeight?: number;
   /** The Track page's own settings (lib/track: TrackSettings), read leniently. */
   track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
   /** How the app is drawn (lib/theme). */
@@ -242,6 +246,14 @@ export type TerminalView = {
   /** Opened by a board card's moment, not by the user: it takes neither the view nor the keyboard. */
   unasked: boolean;
 };
+
+/** A pane of the terminal panel (a terminal, or empty), or panes side by side (`row`) or one under
+ * the other (`col`), each taking its share of the room (core/layout.rs). */
+export type PaneNodeCore = { kind: "pane"; terminal: number | null } | { kind: "split"; dir: "row" | "col"; sizes: number[]; kids: PaneNodeCore[] };
+
+/** A project's panes as the core keeps them: `focus` and `zoom` name terminals; `rev` moves when
+ * the core lays them itself (put back after a quit or an update). */
+export type TerminalLayout = { tree: PaneNodeCore; focus: number | null; zoom: number | null; rev: number };
 
 /** A subfolder of the projects folder. */
 export type Folder = { name: string; path: string };

@@ -36,6 +36,7 @@ mod dependencies;
 mod discover;
 mod history;
 mod jobs;
+mod layout;
 mod open;
 mod output;
 mod peers;
@@ -70,6 +71,7 @@ pub use board::{Card, Give, NewImage};
 pub use discover::{Candidate, Discovery};
 pub use resume::ResumeOffer;
 pub use terminal::{TerminalBuffer, TerminalView};
+pub use layout::TerminalLayout;
 pub use jobs::CommandView;
 pub use projects::Folder;
 pub use restore::{RestartPlan, Restored};
@@ -187,6 +189,9 @@ struct Inner {
     tails: HashMap<String, Tail>,
     /// Open project terminals, in the order they were opened.
     terminal_list: Vec<TerminalView>,
+    /// How the panel lays each project's terminals out, by project, while not one at a time
+    /// (`layout.rs`).
+    terminal_layouts: HashMap<String, layout::TerminalLayout>,
     next_run: u64,
     disposed: bool,
     crash_unseen: bool,

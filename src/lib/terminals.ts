@@ -185,6 +185,10 @@ function linkHint(element: HTMLElement): { hover: () => void; leave: () => void 
   };
 }
 
+/** The panel's keys for its panes (lib/panes: `paneAction`), as the panel claims them now: kept
+ * from the shell, they bubble to the panel. */
+export const paneKeys: { claim: (event: KeyboardEvent) => boolean } = { claim: () => false };
+
 function create(id: number): View {
   const element = document.createElement("div");
   element.className = "terminal-host";
@@ -209,6 +213,7 @@ function create(id: number): View {
   //    Terminal's own: Ctrl+C copies while text is selected (^C otherwise), Ctrl+V pastes.
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== "keydown") return true;
+    if (paneKeys.claim(event)) return false;
     if (isMac) {
       if (!event.metaKey) return true;
       if (event.code === "KeyK") {

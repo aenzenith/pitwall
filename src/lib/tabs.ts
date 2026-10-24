@@ -1,4 +1,20 @@
 /**
+ * The names tabs show: their own, and where two or more share one, the later opened (a higher id)
+ * numbered from 2 ("zsh", "zsh 2"), so that two panes or tabs of the same name can be told apart.
+ * Nothing is renamed: the numbers are the row's and the panes' only.
+ */
+export function distinctNames(terminals: ReadonlyArray<{ id: number; name: string }>): Map<number, string> {
+  const seen = new Map<string, number>();
+  const out = new Map<number, string>();
+  for (const term of [...terminals].sort((a, b) => a.id - b.id)) {
+    const count = (seen.get(term.name) ?? 0) + 1;
+    seen.set(term.name, count);
+    out.set(term.id, count === 1 ? term.name : `${term.name} ${count}`);
+  }
+  return out;
+}
+
+/**
  * Keys on a tab (roving tabindex: only the chosen tab is in the Tab order). The arrows move to
  * the next or previous tab of the same tablist, round the ends; Home and End to the first and
  * last. The tab gone to is focused, and its place is returned for the caller to choose it;

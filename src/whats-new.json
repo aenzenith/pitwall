@@ -4,43 +4,64 @@
     {
       "kind": "new",
       "title": {
-        "en": "⌘W closes tabs, then the panel and the Files window",
-        "tr": "⌘W sekmeleri, ardından paneli ve Dosyalar penceresini kapatıyor",
-        "de": "⌘W schließt Tabs, dann den Bereich und das Dateien-Fenster",
-        "es": "⌘W cierra pestañas y luego el panel y la ventana Archivos",
-        "ru": "⌘W закрывает вкладки, затем панель и окно «Файлы»",
-        "ja": "⌘W でタブを閉じ、続けてパネルやファイルウィンドウも閉じられます",
-        "zh-Hans": "⌘W 可关闭标签页，再关闭面板和文件窗口"
+        "en": "Terminals side by side",
+        "tr": "Terminaller yan yana",
+        "de": "Terminals nebeneinander",
+        "es": "Terminales lado a lado",
+        "ru": "Терминалы рядом",
+        "ja": "ターミナルを並べて表示",
+        "zh-Hans": "终端并排显示"
       },
       "body": {
-        "en": "In the terminal panel ⌘W closes the tab shown, and once no tab is left it folds the panel. In a Files window it closes the tab shown, then the window. Where you are typing goes first; with nothing of these up, ⌘W closes Pitwall's window as before. On Windows and Linux it is Ctrl+W, and Ctrl+Shift+W in a terminal.",
-        "tr": "Terminal panelinde ⌘W gösterilen sekmeyi kapatıyor, sekme kalmayınca da paneli daraltıyor. Dosyalar penceresinde gösterilen sekmeyi, sekme kalmayınca da pencereyi kapatıyor. Önce yazdığın yer kapanıyor; bunlardan hiçbiri açık değilse ⌘W eskisi gibi Pitwall penceresini kapatıyor. Windows ve Linux'ta Ctrl+W, terminalde Ctrl+Shift+W.",
-        "de": "Im Terminalbereich schließt ⌘W den gezeigten Tab, und ist keiner mehr offen, klappt der Bereich zu. In einem Dateien-Fenster schließt es den gezeigten Tab, dann das Fenster. Wo du tippst, ist zuerst dran; ist nichts davon offen, schließt ⌘W wie bisher das Fenster von Pitwall. Unter Windows und Linux ist es Strg+W, im Terminal Strg+Umschalt+W.",
-        "es": "En el panel de terminales, ⌘W cierra la pestaña que se ve y, cuando no queda ninguna, pliega el panel. En una ventana Archivos cierra la pestaña que se ve y luego la ventana. Primero va donde escribes; si no hay nada de esto abierto, ⌘W cierra la ventana de Pitwall como antes. En Windows y Linux es Ctrl+W, y Ctrl+Mayús+W en una terminal.",
-        "ru": "В панели терминалов ⌘W закрывает показанную вкладку, а когда вкладок не осталось, сворачивает панель. В окне «Файлы» закрывает показанную вкладку, затем само окно. Сначала закрывается то, где вы печатаете; если ничего из этого не открыто, ⌘W, как и раньше, закрывает окно Pitwall. В Windows и Linux — Ctrl+W, в терминале — Ctrl+Shift+W.",
-        "ja": "ターミナルパネルでは ⌘W で表示中のタブを閉じ、タブがなくなるとパネルを折りたたみます。ファイルウィンドウでは表示中のタブを、続けてウィンドウを閉じます。入力中の場所が先に閉じます。どれも開いていなければ、これまでどおり Pitwall のウィンドウを閉じます。Windows と Linux では Ctrl+W、ターミナルでは Ctrl+Shift+W です。",
-        "zh-Hans": "在终端面板中，⌘W 会关闭当前显示的标签页，没有标签页时收起面板。在文件窗口中，它会关闭当前显示的标签页，然后关闭窗口。先关闭你正在输入的地方；这些都没有打开时，⌘W 会像以前一样关闭 Pitwall 的窗口。Windows 和 Linux 上为 Ctrl+W，在终端中为 Ctrl+Shift+W。"
+        "en": "Split the terminal panel into panes from Layout, or drag a tab, a pane or a past session where you want it. Drag the borders to resize; your layout comes back next time.",
+        "tr": "Terminal panelini Düzen menüsünden bölmelere ayırabilir, bir sekmeyi, bölmeyi ya da geçmiş bir oturumu istediğin yere sürükleyebilirsin. Sınırları sürükleyerek boyutları ayarla; düzenin bir sonraki açılışta da yerinde olur.",
+        "de": "Teile den Terminalbereich über „Anordnung“ in Teilfenster, oder zieh einen Tab, ein Teilfenster oder eine frühere Sitzung dorthin, wo du sie haben willst. Die Grenzen lassen sich ziehen, und deine Anordnung ist beim nächsten Start wieder da.",
+        "es": "Divide el panel de terminales desde Disposición, o arrastra una pestaña, una división o una sesión anterior adonde la quieras. Arrastra los bordes para ajustar el tamaño; tu disposición vuelve la próxima vez.",
+        "ru": "Разделите панель терминалов на области через «Раскладку» или перетащите вкладку, область или прошлую сессию туда, где она нужна. Границы можно тянуть, а раскладка вернётся при следующем запуске.",
+        "ja": "「レイアウト」でターミナルパネルをペインに分けたり、タブやペイン、過去のセッションを好きな場所へドラッグしたりできます。境界はドラッグで調整でき、レイアウトは次回の起動時にも残ります。",
+        "zh-Hans": "通过“布局”把终端面板分成多个窗格，或把标签页、窗格、过往会话拖到想要的位置。拖动边界即可调整大小，布局下次启动时依然保留。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "⌘W closes one thing at a time",
+        "tr": "⌘W her seferinde bir şey kapatıyor",
+        "de": "⌘W schließt eins nach dem anderen",
+        "es": "⌘W cierra una cosa cada vez",
+        "ru": "⌘W закрывает по одному",
+        "ja": "⌘W で 1 つずつ閉じる",
+        "zh-Hans": "⌘W 逐个关闭"
+      },
+      "body": {
+        "en": "Tabs first, then the terminal panel or the Files window, and Pitwall's window last. On Windows and Linux it's Ctrl+W.",
+        "tr": "Önce sekmeler, sonra terminal paneli ya da Dosyalar penceresi, en son da Pitwall penceresi kapanır. Windows ve Linux'ta Ctrl+W.",
+        "de": "Erst die Tabs, dann den Terminalbereich oder das Dateien-Fenster und zuletzt das Fenster von Pitwall. Unter Windows und Linux Strg+W.",
+        "es": "Primero las pestañas, luego el panel de terminales o la ventana Archivos y, al final, la ventana de Pitwall. En Windows y Linux, Ctrl+W.",
+        "ru": "Сначала вкладки, затем панель терминалов или окно «Файлы», а в конце окно Pitwall. В Windows и Linux — Ctrl+W.",
+        "ja": "まずタブ、次にターミナルパネルやファイルウィンドウ、最後に Pitwall のウィンドウを閉じます。Windows と Linux では Ctrl+W です。",
+        "zh-Hans": "先关闭标签页，再关闭终端面板或文件窗口，最后关闭 Pitwall 窗口。Windows 和 Linux 上为 Ctrl+W。"
       }
     },
     {
       "kind": "fix",
       "title": {
-        "en": "A Claude tab keeps its session's whole name",
-        "tr": "Claude sekmesi oturumun adını artık yarıda kesmiyor",
-        "de": "Ein Claude-Tab behält den ganzen Namen seiner Sitzung",
-        "es": "Una pestaña de Claude conserva el nombre entero de su sesión",
-        "ru": "Вкладка Claude хранит название сессии целиком",
-        "ja": "Claude タブがセッション名を最後まで保持します",
-        "zh-Hans": "Claude 标签页保留会话的完整名字"
+        "en": "Claude tabs keep the whole session name",
+        "tr": "Claude sekmeleri oturum adının tamamını tutuyor",
+        "de": "Claude-Tabs behalten den ganzen Namen",
+        "es": "Las pestañas de Claude conservan el nombre entero",
+        "ru": "Вкладки Claude хранят название целиком",
+        "ja": "Claude タブがセッション名を最後まで保持",
+        "zh-Hans": "Claude 标签页保留完整会话名"
       },
       "body": {
-        "en": "A tab's name was cut after a few words for good, so the rest of a session's or card's name was lost. Now the tab holds it whole: what doesn't fit is cut short only on screen, and holding the pointer over the tab shows all of it.",
-        "tr": "Sekmenin adı birkaç kelimeden sonra kalıcı olarak kesiliyordu; oturumun ya da kartın adının devamı kayboluyordu. Artık sekme adın tamamını tutuyor: sığmayan kısım yalnızca ekranda kısalıyor, imleci sekmenin üzerinde tutunca adın tamamı görünüyor.",
-        "de": "Der Name eines Tabs wurde nach ein paar Wörtern endgültig abgeschnitten, und der Rest des Namens der Sitzung oder Karte ging verloren. Jetzt behält der Tab ihn ganz: Was nicht passt, wird nur auf dem Bildschirm gekürzt, und hältst du den Zeiger über den Tab, siehst du alles.",
-        "es": "El nombre de una pestaña se cortaba para siempre tras unas pocas palabras, y se perdía el resto del nombre de la sesión o de la tarjeta. Ahora la pestaña lo guarda entero: lo que no cabe se recorta solo en pantalla, y con el puntero sobre la pestaña se ve completo.",
-        "ru": "Название вкладки навсегда обрезалось после нескольких слов, и остаток названия сессии или карточки терялся. Теперь вкладка хранит его целиком: то, что не помещается, обрезается только на экране, а при наведении указателя на вкладку видно всё название.",
-        "ja": "タブの名前は数語のところで切り詰められたまま保存され、セッションやカードの名前の続きが失われていました。いまはタブが名前全体を保持し、収まらない部分は画面上でだけ省略されます。タブにポインタを重ねると全体が表示されます。",
-        "zh-Hans": "标签页的名字过去在几个词之后就被永久截断，会话或卡片名字的其余部分随之丢失。现在标签页保留完整的名字：放不下的部分只在屏幕上截断，把指针停在标签页上即可看到全部。"
+        "en": "Long names are no longer cut off for good; hover a tab to read all of it.",
+        "tr": "Uzun adlar artık kırpılıp kaybolmuyor; tamamını görmek için imleci sekmenin üzerinde tut.",
+        "de": "Lange Namen werden nicht mehr dauerhaft abgeschnitten; halte den Zeiger über den Tab, um ihn ganz zu lesen.",
+        "es": "Los nombres largos ya no se recortan para siempre; pasa el puntero sobre la pestaña para leerlo completo.",
+        "ru": "Длинные названия больше не обрезаются навсегда — наведите указатель на вкладку, чтобы прочитать его полностью.",
+        "ja": "長い名前が途中で失われなくなりました。タブにポインタを重ねると全体を読めます。",
+        "zh-Hans": "长名字不再被永久截断，把指针停在标签页上即可看到全部。"
       }
     }
   ]

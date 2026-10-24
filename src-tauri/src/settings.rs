@@ -493,6 +493,10 @@ pub struct Settings {
     pub favourites_only: bool,
     /// A press on the page folds the open terminal panel to its tab row (Settings › General).
     pub panel_fold_outside: bool,
+    /// The terminal panel's height while it shows panes (`src/lib/panes.ts`), as it was last
+    /// dragged or grown to; none until it first changes. This Mac's own: it goes with its screens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub panes_height: Option<u32>,
     /// The Track page's own settings. None until one is changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<TrackSettings>,
@@ -567,6 +571,7 @@ impl Default for Settings {
             files_preview: false,
             favourites_only: false,
             panel_fold_outside: true,
+            panes_height: None,
             track: None,
             theme: "system".into(),
             teams: Vec::new(),
