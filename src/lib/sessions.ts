@@ -235,11 +235,35 @@ export function sessionTerminal(row: SessionRow, projects: Project[]): TerminalV
   return null;
 }
 
-/** Its project's other sessions that wait on you: marking it seen clears them too (seen is kept
- * per project). */
+/** How long before a question or permission still open a look stops (the core's `PROMPT_LEAD_MS`). */
+export const PROMPT_LEAD_MS = 8_000;
+
+/** Whether a turn that ended at `at` stays unseen through a look, held back by a question or
+ * permission still open in a running session of the project (`rows`: the sessions as listed). */
+export function heldBack(at: number, where: string, rows: SessionRow[]): boolean {
+  return rows.some(
+    (other) =>
+      other.running !== false &&
+      other.phase === "waiting" &&
+      (other.turn?.kind === "asking" || other.turn?.kind === "permission") &&
+      (other.path ?? other.folder) === where &&
+      other.turn.at - PROMPT_LEAD_MS < at,
+  );
+}
+
+/** A session that waits on you with a finished turn a look would mark seen: what "Mark as seen"
+ * marks. An open question or permission prompt keeps waiting until it is answered, and so does a
+ * turn that ended after one opened in the project, so it isn't offered there. */
+export function finishedWaits(row: SessionRow, rows: SessionRow[] = []): boolean {
+  if (row.phase !== "waiting" || (row.turn?.kind ?? "finished") !== "finished") return false;
+  return !row.turn || !heldBack(row.turn.at, row.path ?? row.folder, rows);
+}
+
+/** Its project's other sessions that wait on you with a finished turn: marking it seen marks them
+ * too (seen is kept per project). */
 export function othersWaiting(row: SessionRow, rows: SessionRow[]): number {
   const where = row.path ?? row.folder;
-  return rows.filter((other) => other.id !== row.id && other.phase === "waiting" && (other.path ?? other.folder) === where).length;
+  return rows.filter((other) => other.id !== row.id && finishedWaits(other, rows) && (other.path ?? other.folder) === where).length;
 }
 
 /**

@@ -12,7 +12,7 @@ import { language, t } from "../../lib/i18n";
 import { revealTab } from "../../lib/panel";
 import { stamp, type Period } from "../../lib/period";
 import { dragRegion, isMac, isWindows } from "../../lib/platform";
-import { endedAt, lastActive, modelsText, runsElsewhere, sessionTerminal, sessionTitle, unlinkedEditor } from "../../lib/sessions";
+import { endedAt, finishedWaits, lastActive, modelsText, runsElsewhere, sessionTerminal, sessionTitle, unlinkedEditor } from "../../lib/sessions";
 import { snapshot } from "../../lib/store";
 import type { SessionRow, TerminalView } from "../../lib/types";
 import CardImages from "../board/CardImages.vue";
@@ -36,6 +36,8 @@ import SessionNotice from "./SessionNotice.vue";
  */
 const props = defineProps<{
   row: SessionRow;
+  /** The sessions as listed: a finished turn held back by an open question isn't offered. */
+  rows: SessionRow[];
   now: number;
   others: number;
   terminal?: TerminalView | null;
@@ -110,7 +112,10 @@ const cardSub = computed(() => {
 });
 
 /** What "Mark as seen" does to the project's other waiting sessions: said only beside that button. */
-const seenHint = computed(() => (waiting.value && props.others > 0 ? t("sessions.seenOthers", { count: props.others, project: props.row.project }) : ""));
+/** "Mark as seen" is offered on a finished turn only: an open question or permission prompt keeps
+ * waiting through it. */
+const seeable = computed(() => finishedWaits(props.row, props.rows));
+const seenHint = computed(() => (seeable.value && props.others > 0 ? t("sessions.seenOthers", { count: props.others, project: props.row.project }) : ""));
 
 /** Why it can't be brought up: an editor window without the extension, or another app. */
 const elsewhereNotice = computed(() => {
@@ -166,7 +171,7 @@ const fuel = computed(() => {
             <span v-if="cardSub" class="card-sub">{{ cardSub }}</span>
           </div>
           <button
-            v-if="waiting"
+            v-if="seeable"
             type="button"
             class="seen"
             :title="t('sessions.seenTitle', { project: row.project })"

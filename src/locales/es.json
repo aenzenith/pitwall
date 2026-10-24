@@ -908,10 +908,10 @@
   "sessions.card.workingFor": "Desde hace {duration}",
   "sessions.card.lastActive": "Última actividad {ago}",
   "sessions.card.endedAt": "Terminó a las {time}",
-  "sessions.seenTitle": "Visto se guarda por proyecto: marca como vistas todas las sesiones de {project}",
+  "sessions.seenTitle": "Visto se guarda por proyecto: los turnos que Claude terminó en {project} quedan vistos; una pregunta o un permiso pendiente sigue esperando",
   "sessions.seenOthers": {
-    "one": "Visto se guarda por proyecto: también despeja {count} sesión más que espera en {project}.",
-    "other": "Visto se guarda por proyecto: también despeja {count} sesiones más que esperan en {project}."
+    "one": "Visto se guarda por proyecto: también queda vista {count} sesión terminada más en {project}. Una pregunta o un permiso pendiente sigue esperando.",
+    "other": "Visto se guarda por proyecto: también quedan vistas {count} sesiones terminadas más en {project}. Una pregunta o un permiso pendiente sigue esperando."
   },
   "sessions.openProject": "Abrir proyecto",
   "sessions.menu.markSeen": "Marcar {project} como visto",

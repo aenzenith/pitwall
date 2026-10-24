@@ -28,7 +28,7 @@ import { cardRequest, panelMeasure, panelTyping, revealTab, usePanelFollow } fro
 import { ALL as EVERY_DAY, type Period } from "../lib/period";
 import { dragRegion, keys, primary } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
-import { originView, othersWaiting, sessionTerminal } from "../lib/sessions";
+import { finishedWaits, originView, othersWaiting, sessionTerminal } from "../lib/sessions";
 import { choiceOf, projectChoice } from "../lib/start";
 import { api, board, now, sessions, snapshot } from "../lib/store";
 import type { BoardColumn, Card, SessionRow, StartChoice, TerminalView } from "../lib/types";
@@ -312,10 +312,11 @@ const selectedTerminal = computed(() => {
 const selectedProject = computed(() => projects.value.find((p) => p.path === selected.value?.path)?.name ?? (selected.value ? folderName(selected.value.path) : ""));
 const others = computed(() => (selectedRow.value ? othersWaiting(selectedRow.value, sessions.value?.sessions ?? []) : 0));
 
-/** Seen is kept per project: every session of the project stops waiting on you. */
+/** Seen is kept per project: what Claude finished there counts as seen; an open question or
+ * permission prompt keeps waiting. */
 function markSeen(): void {
   const row = selectedRow.value;
-  if (row?.phase === "waiting") void api.markSeen(row.path ?? row.folder).catch(() => undefined);
+  if (row && finishedWaits(row, sessions.value?.sessions ?? [])) void api.markSeen(row.path ?? row.folder).catch(() => undefined);
 }
 
 watch(selectedId, (id) => {
@@ -971,6 +972,7 @@ const ghostStyle = computed(() =>
     <SessionDetail
       v-if="selected && selectedRow"
       :row="selectedRow"
+      :rows="sessions?.sessions ?? []"
       :now="now"
       :others="others"
       :terminal="selectedTerminal"

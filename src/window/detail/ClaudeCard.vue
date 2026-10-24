@@ -4,10 +4,22 @@ import { computed } from "vue";
 import ClaudeSpark from "../../components/ClaudeSpark.vue";
 import { ago } from "../../lib/format";
 import { t } from "../../lib/i18n";
+import { PROMPT_LEAD_MS } from "../../lib/sessions";
 import { api, now } from "../../lib/store";
 import type { Project } from "../../lib/types";
 
 const props = defineProps<{ project: Project }>();
+
+/** "Mark as seen" marks what Claude finished: offered while a finished turn waits, not for an open
+ * question or permission prompt alone, which keeps waiting until it is answered. */
+const finished = computed(() => {
+  const sessions = props.project.claudeSessions;
+  // A turn that ended after a question or permission opened stays unseen through a look too.
+  const asks = sessions.flatMap((session) => (session.phase === "waiting" && session.turn && session.turn.kind !== "finished" ? [session.turn.at - PROMPT_LEAD_MS] : []));
+  const seeable = (at: number) => asks.every((from) => at <= from);
+  const turn = props.project.claude;
+  return (turn?.kind === "finished" && seeable(turn.at)) || sessions.some((session) => session.phase === "waiting" && session.turn?.kind === "finished" && seeable(session.turn.at));
+});
 
 const claudeTitle = computed(() => {
   const turn = props.project.claude;
@@ -31,7 +43,7 @@ const claudeTitle = computed(() => {
           }}
         </span>
       </div>
-      <button v-if="project.claude" type="button" class="seen" @click="api.markSeen(project.path)">{{ t("detail.markSeen") }}</button>
+      <button v-if="finished" type="button" class="seen" @click="api.markSeen(project.path)">{{ t("detail.markSeen") }}</button>
     </div>
   </section>
 </template>

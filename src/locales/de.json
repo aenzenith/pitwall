@@ -899,10 +899,10 @@
   "sessions.card.workingFor": "Seit {duration}",
   "sessions.card.lastActive": "Zuletzt aktiv {ago}",
   "sessions.card.endedAt": "Beendet um {time}",
-  "sessions.seenTitle": "„Gesehen“ gilt pro Projekt: markiert alle Sitzungen in {project} als gesehen",
+  "sessions.seenTitle": "„Gesehen“ gilt pro Projekt: Was Claude in {project} fertig hat, gilt als gesehen; eine offene Frage oder Erlaubnis wartet weiter",
   "sessions.seenOthers": {
-    "one": "„Gesehen“ gilt pro Projekt: Das erledigt auch {count} weitere wartende Sitzung in {project}.",
-    "other": "„Gesehen“ gilt pro Projekt: Das erledigt auch {count} weitere wartende Sitzungen in {project}."
+    "one": "„Gesehen“ gilt pro Projekt: Auch {count} weitere fertige Sitzung in {project} gilt dann als gesehen. Eine offene Frage oder Erlaubnis wartet weiter.",
+    "other": "„Gesehen“ gilt pro Projekt: Auch {count} weitere fertige Sitzungen in {project} gelten dann als gesehen. Eine offene Frage oder Erlaubnis wartet weiter."
   },
   "sessions.openProject": "Projekt öffnen",
   "sessions.menu.markSeen": "{project} als gesehen markieren",

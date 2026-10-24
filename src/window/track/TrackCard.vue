@@ -106,7 +106,7 @@ function nameOf(id: string): string {
       <div v-if="project.claude && !waiting.length" class="card-session">
         <span class="session-mark"><ClaudeLogo :size="12" /></span>
         <span class="session-lines"><span class="session-turn">{{ turnLine(project.claude, now) }}</span></span>
-        <button type="button" class="claude-open" @click="api.markSeen(project.path)">{{ t("detail.markSeen") }}</button>
+        <button v-if="project.claude.kind === 'finished'" type="button" class="claude-open" @click="api.markSeen(project.path)">{{ t("detail.markSeen") }}</button>
       </div>
       <div v-for="session in working" :key="session.id" class="card-session working" :title="`${nameOf(session.id)}: ${t('detail.claudeWorking')}`">
         <span class="session-mark"><span class="ring" aria-hidden="true"></span></span>

@@ -888,9 +888,9 @@
   "sessions.card.workingFor": "{duration}'dır çalışıyor",
   "sessions.card.lastActive": "Son hareket {ago}",
   "sessions.card.endedAt": "Bitiş {time}",
-  "sessions.seenTitle": "Görüldü proje başına tutulur: {project} içindeki bütün oturumları görüldü sayar",
+  "sessions.seenTitle": "Görüldü proje başına tutulur: {project} içinde Claude'un sırasını bitirdiği oturumlar görüldü sayılır; açık bir soru ya da izin isteği beklemede kalır",
   "sessions.seenOthers": {
-    "other": "Görüldü proje başına tutulur: bu, {project} içinde bekleyen {count} oturumu daha temizler."
+    "other": "Görüldü proje başına tutulur: {project} içinde sırası biten {count} oturum daha görüldü sayılır. Açık bir soru ya da izin isteği beklemede kalır."
   },
   "sessions.openProject": "Projeyi aç",
   "sessions.menu.markSeen": "{project} projesini görüldü say",

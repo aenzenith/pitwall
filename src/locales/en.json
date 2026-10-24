@@ -899,10 +899,10 @@
   "sessions.card.workingFor": "For {duration} so far",
   "sessions.card.lastActive": "Last active {ago}",
   "sessions.card.endedAt": "Ended at {time}",
-  "sessions.seenTitle": "Seen is kept per project: marks every session in {project} as seen",
+  "sessions.seenTitle": "Seen is kept per project: Claude's finished turns in {project} are marked seen; an open question or permission keeps waiting",
   "sessions.seenOthers": {
-    "one": "Seen is kept per project: this also clears {count} other session waiting in {project}.",
-    "other": "Seen is kept per project: this also clears {count} other sessions waiting in {project}."
+    "one": "Seen is kept per project: {count} other finished session in {project} is marked seen too. An open question or permission keeps waiting.",
+    "other": "Seen is kept per project: {count} other finished sessions in {project} are marked seen too. An open question or permission keeps waiting."
   },
   "sessions.openProject": "Open project",
   "sessions.menu.markSeen": "Mark {project} as seen",

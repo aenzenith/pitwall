@@ -877,9 +877,9 @@
   "sessions.card.workingFor": "作業時間 {duration}",
   "sessions.card.lastActive": "最後の動き {ago}",
   "sessions.card.endedAt": "{time} に終了",
-  "sessions.seenTitle": "既読はプロジェクト単位です。{project} のすべてのセッションを既読にします",
+  "sessions.seenTitle": "既読はプロジェクト単位です。{project} でClaudeの応答が完了したものを既読にします。開いている質問や許可の確認はそのまま残ります",
   "sessions.seenOthers": {
-    "other": "既読はプロジェクト単位です。{project} で待っているほかの {count} 件のセッションも既読になります。"
+    "other": "既読はプロジェクト単位です。{project} で応答が完了したほかの {count} 件のセッションも既読になります。開いている質問や許可の確認はそのまま残ります。"
   },
   "sessions.openProject": "プロジェクトを開く",
   "sessions.menu.markSeen": "{project} を既読にする",

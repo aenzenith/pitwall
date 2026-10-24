@@ -379,6 +379,10 @@ const EVENT_MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
 const PROMPT_NOTICE_MS: u64 = 6_000;
 /// Log writes this soon after a prompt was reported are the turn catching up, not an answer.
 const ANSWER_SLACK_MS: u64 = 1_500;
+/// A look stops this long before a prompt still open (`mark_seen`): the VS Code extension dates
+/// the same prompt from Claude Code's own status, written a moment apart from the hook's event,
+/// and a prompt only Claude Code's notification told of is dated `PROMPT_NOTICE_MS` back.
+const PROMPT_LEAD_MS: u64 = 8_000;
 
 #[derive(Debug, Default)]
 pub struct ScanResult {
@@ -931,10 +935,35 @@ impl ClaudeWatch {
         }
     }
 
-    pub fn mark_seen(&self, folder_path: &str) {
+    /// The project looked at now: its turns count as seen up to a permission prompt or a question
+    /// still open there, which waits until it is answered. A look at one session's finished turn
+    /// never hides another's dialog, nor one that opened just before the look. `running`: the
+    /// sessions Claude Code lists as running (`~/.claude/sessions`); a prompt of one that is gone
+    /// waits for nothing and is seen with the rest, as every prompt is when that can't be told.
+    /// Returns the moment written.
+    pub fn mark_seen(&mut self, folder_path: &str, running: Option<&HashSet<String>>) -> u64 {
+        let now = now_ms();
+        let open = running.and_then(|running| self.open_prompt(folder_path, running));
+        let at = open.map_or(now, |opened| opened.saturating_sub(PROMPT_LEAD_MS).min(now));
         let mut paths = HashMap::new();
-        paths.insert(folder_path.to_string(), now_ms());
+        paths.insert(folder_path.to_string(), at);
         self.write_seen(SeenBook { since: self.read_seen().since, paths });
+        at
+    }
+
+    /// When the earliest permission prompt or question still open in the project opened, as its
+    /// sessions stand now (`evaluate`), of those still `running`; none when nothing asks there.
+    fn open_prompt(&mut self, folder_path: &str, running: &HashSet<String>) -> Option<u64> {
+        let scan = self.evaluate();
+        scan.sessions
+            .iter()
+            .chain(&scan.others)
+            .filter(|session| if session.path.is_empty() { session.folder.as_deref().is_some_and(|folder| same_path(folder, folder_path)) } else { session.path == folder_path })
+            .filter(|session| session.phase == SessionPhase::Waiting && running.contains(&session.id))
+            .filter_map(|session| session.turn)
+            .filter(|turn| turn.kind != TurnKind::Finished)
+            .map(|turn| turn.at)
+            .min()
     }
 
     /// Of `folder_paths`, the one looked at last, as the seen book has it; none when the book
@@ -1326,7 +1355,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         fs::write(tmp.path().join("claude-seen.json"), r#"{"since":1,"paths":{"/a":5},"future":{"x":1}}"#).unwrap();
 
-        ClaudeWatch::new(tmp.path().join("claude"), tmp.path()).mark_seen("/b");
+        ClaudeWatch::new(tmp.path().join("claude"), tmp.path()).mark_seen("/b", None);
 
         let book: Value = serde_json::from_str(&fs::read_to_string(tmp.path().join("claude-seen.json")).unwrap()).unwrap();
         assert_eq!(book["future"], serde_json::json!({"x": 1}));
@@ -1549,7 +1578,7 @@ mod tests {
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[project].kind, TurnKind::Finished);
 
-        watch.mark_seen(project);
+        watch.mark_seen(project, None);
         assert!(watch.scan(&paths).waiting.is_empty());
     }
 }

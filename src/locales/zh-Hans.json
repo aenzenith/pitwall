@@ -877,9 +877,9 @@
   "sessions.card.workingFor": "已工作 {duration}",
   "sessions.card.lastActive": "最后活动 {ago}",
   "sessions.card.endedAt": "结束于 {time}",
-  "sessions.seenTitle": "已读按项目记录：会将 {project} 中的所有会话标为已读",
+  "sessions.seenTitle": "已读按项目记录：Claude 在 {project} 中已完成的轮次会标为已读；尚未回答的提问或授权请求会继续等你",
   "sessions.seenOthers": {
-    "other": "已读按项目记录：这也会清除 {project} 中另外 {count} 个在等你的会话。"
+    "other": "已读按项目记录：{project} 中另外 {count} 个已完成的会话也会标为已读。尚未回答的提问或授权请求会继续等你。"
   },
   "sessions.openProject": "打开项目",
   "sessions.menu.markSeen": "将 {project} 标为已读",

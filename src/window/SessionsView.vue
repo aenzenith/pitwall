@@ -21,7 +21,7 @@ import { openInPanel, panelTyping, usePanelFollow } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { ALL, dayLong, type Period } from "../lib/period";
-import { bringKeys, FILTERS, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionTerminal, sessionWaits, type Layout } from "../lib/sessions";
+import { bringKeys, FILTERS, finishedWaits, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionTerminal, sessionWaits, type Layout } from "../lib/sessions";
 import { api, loadSessions, now, sessions, snapshot, today, visible } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { SessionRow, SessionsView } from "../lib/types";
@@ -221,10 +221,11 @@ async function bringUp(id: string): Promise<void> {
   pending.value = null;
 }
 
-/** Seen is kept per project: every session of the project stops waiting on you. */
+/** Seen is kept per project: what Claude finished there counts as seen; an open question or
+ * permission prompt keeps waiting. */
 function markSeen(id: string): void {
   const row = byId.value.get(id);
-  if (row?.phase === "waiting") void api.markSeen(row.path ?? row.folder).catch(() => undefined);
+  if (row && finishedWaits(row, all.value)) void api.markSeen(row.path ?? row.folder).catch(() => undefined);
 }
 
 function openProject(id: string): void {
@@ -245,7 +246,7 @@ function rowMenu(event: MouseEvent, id: string): void {
   if (!row) return;
   void menu.popup(event, [
     { text: t(bringKeys(row).label), action: () => void bringUp(id) },
-    { text: t("sessions.menu.markSeen", { project: row.project }), enabled: row.phase === "waiting", action: () => markSeen(id) },
+    { text: t("sessions.menu.markSeen", { project: row.project }), enabled: finishedWaits(row, all.value), action: () => markSeen(id) },
     { text: t("sessions.copyResume"), action: () => copyResume(id) },
     "separator",
     { text: t("sessions.openProject"), action: () => openProject(id) },
@@ -420,6 +421,7 @@ onMounted(() => {
     <SessionDetail
       v-if="selected"
       :row="selected"
+      :rows="all"
       :now="now"
       :others="others"
       :last-message="lastMessage"

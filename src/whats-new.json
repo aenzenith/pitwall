@@ -84,6 +84,27 @@
         "ja": "セッションや週の使用量が 90 % を超えたとき、読み取りのたびではなく、ウィンドウごとに一度だけ知らせます。",
         "zh-Hans": "会话或本周用量超过 90 % 时，每个窗口只提醒一次，不再每次读取都提醒。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Waiting Claude sessions stay in view",
+        "tr": "Bekleyen Claude oturumları gözden kaçmıyor",
+        "de": "Wartende Claude-Sitzungen bleiben sichtbar",
+        "es": "Las sesiones de Claude que esperan siguen a la vista",
+        "ru": "Ожидающие сессии Claude не теряются",
+        "ja": "待機中の Claude セッションを見逃さない",
+        "zh-Hans": "等待中的 Claude 会话不再被隐藏"
+      },
+      "body": {
+        "en": "Opening one session no longer hides another's open question.",
+        "tr": "Bir oturumu açmak artık aynı projedeki başka bir oturumun bekleyen sorusunu gizlemiyor.",
+        "de": "Eine Sitzung zu öffnen verdeckt nicht mehr die offene Frage einer anderen.",
+        "es": "Abrir una sesión ya no oculta la pregunta pendiente de otra.",
+        "ru": "Открытие одной сессии больше не скрывает открытый вопрос другой.",
+        "ja": "あるセッションを開いても、別のセッションの未回答の質問が隠れなくなりました。",
+        "zh-Hans": "打开一个会话不再隐藏另一个会话待回答的问题。"
+      }
     }
   ]
 }

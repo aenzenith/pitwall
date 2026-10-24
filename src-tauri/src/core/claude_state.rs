@@ -12,19 +12,31 @@ use crate::claude::TurnKind;
 const NOTIFY_AFTER: Duration = Duration::from_secs(4);
 
 impl Core {
+    /// The project looked at: what Claude waits on you with there counts as seen, up to a
+    /// permission prompt or a question still open in a session that runs, which waits until it is
+    /// answered (`ClaudeWatch::mark_seen`), and so does whatever came after it.
     pub fn mark_seen(&self, path: &str) {
-        if let Ok(watch) = self.claude.lock() {
-            watch.mark_seen(path);
-        }
+        // Before the watch is locked: it may read the process table.
+        let running: Option<HashSet<String>> = self.running_cached().map(|running| running.into_keys().collect());
+        let seen = match self.claude.lock() {
+            Ok(mut watch) => watch.mark_seen(path, running.as_ref()),
+            Err(_) => now_ms(),
+        };
+        let unseen = |turn: Option<Turn>| turn.is_some_and(|turn| turn.at > seen);
         {
             let mut inner = self.lock();
-            inner.waiting.remove(path);
-            turn_seen(&mut inner, path);
+            if unseen(inner.waiting.get(path).copied()) {
+                // What still waits keeps its line; a long turn listed of the project was seen.
+                inner.missed.retain(|entry| !(entry.kind == SignalKind::ClaudeLongTurn && same_path(&entry.path, path)));
+            } else {
+                inner.waiting.remove(path);
+                turn_seen(&mut inner, path);
+            }
             if let Some(sessions) = inner.claude_sessions.get_mut(path) {
-                sessions.retain(|session| session.phase != SessionPhase::Waiting);
+                sessions.retain(|session| session.phase != SessionPhase::Waiting || unseen(session.turn));
             }
             // The Sessions page's too, a folder that isn't listed included, until the next scan.
-            for session in inner.scanned.iter_mut().filter(|session| session.phase == SessionPhase::Waiting) {
+            for session in inner.scanned.iter_mut().filter(|session| session.phase == SessionPhase::Waiting && !unseen(session.turn)) {
                 let here = if session.path.is_empty() { session.folder.as_deref().is_some_and(|folder| same_path(folder, path)) } else { session.path == path };
                 if here {
                     session.phase = SessionPhase::Idle;
