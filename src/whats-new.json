@@ -130,22 +130,22 @@
     {
       "kind": "fix",
       "title": {
-        "en": "The Files window, put right",
-        "tr": "Dosyalar penceresinde düzeltmeler",
-        "de": "Das Dateien-Fenster repariert",
-        "es": "Arreglos en Archivos",
-        "ru": "Исправления в «Файлах»",
-        "ja": "ファイルウィンドウの修正",
-        "zh-Hans": "文件窗口的修复"
+        "en": "Files and backups, put right",
+        "tr": "Dosyalar ve yedekte düzeltmeler",
+        "de": "Dateien und Sicherungen repariert",
+        "es": "Arreglos en Archivos y copias de seguridad",
+        "ru": "Исправления в «Файлах» и резервных копиях",
+        "ja": "ファイルとバックアップの修正",
+        "zh-Hans": "文件与备份的修复"
       },
       "body": {
-        "en": "Source control shows names like çizim.md as written, and Open in editor opens the file you're looking at.",
-        "tr": "Kaynak denetimi çizim.md gibi adları olduğu gibi gösteriyor, Editörde aç da baktığın dosyayı açıyor.",
-        "de": "Die Quellcodeverwaltung zeigt Namen wie çizim.md richtig, und „Im Editor öffnen“ öffnet die Datei, die du gerade ansiehst.",
-        "es": "Control de código fuente muestra nombres como çizim.md tal cual y Abrir en el editor abre el archivo que estás viendo.",
-        "ru": "Система контроля версий показывает имена вроде çizim.md как есть, а «Открыть в редакторе» открывает именно тот файл, что вы смотрите.",
-        "ja": "ソース管理で çizim.md のような名前がそのまま表示され、「エディタで開く」は表示中のファイルを開きます。",
-        "zh-Hans": "源代码管理会按原样显示 çizim.md 这类文件名，“在编辑器中打开”会打开你正在看的文件。"
+        "en": "Source control shows names like çizim.md as written, Open in editor opens the file you're looking at, and unstarred projects come back from a backup.",
+        "tr": "Kaynak denetimi çizim.md gibi adları olduğu gibi gösteriyor, Editörde aç baktığın dosyayı açıyor, yıldızsız projeler de yedekten geri gelebiliyor.",
+        "de": "Die Quellcodeverwaltung zeigt Namen wie çizim.md richtig, „Im Editor öffnen“ öffnet die Datei, die du gerade ansiehst, und Projekte ohne Stern kommen aus einer Sicherung zurück.",
+        "es": "Control de código fuente muestra nombres como çizim.md tal cual, Abrir en el editor abre el archivo que estás viendo y los proyectos sin estrella vuelven desde una copia de seguridad.",
+        "ru": "Система контроля версий показывает имена вроде çizim.md как есть, «Открыть в редакторе» открывает именно тот файл, что вы смотрите, а проекты без звезды восстанавливаются из копии.",
+        "ja": "ソース管理で çizim.md のような名前がそのまま表示され、「エディタで開く」は表示中のファイルを開きます。星のないプロジェクトもバックアップから戻せます。",
+        "zh-Hans": "源代码管理会按原样显示 çizim.md 这类文件名，“在编辑器中打开”会打开你正在看的文件，未加星的项目也能从备份恢复。"
       }
     }
   ]

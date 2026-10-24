@@ -334,11 +334,14 @@ export type BackupInfo = {
   createdAt: number;
   app: string;
   settings: boolean;
-  /** Listed projects, and how many of them carry settings, commands or links. */
+  /** Listed projects, starred or not. */
   projects: number;
   commands: number;
   links: number;
   teams: number;
+  /** The projects part holds something to put back: listed projects, their order, a project's
+   * settings or a team. */
+  hasProjects: boolean;
   cards: number;
   images: number;
   /** Days of the timeline. */

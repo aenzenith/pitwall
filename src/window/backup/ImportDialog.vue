@@ -30,7 +30,7 @@ const info = props.info;
 /** The parts the file has. */
 const has: BackupParts = {
   settings: info.settings,
-  projects: info.projects + info.commands + info.links + info.teams > 0,
+  projects: info.hasProjects,
   board: info.cards + info.images > 0,
   activity: info.days > 0,
 };

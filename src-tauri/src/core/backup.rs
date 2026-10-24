@@ -64,12 +64,15 @@ pub struct BackupInfo {
     /// The version that wrote it.
     pub app: String,
     pub settings: bool,
-    /// The listed projects.
+    /// The listed projects, starred or not.
     pub projects: usize,
     /// The commands of all its projects, and their links.
     pub commands: usize,
     pub links: usize,
     pub teams: usize,
+    /// The projects part holds something to put back: listed projects, their order, a
+    /// project's settings or a team.
+    pub has_projects: bool,
     pub cards: usize,
     pub images: usize,
     /// Days of the timeline.
@@ -272,16 +275,20 @@ impl Backup {
     fn info(&self, file: &Path) -> BackupInfo {
         let projects = self.projects.as_ref();
         let kept = || projects.into_iter().flat_map(|part| part.settings.values());
+        let listed = projects.map_or(0, |part| unique(part.favourites.iter().map(|favourite| favourite.path.clone()).chain(part.added.iter().cloned()).collect()).len());
+        // As `put_projects` takes them: an entry that holds nothing is nothing to put back.
+        let project_settings = projects.is_some_and(|part| part.settings.iter().any(|(path, project)| !path.is_empty() && project.clone().upgraded() != ProjectSettings::default()));
 
         BackupInfo {
             file: file.to_string_lossy().into_owned(),
             created_at: self.created_at,
             app: self.app.clone(),
             settings: self.settings.is_some(),
-            projects: projects.map_or(0, |part| part.favourites.len()),
+            projects: listed,
             commands: kept().map(|project| project.commands.len()).sum(),
             links: kept().map(|project| project.links.len()).sum(),
             teams: projects.map_or(0, |part| part.teams.len()),
+            has_projects: listed > 0 || project_settings || projects.is_some_and(|part| !part.order.is_empty() || !part.teams.is_empty()),
             cards: self.cards.as_ref().map_or(0, Vec::len),
             images: self.cards.iter().flatten().map(|taken| taken.images.len()).sum(),
             days: self.days.as_ref().map_or(0, Vec::len),
@@ -1372,5 +1379,30 @@ mod tests {
         assert_eq!(settings.notifications.muted, [new.as_str()]);
         assert_eq!(listed(&core), sorted(vec![new.clone(), other.clone()]));
         assert_eq!((titles(&mid).len(), titles(&new).len(), core.board_state().len()), (0, 2, 3));
+    }
+
+    /// Projects listed without their star (added from the quick switcher, or unstarred: the list
+    /// keeps them) are a backup's projects all the same, and so is a project's settings alone.
+    /// The import dialog offers the projects part only as the file's summary says it holds some:
+    /// told of starred projects alone, it would refuse to put back a backup of the others, and
+    /// the user would find that out once they were gone.
+    #[test]
+    fn a_backup_of_projects_without_a_star_offers_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_in(tmp.path());
+        for name in ["paddock", "garage", "pitlane"] {
+            let dir = tmp.path().join("work").join(name);
+            fs::create_dir_all(&dir).unwrap();
+            core.add_unstarred(&dir.to_string_lossy()).unwrap();
+        }
+        let file = tmp.path().join("projects.json");
+        core.backup_write(&file, BackupParts { settings: false, projects: true, board: false, activity: false }).unwrap();
+        let info = core.backup_read(&file).unwrap();
+        assert_eq!((info.projects, info.has_projects), (3, true));
+
+        for (part, has) in [(json!({ "settings": { "/Users/me/projects/paddock": { "port": 5174 } } }), true), (json!({ "settings": { "/Users/me/projects/paddock": {} } }), false)] {
+            fs::write(&file, backup(json!({ "projects": part }))).unwrap();
+            assert_eq!(core.backup_read(&file).unwrap().has_projects, has, "{part}");
+        }
     }
 }
