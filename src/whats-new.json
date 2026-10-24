@@ -97,13 +97,13 @@
         "zh-Hans": "等待中的 Claude 会话不再被隐藏"
       },
       "body": {
-        "en": "Opening one session no longer hides another's open question.",
-        "tr": "Bir oturumu açmak artık aynı projedeki başka bir oturumun bekleyen sorusunu gizlemiyor.",
-        "de": "Eine Sitzung zu öffnen verdeckt nicht mehr die offene Frage einer anderen.",
-        "es": "Abrir una sesión ya no oculta la pregunta pendiente de otra.",
-        "ru": "Открытие одной сессии больше не скрывает открытый вопрос другой.",
-        "ja": "あるセッションを開いても、別のセッションの未回答の質問が隠れなくなりました。",
-        "zh-Hans": "打开一个会话不再隐藏另一个会话待回答的问题。"
+        "en": "Opening one session no longer hides another's open question, and a session that ended in its tab opens again when you click it.",
+        "tr": "Bir oturumu açmak artık aynı projedeki başka bir oturumun bekleyen sorusunu gizlemiyor; sekmesinde biten bir oturum da tıklayınca yeniden açılıyor.",
+        "de": "Eine Sitzung zu öffnen verdeckt nicht mehr die offene Frage einer anderen, und eine Sitzung, die in ihrem Tab beendet wurde, öffnet sich per Klick wieder.",
+        "es": "Abrir una sesión ya no oculta la pregunta pendiente de otra, y una sesión que terminó en su pestaña vuelve a abrirse al hacer clic.",
+        "ru": "Открытие одной сессии больше не скрывает открытый вопрос другой, а сессия, завершившаяся во вкладке, снова открывается по щелчку.",
+        "ja": "あるセッションを開いても、別のセッションの未回答の質問が隠れなくなりました。タブ内で終了したセッションもクリックで再び開けます。",
+        "zh-Hans": "打开一个会话不再隐藏另一个会话待回答的问题；在标签页里已结束的会话，点击即可重新打开。"
       }
     }
   ]

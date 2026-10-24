@@ -52,14 +52,14 @@ pub(super) enum Reveal {
 enum Claim {
     /// Nobody holds it: the caller opens its tab, and says which once it is open.
     Open,
-    /// It was opened again in this tab, which is still there.
+    /// It was opened again in this tab, where Claude may still run it.
     Tab(u64),
-    /// Another click is opening its tab right now.
+    /// Its tab is being opened right now.
     Opening,
 }
 
-/// Takes the opening of `session`'s tab, unless it has one (`open`: that tab is still there) or
-/// one is on its way: asked twice before its process is listed, it is opened once.
+/// Takes the opening of `session`'s tab, unless it has one (`open`: Claude may still run it in
+/// that tab) or one is on its way: asked twice before its process is listed, it is opened once.
 fn claim(reopened: &mut HashMap<String, u64>, session: &str, open: impl Fn(u64) -> bool) -> Claim {
     match reopened.get(session).copied() {
         Some(OPENING) => Claim::Opening,
@@ -69,6 +69,19 @@ fn claim(reopened: &mut HashMap<String, u64>, session: &str, open: impl Fn(u64) 
             Claim::Open
         }
     }
+}
+
+/// What `open_once` did with a session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Opened {
+    /// It opened in this new tab.
+    New(TerminalView),
+    /// It has this tab, where Claude may still run it: it isn't opened again.
+    Held(u64),
+    /// Its tab is being opened right now: it isn't opened again.
+    Opening,
+    /// Its tab couldn't be opened, for this reason.
+    Failed(String),
 }
 
 /// What a click on a session in the terminal's history did (`resume_claude`).
@@ -241,8 +254,9 @@ impl Core {
     /// Opens a session no process runs again (`claude --resume`) in a new tab of its
     /// project's terminals and shows it; a card that holds it follows it there. `false` when
     /// there is no such tab to open: a folder that isn't listed has no terminals, and Claude Code
-    /// finds a session only from the folder it ran in. Asked again before its process is listed,
-    /// the tab it was opened in comes up instead: never a second process on one log.
+    /// finds a session only from the folder it ran in. Asked again while Claude may still run it
+    /// in the tab it was opened in (before its process is listed), that tab comes up instead:
+    /// never a second process on one log. Once Claude has ended there, it opens again.
     fn reopen(self: &Arc<Self>, path: &str, session: &str) -> bool {
         let Some(path) = self.listed_paths().into_iter().find(|listed| same_path(listed, path)) else {
             return false;
@@ -252,23 +266,12 @@ impl Core {
             return false;
         }
 
-        let claimed = {
-            let mut cache = self.sessions_cache();
-            claim(&mut cache.reopened, session, |tab| self.terminal_sessions().contains_key(&tab))
-        };
-        let tab = match claimed {
-            Claim::Opening => return true,
-            Claim::Tab(tab) => tab,
-            Claim::Open => {
-                let opened = self.open_terminal_as(&path, &Launch::Resume { session: session.to_string() }, None, false, None, false);
-                let mut cache = self.sessions_cache();
-                let Ok(view) = opened else {
-                    cache.reopened.remove(session);
-                    return false;
-                };
-                cache.reopened.insert(session.to_string(), view.id);
-                drop(cache);
-
+        let open = || self.open_terminal_as(&path, &Launch::Resume { session: session.to_string() }, None, false, None, false);
+        let tab = match self.open_once(session, open) {
+            Opened::Opening => return true,
+            Opened::Failed(_) => return false,
+            Opened::Held(tab) => tab,
+            Opened::New(view) => {
                 self.board_resumed(session, view.id);
                 view.id
             }
@@ -276,6 +279,42 @@ impl Core {
 
         self.emit(CoreEvent::RevealTerminal { path, id: tab });
         true
+    }
+
+    /// Opens a session no process runs again in a new tab, which `open` makes, unless it holds
+    /// one: its tab is on its way, or it was opened again in a tab where Claude may still run it
+    /// (`claude_may_run_in`). Every such opening goes through here, in whatever order they come:
+    /// a click (`reopen`), a card that goes on with its session (`launch_card`), what the last
+    /// quit left open (`put_back`) and what a restart for an update did (`restore`). Two
+    /// processes would write one log.
+    pub(super) fn open_once(&self, session: &str, open: impl FnOnce() -> Result<TerminalView, String>) -> Opened {
+        // Its tab's processes are read first, not while the claim is held.
+        let held = self.sessions_cache().reopened.get(session).copied().filter(|&tab| tab != OPENING);
+        let runs = held.is_some_and(|tab| self.claude_may_run_in(tab));
+        let claimed = {
+            let mut cache = self.sessions_cache();
+            // A tab it was given since has only just opened.
+            claim(&mut cache.reopened, session, |tab| Some(tab) != held || runs)
+        };
+
+        match claimed {
+            Claim::Opening => Opened::Opening,
+            Claim::Tab(tab) => Opened::Held(tab),
+            Claim::Open => {
+                let opened = open();
+                let mut cache = self.sessions_cache();
+                match opened {
+                    Ok(view) => {
+                        cache.reopened.insert(session.to_string(), view.id);
+                        Opened::New(view)
+                    }
+                    Err(error) => {
+                        cache.reopened.remove(session);
+                        Opened::Failed(error)
+                    }
+                }
+            }
+        }
     }
 
     fn reveal_when_open(&self, path: &str, session: &str) {

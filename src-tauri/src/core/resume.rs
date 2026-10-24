@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use super::layout::SavedLayout;
 use super::restore::write_private;
-use super::reveal::{is_session_id, Liveness};
+use super::reveal::{is_session_id, Liveness, Opened};
 use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 
@@ -271,14 +271,20 @@ impl Core {
                     opened.push(None);
                     continue;
                 };
-                let Ok(view) = self.open_terminal_as(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false) else {
-                    opened.push(None);
-                    continue;
+                let open = || self.open_terminal_as(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false);
+                let id = match &launch {
+                    // Once, whoever opens it first: a click in the terminals' history may have
+                    // opened it since the start, before Claude Code lists its process.
+                    Launch::Resume { session } => match self.open_once(session, open) {
+                        Opened::New(view) => {
+                            self.board_resumed(session, view.id);
+                            Some(view.id)
+                        }
+                        Opened::Held(_) | Opened::Opening | Opened::Failed(_) => None,
+                    },
+                    _ => open().ok().map(|view| view.id),
                 };
-                opened.push(Some(view.id));
-                if let Some(session) = &tab.session {
-                    self.board_resumed(session, view.id);
-                }
+                opened.push(id);
             }
             if let Some(saved) = project.layout.clone() {
                 laid |= self.lay_terminals(&project.path, saved, |at| opened.get(at).copied().flatten());
@@ -487,5 +493,82 @@ mod tests {
         drop(sleeper);
         assert_eq!(core.launch_of(&tab), Some(Launch::Resume { session: id.into() }));
         assert_eq!(core.launch_of(&OpenTab::default()), Some(Launch::Shell));
+    }
+
+    /// Two processes on one session write one log. A session opened again in a tab, where
+    /// Claude runs before Claude Code lists it, is neither put back by the last quit's record
+    /// nor by an update's; a click on it shows that tab, and a card that goes on with it follows
+    /// it there: every opening of a session takes the same claim (`open_once`), in whatever
+    /// order they come.
+    #[test]
+    fn a_session_opened_again_is_put_back_by_no_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        let core = core_in(tmp.path());
+        core.add_project(&project).unwrap();
+        let id = "9bb85e86-f618-4861-9858-03ec8fc36c28";
+
+        // Its log, quiet for a while, and Claude Code's list of running sessions without it: it
+        // has ended.
+        let claude = tmp.path().join("claude");
+        let log = claude.join("projects").join(crate::claude::encode_project_path(&project)).join(format!("{id}.jsonl"));
+        fs::create_dir_all(log.parent().unwrap()).unwrap();
+        fs::write(&log, "{}\n").unwrap();
+        let quiet = std::time::SystemTime::now() - Duration::from_millis(crate::claude::WORKING_WINDOW_MS * 2);
+        fs::File::options().write(true).open(&log).unwrap().set_modified(quiet).unwrap();
+        fs::create_dir_all(claude.join("sessions")).unwrap();
+        assert_eq!(core.liveness(id), Liveness::Ended);
+        // A card that held it.
+        let card = core.board_add(&project, "Card", "", &[]).unwrap().id;
+        core.board_link(&card, id).unwrap();
+
+        // Opened again: a shell stands in for `claude --resume`, with a process under it that
+        // passes for Claude Code's (`claude` in its command line).
+        let Opened::New(TerminalView { id: tab, .. }) = core.open_once(id, || core.open_terminal_as(&project, &Launch::Shell, None, false, None, false)) else {
+            panic!("not opened");
+        };
+        let started = process::wait_until(Duration::from_secs(15), || !core.terminal_buffer(tab).data.is_empty());
+        core.write_terminal(tab, "sh -c 'sleep 30; true' claude\r");
+        thread::sleep(super::super::terminal::STARTING);
+        let held = started && process::wait_until(Duration::from_secs(15), || core.claude_may_run_in(tab));
+
+        let (mut tabs, mut restored, mut clicked, mut given, mut followed) = (Vec::new(), None, None, None, None);
+        if held {
+            let record = Record { v: 1, at: now_ms(), projects: vec![OpenProject { path: project.clone(), tabs: vec![OpenTab { name: None, session: Some(id.into()) }], ..OpenProject::default() }] };
+            write_private(&core.resume_file(), &serde_json::to_string(&record).unwrap()).unwrap();
+            core.resume_start(false);
+            core.resume_restore(false);
+            tabs.push(core.lock().terminal_list.len());
+
+            let update = serde_json::json!({
+                "v": 1, "at": now_ms(), "version": "9.9.9", "window": false, "servers": [], "commands": [],
+                "tabs": [{ "path": project, "name": "claude", "session": id, "cut": false, "cols": 80, "rows": 24, "scrollback": "" }],
+            });
+            write_private(&core.cfg.settings_file.with_file_name("restore.json"), &update.to_string()).unwrap();
+            restored = core.restore();
+            tabs.push(core.lock().terminal_list.len());
+
+            clicked = Some(core.resume_claude(&project, id));
+            tabs.push(core.lock().terminal_list.len());
+
+            given = Some(core.board_give(&card, Give::Continue, None).map(|view| view.map(|view| view.id)));
+            followed = core.board_state().into_iter().find(|held| held.id == card).and_then(|held| held.terminal);
+            tabs.push(core.lock().terminal_list.len());
+        }
+
+        // Every tab goes before anything is asserted: one opened a second time runs Claude.
+        let open: Vec<u64> = core.lock().terminal_list.iter().map(|view| view.id).collect();
+        for view in open {
+            core.close_terminal(view);
+        }
+        core.dispose();
+        assert!(held, "Claude's stand-in never showed in its tab");
+        assert_eq!(restored.map(|restored| restored.sessions), Some(0), "the update's record");
+        assert_eq!(clicked, Some(Resumed::Opened));
+        assert_eq!(given, Some(Ok(Some(tab))), "the card goes on in the tab that runs its session");
+        assert_eq!(followed, Some(tab), "the card follows that tab");
+        assert_eq!(tabs, [1, 1, 1, 1], "opened a second time: by the quit's record, the update's, a click, a card");
     }
 }

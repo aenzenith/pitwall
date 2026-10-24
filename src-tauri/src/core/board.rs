@@ -44,7 +44,7 @@ use base64::Engine as _;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::reveal::{is_session_id, Liveness};
+use super::reveal::{is_session_id, Liveness, Opened};
 use super::sessions::{row_phase, status_phase, RowPhase, Running};
 use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
@@ -1141,12 +1141,7 @@ impl Core {
         };
         let launch = match (carry, &card.session) {
             (Carry::Follow, _) => {
-                let mut board = self.board();
-                if let Some(card) = board.place(id, Column::Claude, usize::MAX, now_ms()) {
-                    card.worked = false;
-                    card.schedule = None;
-                }
-                self.board_changed(board);
+                self.follow_card(id);
                 return Ok(None);
             }
             (Carry::Resume, Some(session)) => Launch::Resume { session: session.clone() },
@@ -1171,7 +1166,31 @@ impl Core {
             _ => None,
         };
 
-        let view = self.open_terminal_as(&card.path, &launch, Some(tab_name(&card.title)), false, size, unasked)?;
+        let new_tab = || self.open_terminal_as(&card.path, &launch, Some(tab_name(&card.title)), false, size, unasked);
+        // `held`: its session goes on in a tab opened for it a moment ago (a click in the
+        // terminals' history, before Claude Code lists its process): the card follows it there.
+        let (view, held) = match &resumed {
+            Some(session) => match self.open_once(session, new_tab) {
+                Opened::New(view) => (view, false),
+                Opened::Held(tab) => {
+                    // Looked up first: the lock is let go before `follow_card` takes it again.
+                    let found = self.lock().terminal_list.iter().find(|view| view.id == tab).cloned();
+                    match found {
+                        Some(view) => (view, true),
+                        None => {
+                            self.follow_card(id);
+                            return Ok(None);
+                        }
+                    }
+                }
+                Opened::Opening => {
+                    self.follow_card(id);
+                    return Ok(None);
+                }
+                Opened::Failed(error) => return Err(error),
+            },
+            None => (new_tab()?, false),
+        };
 
         let now = now_ms();
         let mut board = self.board();
@@ -1180,7 +1199,9 @@ impl Core {
         let Some(card) = board.place(id, Column::Claude, usize::MAX, now) else {
             // Deleted while its tab was opening: no card, so no Claude left working on it.
             drop(board);
-            self.close_terminal(view.id);
+            if !held {
+                self.close_terminal(view.id);
+            }
             return Err(no_card(id));
         };
         card.terminal = open.then_some(view.id);
@@ -1200,7 +1221,21 @@ impl Core {
             board.place(id, Column::Review, usize::MAX, now);
         }
         self.board_changed(board);
+        if held {
+            self.emit(CoreEvent::RevealTerminal { path: view.path.clone(), id: view.id });
+        }
         Ok(Some(view))
+    }
+
+    /// Card `id` goes into Claude's column and follows its session where that runs, or is about
+    /// to (`Carry::Follow`).
+    fn follow_card(&self, id: &str) {
+        let mut board = self.board();
+        if let Some(card) = board.place(id, Column::Claude, usize::MAX, now_ms()) {
+            card.worked = false;
+            card.schedule = None;
+        }
+        self.board_changed(board);
     }
 
     /// How `card`, moved back into `claude`, goes on (`carry`), from what is known of its session

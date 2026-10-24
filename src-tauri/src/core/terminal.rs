@@ -17,6 +17,9 @@ use crate::start::Start;
 const SCROLLBACK_BYTES: usize = 512 * 1024;
 /// The longest name a tab keeps, as long as a card's title may be; the tab cuts what doesn't fit.
 pub(super) const TAB_NAME_MAX: usize = 200;
+/// How long a tab just opened counts as one Claude may be starting in, before its processes can
+/// tell (`claude_may_run_in`).
+pub(super) const STARTING: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +74,8 @@ pub(super) struct Session {
     scrollback: String,
     /// Number of the last chunk read.
     seq: u64,
+    /// When the tab was opened (`claude_may_run_in`).
+    opened: Instant,
 }
 
 impl Session {
@@ -221,7 +226,8 @@ impl Core {
             view
         };
 
-        self.terminal_sessions().insert(view.id, Session { master: pair.master, input, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0 });
+        let session = Session { master: pair.master, input, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0, opened: Instant::now() };
+        self.terminal_sessions().insert(view.id, session);
         self.record_pids();
         self.notify();
 
@@ -426,6 +432,28 @@ impl Core {
     /// Every terminal's shell: its pid, the terminal's id and its project.
     pub(super) fn terminal_shells(&self) -> Vec<(u32, u64, String)> {
         self.terminal_sessions().iter().filter_map(|(id, session)| Some((session.pid?, *id, session.path.clone()))).collect()
+    }
+
+    /// Whether Claude may still run in terminal `id`, one a session was opened again in: a
+    /// process under its shell names `claude`, or on Unix the shell itself still does until
+    /// Claude ends there and it becomes the plain login shell (`resume_command`; `cmd.exe` keeps
+    /// `/K claude` in its line for good). A tab just opened, or one whose processes can't be told,
+    /// may be such a tab too. Command lines are only tested, as `read_running` tests them.
+    pub(super) fn claude_may_run_in(&self, id: u64) -> bool {
+        let Some((shell, opened)) = self.terminal_sessions().get(&id).map(|session| (session.pid, session.opened)) else {
+            return false;
+        };
+        if opened.elapsed() < STARTING {
+            return true;
+        }
+        let (Some(shell), Some(table)) = (shell, process::process_table()) else {
+            return true;
+        };
+
+        table.iter().any(|(&pid, process)| {
+            let under = || if pid == shell { cfg!(unix) } else { super::sessions::lineage(&table, pid).contains(&shell) };
+            process.line.to_lowercase().contains("claude") && under()
+        })
     }
 
     /// Every terminal's shell, for shutdown.

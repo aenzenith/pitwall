@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::layout::SavedLayout;
-use super::reveal::is_session_id;
+use super::reveal::{is_session_id, Opened};
 use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 
@@ -300,18 +300,28 @@ impl Core {
             };
             let name: String = tab.name.trim().chars().take(TAB_NAME_MAX).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
-            let Ok(view) = self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false) else {
-                continue;
+            let open = || self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false);
+            let id = match &session {
+                // Once, whoever opens it first: a click on it may come before Claude Code lists
+                // its process.
+                Some(session) => match self.open_once(session, open) {
+                    Opened::New(view) => view.id,
+                    Opened::Held(_) | Opened::Opening | Opened::Failed(_) => continue,
+                },
+                None => match open() {
+                    Ok(view) => view.id,
+                    Err(_) => continue,
+                },
             };
-            opened[at] = Some((view.id, tab.path.clone()));
+            opened[at] = Some((id, tab.path.clone()));
 
             restored.terminals += 1;
             match session {
                 Some(session) => {
                     restored.sessions += 1;
-                    self.board_resumed(&session, view.id);
+                    self.board_resumed(&session, id);
                 }
-                None => self.seed_terminal(view.id, &replay(&tab.scrollback, tab.cut, record.at)),
+                None => self.seed_terminal(id, &replay(&tab.scrollback, tab.cut, record.at)),
             }
         }
 
