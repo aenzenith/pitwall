@@ -343,7 +343,7 @@ impl Core {
             return None;
         }
         let mut command = crate::git::read_command(project);
-        command.args(["show", "--no-color", "--no-ext-diff", "--no-textconv", "--diff-merges=first-parent", "-M", "--format=", "--name-status", id, "--"]);
+        command.args(["show", "--no-color", "--no-ext-diff", "--no-textconv", "--diff-merges=first-parent", "-M", "--format=", "--name-status", "-z", id, "--"]);
         let output = process::output_within(&mut command, crate::git::LOG_LIMIT).ok()?;
         output.status.success().then(|| parse_name_status(&String::from_utf8_lossy(&output.stdout)))
     }
@@ -426,27 +426,36 @@ fn parse_log(output: &str) -> Vec<Commit> {
         .collect()
 }
 
-/// `git show --name-status`: `M\tpath`, `R087\told\tnew`.
+/// `git show --name-status -z`: `M`, `path`, each in a field of its own; `R087`, `old`, `new`
+/// for a rename or a copy. The names come as they are, never quoted: `docs/çizim.md`, not
+/// `"docs/\303\247izim.md"`.
 fn parse_name_status(output: &str) -> Vec<CommitFile> {
-    output
-        .lines()
-        .filter_map(|line| {
-            let mut fields = line.split('\t');
-            let code = fields.next()?.chars().next()?;
-            let first = fields.next()?.to_string();
-            let (path, from) = match fields.next() {
-                Some(second) => (second.to_string(), Some(first)),
-                None => (first, None),
+    let mut files = Vec::new();
+    let mut fields = output.split('\0');
+    while let Some(code) = fields.next() {
+        let Some(code) = code.trim_start_matches('\n').chars().next() else {
+            continue;
+        };
+        let Some(first) = fields.next() else {
+            break;
+        };
+        let (path, from) = if matches!(code, 'R' | 'C') {
+            let Some(second) = fields.next() else {
+                break;
             };
-            let mark = match code {
-                'A' | 'C' => 'A',
-                'D' => 'D',
-                'R' => 'R',
-                _ => 'M',
-            };
-            Some(CommitFile { path, from: if mark == 'R' { from } else { None }, mark })
-        })
-        .collect()
+            (second.to_string(), Some(first.to_string()))
+        } else {
+            (first.to_string(), None)
+        };
+        let mark = match code {
+            'A' | 'C' => 'A',
+            'D' => 'D',
+            'R' => 'R',
+            _ => 'M',
+        };
+        files.push(CommitFile { path, from: if mark == 'R' { from } else { None }, mark });
+    }
+    files
 }
 
 /// The code host a remote's address is on, and its pages for a commit; none for one it doesn't know.

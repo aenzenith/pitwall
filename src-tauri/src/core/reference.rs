@@ -18,14 +18,16 @@ impl Core {
     /// Opens the file an output line of the project at `path` names, in the user's editor at
     /// `line` (and `column`). `file` is the name as the line printed it; where it points is
     /// decided here (`resolve`). False when the project has no such file: nothing opens then.
-    /// It reads the project's folder, so not on the main thread.
-    pub fn open_reference(&self, path: &str, file: &str, line: u32, column: Option<u32>) -> bool {
+    /// `own_folder`: the name is written from the project's own folder, as the Files window
+    /// writes it, never from its working folder. It reads the project's folder, so not on the
+    /// main thread.
+    pub fn open_reference(&self, path: &str, file: &str, line: u32, column: Option<u32>, own_folder: bool) -> bool {
         // The folder is the gate: it is a project the app shows, never one the caller names.
         if !self.listed_paths().iter().any(|listed| listed == path) {
             return false;
         }
         // A path written from the folder it runs in, as its dev server and commands print them.
-        let work = self.work_dir(path);
+        let work = if own_folder { None } else { self.work_dir(path) };
         let Some(found) = resolve(Path::new(path), work.as_deref(), file) else {
             return false;
         };
@@ -256,18 +258,18 @@ mod tests {
         }
 
         for file in &refused {
-            assert!(!fx.core.open_reference(&fx.project, file, 1, Some(1)), "{file:?} must be refused");
+            assert!(!fx.core.open_reference(&fx.project, file, 1, Some(1), false), "{file:?} must be refused");
         }
         // An absolute path to somewhere else is not even looked at: with nothing there any
         // more, the answer is the same.
         fs::remove_dir_all(&outside).unwrap();
         for file in &elsewhere {
-            assert!(!fx.core.open_reference(&fx.project, file, 1, Some(1)), "{file:?} must be refused, whatever is there");
+            assert!(!fx.core.open_reference(&fx.project, file, 1, Some(1), false), "{file:?} must be refused, whatever is there");
         }
 
         // The folder above the project holds the project's files too, and is no project.
         let above = fx.tmp.path().to_string_lossy().into_owned();
-        assert!(!fx.core.open_reference(&above, "paddock/src/a.ts", 1, Some(1)), "a folder that isn't listed is no project");
+        assert!(!fx.core.open_reference(&above, "paddock/src/a.ts", 1, Some(1), false), "a folder that isn't listed is no project");
         assert!(fx.opened.lock().unwrap().is_empty(), "nothing may be opened: {:?}", fx.opened.lock().unwrap());
     }
 
@@ -298,13 +300,13 @@ mod tests {
             // Two of a name: the one whose folder is named.
             ("Pages/index.ts", &pages),
         ] {
-            assert!(fx.core.open_reference(&fx.project, file, 12, Some(5)), "{file:?} is in the project");
+            assert!(fx.core.open_reference(&fx.project, file, 12, Some(5), false), "{file:?} is in the project");
             assert_eq!(fx.opened.lock().unwrap().pop().as_ref(), Some(url), "{file:?}");
         }
 
         // Two of a name and nothing to tell them apart; a file of an installed package.
         for file in ["index.ts", "client.ts"] {
-            assert!(!fx.core.open_reference(&fx.project, file, 1, None), "{file:?} is nobody's");
+            assert!(!fx.core.open_reference(&fx.project, file, 1, None, false), "{file:?} is nobody's");
         }
         assert!(fx.opened.lock().unwrap().is_empty());
 
@@ -312,7 +314,7 @@ mod tests {
         let mut settings = fx.core.settings();
         settings.editor = "cursor".into();
         fx.core.set_settings(settings);
-        assert!(fx.core.open_reference(&fx.project, "src/a.ts", 3, None));
+        assert!(fx.core.open_reference(&fx.project, "src/a.ts", 3, None, false));
         let url = fx.opened.lock().unwrap().pop().unwrap();
         assert!(url.starts_with("cursor://file/") && url.ends_with("/paddock/src/a.ts:3"), "{url}");
     }

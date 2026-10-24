@@ -479,8 +479,10 @@ export const api = {
 
   /* The output pane (core/reference.rs). */
   /** Opens the file an output line names (`file`, as printed) in the editor, at its line. The
-   * core finds it, in the project's folder only: false when the project has no such file. */
-  openReference: (path: string, file: string, line: number, column: number | null) => invoke<boolean>("open_reference", { path, file, line, column }),
+   * core finds it, in the project's folder only: false when the project has no such file.
+   * `ownFolder`: the Files window's, a path from the project's own folder, never its working folder. */
+  openReference: (path: string, file: string, line: number, column: number | null, ownFolder = false) =>
+    invoke<boolean>("open_reference", { path, file, line, column, ownFolder }),
   /** The Files window (lib/explorer): a folder of the project (`""` its root), at most `limit` entries. */
   explorerList: (path: string, dir: string, limit: number) => invoke<import("./explorer").Listing | null>("explorer_list", { path, dir, limit }),
   /** A file of the project: its text, or why it isn't shown; null when it can't be read. */

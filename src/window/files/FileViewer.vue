@@ -173,7 +173,7 @@ const percent = (zoom: number) => new Intl.NumberFormat(language.value, { style:
 /* ---------- the bar's actions ---------- */
 
 function openInEditor(): void {
-  if (active.value) void api.openReference(props.files.path, active.value, current.value ?? 1, null);
+  if (active.value) void api.openReference(props.files.path, active.value, current.value ?? 1, null, true);
 }
 
 function copyPath(): void {

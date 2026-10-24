@@ -180,7 +180,7 @@ function itemMenu(at: MenuPoint, file: string, dir: boolean, head: MenuEntry[] =
   const entries: MenuEntry[] = [...head];
   if (file.startsWith(COMMIT_TAB)) return void menu.popup(at, entries);
   if (entries.length) entries.push("separator");
-  if (!dir) entries.push({ text: t("common.openInEditor"), action: () => void api.openReference(path, file, 1, null) });
+  if (!dir) entries.push({ text: t("common.openInEditor"), action: () => void api.openReference(path, file, 1, null, true) });
   entries.push({ text: revealLabel.value, action: () => void api.explorerReveal(path, file) });
   entries.push("separator", { text: t("files.copyPath"), action: () => void api.copyText(absolutePath(path, file)) }, { text: t("files.copyRelative"), action: () => void api.copyText(file) });
   void menu.popup(at, entries);
