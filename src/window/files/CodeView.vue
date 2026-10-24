@@ -54,6 +54,22 @@ onBeforeUnmount(() => observer?.disconnect());
 
 const lineRange = (chunk: number) => Array.from({ length: Math.min(CHUNK, lines.value.length - chunk * CHUNK) }, (_, i) => chunk * CHUNK + i);
 
+/** What a block's lines are drawn from (its `v-memo`): a block is drawn again only when one of
+ * these changes for it, so a block coming into view, a click or ⌘G leaves the others as they are.
+ * The picked line and the search's current match count only for the block they are in. */
+function drawnFrom(chunk: number): unknown[] {
+  const within = (n: number | undefined) => n !== undefined && Math.floor(n / CHUNK) === chunk;
+  const picked = props.current !== null && within(props.current - 1) ? props.current : 0;
+  const here = within(matches.value[at.value]?.line) ? at.value : -1;
+  return [shown.has(chunk), lines.value, props.tokens, props.palette, props.gutter, matches.value, picked, here];
+}
+
+/** A click on a line picks it (the editor opens there): one listener for all the lines. */
+function onLinesClick(event: MouseEvent): void {
+  const line = (event.target as Element).closest<HTMLElement>(".ln");
+  if (line) emit("line", Number(line.dataset.line));
+}
+
 /* ---------- colours, and what the search found, cut into one line's pieces ---------- */
 
 const styles = new Map<string, string>();
@@ -303,10 +319,10 @@ defineExpose({ openFind, goTo });
 <template>
   <div class="code-view" @keydown="onKey">
     <div ref="scroller" class="scroller" tabindex="0" @scroll.passive="onScroll" @mousedown="allPicked = false" @copy="onCopy">
-      <div class="lines selectable" :style="{ '--digits': digits }">
-        <div v-for="chunk in chunks" :key="chunk" class="chunk" :data-chunk="chunk" :style="{ minHeight: `${lineRange(chunk).length * LH}px` }">
+      <div class="lines selectable" :style="{ '--digits': digits }" @click="onLinesClick">
+        <div v-for="chunk in chunks" :key="chunk" v-memo="drawnFrom(chunk)" class="chunk" :data-chunk="chunk" :style="{ minHeight: `${lineRange(chunk).length * LH}px` }">
           <template v-if="shown.has(chunk)">
-            <div v-for="n in lineRange(chunk)" :key="n" :class="['ln', { cur: current === n + 1 }]" @click="emit('line', n + 1)">
+            <div v-for="n in lineRange(chunk)" :key="n" :class="['ln', { cur: current === n + 1 }]" :data-line="n + 1">
               <span class="gut" aria-hidden="true"><span class="num">{{ n + 1 }}</span><span :class="['gm', gutter.get(n + 1)]"></span></span>
               <span class="code"><span v-for="(piece, k) in pieces(n)" :key="k" :style="piece.style" :class="{ hit: piece.hit === 1, here: piece.hit === 2 }">{{ piece.text }}</span></span>
             </div>

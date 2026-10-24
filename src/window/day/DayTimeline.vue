@@ -95,8 +95,20 @@ const nowLeft = computed(() => (props.day.today ? `${pct(props.day.now, props.ra
 }
 
 .now-pill i {
+  position: relative;
   width: 6px;
   height: 6px;
+  border-radius: 50%;
+  background: var(--run);
+}
+
+/* The dot's pulse: a disc of its colour grown out of it, 5 px at most, and faded; only scaled and
+   faded, so the compositor runs it (a spread shadow had the pill redrawn every frame). Drawn at
+   its largest and scaled down, so it stays sharp. */
+.now-pill i::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
   border-radius: 50%;
   background: var(--run);
   animation: pulse 2s ease-in-out infinite;
@@ -105,10 +117,12 @@ const nowLeft = computed(() => (props.day.today ? `${pct(props.day.now, props.ra
 @keyframes pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--run) 55%, transparent);
+    transform: scale(0.375);
+    opacity: 0.55;
   }
   50% {
-    box-shadow: 0 0 0 5px transparent;
+    transform: scale(1);
+    opacity: 0;
   }
 }
 

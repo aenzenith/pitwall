@@ -160,13 +160,13 @@
         "zh-Hans": "更省 CPU"
       },
       "body": {
-        "en": "Big terminal output now costs far less CPU.",
-        "tr": "Büyük terminal çıktıları artık işlemciyi çok daha az yoruyor.",
-        "de": "Große Terminalausgaben kosten jetzt viel weniger Rechenzeit.",
-        "es": "Las salidas grandes de terminal ahora gastan mucho menos CPU.",
-        "ru": "Большой вывод в терминале теперь нагружает процессор гораздо меньше.",
-        "ja": "大量のターミナル出力で CPU をほとんど使わなくなりました。",
-        "zh-Hans": "大量终端输出现在占用的 CPU 少得多。"
+        "en": "Big terminal output, a chatty server's log, animations and long files now cost far less CPU.",
+        "tr": "Büyük terminal çıktıları, çok konuşan bir sunucunun logu, animasyonlar ve uzun dosyalar artık işlemciyi çok daha az yoruyor.",
+        "de": "Große Terminalausgaben, das Log eines gesprächigen Servers, Animationen und lange Dateien kosten jetzt viel weniger Rechenzeit.",
+        "es": "Las salidas grandes de terminal, el registro de un servidor hablador, las animaciones y los archivos largos ahora gastan mucho menos CPU.",
+        "ru": "Большой вывод в терминале, журнал болтливого сервера, анимации и длинные файлы теперь нагружают процессор гораздо меньше.",
+        "ja": "大量のターミナル出力、ログの多いサーバー、アニメーション、長いファイルで CPU をほとんど使わなくなりました。",
+        "zh-Hans": "大量终端输出、日志频繁的服务器、动画和长文件现在占用的 CPU 少得多。"
       }
     }
   ]

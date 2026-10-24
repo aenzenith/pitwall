@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 
 import ClaudeDot from "../components/ClaudeDot.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
@@ -12,7 +12,7 @@ import { t } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
 import { plainText, shownLines } from "../lib/outputLines";
 import { useOutputSearch } from "../lib/outputSearch";
-import { useOutputStream } from "../lib/outputStream";
+import { useOutputStream, type OutputLine } from "../lib/outputStream";
 import { openOrAtWork } from "../lib/pages";
 import {
   chooseTab,
@@ -84,7 +84,7 @@ import {
 import { isMac, primary } from "../lib/platform";
 import { sessionWaits, statusLine } from "../lib/sessions";
 import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
-import { api, now, sessions, snapshot } from "../lib/store";
+import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
 import { attach, fitView, focusView, measure, paneKeys } from "../lib/terminals";
@@ -337,6 +337,18 @@ const errorsOnly = computed({
 /** The errors of the run that is on: those of a run before are no longer the server's state. */
 const errorCount = computed(() => lines.value.reduce((count, line) => count + (line.level === "error" && line.id >= runStart.value ? 1 : 0), 0));
 const shownOutput = computed(() => shownLines(lines.value, errorsOnly.value));
+/** The output picked can be seen: the panel open, the window on screen. */
+const outputSeen = computed(() => showsOutput.value && !collapsed.value && visible.value);
+/** The lines its pane draws: while it can't be seen, they are followed and not drawn (no rows made,
+ * no layout), and what came meanwhile is drawn at once when it can. */
+const drawnOutput = shallowRef<OutputLine[]>([]);
+watch(
+  [shownOutput, outputSeen],
+  ([shown, seen]) => {
+    if (seen) drawnOutput.value = shown;
+  },
+  { immediate: true },
+);
 const emptyOutput = computed(() => {
   if (lines.value.length) return t("output.noErrors");
   if (job.value !== null) return t("detail.noOutput");
@@ -1819,7 +1831,7 @@ defineExpose({ openTerminal, closeShown });
             class="log"
             :inert="collapsed"
             :path="project.path"
-            :lines="shownOutput"
+            :lines="drawnOutput"
             :run-start="runStart"
             :ranges="ranges"
             :current="current"
