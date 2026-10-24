@@ -1287,6 +1287,12 @@ defineExpose({ openTerminal, closeShown });
   transition: none;
 }
 
+/* The dragged tab is under the pointer at every move: the others' slide (above) would make it trail
+   the pointer and start over at each move, a stutter. Only its settling slides. */
+.tablist.reordering .tab.dragging:not(.settling) {
+  transition: none;
+}
+
 .tablist.reordering .tab.dragging.settling {
   transition: translate 160ms ease-out;
 }
