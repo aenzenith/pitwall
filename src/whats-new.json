@@ -147,6 +147,27 @@
         "ja": "ソース管理で çizim.md のような名前がそのまま表示され、「エディタで開く」は表示中のファイルを開きます。星のないプロジェクトもバックアップから戻せます。",
         "zh-Hans": "源代码管理会按原样显示 çizim.md 这类文件名，“在编辑器中打开”会打开你正在看的文件，未加星的项目也能从备份恢复。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Lighter on the CPU",
+        "tr": "İşlemciye daha hafif",
+        "de": "Schonender für den Prozessor",
+        "es": "Más ligero para el procesador",
+        "ru": "Легче для процессора",
+        "ja": "CPU への負担が軽く",
+        "zh-Hans": "更省 CPU"
+      },
+      "body": {
+        "en": "Big terminal output now costs far less CPU.",
+        "tr": "Büyük terminal çıktıları artık işlemciyi çok daha az yoruyor.",
+        "de": "Große Terminalausgaben kosten jetzt viel weniger Rechenzeit.",
+        "es": "Las salidas grandes de terminal ahora gastan mucho menos CPU.",
+        "ru": "Большой вывод в терминале теперь нагружает процессор гораздо меньше.",
+        "ja": "大量のターミナル出力で CPU をほとんど使わなくなりました。",
+        "zh-Hans": "大量终端输出现在占用的 CPU 少得多。"
+      }
     }
   ]
 }

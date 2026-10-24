@@ -17,6 +17,13 @@ use crate::start::Start;
 const SCROLLBACK_BYTES: usize = 512 * 1024;
 /// The longest name a tab keeps, as long as a card's title may be; the tab cuts what doesn't fit.
 pub(super) const TAB_NAME_MAX: usize = 200;
+/// How long output gathers before it goes to the window once some has just gone. A flood (`cat`
+/// of a big log, a verbose build) then goes as a few events a frame instead of one per read of
+/// the terminal (about 1 KB on macOS), which kept the window's one thread busy for every pane and
+/// page. Output after a pause, like the echo of a key, goes at once.
+const GATHER: Duration = Duration::from_millis(8);
+/// The most output one event to the window carries.
+const EVENT_BYTES: usize = 64 * 1024;
 /// How long a tab just opened counts as one Claude may be starting in, before its processes can
 /// tell (`claude_may_run_in`).
 pub(super) const STARTING: Duration = Duration::from_secs(1);
@@ -61,6 +68,13 @@ pub(super) enum Launch {
     Resume { session: String },
 }
 
+/// What a terminal's reader hands on to the thread that sends its output to the window.
+enum Pty {
+    Output(Vec<u8>),
+    /// The shell ended: what was read before goes first, then the tab.
+    Exited,
+}
+
 pub(super) struct Session {
     master: Box<dyn MasterPty + Send>,
     /// What the user types, for the tab's own writer thread: a write to the terminal blocks
@@ -72,7 +86,7 @@ pub(super) struct Session {
     pid: Option<u32>,
     path: String,
     scrollback: String,
-    /// Number of the last chunk read.
+    /// Number of the last chunk sent to the window.
     seq: u64,
     /// When the tab was opened (`claude_may_run_in`).
     opened: Instant,
@@ -231,46 +245,91 @@ impl Core {
         self.record_pids();
         self.notify();
 
+        let (output, read) = mpsc::channel::<Pty>();
+        let exited = output.clone();
+        thread::spawn(move || read_terminal(reader, output));
+
         let core = Arc::clone(self);
         let id = view.id;
-        thread::spawn(move || core.read_terminal(id, reader));
+        thread::spawn(move || core.stream_terminal(id, read));
 
         let core = Arc::clone(self);
         thread::spawn(move || {
             let _ = child.wait();
-            core.forget_terminal(id);
+            // Through the thread that sends the output, after what the shell printed last.
+            if exited.send(Pty::Exited).is_err() {
+                core.forget_terminal(id);
+            }
         });
 
         Ok(view)
     }
 
-    fn read_terminal(&self, id: u64, mut reader: Box<dyn Read + Send>) {
-        let mut buffer = [0u8; 16 * 1024];
+    /// Sends a terminal's output on to the window: output after a pause at once, the rest
+    /// gathered for `GATHER` after the last. The tab goes once its shell has ended, after the
+    /// output read before that.
+    fn stream_terminal(&self, id: u64, read: mpsc::Receiver<Pty>) {
         let mut pending: Vec<u8> = Vec::new();
+        let mut sent: Option<Instant> = None;
+        let mut exited = false;
 
-        loop {
-            let read = match reader.read(&mut buffer) {
-                Ok(0) | Err(_) => break,
-                Ok(read) => read,
+        while !exited {
+            let Ok(first) = read.recv() else {
+                break;
             };
-
-            pending.extend_from_slice(&buffer[..read]);
-            let data = take_text(&mut pending);
-            if data.is_empty() {
-                continue;
+            if let Some(wait) = sent.and_then(|sent| GATHER.checked_sub(sent.elapsed())) {
+                thread::sleep(wait);
+            }
+            for message in std::iter::once(first).chain(read.try_iter()) {
+                match message {
+                    Pty::Output(bytes) => pending.extend_from_slice(&bytes),
+                    Pty::Exited => {
+                        exited = true;
+                        break;
+                    }
+                }
             }
 
-            let seq = match self.terminal_sessions().get_mut(&id) {
-                Some(session) => {
-                    session.scrollback.push_str(&data);
-                    trim_scrollback(&mut session.scrollback);
-                    session.seq += 1;
-                    session.seq
-                }
-                None => continue,
-            };
+            let data = take_text(&mut pending);
+            if !data.is_empty() {
+                self.send_terminal(id, &data);
+                sent = Some(Instant::now());
+            }
+        }
 
-            self.emit(CoreEvent::Terminal { id, seq, data });
+        if exited {
+            self.forget_terminal(id);
+        }
+    }
+
+    /// Output into the terminal's scrollback and on to the window, in events of at most
+    /// `EVENT_BYTES`, each numbered after the last.
+    fn send_terminal(&self, id: u64, data: &str) {
+        let mut chunks = Vec::new();
+        let mut rest = data;
+        while !rest.is_empty() {
+            let mut end = rest.len().min(EVENT_BYTES);
+            while !rest.is_char_boundary(end) {
+                end -= 1;
+            }
+            let (chunk, after) = rest.split_at(end);
+            chunks.push(chunk);
+            rest = after;
+        }
+
+        let first = match self.terminal_sessions().get_mut(&id) {
+            Some(session) => {
+                session.scrollback.push_str(data);
+                trim_scrollback(&mut session.scrollback);
+                let first = session.seq + 1;
+                session.seq += chunks.len() as u64;
+                first
+            }
+            None => return,
+        };
+
+        for (seq, chunk) in (first..).zip(chunks) {
+            self.emit(CoreEvent::Terminal { id, seq, data: chunk.to_string() });
         }
     }
 
@@ -587,6 +646,20 @@ pub(super) fn resume_command(_shell: &str, session: &str) -> Result<CommandBuild
     Ok(command)
 }
 
+/// Hands a terminal's output on as it is read (`stream_terminal`), until the terminal closes.
+/// Once its tab has gone nothing takes it, but it is read to the end all the same: a job left
+/// running in it writes on.
+fn read_terminal(mut reader: Box<dyn Read + Send>, output: mpsc::Sender<Pty>) {
+    let mut buffer = [0u8; 16 * 1024];
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => read,
+        };
+        let _ = output.send(Pty::Output(buffer[..read].to_vec()));
+    }
+}
+
 /// Text out of `pending`; an unfinished UTF-8 sequence at the end waits for the next read.
 fn take_text(pending: &mut Vec<u8>) -> String {
     match std::str::from_utf8(pending) {
@@ -609,9 +682,10 @@ fn take_text(pending: &mut Vec<u8>) -> String {
     }
 }
 
-/// Keeps the scrollback under its limit, cutting at a line start.
+/// Keeps the scrollback under its limit, cutting at a line start. It grows to half as long again
+/// before it is cut back to the limit: cut back on every chunk, the whole of it moved each time.
 fn trim_scrollback(scrollback: &mut String) {
-    if scrollback.len() <= SCROLLBACK_BYTES {
+    if scrollback.len() <= SCROLLBACK_BYTES + SCROLLBACK_BYTES / 2 {
         return;
     }
 
