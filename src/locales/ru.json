@@ -286,6 +286,7 @@
   "panes.detach": "Убрать из областей",
   "panes.tooNarrow": "Слишком узко для разделения",
   "panes.tooShort": "Слишком низко для разделения",
+  "panes.tooMany": "Не больше {count} областей",
   "panes.shell": "Терминал",
   "panes.claude": "Claude",
   "panes.empty": "Пустая область",

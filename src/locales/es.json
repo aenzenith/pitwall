@@ -280,6 +280,7 @@
   "panes.detach": "Sacar de las divisiones",
   "panes.tooNarrow": "Demasiado estrecho para dividir",
   "panes.tooShort": "Demasiado bajo para dividir",
+  "panes.tooMany": "Como máximo {count} divisiones",
   "panes.shell": "Terminal",
   "panes.claude": "Claude",
   "panes.empty": "División vacía",

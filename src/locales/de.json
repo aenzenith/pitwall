@@ -278,6 +278,7 @@
   "panes.detach": "Aus den Teilfenstern nehmen",
   "panes.tooNarrow": "Zu schmal zum Teilen",
   "panes.tooShort": "Zu niedrig zum Teilen",
+  "panes.tooMany": "Höchstens {count} Teilfenster",
   "panes.shell": "Terminal",
   "panes.claude": "Claude",
   "panes.empty": "Leeres Teilfenster",

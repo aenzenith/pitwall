@@ -7,10 +7,12 @@ import Icon from "../components/Icon.vue";
 import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import {
+  canAddPane,
   canSplit,
   evenBorder,
   kindOf,
   leaves,
+  MAX_PANES,
   moveBorder,
   movePane,
   PANE_ACCELERATORS,
@@ -124,8 +126,9 @@ const hosts = new Map<string, HTMLElement>();
 /** The terminal last put into each pane's host. */
 const attached = new Map<string, number>();
 let hostObserver: ResizeObserver | null = null;
-/** A border is being dragged: the views follow it, the shells hear the size it ends at. */
-const bordering = ref<{ split: string; at: number; dir: SplitDir; from: number; tree: PaneLayout["tree"]; places: ReturnType<typeof place> } | null>(null);
+/** A border is being dragged (`start`: where it was as the pointer took it at `from`): the views
+ * follow it, the shells hear the size it ends at. */
+const bordering = ref<{ split: string; at: number; dir: SplitDir; from: number; start: number } | null>(null);
 
 function hostRef(key: string, el: Element | null): void {
   const old = hosts.get(key);
@@ -196,13 +199,15 @@ function rectOf(key: string): PlacedPane | undefined {
   return placed.value.panes.find((pane) => pane.leaf.key === key);
 }
 
-/** The pane can be split that way, with a shell beside it (`claude`: a Claude session). */
+/** The pane can be split that way, with a shell beside it (`claude`: a Claude session), and the
+ * panes may take one more. */
 function splits(key: string, dir: SplitDir, claude = false): boolean {
   const rect = rectOf(key);
-  return asIs.value && !!rect && canSplit(rect, dir, [kindOf(rect.leaf), claude ? "claude" : "shell"]);
+  return asIs.value && !!rect && canAddPane(props.layout.tree) && canSplit(rect, dir, [kindOf(rect.leaf), claude ? "claude" : "shell"]);
 }
 
 function splitTitle(key: string, dir: SplitDir): string {
+  if (!canAddPane(props.layout.tree)) return t("panes.tooMany", { count: MAX_PANES });
   if (!splits(key, dir)) return t(dir === "row" ? "panes.tooNarrow" : "panes.tooShort");
   return `${t(dir === "row" ? "panes.splitRight" : "panes.splitDown")} (${dir === "row" ? PANE_KEYS.right : PANE_KEYS.down})`;
 }
@@ -264,14 +269,18 @@ function startBorder(event: PointerEvent, gutter: Gutter): void {
   if (event.button !== 0) return;
   event.preventDefault();
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  bordering.value = { split: gutter.split, at: gutter.at, dir: gutter.dir, from: gutter.dir === "row" ? event.clientX : event.clientY, tree: props.layout.tree, places: placed.value };
+  bordering.value = { split: gutter.split, at: gutter.at, dir: gutter.dir, from: gutter.dir === "row" ? event.clientX : event.clientY, start: gutter.dir === "row" ? gutter.x : gutter.y };
 }
 
+/** The border goes where the pointer takes it, in the panes as they are now: a pane that went
+ * meanwhile (its terminal closed) stays gone. Past its panes' least, it waits for the pointer. */
 function dragBorder(event: PointerEvent): void {
   const drag = bordering.value;
   if (!drag) return;
-  const delta = (drag.dir === "row" ? event.clientX : event.clientY) - drag.from;
-  const tree = moveBorder(drag.tree, drag.split, drag.at, delta, drag.places);
+  const gutter = placed.value.gutters.find((each) => each.split === drag.split && each.at === drag.at);
+  if (!gutter) return;
+  const wanted = drag.start + (drag.dir === "row" ? event.clientX : event.clientY) - drag.from;
+  const tree = moveBorder(props.layout.tree, drag.split, drag.at, wanted - (drag.dir === "row" ? gutter.x : gutter.y), placed.value);
   if (tree) setPanes(props.project.path, { ...props.layout, tree }, false);
 }
 

@@ -173,6 +173,16 @@ export function fits(node: PaneNode, w: number, h: number): boolean {
   return least.w <= w && least.h <= h;
 }
 
+/** The most panes a project has, however large the screen: the core keeps no layout of more
+ * (core/layout.rs). */
+export const MAX_PANES = 16;
+
+/** The tree may take one pane more. With that many, nothing splits any more: a terminal that comes
+ * goes into a pane, the one there waiting. */
+export function canAddPane(tree: PaneNode): boolean {
+  return leaves(tree).length < MAX_PANES;
+}
+
 /** A pane of that room can be split that way: both halves at their least, the one there and the
  * one coming (each a shell's or a Claude session's). */
 export function canSplit(rect: Rect, dir: SplitDir, kinds: [PaneKind, PaneKind] = ["shell", "shell"]): boolean {

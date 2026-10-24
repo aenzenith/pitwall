@@ -278,6 +278,7 @@
   "panes.detach": "Take out of the panes",
   "panes.tooNarrow": "Too narrow to split",
   "panes.tooShort": "Too short to split",
+  "panes.tooMany": "At most {count} panes",
   "panes.shell": "Terminal",
   "panes.claude": "Claude",
   "panes.empty": "Empty pane",

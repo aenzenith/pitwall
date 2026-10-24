@@ -277,6 +277,7 @@
   "panes.detach": "Bölmeden çıkar",
   "panes.tooNarrow": "Bölmek için dar",
   "panes.tooShort": "Bölmek için kısa",
+  "panes.tooMany": "En fazla {count} bölme",
   "panes.shell": "Terminal",
   "panes.claude": "Claude",
   "panes.empty": "Boş bölme",

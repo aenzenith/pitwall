@@ -22,11 +22,12 @@ export type Elsewhere = { over: (id: number, x: number, y: number) => boolean; d
  * land, and on release it slides into that place before `onDrop` is given the new order. Tabs
  * carry `data-tab-id`; controls marked `data-no-drag` keep their own clicks and never start a
  * drag. Pointer events rather than HTML drag and drop, which Tauri's file-drop handling can
- * swallow.
+ * swallow. `onEnd` is told once a drag is over, wherever the tab was let go, taken or not.
  *
- * Bind `listClass()` on the row, `tabClass(id)` and `tabStyle(id)` on each tab.
+ * Bind `listClass()` on the row, `tabClass(id)` and `tabStyle(id)` on each tab; a tab's click
+ * opens it only while `justDragged()` is false: the click that ends a drag is no click.
  */
-export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: number[]) => void, elsewhere?: Elsewhere) {
+export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: number[]) => void, elsewhere?: Elsewhere, onEnd?: () => void) {
   const dragging = ref<number | null>(null);
   /** Horizontal offset per tab while a drag is on. */
   const offsets = ref<Record<number, number>>({});
@@ -40,6 +41,8 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
   let target = -1;
   /** The pointer is over `elsewhere`, off the row. */
   let away = false;
+  /** A drag just ended: the click that may follow it (let go over its own tab) is no click. */
+  let dragged = false;
 
   function down(event: PointerEvent, id: number): void {
     if (event.button !== 0 || settling.value || (event.target as HTMLElement).closest("[data-no-drag]")) return;
@@ -157,7 +160,8 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
       away = false;
       const taken = elsewhere?.drop(moved) ?? false;
       if (!taken) elsewhere?.leave();
-      return abort();
+      abort();
+      return ended();
     }
     release();
 
@@ -169,6 +173,7 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
       dragging.value = null;
       return;
     }
+    ended();
 
     // Slide the tab into the slot the others opened, then keep the order.
     const { lefts, widths, from } = drop;
@@ -177,6 +182,17 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
     offsets.value = { ...offsets.value, [moved]: left - lefts[from] };
 
     window.setTimeout(() => void finish(moved, drop, target), SETTLE_MS);
+  }
+
+  /** A drag is over: the click that follows it opens nothing, and `onEnd` hears of it. */
+  function ended(): void {
+    dragged = true;
+    window.setTimeout(() => (dragged = false));
+    onEnd?.();
+  }
+
+  function justDragged(): boolean {
+    return dragged;
   }
 
   async function finish(moved: number, drop: Layout, to: number): Promise<void> {
@@ -211,5 +227,5 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
     return offset ? { translate: `${offset}px 0` } : undefined;
   }
 
-  return { dragging, down, listClass, tabClass, tabStyle };
+  return { dragging, down, justDragged, listClass, tabClass, tabStyle };
 }

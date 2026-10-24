@@ -45,6 +45,7 @@ import {
   PANEL_MIN,
 } from "../lib/panel";
 import {
+  canAddPane,
   canSplit,
   claudeTerminals,
   evenAll,
@@ -544,7 +545,9 @@ async function openTerminal(claude = false, start: StartChoice | null = null, wh
     const size = viewport.value && !panesOn.value && !where ? measure(viewport.value) : null;
     const view = await api.openTerminal(props.project.path, claude, size, start);
     asked = view.id;
-    fresh.add(view.id);
+    // The core lists a new terminal before it answers: one listed already is waited for no
+    // longer, and its pane goes as soon as it closes.
+    if (!terminals.value.some((term) => term.id === view.id)) fresh.add(view.id);
     if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, claude ? "claude" : "shell");
     chooseTab(props.project.path, { kind: "terminal", id: view.id });
   } finally {
@@ -734,7 +737,9 @@ function placeTerminal(id: number, where: Place, kind: PaneKind = kindOfTerminal
   }
   let tree: PaneNode;
   let focus = added.key;
-  if (where.kind === "split") tree = splitPane(now.tree, where.key, where.dir, added, where.before);
+  // With as many panes as there may be, a split asked for finds it a place as `auto` does.
+  const more = canAddPane(now.tree);
+  if (where.kind === "split" && more) tree = splitPane(now.tree, where.key, where.dir, added, where.before);
   else if (where.kind === "cell") {
     tree = setTerminal(now.tree, where.key, id);
     focus = where.key;
@@ -745,8 +750,8 @@ function placeTerminal(id: number, where: Place, kind: PaneKind = kindOfTerminal
     if (empty) {
       tree = setTerminal(now.tree, empty.key, id);
       focus = empty.key;
-    } else if (rect && canSplit(rect, "row", kinds)) tree = splitPane(now.tree, now.focus, "row", added);
-    else if (rect && canSplit(rect, "col", kinds)) tree = splitPane(now.tree, now.focus, "col", added);
+    } else if (rect && more && canSplit(rect, "row", kinds)) tree = splitPane(now.tree, now.focus, "row", added);
+    else if (rect && more && canSplit(rect, "col", kinds)) tree = splitPane(now.tree, now.focus, "col", added);
     else {
       tree = setTerminal(now.tree, now.focus, id);
       focus = now.focus;
@@ -765,9 +770,10 @@ function bring(id: number, into: string): void {
   chooseTab(props.project.path, { kind: "terminal", id });
 }
 
-// A terminal that closed leaves its pane, the room going to its neighbour.
+// A terminal that closed leaves its pane, the room going to its neighbour; so does one put into a
+// pane once it had closed.
 watch(
-  () => [props.project.path, terminals.value.map((term) => term.id).join()] as const,
+  () => [props.project.path, terminals.value.map((term) => term.id).join(), layout.value ? leaves(layout.value.tree).map((pane) => pane.terminal).join() : ""] as const,
   () => {
     const now = layout.value;
     const alive = new Set(terminals.value.map((term) => term.id));
@@ -931,7 +937,7 @@ function onPanelKey(event: KeyboardEvent): void {
     if (opening.value) return;
     if (now) {
       const rect = panesAsIs() ? placedNow()?.panes.find((pane) => pane.leaf.key === now.focus) : undefined;
-      if (rect && canSplit(rect, dir, [kindOf(rect.leaf), "shell"])) void openTerminal(false, null, { kind: "split", key: now.focus, dir });
+      if (rect && canAddPane(now.tree) && canSplit(rect, dir, [kindOf(rect.leaf), "shell"])) void openTerminal(false, null, { kind: "split", key: now.focus, dir });
     } else if (active.value) {
       const room = roomAt(Math.min(Math.max(panesHeight.value, PANES_HEIGHT), tallest()));
       if (canSplit({ x: 0, y: 0, ...room }, dir, [kindOfTerminal(active.value.id), "shell"])) void openTerminal(false, null, { kind: "split", key: "", dir });
@@ -968,7 +974,8 @@ function landingAt(drag: Incoming): Landing | null {
   if (!box || !overStage(drag.x, drag.y)) return null;
   if (layout.value) {
     const at = panesView.value?.dropAt(drag.x, drag.y, "");
-    return at ? { pane: at.key, side: at.side } : null;
+    // With as many panes as there may be, it goes into a pane, never beside one.
+    return at ? { pane: at.key, side: canAddPane(layout.value.tree) ? at.side : null } : null;
   }
   const shown = active.value;
   // A tab beside itself is no split; with nothing shown, a session opens as a tab.
@@ -1214,7 +1221,20 @@ const tabDrag = useTabReorder(
     terminalOrder.value = { ...terminalOrder.value, [props.project.path]: order };
   },
   tabElsewhere,
+  tabDragEnded,
 );
+
+/** A tab's drag is over, taken off the row or not: the keyboard goes to the terminal shown, as
+ * after a click on a tab, the panel open. Never to the tab itself (a press on one leaves the
+ * keyboard where it is): left on its label, a Backspace would close that tab. */
+function tabDragEnded(): void {
+  if (!collapsed.value) backToTerminal();
+}
+
+/** A click on a tab opens it; not the one that ends its drag: a drag only moves a tab. */
+function clickTab(id: number): void {
+  if (!tabDrag.justDragged()) open(id);
+}
 
 /* A tab opens by growing to its width and closes by shrinking away, the gap beside it too; the
    tabs and the buttons after it follow it frame by frame. Not as the panel comes, nor for a
@@ -1610,7 +1630,7 @@ defineExpose({ openTerminal, closeShown });
       <!-- Each tab and its close button side by side, never one inside the other; the list holds
            tabs only, so the close button is the mouse's (the keyboard closes with Delete). One Tab
            stop: the shown tab; ←/→ move. Double-click (or F2) renames; a middle click closes; a drag
-           moves it. -->
+           moves it. A press leaves the keyboard where it is: Tab alone brings it to the tabs. -->
       <!-- With panes the names of the terminals in them are on the panes: the row lists the others,
            waiting to be clicked or dragged into one. -->
       <div ref="tablist" :class="['tablist', { some: rowTabs.length }, tabDrag.listClass()]" role="tablist" :aria-label="t('terminal.tabs')">
@@ -1624,9 +1644,9 @@ defineExpose({ openTerminal, closeShown });
           role="none"
           :title="`${term.name}\n${t('terminal.renameHint')}`"
           @pointerdown="tabDrag.down($event, term.id)"
-          @click="open(term.id)"
+          @click="clickTab(term.id)"
           @dblclick="renaming = { id: term.id, name: term.name }"
-          @mousedown.middle.prevent
+          @mousedown.prevent
           @mouseup.middle="close(term.id)"
         >
           <div

@@ -274,6 +274,7 @@
   "panes.detach": "移出窗格",
   "panes.tooNarrow": "太窄，无法拆分",
   "panes.tooShort": "太矮，无法拆分",
+  "panes.tooMany": "最多 {count} 个窗格",
   "panes.shell": "终端",
   "panes.claude": "Claude",
   "panes.empty": "空窗格",

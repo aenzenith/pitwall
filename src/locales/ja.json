@@ -274,6 +274,7 @@
   "panes.detach": "ペインから外す",
   "panes.tooNarrow": "分割するには狭すぎます",
   "panes.tooShort": "分割するには低すぎます",
+  "panes.tooMany": "ペインは{count}個まで",
   "panes.shell": "ターミナル",
   "panes.claude": "Claude",
   "panes.empty": "空のペイン",
