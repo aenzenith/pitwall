@@ -88,6 +88,27 @@
     {
       "kind": "fix",
       "title": {
+        "en": "Fewer false alarms from servers",
+        "tr": "Sunucularda daha az yanlış alarm",
+        "de": "Weniger Fehlalarme bei Servern",
+        "es": "Menos falsas alarmas de los servidores",
+        "ru": "Меньше ложных тревог от серверов",
+        "ja": "サーバーの誤報が減りました",
+        "zh-Hans": "服务器误报更少"
+      },
+      "body": {
+        "en": "A server behind a proxy shows its own address, a side process's busy port no longer restarts it, and a fixed Vite error clears by itself.",
+        "tr": "Proxy arkasındaki bir sunucu kendi adresini gösteriyor, yan bir işin dolu portu onu artık yeniden başlatmıyor, düzelen bir Vite hatasının uyarısı da kendiliğinden kalkıyor.",
+        "de": "Ein Server hinter einem Proxy zeigt seine eigene Adresse, ein belegter Port eines Nebenprozesses startet ihn nicht mehr neu, und ein behobener Vite-Fehler verschwindet von selbst.",
+        "es": "Un servidor detrás de un proxy muestra su propia dirección, el puerto ocupado de otro proceso ya no lo reinicia y un error de Vite corregido desaparece solo.",
+        "ru": "Сервер за прокси показывает свой адрес, занятый порт стороннего процесса больше не перезапускает его, а исправленная ошибка Vite исчезает сама.",
+        "ja": "プロキシの背後のサーバーは自分のアドレスを表示し、別プロセスのポート使用中エラーで再起動されることもなくなりました。直した Vite のエラーも自動で消えます。",
+        "zh-Hans": "代理后面的服务器会显示自己的地址，其他进程的端口占用不再让它重启，已修复的 Vite 错误也会自动消失。"
+      }
+    },
+    {
+      "kind": "fix",
+      "title": {
         "en": "Waiting Claude sessions stay in view",
         "tr": "Bekleyen Claude oturumları gözden kaçmıyor",
         "de": "Wartende Claude-Sitzungen bleiben sichtbar",

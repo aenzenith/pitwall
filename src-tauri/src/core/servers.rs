@@ -5,7 +5,7 @@ use super::*;
 use crate::ports::is_port_served;
 use crate::resolve::{
     build_command, detect_error_line, detect_package_manager, detect_port_conflict, extract_local_url, has_script,
-    is_unsafe_script, parse_vite_port, port_from_url,
+    is_unsafe_script, is_update_line, parse_vite_port, port_from_url, runs_vite, script_line,
 };
 
 /// Whether an issue ends a start the user waits on: a refused or failed start, or a final
@@ -14,6 +14,19 @@ use crate::resolve::{
 enum IssueEnd {
     Final,
     Retrying,
+}
+
+/// How sure a server's address is, from the least to the most: a surer one read later takes the
+/// place of the one it has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Found {
+    /// A bare URL in a line: a proxy's target or another process of the script may print one
+    /// before the server says its own, or the server says its own so (Django, Rails, Express).
+    Bare,
+    /// The server's own address line (`Local:`).
+    Labelled,
+    /// A URL on the port Pitwall started it on.
+    Asked,
 }
 
 pub(super) struct Run {
@@ -26,16 +39,43 @@ pub(super) struct Run {
     pub(super) started_at: u64,
     pub(super) port: Option<u16>,
     pub(super) url: Option<String>,
-    buffer: String,
+    /// The port Pitwall started it on (the project's own, its Vite config's, or the free one
+    /// given instead); none when the script picks its own.
+    asked: Option<u16>,
+    /// How sure `url` is, once it has one.
+    found: Option<Found>,
+    /// It printed URLs on more than one port: with none of them sure, which is the server's own
+    /// can't be told.
+    ports_differ: bool,
     open_url: bool,
     pub(super) settled: bool,
 }
 
+impl Run {
+    /// The port the health probe asks, when it is surely the server's own: the one Pitwall
+    /// started it on, the one its own `Local:` line gives, or a bare URL's while it is the only
+    /// port the run printed. With bare URLs on two ports or more (a proxy's target and the
+    /// server's), none: the probe leaves it alone rather than restart a server that is fine
+    /// because the other one went down.
+    fn probed_port(&self) -> Option<u16> {
+        let sure = match self.found {
+            Some(Found::Bare) => !self.ports_differ,
+            found => found.is_some(),
+        };
+        self.port.filter(|_| sure)
+    }
+}
+
 impl Core {
-    /// A start by hand resets the restart counter. `by`: who starts it, for the commands that
-    /// start with it and ask first (`jobs.rs`: `start_server_companions`).
+    /// A start by hand resets the restart counter and the one move off a busy port. `by`: who
+    /// starts it, for the commands that start with it and ask first (`jobs.rs`:
+    /// `start_server_companions`).
     pub fn start(self: &Arc<Self>, path: &str, open_url: bool, by: Origin) {
-        self.lock().supervisor.reset_attempts(path);
+        {
+            let mut inner = self.lock();
+            inner.supervisor.reset_attempts(path);
+            inner.retried.remove(path);
+        }
         let open = open_url && self.lock().settings.open_url_on_start;
         self.launch(path, open, Vec::new());
 
@@ -112,12 +152,13 @@ impl Core {
         });
 
         // `--port` only for a project that asks for a port: its own in the settings, or its Vite
-        // config's. Any other script keeps the port it picks itself (Next, Nuxt and Astro move
-        // on by themselves), and some refuse the flag; its port is known once it prints its address.
+        // config's (`vite_port`). Any other script keeps the port it picks itself (Next, Nuxt and
+        // Astro move on by themselves), and some refuse the flag; its port is known once it prints
+        // its address.
         let (args, port) = if !extra_args.is_empty() {
             let port = extra_args.iter().skip_while(|a| *a != "--port").nth(1).and_then(|p| p.parse().ok());
             (extra_args, port)
-        } else if let Some(base) = project.port.filter(|p| *p > 0).or_else(|| vite_port(&dir)) {
+        } else if let Some(base) = project.port.filter(|p| *p > 0).or_else(|| vite_port(&dir, &package_json, &script)) {
             let free = self.reservations.lock().ok().and_then(|mut r| r.reserve_free(base, path));
 
             match free {
@@ -154,7 +195,9 @@ impl Core {
                     started_at: now_ms(),
                     port,
                     url: None,
-                    buffer: String::new(),
+                    asked: port,
+                    found: None,
+                    ports_differ: false,
                     open_url,
                     settled: false,
                 },
@@ -176,50 +219,73 @@ impl Core {
 
     pub(super) fn on_line(self: &Arc<Self>, path: &str, run_id: u64, line: String) {
         let clean = crate::resolve::strip_ansi(&line);
-        let mut open: Option<Option<String>> = None;
+        // What a server says (its address, a busy port, an error, a change it took) stands on one
+        // line: each line is read once, on its own, before the core's lock is taken.
+        let conflict = detect_port_conflict(&clean);
+        let address = if conflict.is_none() { extract_local_url(&clean) } else { None };
+        let error = detect_error_line(&clean, 90);
+        let updated = error.is_none() && is_update_line(&clean);
+        let mut open: Option<String> = None;
         let mut conflict_port: Option<u16> = None;
         let mut changed = false;
 
         {
             let mut inner = self.lock();
-            let Some(run) = inner.runs.get_mut(path).filter(|run| run.id == run_id) else {
+            let Inner { runs, retried, issues, issue_texts, .. } = &mut *inner;
+            let Some(run) = runs.get_mut(path).filter(|run| run.id == run_id) else {
                 return;
             };
 
-            run.buffer.push_str(&clean);
-            run.buffer.push('\n');
-            if run.buffer.len() > 4096 {
-                let cut = run.buffer.len() - 4096;
-                let cut = (cut..run.buffer.len()).find(|i| run.buffer.is_char_boundary(*i)).unwrap_or(0);
-                run.buffer.drain(..cut);
-            }
-
-            if let Some(conflict) = detect_port_conflict(&run.buffer) {
-                run.buffer.clear();
-                if conflict.fatal && conflict.port > 0 && !inner.retried.contains(path) {
-                    inner.retried.insert(path.to_string());
+            if let Some(conflict) = conflict {
+                // The server itself died on its busy port before it was up: moved to a free one,
+                // once per start by hand. Another process of the script that finds its own port
+                // busy, or anything said once the server is up, is no reason to move it.
+                let own = run.asked.is_none_or(|port| port == conflict.port);
+                if conflict.fatal && conflict.port > 0 && !run.settled && own && !retried.contains(path) {
+                    retried.insert(path.to_string());
                     conflict_port = Some(conflict.port);
                 }
-            } else if let Some(url) = extract_local_url(&run.buffer) {
-                run.buffer.clear();
-                if !run.settled {
-                    run.settled = true;
-                    run.port = port_from_url(&url).or(run.port);
-                    run.url = Some(url.clone());
+            } else if let Some(local) = address {
+                let port = port_from_url(&local.url);
+                let found = if port.is_some() && port == run.asked {
+                    Found::Asked
+                } else if local.labelled {
+                    Found::Labelled
+                } else {
+                    Found::Bare
+                };
+                // The first address settles the run; a surer one said later takes its place (a
+                // proxy's target printed before the server's own `Local:` line).
+                if run.found.is_none_or(|had| found > had) {
+                    run.found = Some(found);
+                    // A URL whose port can't be read leaves the one Pitwall started it on, never
+                    // the port of the address it replaces.
+                    run.port = port.or(run.asked);
+                    run.url = Some(local.url.clone());
                     changed = true;
-                    if run.open_url {
-                        open = Some(Some(url));
+                    if !run.settled {
+                        run.settled = true;
+                        if run.open_url {
+                            open = Some(local.url);
+                        }
                     }
+                } else if port != run.port {
+                    run.ports_differ = true;
                 }
             }
 
-            if let Some(error) = detect_error_line(&clean, 90) {
-                let current = inner.issues.get(path).map(|i| i.kind.clone());
-                if current.as_deref() != Some("crashed") {
-                    inner.issues.insert(path.to_string(), Issue { kind: "error".into(), text: error.clone() });
-                    inner.issue_texts.insert(path.to_string(), Arc::new(move || error.clone()));
+            if let Some(error) = error {
+                if issues.get(path).is_none_or(|issue| issue.kind != "crashed") {
+                    issues.insert(path.to_string(), Issue { kind: "error".into(), text: error.clone() });
+                    issue_texts.insert(path.to_string(), Arc::new(move || error.clone()));
                     changed = true;
                 }
+            } else if updated && issues.get(path).is_some_and(|issue| issue.kind == "error") {
+                // The server took a change since the error: it was mended (one that wasn't is
+                // printed again right after).
+                issues.remove(path);
+                issue_texts.remove(path);
+                changed = true;
             }
         }
 
@@ -230,12 +296,12 @@ impl Core {
             self.notify();
         }
 
-        if let Some(Some(local)) = open {
+        if let Some(local) = open {
             self.show_in_browser(path, Some(local), true);
         }
 
         if let Some(port) = conflict_port {
-            // The server died on a busy port: move it to a free one, once per project.
+            // The server died on its busy port: move it to a free one.
             let core = Arc::clone(self);
             let path = path.to_string();
 
@@ -317,6 +383,7 @@ impl Core {
 
     /* ---------- health ---------- */
 
+    /// Only a port that is surely the server's own is probed (`Run::probed_port`).
     pub fn check_health(self: &Arc<Self>) {
         let targets: Vec<(String, u64, u16)> = {
             let inner = self.lock();
@@ -324,7 +391,7 @@ impl Core {
                 .runs
                 .iter()
                 .filter(|(path, _)| !inner.busy.contains(*path))
-                .filter_map(|(path, run)| run.port.filter(|_| run.settled).map(|port| (path.clone(), run.id, port)))
+                .filter_map(|(path, run)| run.probed_port().map(|port| (path.clone(), run.id, port)))
                 .collect()
         };
 
@@ -346,15 +413,17 @@ impl Core {
     fn recover_unresponsive(self: &Arc<Self>, path: &str, run_id: u64, port: u16) {
         thread::sleep(RESTART_DELAY);
 
-        let started = {
+        let (started, probed) = {
             let inner = self.lock();
             match inner.runs.get(path) {
-                Some(run) if run.id == run_id && !inner.busy.contains(path) && !inner.disposed => run.started,
+                Some(run) if run.id == run_id && !inner.busy.contains(path) && !inner.disposed => (run.started, run.probed_port()),
                 _ => return,
             }
         };
 
-        if is_port_served(port) {
+        // Meanwhile the server said its own address (after a proxy's target), or another port
+        // made it unsure: the silent port is no longer its own.
+        if probed != Some(port) || is_port_served(port) {
             let mut inner = self.lock();
             if inner.issues.get(path).is_some_and(|issue| issue.kind == "unresponsive") {
                 inner.issues.remove(path);
@@ -414,13 +483,20 @@ pub(super) fn run_command(inner: &Inner, path: &str) -> String {
     build_command(manager, &script, &[]).unwrap_or_else(|_| format!("{manager} run {}", script.trim()))
 }
 
-/// The port a Vite project wants: `server.port` in its Vite config, else Vite's own 5173. None
-/// for a project without a Vite config in the folder it runs in.
-fn vite_port(dir: &Path) -> Option<u16> {
+/// The port a Vite project wants: `server.port` in its Vite config, else Vite's own 5173 when the
+/// dev script (`script` in `package_json`) runs Vite. None for a project without a Vite config in
+/// the folder it runs in, and for one whose config is there for Vitest only: its own server may
+/// refuse the flag, or be moved off the port it picks.
+fn vite_port(dir: &Path, package_json: &str, script: &str) -> Option<u16> {
     let sources: Vec<String> = ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs"]
         .iter()
         .filter_map(|name| fs::read_to_string(dir.join(name)).ok())
         .collect();
 
-    (!sources.is_empty()).then(|| sources.iter().find_map(|source| parse_vite_port(source)).unwrap_or(5173))
+    if sources.is_empty() {
+        return None;
+    }
+
+    let vite = script_line(package_json, script).is_some_and(|line| runs_vite(&line));
+    sources.iter().find_map(|source| parse_vite_port(source)).or(vite.then_some(5173))
 }

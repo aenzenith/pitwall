@@ -153,6 +153,8 @@ struct Inner {
     issues: HashMap<String, Issue>,
     /// How each of `issues` is said, by path: in the language of the moment, not the one it came in.
     issue_texts: HashMap<String, IssueText>,
+    /// Servers moved off a busy port since their last start by hand: once per start, so a port
+    /// that stays busy can't move one on and on.
     retried: HashSet<String>,
     busy: HashSet<String>,
     /// Servers and commands being stopped, by `Unit::key`: their exit is no crash.

@@ -55,7 +55,7 @@ pub(super) fn end_line(unit: &Unit, planned: bool, status: Option<std::process::
 /// Output lines on their way to the UI, gathered per project and command.
 #[derive(Default)]
 pub(super) struct Outbox {
-    batches: Vec<(String, Option<String>, Vec<String>)>,
+    batches: Vec<(String, Option<String>, VecDeque<String>)>,
     /// A flush is on its way.
     due: bool,
 }
@@ -64,7 +64,7 @@ pub(super) struct Outbox {
 /// it), so a batch never overtakes the one before it.
 fn flush_outbox(outbox: &mut Outbox, sink: &Sink) {
     for (path, job, lines) in outbox.batches.drain(..) {
-        sink(CoreEvent::Output { path, job, lines });
+        sink(CoreEvent::Output { path, job, lines: lines.into() });
     }
 }
 
@@ -173,11 +173,18 @@ impl Core {
     }
 
     /// Queues a line for the UI. The first line of a batch sends the batch `OUTPUT_BATCH` later,
-    /// with whatever else came for any project or command meanwhile.
+    /// with whatever else came for any project or command meanwhile. A batch holds as many lines
+    /// as the pane keeps (`OUTPUT_LINES`, as here): of a flood, older ones would only be pushed
+    /// out there.
     fn send_output(&self, outbox: &mut Outbox, path: &str, job: Option<&str>, line: String) {
         match outbox.batches.iter_mut().find(|(p, j, _)| p == path && j.as_deref() == job) {
-            Some((_, _, lines)) => lines.push(line),
-            None => outbox.batches.push((path.to_string(), job.map(str::to_string), vec![line])),
+            Some((_, _, lines)) => {
+                lines.push_back(line);
+                if lines.len() > OUTPUT_LINES {
+                    lines.pop_front();
+                }
+            }
+            None => outbox.batches.push((path.to_string(), job.map(str::to_string), VecDeque::from([line]))),
         }
 
         if !outbox.due {

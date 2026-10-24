@@ -59,11 +59,18 @@ static SAFE_ARG: LazyLock<Regex> = LazyLock::new(|| {
 static ANSI: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Za-z0-9]|\x1b").unwrap()
 });
-static VITE_LOCAL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)Local:\s*(https?://\S+)").unwrap());
+/// The line a dev server says its own address on: `Local:` (Vite, Next, Nuxt, Vue CLI,
+/// create-react-app), `Loopback:` (webpack-dev-server).
+static OWN_ADDRESS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(?:Local|Loopback):\s*(https?://\S+)").unwrap());
 static ANY_LOCAL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)https?://(?:localhost|127\.0\.0\.1|\[::1\]):\d+\S*").unwrap());
 static PORT_TAKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)Port\s+(\d{2,5})\s+is\s+in\s+use").unwrap());
 static ADDR_IN_USE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)EADDRINUSE[^\n]*").unwrap());
+/// Vite took a change: `[vite] hmr update /src/App.vue`, `[vite] (client) page reload …`.
+static UPDATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\[vite\]\s+(?:\(\w+\)\s+)?(?:hmr update|page reload)\b").unwrap());
+/// Vite run by its own name in a script: `vite`, `vite --host`, `vite dev`, `npx vite`, `remix
+/// vite:dev`, Vite+'s `vp dev`; never `vitest`, `vite-node` or `vitepress`.
+static RUNS_VITE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(?:^|[\s;&|()"'=/])(?:vite(?:$|[\s;&|()"':])|vp\s+dev\b)"#).unwrap());
 
 /// What a dev server prints for an error: one list for the project's issue here and for the
 /// output pane, which marks the same lines (`src/lib/outputLines.ts`). Each is searched for in a
@@ -103,10 +110,19 @@ pub fn build_command(manager: PackageManager, script: &str, args: &[String]) -> 
 /// Whether `package.json` has `script`. A byte-order mark before it is no part of it: npm reads
 /// past one too.
 pub fn has_script(package_json: &str, script: &str) -> bool {
+    script_line(package_json, script).is_some()
+}
+
+/// What `script` runs, as `package.json` writes it.
+pub fn script_line(package_json: &str, script: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Value>(package_json.trim_start_matches('\u{feff}'))
         .ok()
-        .and_then(|value| value.get("scripts")?.get(script.trim())?.as_str().map(|_| ()))
-        .is_some()
+        .and_then(|value| value.get("scripts")?.get(script.trim())?.as_str().map(str::to_string))
+}
+
+/// Whether a script's command line starts Vite (`RUNS_VITE`).
+pub fn runs_vite(script_line: &str) -> bool {
+    RUNS_VITE.is_match(script_line)
 }
 
 pub fn strip_ansi(text: &str) -> String {
@@ -117,15 +133,30 @@ fn trim_url(url: &str) -> String {
     url.trim_end_matches(['.', ',', ';', ')', ']']).to_string()
 }
 
-/// The local URL a dev server printed, preferring Vite's `Local:` line.
-pub fn extract_local_url(output: &str) -> Option<String> {
+/// A local URL a dev server printed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalUrl {
+    pub url: String,
+    /// Said on the server's own address line (`OWN_ADDRESS`); else a bare URL anywhere in the
+    /// output, which may be another's: a proxy's target, another process of the script.
+    pub labelled: bool,
+}
+
+/// The local URL a dev server printed, preferring its own address line.
+pub fn extract_local_url(output: &str) -> Option<LocalUrl> {
     let clean = strip_ansi(output);
 
-    if let Some(captures) = VITE_LOCAL.captures(&clean) {
-        return Some(trim_url(&captures[1]));
+    if let Some(captures) = OWN_ADDRESS.captures(&clean) {
+        return Some(LocalUrl { url: trim_url(&captures[1]), labelled: true });
     }
 
-    ANY_LOCAL.find(&clean).map(|found| trim_url(found.as_str()))
+    ANY_LOCAL.find(&clean).map(|found| LocalUrl { url: trim_url(found.as_str()), labelled: false })
+}
+
+/// Whether a line says the server took a change (Vite's `hmr update`, `page reload`): an error
+/// it printed before was mended, or comes again right after this line.
+pub fn is_update_line(line: &str) -> bool {
+    UPDATE.is_match(&strip_ansi(line))
 }
 
 /// `APP_URL` from a `.env` file, quotes and trailing comments removed.
@@ -312,7 +343,7 @@ mod tests {
     #[test]
     fn urls_and_app_url() {
         assert_eq!(
-            extract_local_url("\x1b[32m  ➜  Local:   http://localhost:5173/\x1b[0m"),
+            extract_local_url("\x1b[32m  ➜  Local:   http://localhost:5173/\x1b[0m").map(|found| found.url),
             Some("http://localhost:5173/".into())
         );
         assert_eq!(parse_app_url("APP_NAME=x\nAPP_URL=\"https://shop.test\" \n"), Some("https://shop.test".into()));

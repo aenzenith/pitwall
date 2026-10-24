@@ -226,6 +226,92 @@ fn a_crashing_server_is_restarted_three_times_then_given_up() {
     assert_eq!(output.iter().filter(|l| l.starts_with("\u{1e}ended\t") && l.ends_with("\tcrashed:1")).count(), 3, "each under how it ended: {output:?}");
 }
 
+/// Disposes the core whatever comes of a test, so none of its servers outlives it.
+struct Quit(Arc<Core>);
+
+impl Drop for Quit {
+    fn drop(&mut self) {
+        self.0.dispose();
+    }
+}
+
+/// A dev server with a proxy (an Express app, webpack's): http-proxy-middleware names its target
+/// first, the server then gives its own address as a bare URL, and only later on its own
+/// `Local:` line. The backend behind the proxy is down.
+const PROXY_JS: &str = r#"
+const fs = require('fs');
+const port = Number(fs.readFileSync(__dirname + '/port.txt', 'utf8'));
+const backend = Number(fs.readFileSync(__dirname + '/backend.txt', 'utf8'));
+console.log(`[HPM] Proxy created: /api  -> http://localhost:${backend}`);
+require('http').createServer((q, s) => s.end('ok')).listen(port, '127.0.0.1', () => {
+  console.log(`Server listening on http://localhost:${port}`);
+  setTimeout(() => console.log(`  ➜  Local:   http://localhost:${port}/`), 1500);
+});
+"#;
+
+#[test]
+fn a_proxys_target_never_stands_for_the_server_nor_gets_it_restarted() {
+    let port = free_port();
+    let backend = free_port();
+    let fx = fixture("node proxy.js", &[("proxy.js", PROXY_JS), ("port.txt", &port.to_string()), ("backend.txt", &backend.to_string())]);
+    fx.core.add_project(&fx.project).unwrap();
+    let _quit = Quit(Arc::clone(&fx.core));
+    let run = |core: &Core| core.lock().runs.get(&fx.project).map(|run| run.id);
+
+    fx.core.start(&fx.project, false, Origin::User);
+
+    // Two bare URLs on two ports: which is the server's can't be told, so neither is probed.
+    let bare = format!("Server listening on http://localhost:{port}");
+    assert!(wait_for(Duration::from_secs(30), || fx.core.output(&fx.project).contains(&bare)), "the server never said where it listens");
+    let first = run(&fx.core);
+    fx.core.check_health();
+    assert!(view(&fx.core, &fx.project).issue.is_none(), "the backend's port was probed for the server's");
+
+    let own = format!("http://localhost:{port}/");
+    assert!(
+        wait_for(Duration::from_secs(10), || view(&fx.core, &fx.project).url.as_deref() == Some(own.as_str())),
+        "its own Local: line never took the proxy target's place: {:?}",
+        view(&fx.core, &fx.project).url
+    );
+    assert_eq!(view(&fx.core, &fx.project).port, Some(port));
+    fx.core.check_health();
+    assert!(view(&fx.core, &fx.project).issue.is_none());
+    assert_eq!(run(&fx.core), first, "a healthy server was restarted");
+}
+
+/// A dev script that runs more than the server (`concurrently`, a worker, an API under nodemon):
+/// before the server is up the API finds its own port busy, and once it is up a second copy finds
+/// the server's port taken by the server.
+const SIDE_JS: &str = r#"
+const fs = require('fs');
+const port = Number(fs.readFileSync(__dirname + '/port.txt', 'utf8'));
+const api = Number(fs.readFileSync(__dirname + '/api.txt', 'utf8'));
+console.log(`[api] Error: listen EADDRINUSE: address already in use 127.0.0.1:${api}`);
+require('http').createServer((q, s) => s.end('ok')).listen(port, '127.0.0.1', () => {
+  console.log(`  ➜  Local:   http://localhost:${port}/`);
+  setTimeout(() => console.log(`[worker] Error: listen EADDRINUSE: address already in use 127.0.0.1:${port}`), 1000);
+});
+"#;
+
+#[test]
+fn a_busy_port_another_process_finds_never_moves_the_server() {
+    let port = free_port();
+    let api = free_port();
+    let fx = fixture("node side.js", &[("side.js", SIDE_JS), ("port.txt", &port.to_string()), ("api.txt", &api.to_string())]);
+    fx.core.add_project(&fx.project).unwrap();
+    fx.core.set_project_settings(&fx.project, ProjectSettings { port: Some(port), ..Default::default() });
+    let _quit = Quit(Arc::clone(&fx.core));
+    let run = |core: &Core| core.lock().runs.get(&fx.project).map(|run| (run.id, run.command.clone()));
+
+    fx.core.start(&fx.project, false, Origin::User);
+
+    assert!(wait_for(Duration::from_secs(30), || fx.core.output(&fx.project).iter().any(|line| line.starts_with("[worker]"))), "the second copy never spoke");
+    let first = run(&fx.core);
+    assert!(!wait_for(Duration::from_secs(3), || run(&fx.core) != first), "the server was stopped and started again: {:?}", run(&fx.core));
+    assert_eq!(first.map(|(_, command)| command).as_deref(), Some("npm run dev"), "the server was moved to another port");
+    assert_eq!(view(&fx.core, &fx.project).url, Some(format!("http://localhost:{port}/")));
+}
+
 #[test]
 fn a_script_name_the_shell_would_read_is_refused_and_nothing_runs() {
     // The project's package.json has the script, so only the name's own check stands in the way.
