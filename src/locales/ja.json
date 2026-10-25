@@ -261,6 +261,18 @@
   "terminal.historyMissing": "セッションの記録が見つかりません",
   "terminal.historyUnsure": "まだ実行中か判別できません",
   "terminal.historyResize": "過去のセッションの幅を変更",
+  "terminal.openWith": "シェルを選んで開く",
+  "terminal.shell.cmd": "コマンド プロンプト",
+  "terminal.shell.powershell": "Windows PowerShell",
+  "terminal.shell.pwsh": "PowerShell 7",
+  "terminal.admin": "{shell}（管理者）",
+  "terminal.adminBadge": "管理者",
+  "terminal.adminOutside": "管理者シェルは別のウィンドウで開きました。ここで開くには、Windows の設定で sudo を「インライン」にしてください。",
+  "terminal.adminSettings": "設定を開く",
+  "terminal.adminDenied": "Windows が管理者の許可を出さなかったため、シェルは開きませんでした。",
+  "terminal.adminNotRestored": {
+    "other": "管理者タブは復元されませんでした。Windows は開くたびに許可を求めます。"
+  },
   "panes.layout": "レイアウト",
   "panes.layoutTitle": "ターミナルのレイアウト",
   "panes.panes": "ペイン",
@@ -1136,6 +1148,8 @@
   "update.cut.claudeOutcome": "ターンは中断され、セッションは開き直されます",
   "update.cut.command": "コマンドを実行中",
   "update.cut.commandOutcome": "コマンドは中断され、再実行されません",
+  "update.cut.admin": "管理者シェル",
+  "update.cut.adminOutcome": "閉じたあと開き直しません。Windows が毎回許可を求めるためです",
   "update.back.servers": {
     "other": "{count} 個の開発サーバー"
   },

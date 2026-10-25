@@ -28,10 +28,13 @@ import type {
   RestartPlan,
   SessionsView,
   Settings,
+  ShellChoice,
   SignalKind,
   Snapshot,
   StartChoice,
   TerminalLayout,
+  TerminalOpened,
+  TerminalShells,
   TerminalView,
   UpdateView,
 } from "./types";
@@ -274,9 +277,17 @@ export const api = {
   /** The system's notification settings, at the entry whose permission it is. */
   notificationSettings: () => invoke("notification_settings"),
   /** `start`: for a Claude tab, the model and the mode picked from "New Claude"'s list; without
-   * it, the project's own. */
-  openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null, start: StartChoice | null = null) =>
-    invoke<TerminalView>("open_terminal", { path, claude, cols: size?.cols, rows: size?.rows, start: start ?? undefined }),
+   * it, the project's own. `shell`: on Windows, the shell of the list a shell tab runs, and
+   * whether an administrator's; without it, Command Prompt there and the user's own shell
+   * elsewhere. */
+  openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null, start: StartChoice | null = null, shell: ShellChoice | null = null) =>
+    invoke<TerminalOpened>("open_terminal", { path, claude, cols: size?.cols, rows: size?.rows, start: start ?? undefined, shell: shell?.shell, elevated: shell?.elevated }),
+  /** The shells "+" offers on Windows (none elsewhere), asked of the system now. */
+  terminalShells: () => invoke<TerminalShells>("terminal_shells"),
+  /** Windows' settings for sudo (System › For developers). */
+  openSudoSettings: () => invoke("open_sudo_settings"),
+  /** The panel said that the last quit's or update's administrator's tabs weren't put back. */
+  adminNotRestoredSeen: () => invoke("admin_not_restored_seen"),
   renameTerminal: (id: number, name: string) => invoke("rename_terminal", { id, name }),
   writeTerminal: (id: number, data: string) => invoke("write_terminal", { id, data }),
   resizeTerminal: (id: number, cols: number, rows: number) => invoke("resize_terminal", { id, cols, rows }),

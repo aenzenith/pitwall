@@ -44,6 +44,27 @@
       }
     },
     {
+      "kind": "new",
+      "title": {
+        "en": "Pick a shell on Windows",
+        "tr": "Windows'ta kabuğunu seç",
+        "de": "Unter Windows die Shell wählen",
+        "es": "Elige la shell en Windows",
+        "ru": "Выбор оболочки в Windows",
+        "ja": "Windows でシェルを選べるように",
+        "zh-Hans": "在 Windows 上选择 Shell"
+      },
+      "body": {
+        "en": "On Windows, + › New tab with opens Command Prompt, Windows PowerShell or PowerShell 7, and each of them as administrator.",
+        "tr": "Windows'ta + › Kabukla aç ile Komut İstemi, Windows PowerShell ya da PowerShell 7 açabilir, istersen yönetici olarak başlatabilirsin.",
+        "de": "Unter Windows öffnet + › Neuer Tab mit die Eingabeaufforderung, Windows PowerShell oder PowerShell 7, auf Wunsch auch als Administrator.",
+        "es": "En Windows, + › Nueva pestaña con abre el Símbolo del sistema, Windows PowerShell o PowerShell 7, también como administrador.",
+        "ru": "В Windows пункт + › Открыть в оболочке открывает Командную строку, Windows PowerShell или PowerShell 7, в том числе от имени администратора.",
+        "ja": "Windows では + › シェルを選んで開く から、コマンド プロンプト、Windows PowerShell、PowerShell 7 を開けます。管理者としても開けます。",
+        "zh-Hans": "在 Windows 上，通过 + › 新标签页使用 可以打开命令提示符、Windows PowerShell 或 PowerShell 7，也可以以管理员身份打开。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Claude tabs keep the whole session name",

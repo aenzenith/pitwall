@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield";
     size?: number;
   }>(),
   { size: 15 },
@@ -29,6 +29,8 @@ withDefaults(
     <g v-else-if="name === 'settings'"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></g>
     <g v-else-if="name === 'editor'"><path d="m8 8-4 4 4 4" /><path d="m16 8 4 4-4 4" /><path d="m13.5 5-3 14" /></g>
     <g v-else-if="name === 'terminal'"><path d="m5 7 5 5-5 5" /><path d="M13 18h6" /></g>
+    <g v-else-if="name === 'powershell'"><path d="M7 5h14l-4 14H3z" /><path d="m8.5 9 3.5 3-4.5 3" /><path d="M12.5 15.5h3" /></g>
+    <path v-else-if="name === 'shield'" d="M12 3.5 5 6.2v5.3c0 4.3 2.9 7.5 7 9 4.1-1.5 7-4.7 7-9V6.2z" />
     <path v-else-if="name === 'close'" d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
     <g v-else-if="name === 'pencil'"><path d="M4.5 19.5h4l10-10a2.8 2.8 0 0 0-4-4l-10 10z" /><path d="m13.5 6.5 4 4" /></g>
     <g v-else-if="name === 'coffee'"><path d="M4.5 9.5h11V14a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z" /><path d="M15.5 11h1.5a2.5 2.5 0 0 1 0 5h-1.8" /><path d="M8.5 3.5c-.7.9-.7 1.8 0 2.7M12 3.5c-.7.9-.7 1.8 0 2.7" /></g>

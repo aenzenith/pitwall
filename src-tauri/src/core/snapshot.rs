@@ -96,6 +96,9 @@ pub struct Snapshot {
     pub resume: Option<ResumeOffer>,
     /// This version's notes are still to be shown (`whatsnew.rs`).
     pub whats_new: bool,
+    /// Administrator's tabs the last quit or update had open, which no record puts back, until
+    /// the terminal panel has said so.
+    pub admin_not_restored: usize,
     /// Projects that appeared in the projects folder (`discover.rs`).
     pub suggestions: Vec<Candidate>,
     /// It is quiet now, and until when (`signals.rs`).
@@ -323,6 +326,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         system_language: i18n::system(),
         resume: super::resume::offer(inner),
         whats_new: inner.whats_new,
+        admin_not_restored: inner.admin_not_restored,
         suggestions: inner.suggestions.clone(),
         quiet: super::signals::quiet_at(&inner.settings.notifications, now_ms()),
         missed: super::signals::listed(&inner.missed, &projects),

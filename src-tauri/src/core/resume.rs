@@ -4,7 +4,9 @@
 //! somewhere else by then; a shell tab as a new shell). Unlike a restart for an update
 //! (`restore.rs`) nothing a terminal showed is kept: the record names projects, command ids,
 //! session ids, the tab names the user gave and how the panel laid the tabs out (by their
-//! places, `layout.rs`), and is read once and deleted at the next start.
+//! places, `layout.rs`), and is read once and deleted at the next start. An administrator's tab
+//! (Windows) is never written down, only counted: Windows asks for its permission each time, and
+//! nothing but the user opens one.
 //!
 //! Settings' `resume` decides what that start does with it: `ask` offers it (the snapshot's
 //! `resume`) until the user answers, `always` puts it back at once, `never` writes none.
@@ -14,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use super::layout::SavedLayout;
 use super::restore::write_private;
 use super::reveal::{is_session_id, Liveness, Opened};
+use super::shells::{shell_or_none, Shell};
 use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 
@@ -26,6 +29,10 @@ struct OpenTab {
     name: Option<String>,
     /// The Claude session that ran in it.
     session: Option<String>,
+    /// The shell of the list it ran on Windows; none comes back as Command Prompt there, and
+    /// elsewhere as the user's own shell.
+    #[serde(deserialize_with = "shell_or_none", skip_serializing_if = "Option::is_none")]
+    shell: Option<Shell>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -40,6 +47,13 @@ struct OpenProject {
     /// The panel's panes, by the places of `tabs`; none while one tab showed at a time.
     #[serde(skip_serializing_if = "Option::is_none")]
     layout: Option<SavedLayout>,
+    /// Administrator's tabs left out, counted.
+    #[serde(skip_serializing_if = "is_zero")]
+    elevated: usize,
+}
+
+fn is_zero(count: &usize) -> bool {
+    *count == 0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -54,6 +68,8 @@ struct Record {
 pub(super) struct Kept {
     at: u64,
     projects: Vec<OpenProject>,
+    /// Administrator's tabs of its projects that were left out.
+    elevated: usize,
 }
 
 /// One project of the last quit, as the UI names it.
@@ -134,13 +150,17 @@ impl Core {
         }
         for tab in &standing.tabs {
             let name = tab.renamed.then(|| tab.name.clone());
-            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone() })));
+            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), shell: tab.shell })));
         }
+        let elevated: Vec<usize> = standing.elevated.iter().map(|(path, _)| entry(path)).collect();
         for (at, server, command, tab) in filled {
             let project = &mut projects[at];
             project.server |= server;
             project.commands.extend(command);
             project.tabs.extend(tab);
+        }
+        for at in elevated {
+            projects[at].elevated += 1;
         }
 
         // The panes, by the places of each project's tabs in the record.
@@ -155,13 +175,16 @@ impl Core {
             }
         }
 
-        let record = match (projects.is_empty(), self.lock().resume.take()) {
-            (true, Some(kept)) => Record { v: 1, at: kept.at, projects: kept.projects },
-            (true, None) => {
+        // Only administrator's tabs open: an offer never answered stays instead, and without one the
+        // record only counts them, for the next start to say so.
+        let open = projects.iter().any(|project| project.server || !project.commands.is_empty() || !project.tabs.is_empty());
+        let record = match (open, self.lock().resume.take()) {
+            (false, Some(kept)) => Record { v: 1, at: kept.at, projects: kept.projects },
+            (false, None) if projects.is_empty() => {
                 let _ = fs::remove_file(&file);
                 return;
             }
-            (false, _) => Record { v: 1, at: now_ms(), projects },
+            _ => Record { v: 1, at: now_ms(), projects },
         };
 
         if let Ok(json) = serde_json::to_string(&record) {
@@ -209,13 +232,19 @@ impl Core {
                 }
                 project
             })
-            .filter(|project| project.server || !project.commands.is_empty() || !project.tabs.is_empty())
             .collect();
+        let elevated = projects.iter().map(|project| project.elevated).sum();
+        let projects: Vec<OpenProject> = projects.into_iter().filter(|project| project.server || !project.commands.is_empty() || !project.tabs.is_empty()).collect();
         if projects.is_empty() {
+            // Nothing else to put back: the panel only says what wasn't.
+            if elevated > 0 {
+                self.lock().admin_not_restored = elevated;
+                self.notify();
+            }
             return;
         }
 
-        let kept = Kept { at: record.at, projects };
+        let kept = Kept { at: record.at, projects, elevated };
         if mode == "always" {
             self.put_back(kept);
         } else {
@@ -256,7 +285,7 @@ impl Core {
     /// (`reveal.rs`), so its tab stays away.
     fn launch_of(&self, tab: &OpenTab) -> Option<Launch> {
         let Some(session) = &tab.session else {
-            return Some(Launch::Shell);
+            return Some(Launch::Shell { shell: tab.shell, elevated: false });
         };
         matches!(self.liveness(session), Liveness::Stopped | Liveness::Ended).then(|| Launch::Resume { session: session.clone() })
     }
@@ -290,7 +319,11 @@ impl Core {
                 laid |= self.lay_terminals(&project.path, saved, |at| opened.get(at).copied().flatten());
             }
         }
-        if laid {
+        // What wasn't put back, the panel says once.
+        if kept.elevated > 0 {
+            self.lock().admin_not_restored = kept.elevated;
+        }
+        if laid || kept.elevated > 0 {
             self.notify();
         }
 
@@ -344,7 +377,7 @@ mod tests {
         let core = core_in(tmp.path());
         core.add_project(&listed).unwrap();
 
-        let tab = |session: Option<&str>| OpenTab { name: None, session: session.map(str::to_string) };
+        let tab = |session: Option<&str>| OpenTab { name: None, session: session.map(str::to_string), shell: None };
         let record = Record {
             v: 1,
             at: now_ms(),
@@ -425,7 +458,7 @@ mod tests {
         let core = core_in(tmp.path());
         core.add_project(&project).unwrap();
 
-        let open = || core.open_terminal_as(&project, &Launch::Shell, None, false, None, false).unwrap().id;
+        let open = || core.open_terminal_as(&project, &Launch::Shell { shell: None, elevated: false }, None, false, None, false).unwrap().id;
         let (first, second) = (open(), open());
         let pane = |terminal| PaneNode::Pane { terminal: Some(terminal) };
         let side_by_side = |left, right| PaneNode::Split { dir: SplitDir::Row, sizes: vec![0.25, 0.75], kids: vec![pane(left), pane(right)] };
@@ -455,6 +488,56 @@ mod tests {
         core.dispose();
     }
 
+    /// An administrator's shell (Windows) opens only when the user picks it, Windows asking for
+    /// its permission first: neither the quit's record nor an update's holds one, and a record
+    /// that says a tab was one (written by hand, or by another version) puts it back as an
+    /// ordinary shell.
+    #[test]
+    fn an_administrators_tab_is_put_back_by_no_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        let core = core_in(tmp.path());
+        core.add_project(&project).unwrap();
+
+        let open = || core.open_terminal_as(&project, &Launch::Shell { shell: None, elevated: false }, None, false, None, false).unwrap().id;
+        let (plain, admin) = (open(), open());
+        core.mark_elevated(admin);
+        core.save_last_session();
+        core.save_restore("9.9.9", false).unwrap();
+        core.close_terminal(plain);
+        core.close_terminal(admin);
+
+        let read = |file: &Path| -> serde_json::Value { serde_json::from_slice(&fs::read(file).unwrap()).unwrap() };
+        let update_file = core.cfg.settings_file.with_file_name("restore.json");
+        let (mut quit, mut update) = (read(&core.resume_file()), read(&update_file));
+        let held = (quit["projects"][0]["tabs"].as_array().map(Vec::len), update["tabs"].as_array().map(Vec::len));
+        let written = format!("{quit} {update}");
+
+        // Each record made to say its tab was an administrator's.
+        quit["projects"][0]["tabs"][0]["elevated"] = true.into();
+        update["tabs"][0]["elevated"] = true.into();
+        write_private(&core.resume_file(), &quit.to_string()).unwrap();
+        core.resume_start(false);
+        core.resume_restore(false);
+        let resumed = core.lock().terminal_list.clone();
+        for view in &resumed {
+            core.close_terminal(view.id);
+        }
+        write_private(&update_file, &update.to_string()).unwrap();
+        core.restore();
+        let restored = core.lock().terminal_list.clone();
+        for view in &restored {
+            core.close_terminal(view.id);
+        }
+        core.dispose();
+
+        assert_eq!(held, (Some(1), Some(1)), "the records hold the ordinary tab alone: {written}");
+        assert_eq!(resumed.iter().map(|view| view.elevated).collect::<Vec<_>>(), [false], "put back by the quit's record");
+        assert_eq!(restored.iter().map(|view| view.elevated).collect::<Vec<_>>(), [false], "put back by the update's record");
+    }
+
     /// A process that passes for Claude Code's (`claude` in its command line), gone with the
     /// test however that ends.
     struct Sleeper(std::process::Child);
@@ -475,7 +558,7 @@ mod tests {
         let claude = tmp.path().join("claude");
         let core = core_in(tmp.path());
         let id = "9bb85e86-f618-4861-9858-03ec8fc36c28";
-        let tab = OpenTab { name: None, session: Some(id.into()) };
+        let tab = OpenTab { name: None, session: Some(id.into()), shell: None };
 
         // Its log, written a moment ago, and Claude Code's file of the process that runs it.
         let log = claude.join("projects").join("-paddock").join(format!("{id}.jsonl"));
@@ -492,7 +575,7 @@ mod tests {
         // That process gone, the same tab comes back with its session; a shell tab always does.
         drop(sleeper);
         assert_eq!(core.launch_of(&tab), Some(Launch::Resume { session: id.into() }));
-        assert_eq!(core.launch_of(&OpenTab::default()), Some(Launch::Shell));
+        assert_eq!(core.launch_of(&OpenTab::default()), Some(Launch::Shell { shell: None, elevated: false }));
     }
 
     /// Two processes on one session write one log. A session opened again in a tab, where
@@ -526,7 +609,7 @@ mod tests {
 
         // Opened again: a shell stands in for `claude --resume`, with a process under it that
         // passes for Claude Code's (`claude` in its command line).
-        let Opened::New(TerminalView { id: tab, .. }) = core.open_once(id, || core.open_terminal_as(&project, &Launch::Shell, None, false, None, false)) else {
+        let Opened::New(TerminalView { id: tab, .. }) = core.open_once(id, || core.open_terminal_as(&project, &Launch::Shell { shell: None, elevated: false }, None, false, None, false)) else {
             panic!("not opened");
         };
         let started = process::wait_until(Duration::from_secs(15), || !core.terminal_buffer(tab).data.is_empty());
@@ -536,7 +619,7 @@ mod tests {
 
         let (mut tabs, mut restored, mut clicked, mut given, mut followed) = (Vec::new(), None, None, None, None);
         if held {
-            let record = Record { v: 1, at: now_ms(), projects: vec![OpenProject { path: project.clone(), tabs: vec![OpenTab { name: None, session: Some(id.into()) }], ..OpenProject::default() }] };
+            let record = Record { v: 1, at: now_ms(), projects: vec![OpenProject { path: project.clone(), tabs: vec![OpenTab { name: None, session: Some(id.into()), shell: None }], ..OpenProject::default() }] };
             write_private(&core.resume_file(), &serde_json::to_string(&record).unwrap()).unwrap();
             core.resume_start(false);
             core.resume_restore(false);

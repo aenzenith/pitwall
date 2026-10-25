@@ -50,13 +50,14 @@ onMounted(() => {
 
 type Row = { mark: "claude" | "terminal" | "server"; working?: boolean; name: string; sub: string; outcome: string };
 
-/** Cut off for good: a Claude turn at work, a command running in a shell tab or on its own. */
+/** Cut off for good: a Claude turn at work, a command running in a shell tab or on its own, an
+ * administrator's tab (Windows). */
 const cut = computed<Row[]>(() =>
   (plan.value?.cut ?? []).map((entry) => {
     const name = `${entry.project} · ${entry.name}`;
-    return entry.kind === "claude"
-      ? { mark: "claude", working: true, name, sub: t("update.cut.claude"), outcome: t("update.cut.claudeOutcome") }
-      : { mark: "terminal", name, sub: t("update.cut.command"), outcome: t("update.cut.commandOutcome") };
+    if (entry.kind === "claude") return { mark: "claude", working: true, name, sub: t("update.cut.claude"), outcome: t("update.cut.claudeOutcome") };
+    if (entry.kind === "admin") return { mark: "terminal", name, sub: t("update.cut.admin"), outcome: t("update.cut.adminOutcome") };
+    return { mark: "terminal", name, sub: t("update.cut.command"), outcome: t("update.cut.commandOutcome") };
   }),
 );
 

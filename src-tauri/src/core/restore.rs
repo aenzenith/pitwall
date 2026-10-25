@@ -5,12 +5,15 @@
 //!
 //! A command that was running in a tab is not started again, and a Claude turn at work is lost
 //! (its session comes back): the plan names both, so the user decides before the restart. A
-//! tab's command line is never read; a running command is told from the terminal alone.
+//! tab's command line is never read; a running command is told from the terminal alone. An
+//! administrator's tab (Windows) is never written down, only counted: Windows asks for its
+//! permission each time, and nothing but the user opens one.
 
 use serde::{Deserialize, Serialize};
 
 use super::layout::SavedLayout;
 use super::reveal::{is_session_id, Opened};
+use super::shells::{shell_or_none, Shell};
 use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 
@@ -25,7 +28,8 @@ const RESET: &str = "\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Cut {
     /// `claude`: a turn at work in a tab (its session is opened again). `shell`: a command
-    /// running in a tab. `command`: a running custom command that is one-off or asks first.
+    /// running in a tab. `admin`: an administrator's tab (Windows), which never comes back.
+    /// `command`: a running custom command that is one-off or asks first.
     pub kind: &'static str,
     /// The project's name.
     pub project: String,
@@ -71,6 +75,10 @@ pub(super) struct Tab {
     pub(super) renamed: bool,
     /// The Claude session running in it.
     pub(super) session: Option<String>,
+    /// The shell of the list it ran on Windows; none comes back as Command Prompt there, and
+    /// elsewhere as the user's own shell.
+    #[serde(default, deserialize_with = "shell_or_none", skip_serializing_if = "Option::is_none")]
+    pub(super) shell: Option<Shell>,
     /// That session was at work, or (without one) a command was running.
     cut: bool,
     cols: u16,
@@ -104,6 +112,9 @@ struct Record {
     tabs: Vec<Tab>,
     #[serde(default)]
     layouts: Vec<Laid>,
+    /// The project of each administrator's tab left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    elevated: Vec<String>,
 }
 
 /// Everything that runs under this app right now.
@@ -111,7 +122,11 @@ pub(super) struct Standing {
     pub(super) servers: Vec<String>,
     /// Running custom commands: project, id, name, and whether it is started again.
     pub(super) commands: Vec<(String, String, String, bool)>,
+    /// The tabs a record holds: every one but an administrator's.
     pub(super) tabs: Vec<Tab>,
+    /// Each administrator's tab whose shell still runs, by its project and name: no record holds
+    /// one, and a restart ends it.
+    pub(super) elevated: Vec<(String, String)>,
 }
 
 /// The tab's last output with a line under it that says where the old shell ended.
@@ -170,9 +185,13 @@ impl Core {
         let states = self.terminal_tabs();
 
         let inner = self.lock();
+        // One Windows refused has no shell left: nothing of it is lost.
+        let running = |id: u64| states.iter().any(|state| state.id == id && state.pid.is_some());
+        let elevated = inner.terminal_list.iter().filter(|view| view.elevated && running(view.id)).map(|view| (view.path.clone(), view.name.clone())).collect();
         let tabs = inner
             .terminal_list
             .iter()
+            .filter(|view| !view.elevated)
             .filter_map(|view| {
                 let state = states.iter().find(|state| state.id == view.id)?;
                 let session = sessions.get(&view.id);
@@ -183,6 +202,7 @@ impl Core {
                     name: view.name.clone(),
                     renamed: view.renamed,
                     session: session.map(|(id, _)| id.clone()),
+                    shell: view.shell,
                     cut: session.map_or(running, |(_, busy)| *busy),
                     cols: state.cols,
                     rows: state.rows,
@@ -212,7 +232,7 @@ impl Core {
         }
         commands.sort();
 
-        Standing { servers, commands, tabs }
+        Standing { servers, commands, tabs, elevated }
     }
 
     /// What a restart would cut off and what it would bring back.
@@ -224,6 +244,8 @@ impl Core {
             .filter(|tab| tab.cut)
             .map(|tab| Cut { kind: if tab.session.is_some() { "claude" } else { "shell" }, project: folder_name(&tab.path), name: tab.name.clone() })
             .collect();
+        // An administrator's tab never comes back.
+        cut.extend(standing.elevated.iter().map(|(path, name)| Cut { kind: "admin", project: folder_name(path), name: name.clone() }));
         cut.extend(
             standing.commands.iter().filter(|(_, _, _, again)| !again).map(|(path, _, name, _)| Cut { kind: "command", project: folder_name(path), name: name.clone() }),
         );
@@ -261,6 +283,7 @@ impl Core {
             commands: standing.commands.into_iter().filter(|(_, _, _, again)| *again).map(|(path, id, _, _)| Rerun { path, id }).collect(),
             tabs: standing.tabs,
             layouts,
+            elevated: standing.elevated.into_iter().map(|(path, _)| path).collect(),
         };
         let json = serde_json::to_string(&record).map_err(|error| error.to_string())?;
         write_private(&self.restore_file(), &json).map_err(|error| error.to_string())
@@ -296,7 +319,7 @@ impl Core {
             let session = tab.session.filter(|id| is_session_id(id));
             let launch = match &session {
                 Some(session) => Launch::Resume { session: session.clone() },
-                None => Launch::Shell,
+                None => Launch::Shell { shell: tab.shell, elevated: false },
             };
             let name: String = tab.name.trim().chars().take(TAB_NAME_MAX).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
@@ -329,7 +352,12 @@ impl Core {
         for Laid { path, layout } in record.layouts.into_iter().filter(|laid| known(&laid.path)) {
             laid |= self.lay_terminals(&path, layout, |at| opened.get(at).and_then(|tab| tab.as_ref()).filter(|(_, own)| *own == path).map(|(id, _)| *id));
         }
-        if laid {
+        // What wasn't put back, the panel says once.
+        let elevated = record.elevated.iter().filter(|path| known(path)).count();
+        if elevated > 0 {
+            self.lock().admin_not_restored = elevated;
+        }
+        if laid || elevated > 0 {
             self.notify();
         }
 
@@ -376,11 +404,11 @@ mod tests {
 
     #[cfg(unix)]
     fn tab(path: &str, session: Option<&str>) -> Tab {
-        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
+        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), shell: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
     }
 
     fn write(core: &Core, at: u64, servers: Vec<String>, tabs: Vec<Tab>) {
-        let record = Record { v: 1, at, version: "9.9.9".into(), window: true, servers, commands: Vec::new(), tabs, layouts: Vec::new() };
+        let record = Record { v: 1, at, version: "9.9.9".into(), window: true, servers, commands: Vec::new(), tabs, layouts: Vec::new(), elevated: Vec::new() };
         write_private(&core.restore_file(), &serde_json::to_string(&record).unwrap()).unwrap();
     }
 
@@ -473,7 +501,7 @@ mod tests {
 
         let rerun = |id: &str| Rerun { path: project.clone(), id: id.into() };
         let commands = vec![rerun("migrate"), rerun("worker"), rerun("watch")];
-        let record = Record { v: 1, at: now_ms(), version: "9.9.9".into(), window: false, servers: Vec::new(), commands, tabs: Vec::new(), layouts: Vec::new() };
+        let record = Record { v: 1, at: now_ms(), version: "9.9.9".into(), window: false, servers: Vec::new(), commands, tabs: Vec::new(), layouts: Vec::new(), elevated: Vec::new() };
         write_private(&core.restore_file(), &serde_json::to_string(&record).unwrap()).unwrap();
         core.restore().expect("a fresh record");
 

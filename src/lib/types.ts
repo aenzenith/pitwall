@@ -243,9 +243,27 @@ export type TerminalView = {
   path: string;
   name: string;
   kind: "shell" | "claude";
+  /** The shell of the list a shell tab runs on Windows; null elsewhere and for a Claude tab. */
+  shell: Shell | null;
+  /** An administrator's shell (Windows, through sudo): no record puts it back. */
+  elevated: boolean;
   /** Opened by a board card's moment, not by the user: it takes neither the view nor the keyboard. */
   unasked: boolean;
 };
+
+/** A shell a new terminal can start on Windows, by the core's word for it (core/shells.rs). */
+export type Shell = "cmd" | "powershell" | "pwsh";
+
+/** A shell picked from "+" (or a split's menu): which, and whether an administrator's. */
+export type ShellChoice = { shell: Shell; elevated: boolean };
+
+/** The shells "+" offers on Windows (none elsewhere), and where an administrator's opens: in a tab
+ * (sudo runs inline) or in a window of its own. */
+export type TerminalShells = { shells: Shell[]; elevate: "inline" | "window" | null };
+
+/** What came of opening a terminal: its tab; an administrator's shell in a window of its own; or
+ * nothing, Windows' permission not given. */
+export type TerminalOpened = { kind: "tab"; view: TerminalView } | { kind: "window" } | { kind: "denied" };
 
 /** A pane of the terminal panel (a terminal, or empty), or panes side by side (`row`) or one under
  * the other (`col`), each taking its share of the room (core/layout.rs). */
@@ -282,6 +300,9 @@ export type Snapshot = {
   resume: ResumeOffer | null;
   /** This version's notes haven't been shown yet (after an update). */
   whatsNew: boolean;
+  /** Administrator's tabs the last quit or update had open, which nothing puts back, until the
+   * terminal panel has said so (`admin_not_restored_seen`). */
+  adminNotRestored?: number;
   /** Projects that appeared in the projects folder, offered under the list. */
   suggestions: Candidate[];
   /** It is quiet now (a period the user started, or the quiet hours); null otherwise. */
@@ -665,9 +686,10 @@ export type UpdateView = {
 /** What a restart for the update would do to what is open; for the dialog. */
 export type RestartPlan = {
   /** Cut off for good. `claude`: a Claude turn at work in one of Pitwall's tabs (its session is
-   *  reopened, the turn is lost). `shell`: a command running in a shell tab. `command`: a
-   *  running one-off custom command. `name` is the tab's or the command's name. */
-  cut: Array<{ kind: "claude" | "shell" | "command"; project: string; name: string }>;
+   *  reopened, the turn is lost). `shell`: a command running in a shell tab. `admin`: an
+   *  administrator's tab (Windows), which never comes back. `command`: a running one-off custom
+   *  command. `name` is the tab's or the command's name. */
+  cut: Array<{ kind: "claude" | "shell" | "admin" | "command"; project: string; name: string }>;
   /** Project names whose dev server is started again. */
   servers: string[];
   /** Project names of the Claude sessions opened again, one entry per session. */

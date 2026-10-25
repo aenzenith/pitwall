@@ -53,6 +53,7 @@ mod snapshot;
 mod supervise;
 mod teams;
 mod terminal;
+mod shells;
 mod watch;
 mod radio;
 mod reference;
@@ -71,6 +72,7 @@ pub use board::{Card, Give, NewImage};
 pub use discover::{Candidate, Discovery};
 pub use resume::ResumeOffer;
 pub use terminal::{TerminalBuffer, TerminalView};
+pub use shells::{installed_shells, Shell, TerminalOpened, TerminalShells};
 pub use layout::TerminalLayout;
 pub use jobs::CommandView;
 pub use projects::Folder;
@@ -204,6 +206,9 @@ struct Inner {
     suggestions: Vec<Candidate>,
     /// What was open at the last quit, while it waits for the user's answer (`resume.rs`).
     resume: Option<resume::Kept>,
+    /// Administrator's tabs the last quit or update had open and put back by no record, until the
+    /// panel has said so (`resume.rs`, `restore.rs`).
+    admin_not_restored: usize,
     /// This version's notes are still to be shown (`whatsnew.rs`).
     whats_new: bool,
     /// Each team's start under way, by its number: a stop takes it out, and the start goes no

@@ -267,6 +267,19 @@
   "terminal.historyMissing": "No se encuentra el registro de la sesión",
   "terminal.historyUnsure": "No se sabe si sigue en marcha",
   "terminal.historyResize": "Cambiar el ancho de las sesiones anteriores",
+  "terminal.openWith": "Nueva pestaña con",
+  "terminal.shell.cmd": "Símbolo del sistema",
+  "terminal.shell.powershell": "Windows PowerShell",
+  "terminal.shell.pwsh": "PowerShell 7",
+  "terminal.admin": "{shell} (administrador)",
+  "terminal.adminBadge": "Admin",
+  "terminal.adminOutside": "La shell de administrador se abrió en su propia ventana. Para que se abra aquí, pon sudo en «En línea» en la configuración de Windows.",
+  "terminal.adminSettings": "Abrir configuración",
+  "terminal.adminDenied": "Windows no concedió permiso de administrador; la shell no se abrió.",
+  "terminal.adminNotRestored": {
+    "one": "La pestaña de administrador no se restauró: Windows pide permiso cada vez.",
+    "other": "{count} pestañas de administrador no se restauraron: Windows pide permiso cada vez."
+  },
   "panes.layout": "Disposición",
   "panes.layoutTitle": "Disposición de los terminales",
   "panes.panes": "Divisiones",
@@ -1197,6 +1210,8 @@
   "update.cut.claudeOutcome": "El turno se corta, la sesión se vuelve a abrir",
   "update.cut.command": "Hay un comando en ejecución",
   "update.cut.commandOutcome": "El comando se corta y no se reinicia",
+  "update.cut.admin": "Shell de administrador",
+  "update.cut.adminOutcome": "Se cierra y no se vuelve a abrir: Windows pide permiso cada vez",
   "update.back.servers": {
     "one": "{count} servidor de desarrollo",
     "many": "{count} servidores de desarrollo",

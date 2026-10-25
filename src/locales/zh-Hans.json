@@ -261,6 +261,18 @@
   "terminal.historyMissing": "找不到会话记录",
   "terminal.historyUnsure": "无法判断它是否仍在运行",
   "terminal.historyResize": "调整过去会话的宽度",
+  "terminal.openWith": "新标签页使用",
+  "terminal.shell.cmd": "命令提示符",
+  "terminal.shell.powershell": "Windows PowerShell",
+  "terminal.shell.pwsh": "PowerShell 7",
+  "terminal.admin": "{shell}（管理员）",
+  "terminal.adminBadge": "管理员",
+  "terminal.adminOutside": "管理员 Shell 已在单独的窗口中打开。要在这里打开，请在 Windows 设置中把 sudo 设为“内联”。",
+  "terminal.adminSettings": "打开设置",
+  "terminal.adminDenied": "Windows 未授予管理员权限，Shell 没有打开。",
+  "terminal.adminNotRestored": {
+    "other": "管理员标签页没有恢复：Windows 每次都会请求许可。"
+  },
   "panes.layout": "布局",
   "panes.layoutTitle": "终端布局",
   "panes.panes": "窗格",
@@ -1136,6 +1148,8 @@
   "update.cut.claudeOutcome": "本轮中断，会话会重新打开",
   "update.cut.command": "命令正在运行",
   "update.cut.commandOutcome": "命令中断，不会重新运行",
+  "update.cut.admin": "管理员 Shell",
+  "update.cut.adminOutcome": "会关闭且不再打开：Windows 每次都会请求许可",
   "update.back.servers": {
     "other": "{count} 个开发服务器"
   },

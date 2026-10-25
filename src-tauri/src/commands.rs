@@ -230,20 +230,54 @@ pub async fn claude_last_message(app: AppHandle, session: String) -> Option<Stri
 /* ---------- project terminals ---------- */
 
 /// `start`: for a Claude tab, the model and the mode chosen from "New Claude"'s list; without
-/// it, the project's own.
+/// it, the project's own. `shell`: on Windows, the shell of the list a shell tab runs, by its
+/// word (`Shell::parse`; any other is none, Command Prompt), never a path or a command line;
+/// `elevated`, an administrator's, which waits for Windows' permission: off the main thread.
 #[tauri::command]
-pub fn open_terminal(
-    state: State<'_, AppState>,
+#[allow(clippy::too_many_arguments)]
+pub async fn open_terminal(
+    app: AppHandle,
     path: String,
     claude: Option<bool>,
     cols: Option<u16>,
     rows: Option<u16>,
     start: Option<StartChoice>,
-) -> Result<crate::core::TerminalView, String> {
-    match (claude.unwrap_or(false), start) {
-        (true, Some(start)) => state.core.open_claude_terminal(&path, Some(start.gated()), cols.zip(rows)),
-        (claude, _) => state.core.open_terminal(&path, claude, cols.zip(rows)),
+    shell: Option<String>,
+    elevated: Option<bool>,
+) -> Result<crate::core::TerminalOpened, String> {
+    use crate::core::TerminalOpened;
+
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || match (claude.unwrap_or(false), start) {
+        (true, Some(start)) => core.open_claude_terminal(&path, Some(start.gated()), cols.zip(rows)).map(|view| TerminalOpened::Tab { view }),
+        (true, None) => core.open_terminal(&path, true, cols.zip(rows)).map(|view| TerminalOpened::Tab { view }),
+        (false, _) => core.open_shell(&path, shell.as_deref().and_then(crate::core::Shell::parse), elevated.unwrap_or(false), cols.zip(rows)),
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// The shells the terminal panel's "+" offers on Windows, and where an administrator's opens:
+/// asked of the system now, nothing kept. None elsewhere.
+#[tauri::command]
+pub async fn terminal_shells() -> Result<crate::core::TerminalShells, String> {
+    tauri::async_runtime::spawn_blocking(crate::core::installed_shells).await.map_err(|error| error.to_string())
+}
+
+/// Windows' settings for sudo (System › For developers), from the panel's line about an
+/// administrator's shell that opened in a window of its own: that page, and nothing else.
+#[tauri::command]
+pub fn open_sudo_settings(app: AppHandle) -> Result<(), String> {
+    if !cfg!(windows) {
+        return Err("no sudo settings here".into());
     }
+    app.opener().open_url("ms-settings:developers", None::<&str>).map_err(|error| error.to_string())
+}
+
+/// The terminal panel said that the last quit's or update's administrator's tabs weren't put back.
+#[tauri::command]
+pub fn admin_not_restored_seen(state: State<'_, AppState>) {
+    state.core.admin_not_restored_seen();
 }
 
 #[tauri::command]

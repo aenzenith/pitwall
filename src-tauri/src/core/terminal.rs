@@ -10,6 +10,7 @@ use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, Pt
 
 use super::board::tab_name;
 use super::reveal::is_session_id;
+use super::shells::{self, Shell};
 use super::*;
 use crate::start::Start;
 
@@ -27,6 +28,12 @@ const EVENT_BYTES: usize = 64 * 1024;
 /// How long a tab just opened counts as one Claude may be starting in, before its processes can
 /// tell (`claude_may_run_in`).
 pub(super) const STARTING: Duration = Duration::from_secs(1);
+/// An administrator's tab whose sudo ends with a failure this soon after it was opened is one
+/// Windows wasn't given the permission for (`refused_exit`), whatever its code.
+const REFUSED_WITHIN: Duration = Duration::from_secs(10);
+/// What sudo ends with when its elevation was cancelled, the permission refused however long
+/// Windows' dialog was read: `ERROR_CANCELLED`, or the same as an `HRESULT`.
+const CANCELLED: [u32; 2] = [1223, 0x8007_04C7];
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +44,11 @@ pub struct TerminalView {
     pub name: String,
     /// `shell` | `claude`: a Claude Code session started from its own button.
     pub kind: String,
+    /// The shell of the list a shell tab runs on Windows (`shells.rs`); none elsewhere and for a
+    /// Claude tab.
+    pub shell: Option<Shell>,
+    /// An administrator's shell, through sudo (Windows): never put back by a record.
+    pub elevated: bool,
     /// The user gave it its name: it no longer takes its session's (`name_terminals`).
     #[serde(skip)]
     pub renamed: bool,
@@ -57,8 +69,9 @@ pub struct TerminalBuffer {
 /// What a terminal starts with.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Launch {
-    /// The user's shell.
-    Shell,
+    /// The user's shell, or on Windows the shell of the list picked (none: Command Prompt);
+    /// `elevated`, an administrator's, through sudo.
+    Shell { shell: Option<Shell>, elevated: bool },
     /// Claude Code, then the shell: with a first prompt (a board card's text), with the model and
     /// in the mode of `start`, and with the folder of that card's images among Claude's
     /// directories.
@@ -71,8 +84,9 @@ pub(super) enum Launch {
 /// What a terminal's reader hands on to the thread that sends its output to the window.
 enum Pty {
     Output(Vec<u8>),
-    /// The shell ended: what was read before goes first, then the tab.
-    Exited,
+    /// The shell ended, `failed` with a code other than 0 (`code`; none when it couldn't be read):
+    /// what was read before goes first, then the tab.
+    Exited { failed: bool, code: Option<u32> },
 }
 
 pub(super) struct Session {
@@ -88,8 +102,10 @@ pub(super) struct Session {
     scrollback: String,
     /// Number of the last chunk sent to the window.
     seq: u64,
-    /// When the tab was opened (`claude_may_run_in`).
+    /// When the tab was opened (`claude_may_run_in`, `refused`).
     opened: Instant,
+    /// An administrator's shell, through sudo.
+    elevated: bool,
 }
 
 impl Session {
@@ -137,7 +153,7 @@ impl Core {
         if claude {
             return self.open_claude_terminal(path, None, size);
         }
-        self.open_terminal_as(path, &Launch::Shell, None, false, size, false)
+        self.open_terminal_as(path, &Launch::Shell { shell: None, elevated: false }, None, false, size, false)
     }
 
     /// A Claude Code tab in the project's folder ("New Claude"): with the model and in the mode
@@ -170,7 +186,11 @@ impl Core {
         if !Path::new(path).is_dir() {
             return Err(t!("core.error.notFolder", path = path));
         }
-        let claude = !matches!(launch, Launch::Shell);
+        let claude = !matches!(launch, Launch::Shell { .. });
+        let (shell, elevated) = match launch {
+            Launch::Shell { shell, elevated } => (shells::on_this_system(*shell), *elevated),
+            _ => (None, false),
+        };
         let (cols, rows) = size.filter(|&(cols, rows)| cols > 0 && rows > 0).unwrap_or((80, 24));
         let pair = native_pty_system()
             .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
@@ -180,7 +200,7 @@ impl Core {
         let mut command = match launch {
             Launch::Claude { prompt, start, images } => claude_command(&shell_path, prompt.as_deref(), *start, images.as_deref()),
             Launch::Resume { session } => resume_command(&shell_path, session)?,
-            Launch::Shell => CommandBuilder::new_default_prog(),
+            Launch::Shell { .. } => shells::command(shell, elevated)?,
         };
         command.cwd(path);
         // Started under npm (dev runs), the app carries npm's variables; nvm in the shell
@@ -198,10 +218,10 @@ impl Core {
         if std::env::var_os("LANG").is_none() {
             command.env("LANG", "en_US.UTF-8");
         }
-        let base = if claude {
-            "claude".to_string()
-        } else {
-            Path::new(&shell_path).file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_else(|| "shell".into())
+        let base = match shell {
+            _ if claude => "claude".to_string(),
+            Some(shell) => shell.name(),
+            None => Path::new(&shell_path).file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_else(|| "shell".into()),
         };
         let kind = if claude { "claude" } else { "shell" };
 
@@ -232,15 +252,17 @@ impl Core {
             let same = inner.terminal_list.iter().filter(|t| t.path == path && t.kind == kind).count();
             let name = match name {
                 Some(name) => name,
-                None if same == 0 => base,
+                // A shell of the list goes by its own name; two of one are told apart where they
+                // show (`distinctNames` in the window).
+                None if same == 0 || shell.is_some() => base,
                 None => format!("{base} {}", same + 1),
             };
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), renamed, unasked };
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), shell, elevated, renamed, unasked };
             inner.terminal_list.push(view.clone());
             view
         };
 
-        let session = Session { master: pair.master, input, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0, opened: Instant::now() };
+        let session = Session { master: pair.master, input, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0, opened: Instant::now(), elevated };
         self.terminal_sessions().insert(view.id, session);
         self.record_pids();
         self.notify();
@@ -255,9 +277,10 @@ impl Core {
 
         let core = Arc::clone(self);
         thread::spawn(move || {
-            let _ = child.wait();
+            let status = child.wait().ok();
+            let (failed, code) = (!status.as_ref().is_some_and(|status| status.success()), status.map(|status| status.exit_code()));
             // Through the thread that sends the output, after what the shell printed last.
-            if exited.send(Pty::Exited).is_err() {
+            if exited.send(Pty::Exited { failed, code }).is_err() {
                 core.forget_terminal(id);
             }
         });
@@ -267,13 +290,13 @@ impl Core {
 
     /// Sends a terminal's output on to the window: output after a pause at once, the rest
     /// gathered for `GATHER` after the last. The tab goes once its shell has ended, after the
-    /// output read before that.
+    /// output read before that, unless Windows refused it its permission (`refused`).
     fn stream_terminal(&self, id: u64, read: mpsc::Receiver<Pty>) {
         let mut pending: Vec<u8> = Vec::new();
         let mut sent: Option<Instant> = None;
-        let mut exited = false;
+        let mut exited: Option<(bool, Option<u32>)> = None;
 
-        while !exited {
+        while exited.is_none() {
             let Ok(first) = read.recv() else {
                 break;
             };
@@ -283,8 +306,8 @@ impl Core {
             for message in std::iter::once(first).chain(read.try_iter()) {
                 match message {
                     Pty::Output(bytes) => pending.extend_from_slice(&bytes),
-                    Pty::Exited => {
-                        exited = true;
+                    Pty::Exited { failed, code } => {
+                        exited = Some((failed, code));
                         break;
                     }
                 }
@@ -297,9 +320,29 @@ impl Core {
             }
         }
 
-        if exited {
-            self.forget_terminal(id);
+        if let Some((failed, code)) = exited {
+            if !self.refused(id, failed, code) {
+                self.forget_terminal(id);
+            }
         }
+    }
+
+    /// An administrator's tab whose sudo ended as one Windows refused the permission ends
+    /// (`refused_exit`): no shell opened. The tab stays with the core's own line saying so, its
+    /// process forgotten, until it is closed.
+    fn refused(&self, id: u64, failed: bool, code: Option<u32>) -> bool {
+        let refused = match self.terminal_sessions().get_mut(&id) {
+            Some(session) if session.elevated && refused_exit(failed, code, session.opened.elapsed()) => {
+                session.pid = None;
+                true
+            }
+            _ => false,
+        };
+        if refused {
+            self.send_terminal(id, &format!("\r\n\x1b[2m── {} ──\x1b[0m\r\n", t!("terminal.adminDenied")));
+            self.record_pids();
+        }
+        refused
     }
 
     /// Output into the terminal's scrollback and on to the window, in events of at most
@@ -548,6 +591,18 @@ impl Core {
             .collect()
     }
 
+    /// Makes tab `id` an administrator's, as sudo would have opened it on Windows: the records'
+    /// rules for one are tried on any system.
+    #[cfg(all(test, unix))]
+    pub(super) fn mark_elevated(&self, id: u64) {
+        if let Some(view) = self.lock().terminal_list.iter_mut().find(|view| view.id == id) {
+            view.elevated = true;
+        }
+        if let Some(session) = self.terminal_sessions().get_mut(&id) {
+            session.elevated = true;
+        }
+    }
+
     /// Puts `text` before whatever a new tab has shown so far: the output of the tab it stands
     /// in for after a restart.
     pub(super) fn seed_terminal(&self, id: u64, text: &str) {
@@ -644,6 +699,13 @@ pub(super) fn resume_command(_shell: &str, session: &str) -> Result<CommandBuild
     let mut command = CommandBuilder::new("cmd.exe");
     command.args(["/K", "claude", "--resume", session]);
     Ok(command)
+}
+
+/// Whether an administrator's tab whose sudo ended so, `age` after it was opened, was refused the
+/// permission: sudo's code for a cancelled elevation at any age, or any failure within
+/// `REFUSED_WITHIN` (another code, or one that couldn't be read).
+fn refused_exit(failed: bool, code: Option<u32>, age: Duration) -> bool {
+    code.is_some_and(|code| CANCELLED.contains(&code)) || (failed && age < REFUSED_WITHIN)
 }
 
 /// Hands a terminal's output on as it is read (`stream_terminal`), until the terminal closes.

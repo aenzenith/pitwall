@@ -265,6 +265,19 @@
   "terminal.historyMissing": "Sitzungsprotokoll nicht gefunden",
   "terminal.historyUnsure": "Unklar, ob sie noch läuft",
   "terminal.historyResize": "Breite der früheren Sitzungen ändern",
+  "terminal.openWith": "Neuer Tab mit",
+  "terminal.shell.cmd": "Eingabeaufforderung",
+  "terminal.shell.powershell": "Windows PowerShell",
+  "terminal.shell.pwsh": "PowerShell 7",
+  "terminal.admin": "{shell} (Administrator)",
+  "terminal.adminBadge": "Admin",
+  "terminal.adminOutside": "Die Administrator-Shell ist in einem eigenen Fenster aufgegangen. Damit sie hier aufgeht, stell sudo in den Windows-Einstellungen auf „Inline“.",
+  "terminal.adminSettings": "Einstellungen öffnen",
+  "terminal.adminDenied": "Windows hat keine Administratorrechte erteilt; die Shell wurde nicht geöffnet.",
+  "terminal.adminNotRestored": {
+    "one": "Der Administrator-Tab wurde nicht wiederhergestellt: Windows fragt jedes Mal nach der Erlaubnis.",
+    "other": "{count} Administrator-Tabs wurden nicht wiederhergestellt: Windows fragt jedes Mal nach der Erlaubnis."
+  },
   "panes.layout": "Anordnung",
   "panes.layoutTitle": "Anordnung der Terminals",
   "panes.panes": "Teilfenster",
@@ -1174,6 +1187,8 @@
   "update.cut.claudeOutcome": "Der Durchgang wird abgebrochen, die Sitzung wieder geöffnet",
   "update.cut.command": "Ein Befehl läuft",
   "update.cut.commandOutcome": "Der Befehl wird abgebrochen und nicht neu gestartet",
+  "update.cut.admin": "Administrator-Shell",
+  "update.cut.adminOutcome": "Wird geschlossen und nicht wieder geöffnet: Windows fragt jedes Mal",
   "update.back.servers": {
     "one": "{count} Dev-Server",
     "other": "{count} Dev-Server"

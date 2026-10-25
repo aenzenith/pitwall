@@ -264,6 +264,19 @@
   "terminal.historyMissing": "Oturumun kaydı bulunamadı",
   "terminal.historyUnsure": "Hâlâ çalışıp çalışmadığı anlaşılamadı",
   "terminal.historyResize": "Geçmiş oturumları yeniden boyutlandır",
+  "terminal.openWith": "Kabukla aç",
+  "terminal.shell.cmd": "Komut İstemi",
+  "terminal.shell.powershell": "Windows PowerShell",
+  "terminal.shell.pwsh": "PowerShell 7",
+  "terminal.admin": "{shell} (yönetici)",
+  "terminal.adminBadge": "Yönetici",
+  "terminal.adminOutside": "Yönetici kabuğu ayrı bir pencerede açıldı. Pitwall'ın içinde açılması için Windows ayarlarında sudo'yu Satır içi kipine al.",
+  "terminal.adminSettings": "Ayarları aç",
+  "terminal.adminDenied": "Windows yönetici iznini vermedi; kabuk açılmadı.",
+  "terminal.adminNotRestored": {
+    "one": "Yönetici sekmesi geri getirilmedi: Windows her açılışta izin ister.",
+    "other": "{count} yönetici sekmesi geri getirilmedi: Windows her açılışta izin ister."
+  },
   "panes.layout": "Düzen",
   "panes.layoutTitle": "Terminallerin düzeni",
   "panes.panes": "Bölmeler",
@@ -1161,6 +1174,8 @@
   "update.cut.claudeOutcome": "Tur kesilir, oturum geri açılır",
   "update.cut.command": "Komut sürüyor",
   "update.cut.commandOutcome": "Komut kesilir, yeniden başlatılmaz",
+  "update.cut.admin": "Yönetici kabuğu",
+  "update.cut.adminOutcome": "Kapanır, yeniden açılmaz: Windows her seferinde izin ister",
   "update.back.servers": {
     "one": "{count} dev sunucusu",
     "other": "{count} dev sunucusu"

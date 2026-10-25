@@ -30,9 +30,10 @@ import {
   type Side,
   type SplitDir,
 } from "../lib/panes";
+import { SHELL_LABELS, shellIcon } from "../lib/shells";
 import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
 import { attach, fitView } from "../lib/terminals";
-import type { Project, StartChoice, TerminalView } from "../lib/types";
+import type { Project, Shell, ShellChoice, StartChoice, TerminalView } from "../lib/types";
 
 /**
  * The terminal panel's panes (lib/panes): each with a head (the terminal's name, Claude's state,
@@ -60,11 +61,13 @@ const props = defineProps<{
   rowAt?: (x: number, y: number) => boolean;
   /** The names the panes show (lib/tabs: `distinctNames`); a terminal's own without. */
   names?: Map<number, string>;
+  /** The shells installed, on Windows (a split's menu offers them); none elsewhere. */
+  shells?: Shell[];
 }>();
 
 const emit = defineEmits<{
-  /** A new terminal, put there. */
-  open: [place: Place, claude: boolean, start: StartChoice | null];
+  /** A new terminal, put there; `shell`, on Windows the shell of the list picked. */
+  open: [place: Place, claude: boolean, start: StartChoice | null, shell: ShellChoice | null];
   close: [id: number];
   rename: [id: number];
   /** A pane picked: `keyboard`, the keyboard goes into its terminal. */
@@ -212,20 +215,25 @@ function splitTitle(key: string, dir: SplitDir): string {
   return `${t(dir === "row" ? "panes.splitRight" : "panes.splitDown")} (${dir === "row" ? PANE_KEYS.right : PANE_KEYS.down})`;
 }
 
-function split(key: string, dir: SplitDir, claude = false, start: StartChoice | null = null): void {
+function split(key: string, dir: SplitDir, claude = false, start: StartChoice | null = null, shell: ShellChoice | null = null): void {
   if (!splits(key, dir, claude) || props.opening) return;
-  emit("open", { kind: "split", key, dir }, claude, start);
+  emit("open", { kind: "split", key, dir }, claude, start, shell);
 }
 
-/** A split button's other choices, on its right-click as on "+": a shell, Claude as the
- * project's settings say, or Claude with a model or plan mode of its own. */
+/** A split button's other choices, on its right-click as on "+": a shell (on Windows each shell
+ * installed, Command Prompt the one the button opens), Claude as the project's settings say, or
+ * Claude with a model or plan mode of its own. */
 function splitMenu(event: MouseEvent, key: string, dir: SplitDir): void {
   if (!splits(key, dir)) return;
   const { model, mode } = defaults.value;
   // A Claude session needs more room than a shell: with too little for it, its lines are off.
   const claude = splits(key, dir, true);
+  const accelerator = dir === "row" ? PANE_ACCELERATORS.right : PANE_ACCELERATORS.down;
+  const shellLines: MenuEntry[] = props.shells?.length
+    ? [...props.shells.map((shell) => ({ text: t(SHELL_LABELS[shell]), accelerator: shell === "cmd" ? accelerator : undefined, action: () => split(key, dir, false, null, { shell, elevated: false }) })), "separator"]
+    : [{ text: t("panes.shell"), accelerator, action: () => split(key, dir) }];
   void menu.popup(event, [
-    { text: t("panes.shell"), accelerator: dir === "row" ? PANE_ACCELERATORS.right : PANE_ACCELERATORS.down, action: () => split(key, dir) },
+    ...shellLines,
     { text: t("panes.claude"), enabled: claude, action: () => split(key, dir, true) },
     "separator",
     {
@@ -450,7 +458,7 @@ defineExpose({ placed, shown, rectOf, dropAt });
     <div
       v-for="pane in placed.panes"
       :key="pane.leaf.key"
-      :class="['pane', { on: pane.leaf.key === layout.focus, empty: pane.leaf.terminal === null, lifted: moving?.started && moving.key === pane.leaf.key, targeted: dropping?.key === pane.leaf.key }]"
+      :class="['pane', { on: pane.leaf.key === layout.focus, empty: pane.leaf.terminal === null, elevated: pane.leaf.terminal !== null && views.get(pane.leaf.terminal)?.elevated, lifted: moving?.started && moving.key === pane.leaf.key, targeted: dropping?.key === pane.leaf.key }]"
       :style="paneStyle(pane)"
       @pointerdown.capture="press(pane.leaf.key, $event)"
       @focusin="focusIn(pane.leaf.key)"
@@ -464,8 +472,9 @@ defineExpose({ placed, shown, rectOf, dropAt });
           @contextmenu.prevent="paneMenu($event, pane.leaf.key, pane.leaf.terminal)"
         >
           <ClaudeLogo v-if="views.get(pane.leaf.terminal)?.kind === 'claude'" :size="11" />
-          <Icon v-else name="terminal" :size="11" />
+          <Icon v-else :name="shellIcon(views.get(pane.leaf.terminal)?.shell)" :size="11" />
           <span class="name">{{ nameOf(pane.leaf.terminal) }}</span>
+          <span v-if="views.get(pane.leaf.terminal)?.elevated" class="admin"><Icon name="shield" :size="9" />{{ t("terminal.adminBadge") }}</span>
           <ClaudeDot v-if="live.has(pane.leaf.terminal)" :live="live.get(pane.leaf.terminal)" />
           <span v-if="live.get(pane.leaf.terminal)?.phase === 'waiting'" class="wait">{{ live.get(pane.leaf.terminal)?.text }}</span>
           <span class="grow"></span>
@@ -510,10 +519,10 @@ defineExpose({ placed, shown, rectOf, dropAt });
         <div :ref="(el) => hostRef(pane.leaf.key, el as Element | null)" class="host" :data-pane="pane.leaf.key"></div>
       </template>
       <div v-else class="cell" :aria-label="t('panes.empty')" role="group">
-        <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, false, null)">
+        <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, false, null, null)">
           <Icon name="terminal" :size="12" /> {{ t("terminal.newTab") }}
         </button>
-        <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, null)">
+        <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, null, null)">
           <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
         </button>
       </div>
@@ -568,6 +577,35 @@ defineExpose({ placed, shown, rectOf, dropAt });
 
 .pane.on {
   border-color: var(--line-heavy);
+}
+
+/* An administrator's shell: its border and its head's mark in the warning's colours, apart from
+   the ordinary shells beside it. */
+.pane.elevated {
+  border-color: var(--warn-line);
+}
+
+.pane.elevated.on {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--warn-line));
+}
+
+.admin {
+  flex-shrink: 0;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--warn-text);
+}
+
+.admin :deep(svg) {
+  color: var(--warn);
 }
 
 .pane.lifted {

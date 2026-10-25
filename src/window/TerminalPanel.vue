@@ -9,7 +9,7 @@ import { depJobName, depJobs } from "../lib/deps";
 import { commandFaded } from "../lib/format";
 import { shellRequest } from "../lib/flag";
 import { t } from "../lib/i18n";
-import { useNativeMenu } from "../lib/nativeMenu";
+import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { plainText, shownLines } from "../lib/outputLines";
 import { useOutputSearch } from "../lib/outputSearch";
 import { useOutputStream, type OutputLine } from "../lib/outputStream";
@@ -81,14 +81,15 @@ import {
   type Side,
   type SplitDir,
 } from "../lib/panes";
-import { isMac, primary } from "../lib/platform";
+import { isMac, isWindows, primary } from "../lib/platform";
 import { sessionWaits, statusLine } from "../lib/sessions";
+import { SHELL_LABELS, shellIcon } from "../lib/shells";
 import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
 import { attach, fitView, focusView, measure, paneKeys } from "../lib/terminals";
-import type { Project, StartChoice } from "../lib/types";
+import type { Project, Shell, ShellChoice, StartChoice } from "../lib/types";
 import CardDialog from "./board/CardDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
@@ -542,10 +543,37 @@ function pressScreen(): void {
   overlayOpen.value = false;
 }
 
+/**
+ * What the panel says under its terminals after an administrator's shell was asked for (Windows):
+ * it opened in a window of its own, sudo not running inline (with a link to Windows' setting), or
+ * Windows refused it. It stays until it is closed, another takes its place or the panel turns to
+ * another project.
+ */
+const notice = ref<"window" | "denied" | null>(null);
+watch(
+  () => props.project.path,
+  () => (notice.value = null),
+);
+/** Administrator's tabs the last quit or update had open, which nothing put back: said once, after
+ * the one above. */
+const notRestored = computed(() => snapshot.value?.adminNotRestored ?? 0);
+const shownNotice = computed(() => notice.value ?? (notRestored.value ? "restored" : null));
+
+function closeNotice(): void {
+  if (notice.value) notice.value = null;
+  else void api.adminNotRestoredSeen().catch(() => undefined);
+}
+
+function openSudoSettings(): void {
+  void api.openSudoSettings().catch(() => undefined);
+}
+
 /** A new tab: the shell, or with `claude` a Claude Code session (`start`: with the model and in
  * the mode picked from its list; without one, as the project's settings say). With panes, or
- * `where` asked for, it goes into a pane (`placeTerminal`). */
-async function openTerminal(claude = false, start: StartChoice | null = null, where: Place | null = null): Promise<void> {
+ * `where` asked for, it goes into a pane (`placeTerminal`). `shell`: on Windows, the shell of the
+ * list picked, an administrator's or not; an administrator's that opened in a window of its own,
+ * or that Windows refused, opens no tab and the panel says so (`notice`). */
+async function openTerminal(claude = false, start: StartChoice | null = null, where: Place | null = null, shell: ShellChoice | null = null): Promise<void> {
   if (opening.value) return;
   opening.value = true;
   try {
@@ -555,7 +583,12 @@ async function openTerminal(claude = false, start: StartChoice | null = null, wh
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
     const size = viewport.value && !panesOn.value && !where ? measure(viewport.value) : null;
-    const view = await api.openTerminal(props.project.path, claude, size, start);
+    const opened = await api.openTerminal(props.project.path, claude, size, start, shell);
+    if (opened.kind !== "tab") {
+      notice.value = opened.kind;
+      return;
+    }
+    const view = opened.view;
     asked = view.id;
     // The core lists a new terminal before it answers: one listed already is waited for no
     // longer, and its pane goes as soon as it closes.
@@ -632,9 +665,29 @@ const defaults = computed(() => projectChoice(props.project));
 
 const menu = useNativeMenu();
 
-/** The "+" menu, under it: a shell tab, a Claude session as the project's settings say, and in
- * a submenu the models (the project's own checked) and plan mode, each starting a session at
- * once with that one change, the rest as the project's settings say. */
+/** The shells installed here, Windows' alone (none elsewhere): asked of the core once. */
+const shells = ref<Shell[]>([]);
+if (isWindows) {
+  void api
+    .terminalShells()
+    .then((found) => (shells.value = found.shells))
+    .catch(() => undefined);
+}
+
+/** "+"'s submenu on Windows: each shell installed, then each as an administrator's. */
+function shellItems(): MenuEntry[] {
+  const open = (shell: Shell, elevated: boolean) => () => void openTerminal(false, null, null, { shell, elevated });
+  return [
+    ...shells.value.map((shell) => ({ text: t(SHELL_LABELS[shell]), action: open(shell, false) })),
+    "separator",
+    ...shells.value.map((shell) => ({ text: t("terminal.admin", { shell: t(SHELL_LABELS[shell]) }), action: open(shell, true) })),
+  ];
+}
+
+/** The "+" menu, under it: a shell tab, a Claude session as the project's settings say, on
+ * Windows in a submenu the shells (and each as an administrator's), and in a submenu the models
+ * (the project's own checked) and plan mode, each starting a session at once with that one
+ * change, the rest as the project's settings say. */
 function addMenu(event: Event): void {
   if (opening.value) return;
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -643,6 +696,7 @@ function addMenu(event: Event): void {
     { text: t("terminal.newTab"), accelerator: isMac ? "Cmd+T" : "Ctrl+Shift+T", action: () => void openTerminal() },
     { text: t("terminal.newClaude"), action: () => void openTerminal(true) },
     "separator",
+    ...(shells.value.length ? [{ text: t("terminal.openWith"), items: shellItems() }] : []),
     {
       text: t("terminal.claudeWith"),
       items: [
@@ -1672,8 +1726,9 @@ defineExpose({ openTerminal, closeShown });
             @keydown="onTabKey($event, term.id)"
           >
             <ClaudeLogo v-if="term.kind === 'claude'" :size="11" />
-            <Icon v-else name="terminal" :size="11" />
+            <Icon v-else :name="shellIcon(term.shell)" :size="11" />
             <span class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
+            <span v-if="term.elevated" class="admin"><Icon name="shield" :size="9" />{{ t("terminal.adminBadge") }}</span>
             <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
           <button
@@ -1812,7 +1867,8 @@ defineExpose({ openTerminal, closeShown });
           :hold="collapsed || animating"
           :quiet="sliding"
           :opening="opening"
-          @open="(where, claude, start) => openTerminal(claude, start, where)"
+          :shells="shells"
+          @open="(where, claude, start, shell) => openTerminal(claude, start, where, shell)"
           @close="close"
           @rename="renameTerminal"
           @focus="focusPane"
@@ -1868,6 +1924,22 @@ defineExpose({ openTerminal, closeShown });
         <TerminalHistory v-if="narrow && overlayOpen" ref="over" :project="project" overlay @close="closeOverlay" @leave="backToTerminal" @drag="sessionDragged" @drop="sessionDropped" />
       </Transition>
     </div>
+    <!-- After an administrator's shell was asked for, or a start that put none back: a line of its
+         own under the terminals (they give up its height), until it is closed. -->
+    <Transition name="fade">
+      <div v-if="shownNotice && !collapsed" class="notice" role="status">
+        <Icon name="shield" :size="13" />
+        <span class="notice-text">
+          <template v-if="shownNotice === 'window'">
+            {{ t("terminal.adminOutside") }}
+            <button type="button" class="notice-link" @click="openSudoSettings">{{ t("terminal.adminSettings") }}</button>
+          </template>
+          <template v-else-if="shownNotice === 'denied'">{{ t("terminal.adminDenied") }}</template>
+          <template v-else>{{ t("terminal.adminNotRestored", { count: notRestored }) }}</template>
+        </span>
+        <button type="button" class="notice-x" :aria-label="t('common.close')" :title="t('common.close')" @click="closeNotice">×</button>
+      </div>
+    </Transition>
 
     <div v-if="incoming" class="ghost" :style="{ left: `${incoming.x + 12}px`, top: `${incoming.y + 10}px` }" aria-hidden="true">
       <ClaudeLogo v-if="incoming.claude" :size="11" />
@@ -2046,6 +2118,25 @@ defineExpose({ openTerminal, closeShown });
 .tab-label > :not(.tab-name),
 .x {
   flex-shrink: 0;
+}
+
+/* An administrator's shell: a shield and the word, in the warning's colours. */
+.admin {
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--warn-text);
+}
+
+.admin :deep(svg) {
+  color: var(--warn);
 }
 
 /* The keyboard's tab: the ring goes round the pair, as the tab looks like one piece. */
@@ -2595,5 +2686,67 @@ defineExpose({ openTerminal, closeShown });
 .control:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* What the panel says about an administrator's shell, on a row of its own under the terminals (the
+   stage's foot margin above it, the panel's margins beside and under it): its own ground, in the
+   warning's colours, a link to Windows' setting where there is one, and its close button. */
+.notice {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: -8px 20px 12px;
+  padding: 9px 8px 9px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.notice > :deep(svg) {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--warn);
+}
+
+.notice-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.notice-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--warn-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.notice-link:hover {
+  color: var(--text-strong);
+}
+
+.notice-x {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-faint);
+}
+
+.notice-x:hover {
+  background: var(--bg-icon-hover);
+  color: var(--text-strong);
 }
 </style>

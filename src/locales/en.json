@@ -265,6 +265,19 @@
   "terminal.historyMissing": "Session log not found",
   "terminal.historyUnsure": "Can't tell if it's still running",
   "terminal.historyResize": "Resize past sessions",
+  "terminal.openWith": "New tab with",
+  "terminal.shell.cmd": "Command Prompt",
+  "terminal.shell.powershell": "Windows PowerShell",
+  "terminal.shell.pwsh": "PowerShell 7",
+  "terminal.admin": "{shell} (administrator)",
+  "terminal.adminBadge": "Admin",
+  "terminal.adminOutside": "The administrator shell opened in a window of its own. To have it open here, set sudo to Inline in Windows settings.",
+  "terminal.adminSettings": "Open settings",
+  "terminal.adminDenied": "Windows didn't give administrator permission; no shell opened.",
+  "terminal.adminNotRestored": {
+    "one": "The administrator tab wasn't brought back: Windows asks for permission every time.",
+    "other": "{count} administrator tabs weren't brought back: Windows asks for permission every time."
+  },
   "panes.layout": "Layout",
   "panes.layoutTitle": "Terminal layout",
   "panes.panes": "Panes",
@@ -1174,6 +1187,8 @@
   "update.cut.claudeOutcome": "The turn is cut off, the session reopens",
   "update.cut.command": "A command is running",
   "update.cut.commandOutcome": "The command is cut off, not started again",
+  "update.cut.admin": "Administrator's shell",
+  "update.cut.adminOutcome": "It closes and isn't opened again: Windows asks each time",
   "update.back.servers": {
     "one": "{count} dev server",
     "other": "{count} dev servers"

@@ -70,9 +70,9 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std"
 rodio = { version = "0.22.2", default-features = false, features = ["playback", "wav"] }
 
 # Job objects (a server's whole tree), process times and console-less children; ^C at the
-# `pitwall` command; toasts; the taskbar's theme.
+# `pitwall` command; an administrator's shell in a window of its own; toasts; the taskbar's theme.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Shell"] }
 tauri-winrt-notification = "0.8.1"
 windows-registry = "0.6.1"
 
