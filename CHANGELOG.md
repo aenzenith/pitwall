@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.17.0](https://github.com/aenzenith/pitwall/compare/v1.16.0...v1.17.0) (2026-10-25)
+
+
+### Features
+
+* **terminal:** on Windows a new tab opens the shell picked, or as administrator ([a713d69](https://github.com/aenzenith/pitwall/commit/a713d693c99a01444df07d36724ce721c974c18b))
+* **terminal:** the panel lays its terminals out in panes ([8887aec](https://github.com/aenzenith/pitwall/commit/8887aec5bbce83e71b2fab7a4fbd15871ee18433))
+* **window:** ⌘W closes a tab at a time, then its panel or Files window ([29a102f](https://github.com/aenzenith/pitwall/commit/29a102f6bb699f76398dc63b3b7505b5237aa64f))
+
+
+### Bug Fixes
+
+* **backup:** an import offers projects without a star ([d3e5a76](https://github.com/aenzenith/pitwall/commit/d3e5a76b1db1f41c6c1df22756e36a4bd1300636))
+* **claude:** a past session is opened once, and again once it ended ([7ba8d56](https://github.com/aenzenith/pitwall/commit/7ba8d5619e2df9c2a972c56d1eb60f74d554e568))
+* **claude:** opening a session never hides another's open question ([d1c8d42](https://github.com/aenzenith/pitwall/commit/d1c8d42da7548223a8b03dfff0c0a63ed857b85b))
+* **files:** Open in editor opens the file shown, names keep their letters ([81597f1](https://github.com/aenzenith/pitwall/commit/81597f130106e00f1a47ec2d35e87aa58ae1575c))
+* **fuel:** the 90 % alert comes once a window ([bc423da](https://github.com/aenzenith/pitwall/commit/bc423da4f5b32b0d18f182344f8cb8322f193347))
+* **servers:** the address, a busy port and an error follow the server ([9c90c11](https://github.com/aenzenith/pitwall/commit/9c90c1130594bca504442a5f9f4b9720dbb1bd37))
+* **terminal:** a Claude tab keeps its session's whole name ([285d575](https://github.com/aenzenith/pitwall/commit/285d5750be31c84c8e925d8e17e6e77f80c9cac1))
+* **terminal:** a dragged tab hands the keyboard back, and panes stay right ([b162e67](https://github.com/aenzenith/pitwall/commit/b162e671d3e98c6fda09a850626c86dbe904e4ba))
+
+
+### Performance
+
+* **terminal:** output reaches the window in batches ([c759e79](https://github.com/aenzenith/pitwall/commit/c759e79535b2acd1037dd23e3adb34dfeebf4e46))
+* **ui:** hidden output, animations and big files cost less ([01e56ec](https://github.com/aenzenith/pitwall/commit/01e56ec975a6a67febfd05b12d10ee6f3dd8c0f6))
+
 ## [1.16.0](https://github.com/aenzenith/pitwall/compare/v1.15.0...v1.16.0) (2026-10-22)
 
 
