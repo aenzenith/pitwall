@@ -60,7 +60,8 @@ takes the keyboard.
 
 Press <kbd>⌃</kbd> <kbd>⌥</kbd> <kbd>P</kbd> anywhere (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>P</kbd>
 on Windows and Linux) and type. The projects Claude is waiting in come first: <kbd>↵</kbd> brings
-that session up, or opens any other project in your editor.
+that session up, or opens any other project according to your settings; by default, it focuses
+its terminal in Pitwall.
 
 <p align="center">
   <img src=".github/readme/switcher.png" width="640" alt="The quick switcher: a search field and the projects below it, the ones Claude is waiting in first">
