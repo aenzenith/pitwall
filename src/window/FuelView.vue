@@ -195,7 +195,8 @@ onBeforeUnmount(() => shadeObserver.disconnect());
          glass over a warm haze in the light one (the cluster's own roles in styles/tokens.css). -->
     <div class="stage">
       <FuelBackdrop :window="session" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
-      <!-- The ground's own colour rising from the bottom, gone by the trip computer's top. -->
+      <!-- The page's lower part on a ground of its own, from the bottom up to the trip computer's
+           top: the trip computer, the session's pace and the foot stand on it, parted by lines. -->
       <div v-if="shade" class="shade" :style="{ height: `${shade}px` }" aria-hidden="true"></div>
 
       <div ref="scroller" class="scroll" @scroll.passive="measureShade">
@@ -228,10 +229,13 @@ onBeforeUnmount(() => shadeObserver.disconnect());
             <div v-if="dials.length" class="dials">
               <FuelGauge v-for="dial in dials" :key="dial.key" :size="dial.size" :left="dial.left" :name="dial.name" :caption="dial.caption" :until="dial.until" :stale="stale" />
             </div>
-            <TripComputer ref="trip" :session="session" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
+            <!-- The page's lower part, as wide as the page on its own ground (`.shade`): the trip
+                 computer and the session's pace, parted by a line, the foot under them. -->
+            <div class="lower">
+              <TripComputer ref="trip" :session="session" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
+              <SessionPace v-if="session" ref="pace" :window="session" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" />
+            </div>
           </section>
-
-          <SessionPace v-if="session" ref="pace" :window="session" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" />
         </div>
       </div>
 
@@ -326,12 +330,11 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   right: 0;
   bottom: 0;
   pointer-events: none;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--bg-detail) 75%, transparent),
-    color-mix(in srgb, var(--bg-detail) 45%, transparent) 45%,
-    transparent
-  );
+  /* Frosted glass over the backdrop, as wide as the page: no corners, an edge along its top only. */
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-tile) 72%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* Only the page body scrolls, never the window. Its size, width and height, sizes the dials. */
@@ -352,14 +355,15 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 }
 
 
-/* The whole window: the cluster takes whatever height the rest leaves. */
+/* The whole window: the cluster takes whatever height the rest leaves, its lower part down to the
+   foot. */
 .content {
   position: relative;
   min-height: 100cqh;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px;
+  padding: 20px 20px 0;
 }
 
 .plan {
@@ -387,7 +391,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
  * side by side allow, as tall as the cards under them leave room for.
  */
 .dials {
-  --dial: clamp(170px, min(40cqw - 60px, 100cqh - 418px), 600px);
+  --dial: clamp(170px, min(40cqw - 60px, 100cqh - 376px), 600px);
   margin-block: auto;
   display: flex;
   align-items: center;
@@ -396,11 +400,19 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   padding: 28px 24px 22px;
 }
 
-/* The page's own margin below it, as on its sides. */
+/* Below the scrolling part, its line and room its own (FuelFooter). */
 .footer {
   position: relative;
   flex-shrink: 0;
-  padding: 0 20px 20px;
+}
+
+/* From one edge of the page to the other. Its parts and the foot share one measure: their words
+   stand as far from the page's edges as the trip computer's from the lines between its parts,
+   each part has the same room above and below, a line between two of them. */
+.lower {
+  display: flex;
+  flex-direction: column;
+  margin-inline: -20px;
 }
 
 /* On a line of its own: no space to guess between sentences in Chinese and Japanese. */
@@ -435,9 +447,9 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 </style>
 
 <!--
-  The cards' common look, for the parts in ./fuel: the dials' pods made square. Glass over the
-  backdrop (smoked in the dark theme, frosted in the light one), lit faintly from below, a bezel
-  catching the light at two corners; labels in capitals, as on the dials.
+  What the parts in ./fuel share: a box (a notice) has the other pages' boxes' corners and edge (the
+  Today page's tiles), its ground frosted glass over the backdrop; labels in capitals, as on the
+  dials.
 -->
 <style>
 /* A length, worked out where it is set: the dials read it as the big one's size, not their own. */
@@ -447,49 +459,13 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   initial-value: 300px;
 }
 
-/* Set on the stage the cards stand in. */
-.fuel .stage {
-  --glow: var(--claude);
-}
-
-.fuel.stale .stage {
-  --glow: var(--idle-ring);
-}
-
-.fuel .glass,
-.fuel .card {
+.fuel .glass {
   position: relative;
-  border-radius: calc(var(--radius-panel) + 4px);
-  background: linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--bg-tile) 72%, transparent);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  /* No shadow cast below: the ground round the cards stays one ground. */
-  box-shadow:
-    inset 0 1px 0 var(--glass-shine),
-    inset 0 -14px 28px -16px color-mix(in srgb, var(--glow) var(--glass-glow), transparent),
-    0 0 0 1px var(--glass-edge);
-}
-
-.fuel .glass::before,
-.fuel .card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  padding: 1.5px;
-  border-radius: inherit;
-  background: linear-gradient(115deg, var(--bezel-lit), var(--bezel-dim) 25%, var(--bezel-half) 55%, var(--bezel-dim) 80%, var(--bezel-far));
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box exclude,
-    linear-gradient(#000 0 0);
-  pointer-events: none;
-}
-
-.fuel .card {
-  padding: 20px 22px;
 }
 
 .fuel .caps {

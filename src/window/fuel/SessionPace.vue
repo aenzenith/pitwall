@@ -54,7 +54,7 @@ const sentence = computed(() => ({ key: SENTENCES[state.value.kind], out: state.
 </script>
 
 <template>
-  <section :class="['card', 'pace', { stale }]" :aria-label="t('fuel.pace.title')">
+  <section :class="['pace', { stale }]" :aria-label="t('fuel.pace.title')">
     <div class="head">
       <span class="card-title caps">{{ t("fuel.pace.title") }}</span>
       <p :class="['sentence', { out: sentence.out }]">
@@ -85,12 +85,14 @@ const sentence = computed(() => ({ key: SENTENCES[state.value.kind], out: state.
 </template>
 
 <style scoped>
+/* On the page's lower ground, under a line that parts it from the trip computer. */
 .pace {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-  padding: 16px 20px;
+  padding: 16px;
+  border-top: 1px solid var(--line);
 }
 
 /* Title, the pace in words, the window's span; only the words may take a second line. */

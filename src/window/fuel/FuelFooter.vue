@@ -15,8 +15,9 @@ import AlertChip from "./AlertChip.vue";
 import LimitList from "./LimitList.vue";
 
 /**
- * Under the cluster, in one muted line: Extra Usage, the used limits without a dial (with a button
- * that lists them), today's top model; and the 90 % notification chip. `rest`: the used limits
+ * Under the cluster, on the page's lower ground below a line, one muted line: Extra Usage, the used
+ * limits without a dial (with a button that lists them), today's top model; and the 90 %
+ * notification chip across from them. `rest`: the used limits
  * without a dial; `extraOnGauge`: Extra Usage has one.
  */
 const props = defineProps<{ rest: UsageWindow[]; extra: UsageExtra | null; extraOnGauge: boolean; today: SpendToday | null; limits: boolean; stale: boolean }>();
@@ -81,6 +82,10 @@ const canList = computed(() => props.rest.length > 0 || !!listedExtra.value);
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Its words in line with the session's pace above, as much room under them as over them; the
+     switch's own 4px make up its right side's 16. */
+  padding: 12px 12px 12px 16px;
+  border-top: 1px solid var(--line);
 }
 
 .line {

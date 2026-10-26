@@ -228,22 +228,18 @@
   --tag-claude-line-on: #6b4a30;
   --tag-crash-line-on: #7a3434;
 
-  /* The Fuel page's cluster. A pod's and a card's glass over the backdrop, from its top to its
-     bottom (a pod's is a shade deeper there), the light along its top edge, the hairline round
-     it and the shadow a pod casts. */
+  /* The Fuel page's cluster. A dial's pod of glass over the backdrop, from its top to its
+     bottom, the light along its top edge, the hairline round it and the shadow it casts. */
   --glass-top: rgba(30, 32, 38, 0.72);
-  --glass-bottom: rgba(8, 9, 11, 0.88);
   --glass-bottom-pod: rgba(8, 9, 11, 0.9);
   --glass-shine: rgba(255, 255, 255, 0.08);
   --glass-edge: rgba(255, 255, 255, 0.05);
   --glass-shade: rgba(0, 0, 0, 0.55);
-  /* How much of the glow's colour the glass takes from below: a card, a pod. */
-  --glass-glow: 32%;
+  /* How much of the glow's colour the pod's glass takes from below. */
   --glass-glow-pod: 18%;
-  /* The bezel round the glass, where it catches the light: its lit corner, the far one of a
-     card, half way round, and where it catches none. */
+  /* The bezel round the glass, where it catches the light: its lit corner, half way round, and
+     where it catches none. */
   --bezel-lit: rgba(255, 255, 255, 0.3);
-  --bezel-far: rgba(255, 255, 255, 0.26);
   --bezel-half: rgba(255, 255, 255, 0.16);
   --bezel-dim: rgba(255, 255, 255, 0.03);
   /* A dial's marks, in the glass's own warmth: the bezel's minutes, every fifth one, the arc's
@@ -442,15 +438,12 @@
   /* Frosted glass by day: white, the backdrop's warmth seen through it; its edge and its bezel
      in ink, the shadow a pod casts a light one. */
   --glass-top: rgba(255, 255, 255, 0.86);
-  --glass-bottom: rgba(255, 255, 255, 0.7);
   --glass-bottom-pod: rgba(255, 255, 255, 0.72);
   --glass-shine: rgba(255, 255, 255, 0.9);
   --glass-edge: rgba(15, 17, 20, 0.07);
   --glass-shade: rgba(15, 17, 20, 0.1);
-  --glass-glow: 16%;
   --glass-glow-pod: 12%;
   --bezel-lit: rgba(15, 17, 20, 0.26);
-  --bezel-far: rgba(15, 17, 20, 0.22);
   --bezel-half: rgba(15, 17, 20, 0.14);
   --bezel-dim: rgba(15, 17, 20, 0.05);
   --dial-minute: rgba(58, 42, 28, 0.16);

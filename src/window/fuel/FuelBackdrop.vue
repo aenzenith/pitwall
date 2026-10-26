@@ -19,7 +19,7 @@ import type { UsageWindow } from "../../lib/types";
  * and the embers and sparks are specks of the tint at its hottest. One source, a program for each
  * (`DAY`): the dark theme's is the source it always was. Under the page's footer (`[data-foot]` in
  * the canvas's parent) the light theme's specks are a trace of themselves: its muted words stand
- * on this ground with no glass under them.
+ * on the page's lower ground, which this one shows through.
  *
  * A theme whose program can't be made is not drawn in the other's: the canvas stays out of sight
  * and the page keeps its plain ground, until the theme is one that can be drawn.

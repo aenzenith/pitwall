@@ -45,7 +45,7 @@ const cells = computed<Cell[]>(() => {
 
 <template>
   <dl :class="['trip', { stale }]">
-    <div v-for="cell in cells" :key="cell.key" class="cell glass">
+    <div v-for="cell in cells" :key="cell.key" class="cell">
       <dt class="label caps" :title="cell.label">{{ cell.label }}</dt>
       <dd :class="['value', { hot: cell.hot, none: cell.value === NONE }]">{{ cell.value }}</dd>
     </div>
@@ -53,11 +53,12 @@ const cells = computed<Cell[]>(() => {
 </template>
 
 <style scoped>
-/* Four equal boxes of their own, side by side. */
+/* Four equal parts side by side on the page's lower ground (FuelView's `.lower`), parted by lines;
+   the first one's words start where the pace's and the foot's do, as far from the page's edge as
+   from a line. */
 .trip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
   margin: 0;
 }
 
@@ -68,7 +69,11 @@ const cells = computed<Cell[]>(() => {
   justify-content: flex-end;
   gap: 3px;
   min-width: 0;
-  padding: clamp(12px, 1.6cqh, 18px) clamp(16px, 1.6cqw, 24px);
+  padding: 16px;
+}
+
+.cell + .cell {
+  border-left: 1px solid var(--line);
 }
 
 /* Set like the dials' figures. */
