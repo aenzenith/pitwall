@@ -19,6 +19,7 @@ import { tabKey } from "../lib/tabs";
 import type { ExtensionStatus, OpenTarget, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
+import AccountsSection from "./settings/AccountsSection.vue";
 import CliSection from "./settings/CliSection.vue";
 import FlagSection from "./settings/FlagSection.vue";
 import RadioSection from "./settings/RadioSection.vue";
@@ -30,9 +31,10 @@ type Tab = "general" | "projects" | "servers" | "editor" | "claude" | "track" | 
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
  * page's settings button Track's); `startPart`: a part of it scrolled to the top (the first run's
- * phone row asks for the phone's). `openSetup`: the first run's steps are asked for again;
+ * phone row asks for the phone's, the Fuel page's account panel for the accounts', with the add
+ * dialog open for `addAccount`). `openSetup`: the first run's steps are asked for again;
  * `openWhatsNew`: this version's notes. */
-const props = defineProps<{ startTab?: Tab; startPart?: "phone" }>();
+const props = defineProps<{ startTab?: Tab; startPart?: "phone" | "accounts" | "addAccount" }>();
 const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNew: [] }>();
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
@@ -269,7 +271,7 @@ async function onRecordKey(event: KeyboardEvent): Promise<void> {
 }
 
 /** The parts a start can ask for, by their labels' ids. */
-const PARTS = { phone: "phone-section" } as const;
+const PARTS = { phone: "phone-section", accounts: "accounts-section", addAccount: "accounts-section" } as const;
 
 /** Scrolls the part whose label is `id` to the top of the tab, a little room above it, once it is
  * drawn (the phone's waits for the core's answer); not looked for after two seconds. */
@@ -673,6 +675,7 @@ function setTheme(theme: Theme): void {
           </div>
           <p v-if="hookError" class="error">{{ hookError }}</p>
           <RadioSection />
+          <AccountsSection :start-add="startPart === 'addAccount'" />
         </fieldset>
 
         <!-- The Track page's own: each change goes to the core by its own command, never with the

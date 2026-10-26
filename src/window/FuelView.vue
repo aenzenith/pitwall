@@ -5,19 +5,31 @@ import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
+import { accountInUse, accountName, severalAccounts } from "../lib/accounts";
 import { duration } from "../lib/day";
 import { ago } from "../lib/format";
 import { clockText, cluster, errorKeys, isStale } from "../lib/fuel";
 import { language, t } from "../lib/i18n";
+import { openInPanel } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, fuel, now, visible } from "../lib/store";
 import type { UsageWindow } from "../lib/types";
+import AccountNote from "./fuel/AccountNote.vue";
+import AccountPanel from "./fuel/AccountPanel.vue";
 import FuelBackdrop from "./fuel/FuelBackdrop.vue";
 import FuelFooter from "./fuel/FuelFooter.vue";
 import FuelGauge from "./fuel/FuelGauge.vue";
 import FuelNotice from "./fuel/FuelNotice.vue";
 import SessionPace from "./fuel/SessionPace.vue";
 import TripComputer from "./fuel/TripComputer.vue";
+
+/** `terminalProject`: the project the terminal panel shows, where "Open Claude with <account>"
+ * opens its tab; null when there is none. */
+const props = defineProps<{ terminalProject: string | null }>();
+
+/** The gear at the bar's end opens Settings on its Claude tab; the account panel's "Manage
+ * accounts" at its accounts (`part`), its "Add account" with the add dialog open. */
+const emit = defineEmits<{ "open-settings": [part?: "accounts" | "addAccount"] }>();
 
 /** The least the refresh button spins, so a click the core answers at once still shows. */
 const MIN_SPIN_MS = 500;
@@ -56,15 +68,25 @@ const firstLoad = computed(() => !usage.value && (!fuel.value || status.value ==
 
 const readAgo = computed(() => (limits.value?.fetchedAt ? ago(limits.value.fetchedAt, now.value) : ""));
 
-/** What the notice above the values says, if anything. */
-const notice = computed<{ kind: "signedOut" | "expired" | "rateLimited" | "error" | "noLimits"; tag: string; title: string; body: string } | null>(() => {
+/** What the notice above the values says, if anything; `account`: the account in use whose
+ * sign-in expired, with more than one account (its "Open Claude with" button). */
+type Notice = { kind: "signedOut" | "expired" | "rateLimited" | "error" | "noLimits"; tag: string; title: string; body: string; account?: { id: string; name: string } };
+
+const notice = computed<Notice | null>(() => {
   const state = limits.value;
   if (!state) return null;
   switch (state.status) {
     case "signedOut":
       return { kind: "signedOut", tag: t("fuel.state.signedOut.tag"), title: t("fuel.state.signedOut.title"), body: t("fuel.state.signedOut.body") };
-    case "expired":
+    case "expired": {
+      // With more than one account, which one's: renewed by opening Claude with it.
+      const account = severalAccounts.value ? accountInUse.value : null;
+      if (account) {
+        const name = accountName(account);
+        return { kind: "expired", tag: t("fuel.state.expired.tag"), title: t("accounts.expired.title", { name }), body: t("accounts.expired.body"), account: { id: account.id, name } };
+      }
       return { kind: "expired", tag: t("fuel.state.expired.tag"), title: t("fuel.state.expired.title"), body: t("fuel.state.expired.body") };
+    }
     case "rateLimited":
       return {
         kind: "rateLimited",
@@ -107,6 +129,11 @@ async function refresh(): Promise<void> {
 }
 
 onMounted(() => void ask(true));
+
+/** "Open Claude with <account>": a Claude tab with it, in the project the terminal panel shows. */
+function openClaude(account: string): void {
+  if (props.terminalProject) openInPanel(props.terminalProject, true, account);
+}
 
 // Back on screen: a fresh look, as far as the core's pace allows.
 watch(visible, (on) => {
@@ -151,10 +178,15 @@ onBeforeUnmount(() => shadeObserver.disconnect());
     <!-- Its heading and free space drag the window; the refresh button stays clickable. -->
     <header class="bar" :data-tauri-drag-region="dragRegion">
       <div class="heading">{{ t("fuel.title") }}</div>
+      <!-- With more than one account: the one in use, and the panel of them all. -->
+      <AccountPanel v-if="severalAccounts" @add="emit('open-settings', 'addAccount')" @manage="emit('open-settings', 'accounts')" />
       <span v-if="readAgo" class="ago">{{ readAgo }}</span>
       <button type="button" class="refresh" :aria-label="t('fuel.refresh')" :title="t('fuel.refresh')" :aria-busy="spinning" @click="refresh">
         <Spinner v-if="spinning" />
         <Icon v-else name="restart" :size="16" />
+      </button>
+      <button type="button" class="options" :aria-label="t('fuel.options')" :title="t('fuel.options')" @click="emit('open-settings')">
+        <Icon name="settings" :size="16" />
       </button>
     </header>
 
@@ -170,6 +202,9 @@ onBeforeUnmount(() => shadeObserver.disconnect());
         <div class="content">
           <!-- The Claude plan, top left on the page's ground, behind Claude's mark. -->
           <div v-if="limits?.plan" class="plan"><ClaudeLogo :size="32" />{{ t("fuel.plan", { plan: limits.plan }) }}</div>
+          <!-- Across from it, for a moment after a switch: what new sessions open with, and how its
+               MCP servers went. Held over the page: nothing moves as it comes and goes. -->
+          <AccountNote />
 
           <FuelNotice v-if="notice" :tag="notice.tag" :title="notice.title">
             <Rich v-if="notice.kind === 'signedOut'" :text="notice.body">
@@ -178,6 +213,9 @@ onBeforeUnmount(() => shadeObserver.disconnect());
             </Rich>
             <template v-else>{{ notice.body }}</template>
             <span v-if="stale" class="dimmed">{{ t("fuel.state.dimmed") }}</span>
+            <template v-if="notice.account && terminalProject" #actions>
+              <button type="button" class="control" @click="openClaude(notice.account.id)">{{ t("accounts.openClaude", { name: notice.account.name }) }}</button>
+            </template>
           </FuelNotice>
 
           <div v-if="firstLoad" class="loading" role="status">
@@ -223,8 +261,8 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   overflow: clip;
 }
 
-/* The same height and line as the projects toolbar, so switching never moves them; the refresh
-   button where a project's settings button sits. */
+/* The same height and line as the projects toolbar, so switching never moves them; the gear where
+   a project's settings button sits, as on the Track page. */
 .bar {
   height: 56px;
   flex-shrink: 0;
@@ -251,7 +289,8 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 }
 
 /* Shaped like a project's settings button (detail/detail.css `.icon`): no box until hovered. */
-.refresh {
+.refresh,
+.options {
   width: 30px;
   height: 30px;
   flex-shrink: 0;
@@ -264,7 +303,8 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   color: var(--text-muted);
 }
 
-.refresh:hover {
+.refresh:hover,
+.options:hover {
   background: var(--bg-icon-hover);
   color: var(--text-strong);
 }
@@ -315,6 +355,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 
 /* The whole window: the cluster takes whatever height the rest leaves. */
 .content {
+  position: relative;
   min-height: 100cqh;
   display: flex;
   flex-direction: column;
@@ -366,6 +407,22 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 /* On a line of its own: no space to guess between sentences in Chinese and Japanese. */
 .dimmed {
   display: block;
+}
+
+/* The notice's button (an expired account's "Open Claude with"). */
+.control {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.control:hover {
+  background: var(--bg-control-hover);
 }
 
 .loading {

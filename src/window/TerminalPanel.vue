@@ -5,6 +5,7 @@ import ClaudeDot from "../components/ClaudeDot.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
+import { accountLabel, accountName, accounts, severalAccounts } from "../lib/accounts";
 import { depJobName, depJobs } from "../lib/deps";
 import { commandFaded } from "../lib/format";
 import { shellRequest } from "../lib/flag";
@@ -572,8 +573,9 @@ function openSudoSettings(): void {
  * the mode picked from its list; without one, as the project's settings say). With panes, or
  * `where` asked for, it goes into a pane (`placeTerminal`). `shell`: on Windows, the shell of the
  * list picked, an administrator's or not; an administrator's that opened in a window of its own,
- * or that Windows refused, opens no tab and the panel says so (`notice`). */
-async function openTerminal(claude = false, start: StartChoice | null = null, where: Place | null = null, shell: ShellChoice | null = null): Promise<void> {
+ * or that Windows refused, opens no tab and the panel says so (`notice`). `account`: the Claude
+ * account it runs with ("Start with account"); without one, the account in use. */
+async function openTerminal(claude = false, start: StartChoice | null = null, where: Place | null = null, shell: ShellChoice | null = null, account: string | null = null): Promise<void> {
   if (opening.value) return;
   opening.value = true;
   try {
@@ -583,7 +585,7 @@ async function openTerminal(claude = false, start: StartChoice | null = null, wh
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
     const size = viewport.value && !panesOn.value && !where ? measure(viewport.value) : null;
-    const opened = await api.openTerminal(props.project.path, claude, size, start, shell);
+    const opened = await api.openTerminal(props.project.path, claude, size, start, shell, account);
     if (opened.kind !== "tab") {
       notice.value = opened.kind;
       return;
@@ -687,7 +689,8 @@ function shellItems(): MenuEntry[] {
 /** The "+" menu, under it: a shell tab, a Claude session as the project's settings say, on
  * Windows in a submenu the shells (and each as an administrator's), and in a submenu the models
  * (the project's own checked) and plan mode, each starting a session at once with that one
- * change, the rest as the project's settings say. */
+ * change, the rest as the project's settings say. With more than one Claude account, in a
+ * submenu the accounts (the one in use checked): a session with that one. */
 function addMenu(event: Event): void {
   if (opening.value) return;
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -705,7 +708,19 @@ function addMenu(event: Event): void {
         { text: t("start.newClaudePlan"), checked: mode === "plan", action: () => void openTerminal(true, { model, mode: "plan" }) },
       ],
     },
+    ...(severalAccounts.value ? [{ text: t("terminal.accountWith"), items: accountItems() }] : []),
   ]);
+}
+
+/** "+"'s "Start with account": every account, the one in use checked; one whose folder is gone
+ * can't be picked. */
+function accountItems(): MenuEntry[] {
+  return accounts.value.map((account) => ({
+    text: accountName(account),
+    checked: account.inUse,
+    enabled: !account.missing,
+    action: () => void openTerminal(true, null, null, null, account.id),
+  }));
 }
 
 /* ---------- the panes ---------- */
@@ -1522,7 +1537,7 @@ watch(
     if (request.path !== path) return;
     openRequest.value = null;
     await nextTick();
-    void openTerminal(request.claude);
+    void openTerminal(request.claude, null, null, null, request.account);
   },
   { immediate: true },
 );
@@ -1728,6 +1743,7 @@ defineExpose({ openTerminal, closeShown });
             <ClaudeLogo v-if="term.kind === 'claude'" :size="11" />
             <Icon v-else :name="shellIcon(term.shell)" :size="11" />
             <span class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
+            <span v-if="accountLabel(term.account)" class="tab-account">{{ accountLabel(term.account) }}</span>
             <span v-if="term.elevated" class="admin"><Icon name="shield" :size="9" />{{ t("terminal.adminBadge") }}</span>
             <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
@@ -2118,6 +2134,22 @@ defineExpose({ openTerminal, closeShown });
 .tab-label > :not(.tab-name),
 .x {
   flex-shrink: 0;
+}
+
+/* Another Claude account's tab (its `claude` runs with it): the account's name, quietly. */
+.tab-account {
+  max-width: 120px;
+  height: 15px;
+  display: inline-block;
+  line-height: 15px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--bg-tag);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* An administrator's shell: a shield and the word, in the warning's colours. */

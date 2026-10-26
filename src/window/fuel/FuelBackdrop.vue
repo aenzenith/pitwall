@@ -36,6 +36,9 @@ const MEASURE_MS = 500;
 const RINGS = 3;
 /** The burn rate, in %/h, at which the embers are at their thickest and quickest. */
 const HOT_RATE = 25;
+/** How long the glow, the embers and the tint take to come most of the way to a new reading's, in
+ * seconds: a switch of account or a fresh reading moves the smoke, never makes it jump. */
+const EASE_S = 0.8;
 
 const VERTEX = `
 attribute vec2 aPos;
@@ -255,6 +258,11 @@ let observer: ResizeObserver | null = null;
 let motionQuery: MediaQueryList | null = null;
 /** The panel's colour and the smoke's, read from the tokens when they may have changed, not each frame. */
 let base: [number, number, number] = [0, 0, 0];
+let tintTo: [number, number, number] = [0, 0, 0];
+/** What the frame shows of the reading: the glow's height (0–1), the heat and the tint. Running, they
+ * glide to a new reading's (`glide`); still, they are the reading's at once (`settle`). */
+let shownLevel = 1;
+let shownHeat = 0;
 let tint: [number, number, number] = [0, 0, 0];
 /** The pods, as the shader takes them: x, y, radius each, in canvas pixels. */
 const rings = new Float32Array(RINGS * 3);
@@ -329,7 +337,7 @@ function setUp(target: HTMLCanvasElement): Scene | null {
 /** The colours of the theme in use, and its program. */
 function colour(): void {
   base = token("--bg-detail");
-  tint = token(props.stale ? "--idle-ring" : low.value ? "--crash" : "--claude");
+  tintTo = token(props.stale ? "--idle-ring" : low.value ? "--crash" : "--claude");
   if (!scene) return;
   const theme = resolvedTheme.value;
   if (!(theme in scene.programs)) scene.programs[theme] = build(scene.gl, theme);
@@ -360,6 +368,21 @@ function measure(): void {
   });
 }
 
+/** The frame shows the reading as it is. */
+function settle(): void {
+  shownLevel = level.value / 100;
+  shownHeat = heat.value;
+  tint = [...tintTo];
+}
+
+/** The frame comes `seconds` closer to the reading. */
+function glide(seconds: number): void {
+  const k = 1 - Math.exp(-seconds / EASE_S);
+  shownLevel += (level.value / 100 - shownLevel) * k;
+  shownHeat += (heat.value - shownHeat) * k;
+  tint = [tint[0] + (tintTo[0] - tint[0]) * k, tint[1] + (tintTo[1] - tint[1]) * k, tint[2] + (tintTo[2] - tint[2]) * k];
+}
+
 function draw(): void {
   const target = canvas.value;
   if (!scene || !target) return;
@@ -374,8 +397,8 @@ function draw(): void {
   gl.uniform1f(uniforms.time, time);
   gl.uniform3fv(uniforms.base, base);
   gl.uniform3fv(uniforms.tint, tint);
-  gl.uniform1f(uniforms.level, level.value / 100);
-  gl.uniform1f(uniforms.heat, heat.value);
+  gl.uniform1f(uniforms.level, shownLevel);
+  gl.uniform1f(uniforms.heat, shownHeat);
   gl.uniform3fv(uniforms.rings, rings);
   gl.uniform2fv(uniforms.foot, foot);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -388,7 +411,8 @@ function tick(at: number): void {
   const step = Math.min(0.1, (at - (lastAt || at)) / 1000);
   lastAt = at;
   lastDrawn = at;
-  time += step * (0.6 + 1.2 * heat.value);
+  glide(step);
+  time += step * (0.6 + 1.2 * shownHeat);
   if (at - lastMeasured > MEASURE_MS) {
     lastMeasured = at;
     measure();
@@ -400,6 +424,7 @@ function play(): void {
   stop();
   if (!scene) return;
   if (!running.value || !scene.uniforms) {
+    settle();
     draw();
     return;
   }
@@ -447,6 +472,7 @@ onMounted(() => {
     ready.value = false;
   });
   colour();
+  settle();
   // The canvas takes another size: its buffer follows. The footer alone does (the limits listed,
   // or folded away): only where it stands is read again.
   observer = new ResizeObserver((entries) => (entries.some((entry) => entry.target === target) ? fit() : onScroll()));
@@ -464,7 +490,9 @@ watch(
   () => {
     colour();
     measure();
-    if (!frame) draw();
+    if (frame) return;
+    settle();
+    draw();
   },
   { flush: "post" },
 );
@@ -476,6 +504,7 @@ watch(
   () => {
     const had = !!scene?.uniforms;
     colour();
+    settle();
     draw();
     // Into a theme whose smoke can't be made, or out of one: the frames stop, or start again.
     if (had !== !!scene?.uniforms) play();

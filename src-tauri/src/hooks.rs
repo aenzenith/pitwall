@@ -481,6 +481,15 @@ impl ClaudeHook {
 
     /// Removes every Pitwall hook from every event, and nothing else.
     pub fn uninstall(&self) -> Result<(), String> {
+        self.take_out()?;
+        let _ = fs::remove_file(&self.script_file);
+        let _ = fs::remove_file(&self.legacy_script);
+        Ok(())
+    }
+
+    /// Takes Pitwall's hooks out of this settings file only, the script left where it is: other
+    /// settings files (another Claude account's, the main one's) may still run it.
+    pub fn take_out(&self) -> Result<(), String> {
         let mut settings = self.read_settings()?;
         let mut changed = false;
 
@@ -510,9 +519,6 @@ impl ClaudeHook {
         if changed {
             self.write_settings(&settings)?;
         }
-
-        let _ = fs::remove_file(&self.script_file);
-        let _ = fs::remove_file(&self.legacy_script);
         Ok(())
     }
 

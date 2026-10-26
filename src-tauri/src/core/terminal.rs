@@ -56,6 +56,8 @@ pub struct TerminalView {
     /// the refill's line), not by the user: it doesn't take the keyboard. Set as the tab is made,
     /// so the first snapshot it is in says so.
     pub unasked: bool,
+    /// The Claude account it runs with (`accounts/`), by id; none: the main one.
+    pub account: Option<String>,
 }
 
 /// A terminal's recent output and the number of its last chunk, so a view can draw the history
@@ -159,8 +161,14 @@ impl Core {
     /// A Claude Code tab in the project's folder ("New Claude"): with the model and in the mode
     /// of `start`, or, without one, as the project's own settings say.
     pub fn open_claude_terminal(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
+        self.open_claude_terminal_with(path, start, size, None)
+    }
+
+    /// `open_claude_terminal` with the account `account` names ("Start with account ›";
+    /// `accounts::MAIN` for the main one); none: the one in use.
+    pub fn open_claude_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>) -> Result<TerminalView, String> {
         let start = start.unwrap_or_else(|| self.project_start(path));
-        self.open_terminal_as(path, &Launch::Claude { prompt: None, start, images: None }, None, false, size, false)
+        self.open_terminal_with(path, &Launch::Claude { prompt: None, start, images: None }, None, false, size, false, account)
     }
 
     /// How a Claude session of the project at `path` starts when nothing else was chosen: the
@@ -182,10 +190,32 @@ impl Core {
         size: Option<(u16, u16)>,
         unasked: bool,
     ) -> Result<TerminalView, String> {
+        self.open_terminal_with(path, launch, name, renamed, size, unasked, None)
+    }
+
+    /// `open_terminal_as` with the Claude account the tab runs with: the one `account` names
+    /// (`accounts::MAIN` for the main one), else the one in use. Another account than the main
+    /// one is given to the tab's shell, and so to Claude in it, as `CLAUDE_CONFIG_DIR`: only the
+    /// folder of an account listed, as the settings hold it; the main one gets nothing of it.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn open_terminal_with(
+        self: &Arc<Self>,
+        path: &str,
+        launch: &Launch,
+        name: Option<String>,
+        renamed: bool,
+        size: Option<(u16, u16)>,
+        unasked: bool,
+        account: Option<&str>,
+    ) -> Result<TerminalView, String> {
         // A folder that is gone would start the shell in the home folder instead, unasked.
         if !Path::new(path).is_dir() {
             return Err(t!("core.error.notFolder", path = path));
         }
+        let account = {
+            let inner = self.lock();
+            crate::accounts::start_with(&inner.settings.accounts, account)?.map(|account| (account.id.clone(), account.dir.clone()))
+        };
         let claude = !matches!(launch, Launch::Shell { .. });
         let (shell, elevated) = match launch {
             Launch::Shell { shell, elevated } => (shells::on_this_system(*shell), *elevated),
@@ -210,6 +240,11 @@ impl Core {
             if key.starts_with("npm_") || key == "INIT_CWD" || key == "NODE" {
                 command.env_remove(key.as_ref());
             }
+        }
+        // The main account is Claude Code without the variable, whatever the app was started with.
+        match &account {
+            Some((_, dir)) => command.env(crate::accounts::ENV, dir),
+            None => command.env_remove(crate::accounts::ENV),
         }
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
@@ -257,7 +292,8 @@ impl Core {
                 None if same == 0 || shell.is_some() => base,
                 None => format!("{base} {}", same + 1),
             };
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), shell, elevated, renamed, unasked };
+            let account = account.map(|(id, _)| id);
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), shell, elevated, renamed, unasked, account };
             inner.terminal_list.push(view.clone());
             view
         };

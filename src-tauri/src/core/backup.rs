@@ -159,6 +159,8 @@ impl General {
             // This Mac's own as well: where its small window stands, the command installed here,
             // how tall its terminal panel is for panes.
             tower: _, cli: _, panes_height: _,
+            // This Mac's own: Claude's accounts are folders and Keychain items here.
+            accounts: _,
         } = settings.clone();
 
         Self {

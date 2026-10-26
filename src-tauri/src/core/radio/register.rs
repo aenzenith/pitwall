@@ -43,12 +43,18 @@ struct Said {
 /// Runs `line` in the user's shell, in the home folder. `None`: no shell, or no answer in time.
 /// Tests never run it: it would be the user's own Claude Code.
 fn run(line: &str) -> Option<Said> {
+    run_in(line, None)
+}
+
+/// `run` for the Claude account whose folder is `account` (none: the main one).
+fn run_in(line: &str, account: Option<&str>) -> Option<Said> {
     if cfg!(test) {
         return None;
     }
 
     let home = dirs::home_dir()?;
-    let child = process::spawn_shell(line, &home.to_string_lossy()).ok()?;
+    let extra: Vec<(&str, &str)> = account.map(|dir| (crate::accounts::ENV, dir)).into_iter().collect();
+    let child = process::spawn_shell_with(line, &home.to_string_lossy(), &extra).ok()?;
     let pid = child.id();
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
@@ -142,7 +148,28 @@ pub(super) fn add() -> Result<(), String> {
 
 /// Takes Pitwall out of the user's MCP servers; not being there is as good.
 pub(super) fn remove() -> Result<(), String> {
-    match run(&format!("claude mcp remove {SERVER_NAME} --scope user")) {
+    remove_in(None)
+}
+
+/// Adds this app as the MCP server `pitwall` of the Claude account whose folder is `account`
+/// (another than the main one), through the same CLI given that folder.
+pub(super) fn add_in(account: &str) -> Result<(), String> {
+    let app = own_app().ok_or_else(|| t!("core.radio.cliSilent"))?;
+    let line = add_line(&app);
+
+    match run_in(&line, Some(account)) {
+        Some(said) if said.code != Some(0) && said.text.contains("already exists") => {
+            remove_in(Some(account))?;
+            settled(run_in(&line, Some(account)))
+        }
+        said => settled(said),
+    }
+}
+
+/// Takes Pitwall out of the MCP servers of the account whose folder is `account` (none: the main
+/// one); not being there is as good.
+pub(super) fn remove_in(account: Option<&str>) -> Result<(), String> {
+    match run_in(&format!("claude mcp remove {SERVER_NAME} --scope user"), account) {
         Some(said) if said.text.contains(NO_SERVER) => Ok(()),
         said => settled(said),
     }

@@ -138,6 +138,8 @@ impl Core {
                 flag: kept.flag,
                 tower: kept.tower,
                 cli: kept.cli,
+                // Claude's accounts: by their own commands (`core/accounts.rs`).
+                accounts: kept.accounts,
                 ..form
             };
             unnamed

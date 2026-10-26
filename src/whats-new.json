@@ -1,193 +1,25 @@
 {
-  "since": "1.16.0",
+  "since": "1.17.0",
   "notes": [
     {
       "kind": "new",
       "title": {
-        "en": "Terminals side by side",
-        "tr": "Terminaller yan yana",
-        "de": "Terminals nebeneinander",
-        "es": "Terminales lado a lado",
-        "ru": "Терминалы рядом",
-        "ja": "ターミナルを並べて表示",
-        "zh-Hans": "终端并排显示"
+        "en": "More than one Claude account",
+        "tr": "Birden fazla Claude hesabı",
+        "de": "Mehrere Claude-Konten",
+        "es": "Varias cuentas de Claude",
+        "ru": "Несколько аккаунтов Claude",
+        "ja": "複数の Claude アカウント",
+        "zh-Hans": "多个 Claude 账户"
       },
       "body": {
-        "en": "Split the terminal panel into panes from Layout, or drag a tab, a pane or a past session where you want it. Drag the borders to resize; your layout comes back next time.",
-        "tr": "Terminal panelini Düzen menüsünden bölmelere ayırabilir, bir sekmeyi, bölmeyi ya da geçmiş bir oturumu istediğin yere sürükleyebilirsin. Sınırları sürükleyerek boyutları ayarla; düzenin bir sonraki açılışta da yerinde olur.",
-        "de": "Teile den Terminalbereich über „Anordnung“ in Teilfenster, oder zieh einen Tab, ein Teilfenster oder eine frühere Sitzung dorthin, wo du sie haben willst. Die Grenzen lassen sich ziehen, und deine Anordnung ist beim nächsten Start wieder da.",
-        "es": "Divide el panel de terminales desde Disposición, o arrastra una pestaña, una división o una sesión anterior adonde la quieras. Arrastra los bordes para ajustar el tamaño; tu disposición vuelve la próxima vez.",
-        "ru": "Разделите панель терминалов на области через «Раскладку» или перетащите вкладку, область или прошлую сессию туда, где она нужна. Границы можно тянуть, а раскладка вернётся при следующем запуске.",
-        "ja": "「レイアウト」でターミナルパネルをペインに分けたり、タブやペイン、過去のセッションを好きな場所へドラッグしたりできます。境界はドラッグで調整でき、レイアウトは次回の起動時にも残ります。",
-        "zh-Hans": "通过“布局”把终端面板分成多个窗格，或把标签页、窗格、过往会话拖到想要的位置。拖动边界即可调整大小，布局下次启动时依然保留。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "⌘W closes one thing at a time",
-        "tr": "⌘W her seferinde bir şey kapatıyor",
-        "de": "⌘W schließt eins nach dem anderen",
-        "es": "⌘W cierra una cosa cada vez",
-        "ru": "⌘W закрывает по одному",
-        "ja": "⌘W で 1 つずつ閉じる",
-        "zh-Hans": "⌘W 逐个关闭"
-      },
-      "body": {
-        "en": "Tabs first, then the terminal panel or the Files window, and Pitwall's window last. On Windows and Linux it's Ctrl+W.",
-        "tr": "Önce sekmeler, sonra terminal paneli ya da Dosyalar penceresi, en son da Pitwall penceresi kapanır. Windows ve Linux'ta Ctrl+W.",
-        "de": "Erst die Tabs, dann den Terminalbereich oder das Dateien-Fenster und zuletzt das Fenster von Pitwall. Unter Windows und Linux Strg+W.",
-        "es": "Primero las pestañas, luego el panel de terminales o la ventana Archivos y, al final, la ventana de Pitwall. En Windows y Linux, Ctrl+W.",
-        "ru": "Сначала вкладки, затем панель терминалов или окно «Файлы», а в конце окно Pitwall. В Windows и Linux — Ctrl+W.",
-        "ja": "まずタブ、次にターミナルパネルやファイルウィンドウ、最後に Pitwall のウィンドウを閉じます。Windows と Linux では Ctrl+W です。",
-        "zh-Hans": "先关闭标签页，再关闭终端面板或文件窗口，最后关闭 Pitwall 窗口。Windows 和 Linux 上为 Ctrl+W。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Pick a shell on Windows",
-        "tr": "Windows'ta kabuğunu seç",
-        "de": "Unter Windows die Shell wählen",
-        "es": "Elige la shell en Windows",
-        "ru": "Выбор оболочки в Windows",
-        "ja": "Windows でシェルを選べるように",
-        "zh-Hans": "在 Windows 上选择 Shell"
-      },
-      "body": {
-        "en": "On Windows, + › New tab with opens Command Prompt, Windows PowerShell or PowerShell 7, and each of them as administrator.",
-        "tr": "Windows'ta + › Kabukla aç ile Komut İstemi, Windows PowerShell ya da PowerShell 7 açabilir, istersen yönetici olarak başlatabilirsin.",
-        "de": "Unter Windows öffnet + › Neuer Tab mit die Eingabeaufforderung, Windows PowerShell oder PowerShell 7, auf Wunsch auch als Administrator.",
-        "es": "En Windows, + › Nueva pestaña con abre el Símbolo del sistema, Windows PowerShell o PowerShell 7, también como administrador.",
-        "ru": "В Windows пункт + › Открыть в оболочке открывает Командную строку, Windows PowerShell или PowerShell 7, в том числе от имени администратора.",
-        "ja": "Windows では + › シェルを選んで開く から、コマンド プロンプト、Windows PowerShell、PowerShell 7 を開けます。管理者としても開けます。",
-        "zh-Hans": "在 Windows 上，通过 + › 新标签页使用 可以打开命令提示符、Windows PowerShell 或 PowerShell 7，也可以以管理员身份打开。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Claude tabs keep the whole session name",
-        "tr": "Claude sekmeleri oturum adının tamamını tutuyor",
-        "de": "Claude-Tabs behalten den ganzen Namen",
-        "es": "Las pestañas de Claude conservan el nombre entero",
-        "ru": "Вкладки Claude хранят название целиком",
-        "ja": "Claude タブがセッション名を最後まで保持",
-        "zh-Hans": "Claude 标签页保留完整会话名"
-      },
-      "body": {
-        "en": "Long names are no longer cut off for good; hover a tab to read all of it.",
-        "tr": "Uzun adlar artık kırpılıp kaybolmuyor; tamamını görmek için imleci sekmenin üzerinde tut.",
-        "de": "Lange Namen werden nicht mehr dauerhaft abgeschnitten; halte den Zeiger über den Tab, um ihn ganz zu lesen.",
-        "es": "Los nombres largos ya no se recortan para siempre; pasa el puntero sobre la pestaña para leerlo completo.",
-        "ru": "Длинные названия больше не обрезаются навсегда — наведите указатель на вкладку, чтобы прочитать его полностью.",
-        "ja": "長い名前が途中で失われなくなりました。タブにポインタを重ねると全体を読めます。",
-        "zh-Hans": "长名字不再被永久截断，把指针停在标签页上即可看到全部。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "The fuel alert comes once",
-        "tr": "Yakıt uyarısı bir kez geliyor",
-        "de": "Die Tank-Warnung kommt nur einmal",
-        "es": "El aviso de combustible llega una vez",
-        "ru": "Предупреждение о топливе — один раз",
-        "ja": "燃料の警告は一度だけ",
-        "zh-Hans": "燃料提醒只出现一次"
-      },
-      "body": {
-        "en": "Past 90 % of a session or the week, you're told once per window instead of at every reading.",
-        "tr": "Oturum ya da hafta %90'ı geçince artık her okumada değil, pencere başına bir kez haber veriyor.",
-        "de": "Über 90 % einer Sitzung oder der Woche meldet sich Pitwall einmal pro Fenster, nicht mehr bei jeder Abfrage.",
-        "es": "Al pasar el 90 % de una sesión o de la semana, te avisa una vez por ventana y no en cada lectura.",
-        "ru": "Когда сессия или неделя переваливает за 90 %, Pitwall сообщает об этом один раз за окно, а не при каждом опросе.",
-        "ja": "セッションや週の使用量が 90 % を超えたとき、読み取りのたびではなく、ウィンドウごとに一度だけ知らせます。",
-        "zh-Hans": "会话或本周用量超过 90 % 时，每个窗口只提醒一次，不再每次读取都提醒。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Fewer false alarms from servers",
-        "tr": "Sunucularda daha az yanlış alarm",
-        "de": "Weniger Fehlalarme bei Servern",
-        "es": "Menos falsas alarmas de los servidores",
-        "ru": "Меньше ложных тревог от серверов",
-        "ja": "サーバーの誤報が減りました",
-        "zh-Hans": "服务器误报更少"
-      },
-      "body": {
-        "en": "A server behind a proxy shows its own address, a side process's busy port no longer restarts it, and a fixed Vite error clears by itself.",
-        "tr": "Proxy arkasındaki bir sunucu kendi adresini gösteriyor, yan bir işin dolu portu onu artık yeniden başlatmıyor, düzelen bir Vite hatasının uyarısı da kendiliğinden kalkıyor.",
-        "de": "Ein Server hinter einem Proxy zeigt seine eigene Adresse, ein belegter Port eines Nebenprozesses startet ihn nicht mehr neu, und ein behobener Vite-Fehler verschwindet von selbst.",
-        "es": "Un servidor detrás de un proxy muestra su propia dirección, el puerto ocupado de otro proceso ya no lo reinicia y un error de Vite corregido desaparece solo.",
-        "ru": "Сервер за прокси показывает свой адрес, занятый порт стороннего процесса больше не перезапускает его, а исправленная ошибка Vite исчезает сама.",
-        "ja": "プロキシの背後のサーバーは自分のアドレスを表示し、別プロセスのポート使用中エラーで再起動されることもなくなりました。直した Vite のエラーも自動で消えます。",
-        "zh-Hans": "代理后面的服务器会显示自己的地址，其他进程的端口占用不再让它重启，已修复的 Vite 错误也会自动消失。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Waiting Claude sessions stay in view",
-        "tr": "Bekleyen Claude oturumları gözden kaçmıyor",
-        "de": "Wartende Claude-Sitzungen bleiben sichtbar",
-        "es": "Las sesiones de Claude que esperan siguen a la vista",
-        "ru": "Ожидающие сессии Claude не теряются",
-        "ja": "待機中の Claude セッションを見逃さない",
-        "zh-Hans": "等待中的 Claude 会话不再被隐藏"
-      },
-      "body": {
-        "en": "Opening one session no longer hides another's open question, and a session that ended in its tab opens again when you click it.",
-        "tr": "Bir oturumu açmak artık aynı projedeki başka bir oturumun bekleyen sorusunu gizlemiyor; sekmesinde biten bir oturum da tıklayınca yeniden açılıyor.",
-        "de": "Eine Sitzung zu öffnen verdeckt nicht mehr die offene Frage einer anderen, und eine Sitzung, die in ihrem Tab beendet wurde, öffnet sich per Klick wieder.",
-        "es": "Abrir una sesión ya no oculta la pregunta pendiente de otra, y una sesión que terminó en su pestaña vuelve a abrirse al hacer clic.",
-        "ru": "Открытие одной сессии больше не скрывает открытый вопрос другой, а сессия, завершившаяся во вкладке, снова открывается по щелчку.",
-        "ja": "あるセッションを開いても、別のセッションの未回答の質問が隠れなくなりました。タブ内で終了したセッションもクリックで再び開けます。",
-        "zh-Hans": "打开一个会话不再隐藏另一个会话待回答的问题；在标签页里已结束的会话，点击即可重新打开。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Files and backups, put right",
-        "tr": "Dosyalar ve yedekte düzeltmeler",
-        "de": "Dateien und Sicherungen repariert",
-        "es": "Arreglos en Archivos y copias de seguridad",
-        "ru": "Исправления в «Файлах» и резервных копиях",
-        "ja": "ファイルとバックアップの修正",
-        "zh-Hans": "文件与备份的修复"
-      },
-      "body": {
-        "en": "Source control shows names like çizim.md as written, Open in editor opens the file you're looking at, and unstarred projects come back from a backup.",
-        "tr": "Kaynak denetimi çizim.md gibi adları olduğu gibi gösteriyor, Editörde aç baktığın dosyayı açıyor, yıldızsız projeler de yedekten geri gelebiliyor.",
-        "de": "Die Quellcodeverwaltung zeigt Namen wie çizim.md richtig, „Im Editor öffnen“ öffnet die Datei, die du gerade ansiehst, und Projekte ohne Stern kommen aus einer Sicherung zurück.",
-        "es": "Control de código fuente muestra nombres como çizim.md tal cual, Abrir en el editor abre el archivo que estás viendo y los proyectos sin estrella vuelven desde una copia de seguridad.",
-        "ru": "Система контроля версий показывает имена вроде çizim.md как есть, «Открыть в редакторе» открывает именно тот файл, что вы смотрите, а проекты без звезды восстанавливаются из копии.",
-        "ja": "ソース管理で çizim.md のような名前がそのまま表示され、「エディタで開く」は表示中のファイルを開きます。星のないプロジェクトもバックアップから戻せます。",
-        "zh-Hans": "源代码管理会按原样显示 çizim.md 这类文件名，“在编辑器中打开”会打开你正在看的文件，未加星的项目也能从备份恢复。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Lighter on the CPU",
-        "tr": "İşlemciye daha hafif",
-        "de": "Schonender für den Prozessor",
-        "es": "Más ligero para el procesador",
-        "ru": "Легче для процессора",
-        "ja": "CPU への負担が軽く",
-        "zh-Hans": "更省 CPU"
-      },
-      "body": {
-        "en": "Big terminal output, a chatty server's log, animations and long files now cost far less CPU.",
-        "tr": "Büyük terminal çıktıları, çok konuşan bir sunucunun logu, animasyonlar ve uzun dosyalar artık işlemciyi çok daha az yoruyor.",
-        "de": "Große Terminalausgaben, das Log eines gesprächigen Servers, Animationen und lange Dateien kosten jetzt viel weniger Rechenzeit.",
-        "es": "Las salidas grandes de terminal, el registro de un servidor hablador, las animaciones y los archivos largos ahora gastan mucho menos CPU.",
-        "ru": "Большой вывод в терминале, журнал болтливого сервера, анимации и длинные файлы теперь нагружают процессор гораздо меньше.",
-        "ja": "大量のターミナル出力、ログの多いサーバー、アニメーション、長いファイルで CPU をほとんど使わなくなりました。",
-        "zh-Hans": "大量终端输出、日志频繁的服务器、动画和长文件现在占用的 CPU 少得多。"
+        "en": "Add one in Settings › Claude (the new gear on Fuel takes you there) and switch with a click on Fuel. You sign in in your browser; Pitwall never stores your password or token.",
+        "tr": "Ayarlar › Claude'dan hesap ekle (Yakıt'taki yeni dişli seni oraya götürür), Yakıt'tan tek tıkla geç. Giriş tarayıcında yapılır; Pitwall şifreni de anahtarını da saklamaz.",
+        "de": "Leg eins unter Einstellungen › Claude an (das neue Zahnrad im Tank bringt dich hin) und wechsle im Tank mit einem Klick. Du meldest dich im Browser an; Passwort und Token speichert Pitwall nie.",
+        "es": "Añade una en Ajustes › Claude (el nuevo engranaje de Combustible te lleva allí) y cambia con un clic en Combustible. Inicias sesión en el navegador; Pitwall nunca guarda tu contraseña ni tu token.",
+        "ru": "Добавьте аккаунт в Настройки › Claude (туда ведёт новая шестерёнка в «Топливе») и переключайтесь одним щелчком в «Топливе». Вход — в браузере; пароль и токен Pitwall не хранит.",
+        "ja": "設定 › Claude で追加でき（燃料の新しい歯車から開けます）、燃料でワンクリックで切り替えられます。サインインはブラウザで。パスワードもトークンも Pitwall は保存しません。",
+        "zh-Hans": "在 设置 › Claude 中添加（燃料页的新齿轮可直达），在燃料页一键切换。登录在浏览器中完成，Pitwall 从不保存你的密码或令牌。"
       }
     }
   ]

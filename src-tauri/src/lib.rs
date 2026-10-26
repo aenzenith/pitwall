@@ -1,3 +1,4 @@
+mod accounts;
 mod browser;
 mod claude;
 mod clock;
@@ -498,6 +499,17 @@ pub fn run() {
             commands::window_ready,
             commands::fuel_state,
             commands::refresh_fuel,
+            commands::account_use,
+            commands::account_rename,
+            commands::account_remove,
+            commands::account_set_sync,
+            commands::account_reveal,
+            commands::account_folder,
+            commands::account_pick_folder,
+            commands::account_login,
+            commands::account_login_cancel,
+            commands::account_sync,
+            commands::account_sync_plan,
             commands::deps_state,
             commands::deps_check,
             commands::deps_install,

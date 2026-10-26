@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import ClaudeDot from "../components/ClaudeDot.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
+import { accountLabel } from "../lib/accounts";
 import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import {
@@ -474,6 +475,7 @@ defineExpose({ placed, shown, rectOf, dropAt });
           <ClaudeLogo v-if="views.get(pane.leaf.terminal)?.kind === 'claude'" :size="11" />
           <Icon v-else :name="shellIcon(views.get(pane.leaf.terminal)?.shell)" :size="11" />
           <span class="name">{{ nameOf(pane.leaf.terminal) }}</span>
+          <span v-if="accountLabel(views.get(pane.leaf.terminal)?.account)" class="account">{{ accountLabel(views.get(pane.leaf.terminal)?.account) }}</span>
           <span v-if="views.get(pane.leaf.terminal)?.elevated" class="admin"><Icon name="shield" :size="9" />{{ t("terminal.adminBadge") }}</span>
           <ClaudeDot v-if="live.has(pane.leaf.terminal)" :live="live.get(pane.leaf.terminal)" />
           <span v-if="live.get(pane.leaf.terminal)?.phase === 'waiting'" class="wait">{{ live.get(pane.leaf.terminal)?.text }}</span>
@@ -587,6 +589,24 @@ defineExpose({ placed, shown, rectOf, dropAt });
 
 .pane.elevated.on {
   border-color: color-mix(in srgb, var(--warn) 55%, var(--warn-line));
+}
+
+/* Another Claude account's terminal: the account's name, quietly, as on its tab (TerminalPanel). */
+.account {
+  flex-shrink: 0;
+  max-width: 120px;
+  height: 15px;
+  display: inline-block;
+  line-height: 15px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--bg-tag);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .admin {

@@ -33,6 +33,9 @@ struct OpenTab {
     /// elsewhere as the user's own shell.
     #[serde(deserialize_with = "shell_or_none", skip_serializing_if = "Option::is_none")]
     shell: Option<Shell>,
+    /// The Claude account it ran with, by id; none: the main one (`accounts/`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -150,7 +153,7 @@ impl Core {
         }
         for tab in &standing.tabs {
             let name = tab.renamed.then(|| tab.name.clone());
-            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), shell: tab.shell })));
+            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), shell: tab.shell, account: tab.account.clone() })));
         }
         let elevated: Vec<usize> = standing.elevated.iter().map(|(path, _)| entry(path)).collect();
         for (at, server, command, tab) in filled {
@@ -300,7 +303,8 @@ impl Core {
                     opened.push(None);
                     continue;
                 };
-                let open = || self.open_terminal_as(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false);
+                let account = self.account_back(tab.account.as_deref());
+                let open = || self.open_terminal_with(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false, Some(&account));
                 let id = match &launch {
                     // Once, whoever opens it first: a click in the terminals' history may have
                     // opened it since the start, before Claude Code lists its process.
@@ -377,7 +381,7 @@ mod tests {
         let core = core_in(tmp.path());
         core.add_project(&listed).unwrap();
 
-        let tab = |session: Option<&str>| OpenTab { name: None, session: session.map(str::to_string), shell: None };
+        let tab = |session: Option<&str>| OpenTab { name: None, session: session.map(str::to_string), shell: None, account: None };
         let record = Record {
             v: 1,
             at: now_ms(),
@@ -558,7 +562,7 @@ mod tests {
         let claude = tmp.path().join("claude");
         let core = core_in(tmp.path());
         let id = "9bb85e86-f618-4861-9858-03ec8fc36c28";
-        let tab = OpenTab { name: None, session: Some(id.into()), shell: None };
+        let tab = OpenTab { name: None, session: Some(id.into()), shell: None, account: None };
 
         // Its log, written a moment ago, and Claude Code's file of the process that runs it.
         let log = claude.join("projects").join("-paddock").join(format!("{id}.jsonl"));
@@ -619,7 +623,7 @@ mod tests {
 
         let (mut tabs, mut restored, mut clicked, mut given, mut followed) = (Vec::new(), None, None, None, None);
         if held {
-            let record = Record { v: 1, at: now_ms(), projects: vec![OpenProject { path: project.clone(), tabs: vec![OpenTab { name: None, session: Some(id.into()), shell: None }], ..OpenProject::default() }] };
+            let record = Record { v: 1, at: now_ms(), projects: vec![OpenProject { path: project.clone(), tabs: vec![OpenTab { name: None, session: Some(id.into()), shell: None, account: None }], ..OpenProject::default() }] };
             write_private(&core.resume_file(), &serde_json::to_string(&record).unwrap()).unwrap();
             core.resume_start(false);
             core.resume_restore(false);

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import Icon from "../../components/Icon.vue";
 
-/** Why the limits can't be shown, or can't be kept fresh: a tag, a title, what to do. */
+/** Why the limits can't be shown, or can't be kept fresh: a tag, a title, what to do; `actions`,
+ * the buttons that do it. */
 defineProps<{ tag: string; title: string }>();
 </script>
 
@@ -12,6 +13,7 @@ defineProps<{ tag: string; title: string }>();
       <span class="section-label">{{ tag }}</span>
       <span class="title">{{ title }}</span>
       <span class="body"><slot /></span>
+      <div v-if="$slots.actions" class="actions"><slot name="actions" /></div>
     </div>
   </section>
 </template>
@@ -52,6 +54,14 @@ defineProps<{ tag: string; title: string }>();
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-soft);
+}
+
+/* What can be done about it, under what it says. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .body :deep(code) {

@@ -10,6 +10,7 @@ import MutedMark from "../components/MutedMark.vue";
 import Spinner from "../components/Spinner.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
+import { connectAccounts } from "../lib/accounts";
 import { claudeState, gitLine, meta } from "../lib/format";
 import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
@@ -71,6 +72,16 @@ let boardLink: Promise<UnlistenFn> | null = null;
 // Fuel's data comes to this window from the start: the sidebar shows it on every page.
 onMounted(async () => {
   unlistenFuel = await connectFuel();
+});
+
+/** The accounts' syncs (lib/accounts), from the start too: a switch made in Settings is told on
+ * the Fuel page. */
+let accountsLink: Promise<UnlistenFn> | null = null;
+onMounted(() => {
+  accountsLink = connectAccounts();
+});
+onBeforeUnmount(() => {
+  void accountsLink?.then((unlisten) => unlisten(), () => undefined);
 });
 
 /** The dependencies' feed: from the start too, for the sidebar's count. */
@@ -136,11 +147,13 @@ watch(visible, (on) => {
 const settingsOpen = ref(false);
 /** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's, the Track
  * page's settings button on Track's, the popover's "Quiet hours…" on Notifications'. The first
- * run's phone row opens it on Notifications' too, at the phone's part (`settingsPart`). */
+ * run's phone row opens it on Notifications' too, at the phone's part (`settingsPart`); the Fuel
+ * page's account panel on Claude's, at its accounts (with the add dialog open for "Add account"). */
 const settingsTab = ref<"claude" | "track" | "notifications" | undefined>(undefined);
-const settingsPart = ref<"phone" | undefined>(undefined);
+type SettingsPart = "phone" | "accounts" | "addAccount";
+const settingsPart = ref<SettingsPart | undefined>(undefined);
 
-function openSettings(tab?: "claude" | "track" | "notifications", part?: "phone"): void {
+function openSettings(tab?: "claude" | "track" | "notifications", part?: SettingsPart): void {
   settingsTab.value = tab;
   settingsPart.value = part;
   settingsOpen.value = true;
@@ -944,7 +957,7 @@ function server(project: Project): string {
     <div class="page" :style="{ marginBottom: panelShown ? `${COLLAPSED_HEIGHT}px` : undefined, '--panel-over': `${panelOver}px` }">
     <DayView v-if="view === 'day'" />
     <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
-    <FuelView v-else-if="view === 'fuel'" />
+    <FuelView v-else-if="view === 'fuel'" :terminal-project="panelShown ? (panelProject?.path ?? null) : null" @open-settings="(part) => openSettings('claude', part)" />
     <SessionsView
       v-else-if="view === 'sessions'"
       :claude-project="selected?.name ?? null"

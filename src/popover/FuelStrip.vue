@@ -3,6 +3,7 @@ import { emitTo } from "@tauri-apps/api/event";
 import { computed } from "vue";
 
 import Icon from "../components/Icon.vue";
+import { accountInUse, accountName, severalAccounts } from "../lib/accounts";
 import { clockText, cluster, errorKeys, isStale, LOW_LEFT, percentText, type ClusterDial } from "../lib/fuel";
 import { language, t } from "../lib/i18n";
 import type { Page } from "../lib/pages";
@@ -80,6 +81,10 @@ const shown = computed<Shown | null>(() => {
   return text ? { kind: "line", text } : null;
 });
 
+/** With more than one Claude account, the one in use: named beside its share (or before why
+ * there is none), since the strip is its limits. */
+const account = computed(() => (severalAccounts.value && accountInUse.value ? accountName(accountInUse.value) : null));
+
 /** Pitwall's window, on the Fuel page: the way the switcher's `/` opens a page. */
 function openFuel(): void {
   const page: Page = "fuel";
@@ -103,7 +108,10 @@ function openFuel(): void {
         <span class="fuelstrip-row">
           <FuelDial variant="big" :left="shown.lead.left" :name="shown.lead.name" :stale="shown.stale" />
           <span class="fuelstrip-lead">
-            <span :class="['fuelstrip-share', { low: shown.lead.low }]" aria-hidden="true">{{ shown.lead.share }}</span>
+            <span class="fuelstrip-top">
+              <span :class="['fuelstrip-share', { low: shown.lead.low }]" aria-hidden="true">{{ shown.lead.share }}</span>
+              <span v-if="account" class="fuelstrip-account">{{ account }}</span>
+            </span>
             <span class="fuelstrip-note">{{ shown.lead.name }} · {{ shown.lead.caption }}</span>
           </span>
           <template v-if="shown.rest.length">
@@ -121,7 +129,7 @@ function openFuel(): void {
         <span v-if="shown.why" class="fuelstrip-why">{{ shown.why }}</span>
       </span>
       <template v-else>
-        <span id="fuelstrip-says" class="fuelstrip-text">{{ shown.text }}</span>
+        <span id="fuelstrip-says" class="fuelstrip-text">{{ account ? `${account} · ${shown.text}` : shown.text }}</span>
         <span class="fuelstrip-go">{{ t("fuel.nav") }} <Icon name="chevron" :size="12" /></span>
       </template>
     </button>
@@ -180,6 +188,32 @@ function openFuel(): void {
   letter-spacing: -0.01em;
   color: var(--claude-text);
   font-variant-numeric: tabular-nums;
+}
+
+/* The share and, with more than one account, whose it is. */
+.fuelstrip-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fuelstrip-top .fuelstrip-share {
+  flex-shrink: 0;
+}
+
+.fuelstrip-account {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.stale .fuelstrip-account {
+  color: var(--text-muted);
 }
 
 .fuelstrip-note {

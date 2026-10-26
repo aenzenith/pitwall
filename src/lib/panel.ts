@@ -168,14 +168,15 @@ export function revealTab(path: string, id: number): void {
   terminalRequest.value = { path, id, at: Date.now() };
 }
 
-/** A new tab asked for from a page (the Sessions page's "Open a Claude terminal"): the panel's
- * project becomes `path` and opens it as its "+" would. Whoever opens it clears it. */
-export const openRequest = ref<{ path: string; claude: boolean; at: number } | null>(null);
+/** A new tab asked for from a page (the Sessions page's "Open a Claude terminal", the Fuel page's
+ * "Open Claude with <account>"): the panel's project becomes `path` and opens it as its "+" would;
+ * `account`, with that Claude account. Whoever opens it clears it. */
+export const openRequest = ref<{ path: string; claude: boolean; account: string | null; at: number } | null>(null);
 
-export function openInPanel(path: string, claude: boolean): void {
+export function openInPanel(path: string, claude: boolean, account: string | null = null): void {
   panelAsks.value++;
   panelPath.value = path;
-  openRequest.value = { path, claude, at: Date.now() };
+  openRequest.value = { path, claude, account, at: Date.now() };
 }
 
 /** The size a new tab gets in the panel, measured by the panel (`register`): the Board page gives

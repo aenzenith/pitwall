@@ -149,6 +149,26 @@ pub fn terminal_path() -> Vec<std::path::PathBuf> {
     shell_path().unwrap_or_else(|| std::env::var_os("PATH").map(|path| std::env::split_paths(&path).collect()).unwrap_or_default())
 }
 
+/// Where the program `name` is on the terminal's `PATH` (`terminal_path`): on Windows as
+/// `name.exe`, else as an npm install's `name.cmd`, whose arguments the standard library escapes
+/// for `cmd.exe` or refuses. Relative entries are skipped.
+pub fn terminal_program(name: &str) -> Option<std::path::PathBuf> {
+    let files = if cfg!(windows) { vec![format!("{name}.exe"), format!("{name}.cmd")] } else { vec![name.to_string()] };
+    let dirs: Vec<_> = terminal_path().into_iter().filter(|dir| dir.is_absolute()).collect();
+    files.iter().find_map(|file| dirs.iter().map(|dir| dir.join(file)).find(|file| file.is_file()))
+}
+
+/// `program` run directly, no shell between: its arguments reach it as they are, whatever they
+/// hold. With the terminal's environment (`terminal_env`; the app's own on Windows) and `extra`
+/// over it.
+pub fn terminal_command(program: &Path, extra: &[(&str, &str)]) -> Command {
+    let mut command = command(program);
+    #[cfg(unix)]
+    command.envs(terminal_env(false).iter().map(|(name, value)| (name, value)));
+    command.envs(extra.iter().copied()).env("FORCE_COLOR", "0").env("NO_COLOR", "1");
+    command
+}
+
 /// Asks an interactive login shell, in the home folder, for its environment (`env -0` between
 /// two marks). The shell gets a session of its own: an interactive shell takes its terminal's
 /// foreground (a dev run's), and without a terminal there is none to take. `None` when it
@@ -226,6 +246,13 @@ fn parse_env(output: &[u8]) -> Option<Environment> {
 /// leads a process group of its own, so stopping it takes the `vite` under `npm` down too.
 #[cfg(unix)]
 pub fn spawn_shell(command_line: &str, cwd: &str) -> std::io::Result<Child> {
+    spawn_shell_with(command_line, cwd, &[])
+}
+
+/// `spawn_shell` with `extra` set over the environment it would have (a Claude account's
+/// `CLAUDE_CONFIG_DIR`).
+#[cfg(unix)]
+pub fn spawn_shell_with(command_line: &str, cwd: &str, extra: &[(&str, &str)]) -> std::io::Result<Child> {
     use std::os::unix::process::CommandExt;
 
     let env = terminal_env(false);
@@ -236,6 +263,7 @@ pub fn spawn_shell(command_line: &str, cwd: &str) -> std::io::Result<Child> {
     shell
         .args(["-c", command_line])
         .envs(env.iter().map(|(name, value)| (name, value)))
+        .envs(extra.iter().copied())
         .current_dir(cwd)
         .env("FORCE_COLOR", "0")
         .stdin(Stdio::null())
@@ -252,11 +280,18 @@ pub fn spawn_shell(command_line: &str, cwd: &str) -> std::io::Result<Child> {
 /// made) the tree is stopped with `taskkill /T`.
 #[cfg(windows)]
 pub fn spawn_shell(command_line: &str, cwd: &str) -> std::io::Result<Child> {
+    spawn_shell_with(command_line, cwd, &[])
+}
+
+/// `spawn_shell` with `extra` set over the app's environment.
+#[cfg(windows)]
+pub fn spawn_shell_with(command_line: &str, cwd: &str, extra: &[(&str, &str)]) -> std::io::Result<Child> {
     use std::os::windows::process::CommandExt;
 
     let mut child = command(win::comspec())
         .args(["/D", "/S", "/C"])
         .raw_arg(cmd_argument(command_line))
+        .envs(extra.iter().copied())
         .current_dir(cwd)
         .env("FORCE_COLOR", "0")
         .stdin(Stdio::null())

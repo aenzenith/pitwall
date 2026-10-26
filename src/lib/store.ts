@@ -32,6 +32,7 @@ import type {
   SignalKind,
   Snapshot,
   StartChoice,
+  SyncReport,
   TerminalLayout,
   TerminalOpened,
   TerminalShells,
@@ -279,9 +280,26 @@ export const api = {
   /** `start`: for a Claude tab, the model and the mode picked from "New Claude"'s list; without
    * it, the project's own. `shell`: on Windows, the shell of the list a shell tab runs, and
    * whether an administrator's; without it, Command Prompt there and the user's own shell
-   * elsewhere. */
-  openTerminal: (path: string, claude = false, size: { cols: number; rows: number } | null = null, start: StartChoice | null = null, shell: ShellChoice | null = null) =>
-    invoke<TerminalOpened>("open_terminal", { path, claude, cols: size?.cols, rows: size?.rows, start: start ?? undefined, shell: shell?.shell, elevated: shell?.elevated }),
+   * elsewhere. `account`: the Claude account it runs with ("Start with account"); without it, the
+   * one in use. */
+  openTerminal: (
+    path: string,
+    claude = false,
+    size: { cols: number; rows: number } | null = null,
+    start: StartChoice | null = null,
+    shell: ShellChoice | null = null,
+    account: string | null = null,
+  ) =>
+    invoke<TerminalOpened>("open_terminal", {
+      path,
+      claude,
+      cols: size?.cols,
+      rows: size?.rows,
+      start: start ?? undefined,
+      shell: shell?.shell,
+      elevated: shell?.elevated,
+      account: account ?? undefined,
+    }),
   /** The shells "+" offers on Windows (none elsewhere), asked of the system now. */
   terminalShells: () => invoke<TerminalShells>("terminal_shells"),
   /** Windows' settings for sudo (System › For developers). */
@@ -375,6 +393,35 @@ export const api = {
   updateInstall: () => invoke("update_install"),
   /** Asks the core to read the limits again (`force`: past the background pace; it still throttles). */
   refreshFuel: (force: boolean) => invoke("refresh_fuel", { force }),
+
+  /* Claude accounts (`fuel.accounts`; events `account-login`, `account-sync`: lib/accounts). */
+  /** New Claude sessions Pitwall starts use it from now on; with its sync on a sync starts, with it
+   * off what differs is told (`account-sync`). Rejects with a message. */
+  accountUse: (id: string) => invoke("account_use", { id }),
+  /** Any account's, the main one's too (an empty name gives it back its default). */
+  accountRename: (id: string, name: string) => invoke("account_rename", { id, name }),
+  /** Not the main one: Pitwall takes back what it added to the folder; the folder and its
+   * sign-in stay. */
+  accountRemove: (id: string) => invoke("account_remove", { id }),
+  /** "Sync when switching". */
+  accountSetSync: (id: string, on: boolean) => invoke("account_set_sync", { id, on }),
+  /** Its folder in Finder. */
+  accountReveal: (id: string) => invoke("account_reveal", { id }),
+  /** The folder a new account of this name gets; `exists`: one is there already, used as it is. */
+  accountFolder: (name: string) => invoke<{ shown: string; exists: boolean }>("account_folder", { name }),
+  /** The system's folder dialog: null when cancelled; rejects with a message for a folder that
+   * can't be an account's. */
+  accountPickFolder: () => invoke<{ path: string; shown: string } | null>("account_pick_folder"),
+  /** Starts adding one: validates (rejects with a message), then Claude Code's own sign-in opens
+   * in the browser and goes on as `account-login` events. `dir`: a `path` from
+   * `accountPickFolder`, null for the new folder by its name. */
+  accountLogin: (name: string, dir: string | null, shared: boolean, sync: boolean) => invoke("account_login", { name, dir, shared, sync }),
+  /** Stops the sign-in under way: nothing is added. */
+  accountLoginCancel: () => invoke("account_login_cancel"),
+  /** Brings its MCP servers level with the main account's now ("Sync", "Try again"). */
+  accountSync: (id: string) => invoke<SyncReport>("account_sync", { id }),
+  /** What differs, writing nothing ("Details"). */
+  accountSyncPlan: (id: string) => invoke<SyncReport>("account_sync_plan", { id }),
   /** The board: every project's cards (the Board page). */
   boardState: () => invoke<Card[]>("board_state"),
   /** `images`: those pasted into the note; the card takes the ones its note names (`[Image #n]`). */

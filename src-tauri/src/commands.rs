@@ -230,7 +230,8 @@ pub async fn claude_last_message(app: AppHandle, session: String) -> Option<Stri
 /* ---------- project terminals ---------- */
 
 /// `start`: for a Claude tab, the model and the mode chosen from "New Claude"'s list; without
-/// it, the project's own. `shell`: on Windows, the shell of the list a shell tab runs, by its
+/// it, the project's own. `account`: for a Claude tab, the Claude account it runs with ("Start
+/// with account ›"); without it, the one in use. `shell`: on Windows, the shell of the list a shell tab runs, by its
 /// word (`Shell::parse`; any other is none, Command Prompt), never a path or a command line;
 /// `elevated`, an administrator's, which waits for Windows' permission: off the main thread.
 #[tauri::command]
@@ -244,13 +245,13 @@ pub async fn open_terminal(
     start: Option<StartChoice>,
     shell: Option<String>,
     elevated: Option<bool>,
+    account: Option<String>,
 ) -> Result<crate::core::TerminalOpened, String> {
     use crate::core::TerminalOpened;
 
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     tauri::async_runtime::spawn_blocking(move || match (claude.unwrap_or(false), start) {
-        (true, Some(start)) => core.open_claude_terminal(&path, Some(start.gated()), cols.zip(rows)).map(|view| TerminalOpened::Tab { view }),
-        (true, None) => core.open_terminal(&path, true, cols.zip(rows)).map(|view| TerminalOpened::Tab { view }),
+        (true, start) => core.open_claude_terminal_with(&path, start.as_ref().map(StartChoice::gated), cols.zip(rows), account.as_deref()).map(|view| TerminalOpened::Tab { view }),
         (false, _) => core.open_shell(&path, shell.as_deref().and_then(crate::core::Shell::parse), elevated.unwrap_or(false), cols.zip(rows)),
     })
     .await
@@ -600,6 +601,72 @@ pub fn fuel_state(state: State<'_, AppState>) -> crate::fuel::FuelView {
 #[tauri::command]
 pub fn refresh_fuel(app: AppHandle, state: State<'_, AppState>, force: bool) {
     state.fuel.refresh(&app, force, state.core.settings().fuel_every_ms());
+}
+
+/* ---------- Claude's accounts ---------- */
+
+/// The account the Claude sessions Pitwall starts use from now on (`accounts::MAIN` for the main
+/// one).
+#[tauri::command]
+pub fn account_use(app: AppHandle, id: String) -> Result<(), String> {
+    crate::accounts::app::use_account(&app, &id)
+}
+
+#[tauri::command]
+pub fn account_rename(app: AppHandle, id: String, name: String) -> Result<(), String> {
+    crate::accounts::app::rename(&app, &id, &name)
+}
+
+/// Takes an account off the list; Claude Code's CLI takes the radio's entry out, so off the main
+/// thread.
+#[tauri::command]
+pub async fn account_remove(app: AppHandle, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::remove(&app, &id)).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn account_set_sync(app: AppHandle, id: String, on: bool) -> Result<(), String> {
+    crate::accounts::app::set_sync(&app, &id, on)
+}
+
+#[tauri::command]
+pub fn account_reveal(app: AppHandle, id: String) -> Result<(), String> {
+    crate::accounts::app::reveal(&app, &id)
+}
+
+/// The folder a new account of this name gets.
+#[tauri::command]
+pub fn account_folder(app: AppHandle, name: String) -> Result<crate::accounts::app::NewFolder, String> {
+    crate::accounts::app::folder(&app, &name)
+}
+
+/// A folder picked for an account: the system's dialog waits for the user, so off the main thread.
+#[tauri::command]
+pub async fn account_pick_folder(app: AppHandle) -> Result<Option<crate::accounts::app::PickedFolder>, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::pick_folder(&app)).await.map_err(|error| error.to_string())?
+}
+
+/// Starts adding an account; `account-login` tells how it goes.
+#[tauri::command]
+pub fn account_login(app: AppHandle, name: String, dir: Option<String>, shared: bool, sync: bool) -> Result<(), String> {
+    crate::accounts::app::login(&app, &name, dir, shared, sync)
+}
+
+#[tauri::command]
+pub fn account_login_cancel() {
+    crate::accounts::app::login_cancel();
+}
+
+/// An account's MCP servers brought level with the main account's now, through Claude Code's CLI.
+#[tauri::command]
+pub async fn account_sync(app: AppHandle, id: String) -> Result<crate::accounts::sync::SyncReport, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::sync_now(&app, &id)).await.map_err(|error| error.to_string())?
+}
+
+/// What a sync would do, writing nothing.
+#[tauri::command]
+pub async fn account_sync_plan(app: AppHandle, id: String) -> Result<crate::accounts::sync::SyncReport, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::sync_plan(&app, &id)).await.map_err(|error| error.to_string())?
 }
 
 /* ---------- dependencies ---------- */

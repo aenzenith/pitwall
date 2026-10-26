@@ -5,8 +5,11 @@ import { useBackdropClose } from "../lib/dialog";
 import { useReturnFocus } from "../lib/dialogFocus";
 import { t } from "../lib/i18n";
 
-/** Renames a terminal tab: opens with the name selected, Enter saves, Esc or a click outside cancels. */
-const props = defineProps<{ name: string; projectName: string }>();
+/** Renames a terminal tab (or a Claude account, Settings › Claude): opens with the name selected,
+ * Enter saves, Esc or a click outside cancels. `projectName`: the line under the title (an
+ * account's folder). `clearable`: an empty name is saved too (the main account's goes back to its
+ * default). */
+const props = defineProps<{ name: string; projectName: string; clearable?: boolean }>();
 const emit = defineEmits<{ save: [name: string]; close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
@@ -21,10 +24,10 @@ onMounted(() => {
   input.value?.select();
 });
 
-/** An empty name keeps the old one. */
+/** An empty name keeps the old one, unless it may be cleared. */
 function submit(): void {
   const name = draft.value.trim();
-  if (name && name !== props.name) emit("save", name);
+  if ((name || props.clearable) && name !== props.name) emit("save", name);
   dialog.value?.close();
 }
 

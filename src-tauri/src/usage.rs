@@ -2,6 +2,8 @@
 //! model's week and Extra Usage. Read from the endpoint Claude Code's own `/usage` reads, with
 //! Claude Code's sign-in.
 //!
+//! Each Claude account (`accounts/`) has its own watch, with its own sign-in (`Source`).
+//!
 //! The sign-in is borrowed, never refreshed: refreshing rotates the token and can sign Claude Code
 //! out, so an expired one is only reported. The token lives in memory for one request and goes
 //! nowhere else: not to disk, logs, errors or the UI.
@@ -15,8 +17,6 @@ use serde_json::Value;
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const BETA: &str = "oauth-2025-04-20";
-#[cfg(target_os = "macos")]
-const KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
 const USER_AGENT: &str = concat!("Pitwall/", env!("CARGO_PKG_VERSION"));
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -102,6 +102,22 @@ pub struct Extra {
     pub currency: Option<String>,
 }
 
+/// Where an account's sign-in is: the Keychain item Claude Code keeps it in, and the file it
+/// keeps it in where there is no Keychain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Source {
+    service: String,
+    file: Option<std::path::PathBuf>,
+}
+
+impl Source {
+    /// The account whose folder is `dir`; none: the main one (`~/.claude`).
+    pub fn account(dir: Option<&str>) -> Self {
+        let file = dirs::home_dir().map(|home| crate::accounts::credentials_file(&home, dir));
+        Source { service: crate::accounts::keychain_service(dir), file }
+    }
+}
+
 /// Watches Claude's plan limits. Cheap to clone; every clone shares one state.
 #[derive(Clone)]
 pub struct UsageWatch {
@@ -109,6 +125,7 @@ pub struct UsageWatch {
 }
 
 struct Shared {
+    source: Source,
     inner: Mutex<Inner>,
     on_change: Box<dyn Fn() + Send + Sync>,
 }
@@ -126,12 +143,23 @@ struct Attempt {
     reached_api: bool,
 }
 
+impl UsageState {
+    /// Nothing read yet.
+    pub fn loading() -> Self {
+        UsageState { status: Status::Loading, usage: None, plan: None, fetched_at: None, retry_at: None, error: None }
+    }
+}
+
 impl UsageWatch {
-    /// `on_change` runs, on whichever thread made the change, each time `state()` changes.
-    pub fn new(on_change: impl Fn() + Send + Sync + 'static) -> Self {
-        let state = UsageState { status: Status::Loading, usage: None, plan: None, fetched_at: None, retry_at: None, error: None };
-        let inner = Inner { state, busy: false, last: None };
-        UsageWatch { shared: Arc::new(Shared { inner: Mutex::new(inner), on_change: Box::new(on_change) }) }
+    /// The limits of the account whose sign-in `source` names. `on_change` runs, on whichever
+    /// thread made the change, each time `state()` changes.
+    pub fn new(source: Source, on_change: impl Fn() + Send + Sync + 'static) -> Self {
+        let inner = Inner { state: UsageState::loading(), busy: false, last: None };
+        UsageWatch { shared: Arc::new(Shared { source, inner: Mutex::new(inner), on_change: Box::new(on_change) }) }
+    }
+
+    pub fn source(&self) -> &Source {
+        &self.shared.source
     }
 
     pub fn state(&self) -> UsageState {
@@ -157,7 +185,7 @@ impl UsageWatch {
 
         let shared = Arc::clone(&self.shared);
         let spawned = thread::Builder::new().name("usage".into()).spawn(move || {
-            let report = fetch(now);
+            let report = fetch(now, &shared.source);
             shared.finish(now, report);
         });
         if spawned.is_err() {
@@ -236,8 +264,8 @@ enum Problem {
 }
 
 /// One read: Claude Code's sign-in, then the endpoint.
-fn fetch(now: i64) -> Report {
-    let (found, keychain_failed) = read_credentials();
+fn fetch(now: i64, source: &Source) -> Report {
+    let (found, keychain_failed) = read_credentials(source);
     match decide(found, now) {
         Access::Use(credentials) => {
             let plan = credentials.plan.clone();
@@ -293,16 +321,17 @@ fn decide(found: Vec<Credentials>, now: i64) -> Access {
     }
 }
 
-/// Where Claude Code keeps its sign-in: the macOS Keychain, else `~/.claude/.credentials.json`.
-/// Also says whether the Keychain could not be read (as opposed to holding nothing).
-fn read_credentials() -> (Vec<Credentials>, bool) {
+/// Where Claude Code keeps the account's sign-in: the macOS Keychain, else `.credentials.json`
+/// in its folder. Also says whether the Keychain could not be read (as opposed to holding
+/// nothing).
+fn read_credentials(source: &Source) -> (Vec<Credentials>, bool) {
     let mut found = Vec::new();
-    let keychain = keychain_secret();
+    let keychain = keychain_secret(&source.service);
     if let Ok(Some(text)) = &keychain {
         found.extend(parse_credentials(text));
     }
-    if let Some(home) = dirs::home_dir() {
-        if let Ok(text) = std::fs::read_to_string(home.join(".claude").join(".credentials.json")) {
+    if let Some(file) = &source.file {
+        if let Ok(text) = std::fs::read_to_string(file) {
             found.extend(parse_credentials(&text));
         }
     }
@@ -313,13 +342,13 @@ fn read_credentials() -> (Vec<Credentials>, bool) {
 /// a direct Keychain read from another app does. The secret comes back on a pipe, never through
 /// arguments. `Ok(None)` when there is no such item.
 #[cfg(target_os = "macos")]
-fn keychain_secret() -> Result<Option<String>, ()> {
+fn keychain_secret(service: &str) -> Result<Option<String>, ()> {
     use std::io::Read;
     use std::process::Stdio;
     use std::sync::mpsc;
 
     let mut child = crate::process::command("/usr/bin/security")
-        .args(["find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"])
+        .args(["find-generic-password", "-s", service, "-w"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -351,7 +380,7 @@ fn keychain_secret() -> Result<Option<String>, ()> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn keychain_secret() -> Result<Option<String>, ()> {
+fn keychain_secret(_service: &str) -> Result<Option<String>, ()> {
     Ok(None)
 }
 

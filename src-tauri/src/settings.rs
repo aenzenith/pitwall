@@ -426,6 +426,39 @@ impl Default for CliSettings {
     }
 }
 
+/// Claude's accounts (`accounts/`): the main one, Claude Code's own folder, always there, and the
+/// others the user added, each a folder of its own (`CLAUDE_CONFIG_DIR`). Changed through their
+/// own commands only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AccountSettings {
+    /// The name the user gave the main account; none: the catalog's (`accounts.main`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_name: Option<String>,
+    /// The accounts added, in the order they were added.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub others: Vec<ClaudeAccount>,
+    /// The account the Claude sessions Pitwall starts use, by id; none: the main one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub in_use: Option<String>,
+}
+
+/// An account added beside the main one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ClaudeAccount {
+    /// Lower-case hex, made when it was added; never `main`.
+    pub id: String,
+    pub name: String,
+    /// Its folder, absolute, exactly as Claude Code is given it: the name of the Keychain item
+    /// that holds its sign-in is made from these very characters (`accounts::keychain_service`).
+    pub dir: String,
+    /// Its folder links to the main account's settings (`accounts::SHARED`).
+    pub shared: bool,
+    /// Its MCP servers are brought level with the main account's when it is switched to.
+    pub sync: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -538,6 +571,9 @@ pub struct Settings {
     /// Where a project opens from each place, unless it chose its own (Settings › Projects).
     #[serde(default)]
     pub open: OpenSettings,
+    /// Claude's accounts; changed through their own commands only.
+    #[serde(default)]
+    pub accounts: AccountSettings,
 }
 
 impl Default for Settings {
@@ -586,6 +622,7 @@ impl Default for Settings {
             tower: TowerSettings::default(),
             cli: CliSettings::default(),
             open: OpenSettings::default(),
+            accounts: AccountSettings::default(),
         }
     }
 }

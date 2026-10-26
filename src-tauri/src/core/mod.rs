@@ -27,6 +27,7 @@ use crate::registry::{now_ms, same_path, Favourite, Issue, PidEntry, Registry, W
 use crate::resolve::PackageManager;
 use crate::settings::{ProjectSettings, Settings, TrackSettings};
 
+mod accounts;
 mod activity;
 mod backup;
 mod day_tokens;

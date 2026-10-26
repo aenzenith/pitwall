@@ -249,6 +249,9 @@ export type TerminalView = {
   elevated: boolean;
   /** Opened by a board card's moment, not by the user: it takes neither the view nor the keyboard. */
   unasked: boolean;
+  /** The id of the Claude account the tab runs with (its `claude` uses it, a shell tab's too);
+   * null for the main one. Another account's tab shows its name beside the tab's. */
+  account: string | null;
 };
 
 /** A shell a new terminal can start on Windows, by the core's word for it (core/shells.rs). */
@@ -468,8 +471,67 @@ export type SpendToday = {
   unpricedModels: string[];
 };
 
-/** The Fuel page's data, pushed to the main window and the popover as `fuel`. */
-export type Fuel = { limits: UsageState; today: SpendToday | null };
+/** A Claude account (Settings › Claude › Accounts, the Fuel page's account panel). */
+export type ClaudeAccount = {
+  /** "main" for the main account. */
+  id: string;
+  /** The name the user gave it; null for the main account while it has none: shown as
+   * t("accounts.main"). */
+  name: string | null;
+  main: boolean;
+  /** Its folder as the user reads it: "~/.claude", "~/.claude-kisisel". */
+  dir: string;
+  /** Uses the main account's settings (CLAUDE.md, settings and hooks, skills, agents, commands,
+   * plugins) through links in its folder. Always false for the main one. */
+  shared: boolean;
+  /** Its MCP servers are brought level with the main account's when it is switched to. Always
+   * false for the main one. */
+  sync: boolean;
+  /** New Claude sessions Pitwall starts use it. Exactly one account is in use. */
+  inUse: boolean;
+  /** Its folder is gone: it can't be picked (shown disabled, "folder not found"). */
+  missing: boolean;
+  /** Its plan limits as last read, the same shape as Fuel's `limits` (status, usage, plan...). */
+  limits: UsageState;
+  /** Claude sessions running with it now. */
+  running: number;
+};
+
+/** One MCP server of a sync between the main account and another, by its name only. */
+export type SyncServer = {
+  name: string;
+  /** synced: brought over now; same: already the same; missing: the main account has it and
+   * this one doesn't, or differently (a plan, before syncing); login: brought over or the same,
+   * but a remote server that may ask for its sign-in in Claude (`/mcp`); onlyHere: only this
+   * account has it (left alone); failed: couldn't be brought over. */
+  state: "synced" | "same" | "missing" | "login" | "onlyHere" | "failed";
+};
+export type SyncReport = { servers: SyncServer[] };
+
+/** An account being added, as its sign-in goes (event `account-login`, one at a time). */
+export type AccountLogin =
+  /** The browser was asked to open; `url`: the sign-in page, for "Open in browser" when it didn't
+   * (null until Claude printed it). */
+  | { state: "waiting"; url: string | null }
+  /** Added: the account's id, and what Pitwall set up for it. `hooks` shared: through the main
+   * account's settings; none: the main account has no Pitwall hooks either. `mcp`: null when its
+   * sync is off. */
+  | { state: "done"; id: string; hooks: "shared" | "installed" | "failed" | "none"; radio: "added" | "failed" | "off"; mcp: SyncReport | null }
+  /** closed: the sign-in ended before it was done; cli: Claude Code wasn't found. */
+  | { state: "failed"; reason: "closed" | "cli" | "error"; error: string | null };
+
+/** An account's MCP servers brought level with the main account's (event `account-sync`). */
+export type AccountSync =
+  | { id: string; state: "syncing" }
+  | { id: string; state: "done"; report: SyncReport }
+  /** Some server failed. */
+  | { id: string; state: "failed"; report: SyncReport }
+  /** Its sync is off and the main account has servers it hasn't. */
+  | { id: string; state: "differs"; report: SyncReport };
+
+/** The Fuel page's data, pushed to the main window and the popover as `fuel`. `limits`: the
+ * account in use's; `accounts`: the main one first, then the added ones in the order added. */
+export type Fuel = { limits: UsageState; today: SpendToday | null; accounts: ClaudeAccount[] };
 
 /* ---------- Dependencies: lock files against what is installed (deps_state, event `deps`) ---------- */
 

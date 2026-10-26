@@ -79,6 +79,9 @@ pub(super) struct Tab {
     /// elsewhere as the user's own shell.
     #[serde(default, deserialize_with = "shell_or_none", skip_serializing_if = "Option::is_none")]
     pub(super) shell: Option<Shell>,
+    /// The Claude account it ran with, by id; none: the main one (`accounts/`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) account: Option<String>,
     /// That session was at work, or (without one) a command was running.
     cut: bool,
     cols: u16,
@@ -203,6 +206,7 @@ impl Core {
                     renamed: view.renamed,
                     session: session.map(|(id, _)| id.clone()),
                     shell: view.shell,
+                    account: view.account.clone(),
                     cut: session.map_or(running, |(_, busy)| *busy),
                     cols: state.cols,
                     rows: state.rows,
@@ -323,7 +327,8 @@ impl Core {
             };
             let name: String = tab.name.trim().chars().take(TAB_NAME_MAX).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
-            let open = || self.open_terminal_as(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false);
+            let account = self.account_back(tab.account.as_deref());
+            let open = || self.open_terminal_with(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false, Some(&account));
             let id = match &session {
                 // Once, whoever opens it first: a click on it may come before Claude Code lists
                 // its process.
@@ -404,7 +409,7 @@ mod tests {
 
     #[cfg(unix)]
     fn tab(path: &str, session: Option<&str>) -> Tab {
-        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), shell: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
+        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), shell: None, account: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
     }
 
     fn write(core: &Core, at: u64, servers: Vec<String>, tabs: Vec<Tab>) {

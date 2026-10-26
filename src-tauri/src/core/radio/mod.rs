@@ -404,10 +404,12 @@ impl Core {
                 let _ = register::remove();
                 return Err(error);
             }
+            self.radio_accounts(true);
             RadioState::on(false)
         } else {
             let removed = register::remove();
             let _ = self.radio_turn(false);
+            self.radio_accounts(false);
             removed?;
             RadioState::off(false)
         };
@@ -435,6 +437,28 @@ impl Core {
         state
     }
 
+    /// Every other Claude account's MCP servers follow the main one's as the radio is turned on
+    /// or off: each as well as its CLI lets it, what one says doesn't hold the others back.
+    fn radio_accounts(&self, on: bool) {
+        for account in self.accounts().others {
+            let _ = self.radio_account(&account.dir, on);
+        }
+    }
+
+    /// Pitwall among the MCP servers of the account whose folder is `dir` (another than the main
+    /// one), through Claude Code's CLI given that folder: added (`on`) or taken out.
+    pub fn radio_account(&self, dir: &str, on: bool) -> Result<(), String> {
+        // A folder that is gone isn't made again by Claude Code's CLI for this.
+        if !SUPPORTED || !Path::new(dir).is_dir() {
+            return Ok(());
+        }
+        if on {
+            register::add_in(dir)
+        } else {
+            register::remove_in(Some(dir))
+        }
+    }
+
     /// Asks Claude Code's CLI how the radio stands.
     fn radio_ask(self: &Arc<Self>) -> RadioState {
         if !self.lock().settings.radio.on {
@@ -457,9 +481,10 @@ impl Core {
                 RadioState::off(false)
             }
             // The app it named is gone (it moved, a build folder was cleaned): this one is put in
-            // its place.
+            // its place, the other accounts' too.
             Listed::Gone => {
                 let _ = register::add();
+                self.radio_accounts(true);
                 RadioState::on(false)
             }
             listed => RadioState::on(listed == Listed::Missing),

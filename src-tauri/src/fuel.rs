@@ -5,6 +5,10 @@
 //! at the logs also goes to the core for the Today page (`DayFuel`), with the share of the
 //! week's limit the day took: told from the week as read at the day's first reading and after a
 //! refill, which the core writes into the day's file (`WeekMark`).
+//!
+//! Each Claude account (`accounts/`) has its limits read: the page, the menu bar, the alert and a
+//! board card waiting for the refill follow the account in use; the week's share of the day is
+//! the main account's (only its readings are written into the day's file).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -15,13 +19,14 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::accounts::{self, AccountView};
 use crate::clock::day_name;
 use crate::core::{Core, DayFuel, WeekMark};
 use crate::i18n::t;
 use crate::registry::now_ms;
 use crate::settings::Settings;
 use crate::spend::{SessionSpend, Spend, SpendToday};
-use crate::usage::{Status, UsageState, UsageWatch, Window};
+use crate::usage::{Source, Status, UsageState, UsageWatch, Window};
 use crate::{AppState, MAIN, POPOVER};
 
 /// How often today's logs are read again and the limits looked at; the limits hold themselves
@@ -46,12 +51,14 @@ const ESTIMATED: f64 = 1.02;
 /// whole percents, and a point or two measured late in the day would be scaled up many times.
 const UNTOLD: f64 = 1.25;
 
-/// What the page shows.
+/// What the page shows: the limits of the account in use, and every account's.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FuelView {
     pub limits: UsageState,
     pub today: Option<SpendToday>,
+    /// The main account first, then the others as they were added.
+    pub accounts: Vec<AccountView>,
 }
 
 /// The session's fuel as the menu bar shows it.
@@ -66,18 +73,24 @@ pub struct BarFuel {
 }
 
 pub struct Fuel {
-    usage: UsageWatch,
+    app: AppHandle,
+    /// Each account's limits, by its id (`accounts::MAIN` for the main one), as listed.
+    usage: Mutex<Vec<(String, UsageWatch)>>,
     spend: Mutex<Spend>,
     /// Today's numbers as of the last read, so asking for them never waits on a read.
     today: Mutex<Option<SpendToday>>,
     /// The same per session, for the Sessions page.
     sessions: Mutex<HashMap<String, SessionSpend>>,
     /// The reset of each limit the door has had, and whether the user was told of it: one
-    /// notification per window.
-    alerted: Mutex<HashMap<String, (Option<i64>, bool)>>,
+    /// notification per window, by the account's id and the window's.
+    alerted: Mutex<Alerted>,
     /// The week's limit through the day.
     week: Mutex<WeekDay>,
 }
+
+/// By the account's id and the window's: the window's refill as the alert met it, and whether
+/// the user was told.
+type Alerted = HashMap<(String, String), (Option<i64>, bool)>;
 
 /// The week's limit through a day: where each stretch of it started, and the latest reading.
 #[derive(Default)]
@@ -88,6 +101,10 @@ struct WeekDay {
     /// The week's limit used, as last read, and when it refills.
     last: Option<f64>,
     resets: Option<i64>,
+    /// Another account than the main one was in use or at work this day (as far as this run of
+    /// Pitwall saw): the day's tokens are no longer the main account's alone, so their share of
+    /// its week isn't told.
+    mixed: bool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -97,15 +114,9 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 impl Fuel {
     /// `claude_projects` is Claude Code's log folder. Nothing is read until `start`.
     pub fn new(app: &AppHandle, claude_projects: PathBuf) -> Self {
-        let handle = app.clone();
-        let usage = UsageWatch::new(move || {
-            if let Some(state) = handle.try_state::<AppState>() {
-                state.fuel.limits_changed(&handle);
-            }
-        });
-
         Self {
-            usage,
+            app: app.clone(),
+            usage: Mutex::new(vec![(accounts::MAIN.to_string(), watch(app, accounts::MAIN, Source::account(None)))]),
             spend: Mutex::new(Spend::new(claude_projects)),
             today: Mutex::new(None),
             sessions: Mutex::new(HashMap::new()),
@@ -119,17 +130,95 @@ impl Fuel {
         lock(&self.sessions).clone()
     }
 
+    /// The watch of each account `settings` lists: one is made for an account added (and read at
+    /// once) and dropped for one removed.
+    pub fn follow_accounts(&self, settings: &Settings) {
+        let wanted: Vec<(String, Source)> = std::iter::once((accounts::MAIN.to_string(), Source::account(None)))
+            .chain(settings.accounts.others.iter().map(|account| (account.id.clone(), Source::account(Some(&account.dir)))))
+            .collect();
+        let made = {
+            let mut usage = lock(&self.usage);
+            let mut kept: Vec<(String, UsageWatch)> = Vec::new();
+            let mut made = Vec::new();
+            for (id, source) in wanted {
+                match usage.iter().position(|(known, watch)| *known == id && *watch.source() == source) {
+                    Some(at) => kept.push(usage.remove(at)),
+                    None => {
+                        let new = watch(&self.app, &id, source);
+                        made.push(new.clone());
+                        kept.push((id, new));
+                    }
+                }
+            }
+            *usage = kept;
+            made
+        };
+        for watch in made {
+            watch.refresh(false, settings.fuel_every_ms());
+        }
+    }
+
+    /// The limits of the account `id` as last read; being read for one not watched yet (never
+    /// another account's).
+    fn state_of(&self, id: &str) -> UsageState {
+        let watch = lock(&self.usage).iter().find(|(known, _)| known == id).map(|(_, watch)| watch.clone());
+        watch.map(|watch| watch.state()).unwrap_or_else(UsageState::loading)
+    }
+
+    /// The limits of the account in use, as last read.
+    fn limits(&self) -> UsageState {
+        self.state_of(&in_use_id(&self.settings()))
+    }
+
+    fn settings(&self) -> Settings {
+        self.app.try_state::<AppState>().map(|state| state.core.settings()).unwrap_or_default()
+    }
+
     pub fn view(&self) -> FuelView {
-        FuelView { limits: self.usage.state(), today: lock(&self.today).clone() }
+        let (settings, running) = match self.app.try_state::<AppState>() {
+            Some(state) => (state.core.settings(), state.core.claudes_by_account()),
+            None => (Settings::default(), HashMap::new()),
+        };
+        let home = dirs::home_dir().unwrap_or_default();
+        let in_use = in_use_id(&settings);
+        let state_of = |id: &str| self.state_of(id);
+        let count = |id: &str| running.get(id).copied().unwrap_or(0);
+
+        let main = AccountView {
+            id: accounts::MAIN.into(),
+            name: settings.accounts.main_name.clone(),
+            main: true,
+            dir: accounts::shown(&home, &accounts::main_dir(&home).to_string_lossy()),
+            shared: false,
+            sync: false,
+            in_use: in_use == accounts::MAIN,
+            missing: false,
+            limits: state_of(accounts::MAIN),
+            running: count(accounts::MAIN),
+        };
+        let others = settings.accounts.others.iter().map(|account| AccountView {
+            id: account.id.clone(),
+            name: Some(account.name.clone()),
+            main: false,
+            dir: accounts::shown(&home, &account.dir),
+            shared: account.shared,
+            sync: account.sync,
+            in_use: in_use == account.id,
+            missing: !std::path::Path::new(&account.dir).is_dir(),
+            limits: state_of(&account.id),
+            running: count(&account.id),
+        });
+        let accounts: Vec<AccountView> = std::iter::once(main).chain(others).collect();
+        FuelView { limits: self.state_of(&in_use), today: lock(&self.today).clone(), accounts }
     }
 
     /// The session's fuel for the menu bar: none while Settings hides it, before the first
-    /// reading, and on a plan without a session limit.
+    /// reading, and on a plan without a session limit. The account in use's.
     pub fn bar(&self, settings: &Settings) -> Option<BarFuel> {
         if !settings.fuel_in_bar {
             return None;
         }
-        let limits = self.usage.state();
+        let limits = self.state_of(&in_use_id(settings));
         let session = limits.usage.as_ref()?.windows.iter().find(|window| window.id == "five_hour")?;
         // A window whose reset has passed has refilled, as the page shows it (`current`).
         let refilled = session.resets_at.is_some_and(|at| at <= now_ms() as i64);
@@ -143,7 +232,9 @@ impl Fuel {
         let app = app.clone();
         thread::spawn(move || loop {
             if let Some(state) = app.try_state::<AppState>() {
-                state.fuel.usage.refresh(false, state.core.settings().fuel_every_ms());
+                let settings = state.core.settings();
+                state.fuel.follow_accounts(&settings);
+                state.fuel.refresh_all(false, settings.fuel_every_ms());
                 state.fuel.read_spend(&app);
                 // A session that refilled meanwhile shows full in the menu bar too.
                 crate::tray::refresh(&app, &state.core.snapshot());
@@ -155,13 +246,34 @@ impl Fuel {
     /// From the page: on opening it and from its refresh button (`force`). `every_ms` is
     /// Settings' rest between two requests nobody asked for.
     pub fn refresh(&self, app: &AppHandle, force: bool, every_ms: i64) {
-        self.usage.refresh(force, every_ms);
+        self.refresh_all(force, every_ms);
         let app = app.clone();
         thread::spawn(move || {
             if let Some(state) = app.try_state::<AppState>() {
                 state.fuel.read_spend(&app);
             }
         });
+    }
+
+    /// Every account's limits, each as its own watch allows (`UsageWatch::refresh`).
+    fn refresh_all(&self, force: bool, every_ms: i64) {
+        let watches: Vec<UsageWatch> = lock(&self.usage).iter().map(|(_, watch)| watch.clone()).collect();
+        for watch in watches {
+            watch.refresh(force, every_ms);
+        }
+    }
+
+    /// The accounts changed (one added, removed, renamed, switched to): the watches follow and
+    /// every window hears of it; what follows the account in use (the menu bar) follows too.
+    pub fn accounts_changed(&self, app: &AppHandle) {
+        if let Some(state) = app.try_state::<AppState>() {
+            self.follow_accounts(&state.core.settings());
+            crate::tray::refresh(app, &state.core.snapshot());
+            if let Some(at) = self.refill_read() {
+                state.core.board_refill(at);
+            }
+        }
+        self.send(app);
     }
 
     /// Reads today's new log lines; tells the page when the totals moved, and hands the day's
@@ -193,24 +305,33 @@ impl Fuel {
         }
     }
 
-    fn limits_changed(&self, app: &AppHandle) {
+    /// The account `id`'s limits changed: every window hears of it. The main account's week goes
+    /// into the day's file; the account in use's moves the menu bar, the board's refill and the
+    /// alert.
+    fn limits_changed(&self, app: &AppHandle, id: &str) {
         self.send(app);
-        if let Some(state) = app.try_state::<AppState>() {
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        if id == accounts::MAIN {
             self.note_week(&state.core);
-            crate::tray::refresh(app, &state.core.snapshot());
-            // A board card that waits for the session's refill follows what was just read.
-            if let Some(at) = self.refill_read() {
-                state.core.board_refill(at);
-            }
         }
-        self.alert(app);
+        if in_use_id(&state.core.settings()) != id {
+            return;
+        }
+        crate::tray::refresh(app, &state.core.snapshot());
+        // A board card that waits for the session's refill follows what was just read.
+        if let Some(at) = self.refill_read() {
+            state.core.board_refill(at);
+        }
+        self.alert(app, id);
     }
 
     /// When the 5-hour session refills, as a reading that has just come says; none while the
     /// last request failed (what is kept then is an older reading), the session hasn't started,
     /// or the moment it names is already past (as `refill`: that is no refill to wait for).
     fn refill_read(&self) -> Option<u64> {
-        let limits = self.usage.state();
+        let limits = self.limits();
         if limits.status != Status::Ready {
             return None;
         }
@@ -221,7 +342,7 @@ impl Fuel {
     /// When the 5-hour session refills, as far as the last good reading knows a moment still
     /// ahead: what a board card can be told to wait for (`commands::board_schedule`).
     pub fn refill(&self) -> Option<u64> {
-        let session = self.usage.state().usage?.windows.into_iter().find(|window| window.id == "five_hour")?;
+        let session = self.limits().usage?.windows.into_iter().find(|window| window.id == "five_hour")?;
         u64::try_from(session.resets_at?).ok().filter(|at| *at > now_ms())
     }
 
@@ -231,7 +352,7 @@ impl Fuel {
         if week.date != date {
             let (marks, last) = core.week_marks(date);
             let resets = marks.last().and_then(|mark| mark.resets);
-            *week = WeekDay { date: date.to_string(), marks, last, resets };
+            *week = WeekDay { date: date.to_string(), marks, last, resets, mixed: false };
         }
         week
     }
@@ -239,7 +360,7 @@ impl Fuel {
     /// A good reading of the week's limit. The day's first, and the first after the week
     /// refilled, start a stretch of the day, written into its file.
     fn note_week(&self, core: &Core) {
-        let limits = self.usage.state();
+        let limits = self.state_of(accounts::MAIN);
         if limits.status != Status::Ready {
             return;
         }
@@ -277,8 +398,11 @@ impl Fuel {
     /// use before it, at the rate after it, as long as that is a small part of the day (`UNTOLD`).
     /// `since`: the tokens and cost from the first mark on.
     fn day_fuel(&self, core: &Core, today: &SpendToday, sessions: &HashMap<String, SessionSpend>, since: Option<(u64, f64)>) -> DayFuel {
-        let week = self.week_of(core, &today.date);
+        let others = core.accounts().in_use.is_some() || core.claudes_by_account().iter().any(|(id, count)| id != accounts::MAIN && *count > 0);
+        let mut week = self.week_of(core, &today.date);
+        week.mixed |= others;
         let (share, estimated) = match (week.last, since) {
+            _ if week.mixed => (None, false),
             (Some(last), Some((tokens_after, cost_after))) => {
                 let measured = spent(&week.marks, last);
                 // By cost, or by tokens when no model used has a price.
@@ -308,12 +432,15 @@ impl Fuel {
 
     /// Once when the session or the week passes 90 %: handed to the core (`core/signals.rs`),
     /// which shows the notification unless Settings turned it off, or it is quiet.
-    fn alert(&self, app: &AppHandle) {
+    fn alert(&self, app: &AppHandle, id: &str) {
         let Some(state) = app.try_state::<AppState>() else {
             return;
         };
 
-        let limits = self.usage.state();
+        let limits = self.state_of(id);
+        // With more than one account, the notification says whose limit it is.
+        let settings = state.core.settings();
+        let account = (!settings.accounts.others.is_empty()).then(|| accounts::name_of(&settings.accounts, Some(id)));
         if limits.status != Status::Ready {
             return;
         }
@@ -327,33 +454,55 @@ impl Fuel {
             }
             // Held until the door has answered: one notification per window, whoever asks.
             let mut alerted = lock(&self.alerted);
-            let before = told_before(&alerted, window);
+            let key = (id.to_string(), window.id.clone());
+            let before = told_before(&alerted, &key, window);
             if before == Some(true) {
                 continue;
             }
 
             let used = window.used.round().min(100.0) as u32;
             let title = if window.id == "five_hour" { t!("fuel.alert.session", used = used) } else { t!("fuel.alert.week", used = used) };
-            let body = match window.resets_at {
-                Some(at) => t!("fuel.alert.refills", time = crate::clock::clock(at)),
-                None => String::new(),
+            let body = match (window.resets_at, &account) {
+                (Some(at), Some(account)) => t!("fuel.alert.refillsOf", account = account, time = crate::clock::clock(at)),
+                (Some(at), None) => t!("fuel.alert.refills", time = crate::clock::clock(at)),
+                (None, Some(account)) => account.clone(),
+                (None, None) => String::new(),
             };
             // With the alert off the door has it all the same, once, for the phone: its
             // notification is owed until the alert is switched on.
             let told = state.core.fuel_high(NOTIFICATION_ID, title, body, before.is_some());
-            alerted.insert(window.id.clone(), (window.resets_at, told));
+            alerted.insert(key, (window.resets_at, told));
         }
     }
 }
 
 /// Whether the user was told of `window` passing 90 %: none for a window not met yet. One window
 /// is one refill moment, give or take what the API's moment moves between readings (`HOUR_MS`).
-fn told_before(alerted: &HashMap<String, (Option<i64>, bool)>, window: &Window) -> Option<bool> {
+fn told_before(alerted: &Alerted, key: &(String, String), window: &Window) -> Option<bool> {
     let same = |reset: Option<i64>| match (reset, window.resets_at) {
         (Some(at), Some(next)) => (next - at).abs() <= HOUR_MS,
         (at, next) => at == next,
     };
-    alerted.get(&window.id).filter(|(reset, _)| same(*reset)).map(|(_, told)| *told)
+    alerted.get(key).filter(|(reset, _)| same(*reset)).map(|(_, told)| *told)
+}
+
+/// A watch of the account `id`'s limits, which tells `Fuel` when they change.
+fn watch(app: &AppHandle, id: &str, source: Source) -> UsageWatch {
+    let (handle, id) = (app.clone(), id.to_string());
+    UsageWatch::new(source, move || {
+        if let Some(state) = handle.try_state::<AppState>() {
+            state.fuel.limits_changed(&handle, &id);
+        }
+    })
+}
+
+/// The id of the account in use, as a Claude would start with it (`accounts::start_with`): the
+/// main one's unless another listed one, whose folder is there, is.
+fn in_use_id(settings: &Settings) -> String {
+    match accounts::start_with(&settings.accounts, None) {
+        Ok(Some(account)) => account.id.clone(),
+        _ => accounts::MAIN.to_string(),
+    }
 }
 
 /// What the week's limit took in a day, in percent: each stretch from its mark to what the next

@@ -98,15 +98,20 @@ impl Core {
         true
     }
 
-    /// Installs the hook, or brings an older one up to date.
+    /// Installs the hook, or brings an older one up to date; in every other Claude account's own
+    /// settings too (`account_hook`).
     pub fn install_claude_hook(&self) -> Result<(), String> {
         let result = self.hook.install();
+        if result.is_ok() {
+            self.account_hooks(true);
+        }
         self.update_hook_status();
         result
     }
 
     pub fn uninstall_claude_hook(&self) -> Result<(), String> {
         let result = self.hook.uninstall();
+        self.account_hooks(false);
         self.update_hook_status();
         result
     }
