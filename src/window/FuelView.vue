@@ -342,9 +342,8 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   overflow-x: hidden;
   overflow-y: auto;
   container-type: size;
-  /* Room under the end for the terminal panel lying over the page (WindowApp: `--panel-over`). */
-  padding-bottom: var(--panel-over, 0px);
-  scroll-padding-bottom: var(--panel-over, 0px);
+  /* No room made for the terminal panel: it lies over the page, and the boxes stay where they are
+     as it grows (WindowApp: `--panel-over`). */
 }
 /* Its scrollbar ends where the panel begins: the list keeps its size, only the bar's track is
    shorter (WindowApp: `--panel-over`). */
