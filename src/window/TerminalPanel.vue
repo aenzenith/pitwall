@@ -687,7 +687,7 @@ function shellItems(): MenuEntry[] {
   ];
 }
 
-/** The "+" menu, under it: a shell tab, a Claude session as the project's settings say, on
+/** The "+" menu, under it: a Claude session as the project's settings say, a shell tab, on
  * Windows in a submenu the shells (and each as an administrator's), and in a submenu the models
  * (the project's own checked) and plan mode, each starting a session at once with that one
  * change, the rest as the project's settings say. With more than one Claude account, in a
@@ -697,8 +697,8 @@ function addMenu(event: Event): void {
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const { model, mode } = defaults.value;
   void menu.popup({ clientX: box.left, clientY: box.bottom + 4 }, [
-    { text: t("terminal.newTab"), accelerator: isMac ? "Cmd+T" : "Ctrl+Shift+T", action: () => void openTerminal() },
     { text: t("terminal.newClaude"), action: () => void openTerminal(true) },
+    { text: t("terminal.newTab"), accelerator: isMac ? "Cmd+T" : "Ctrl+Shift+T", action: () => void openTerminal() },
     "separator",
     ...(shells.value.length ? [{ text: t("terminal.openWith"), items: shellItems() }] : []),
     {
