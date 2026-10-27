@@ -40,8 +40,8 @@ import type { Project, Shell, ShellChoice, StartChoice, TerminalView } from "../
  * The terminal panel's panes (lib/panes): each with a head (the terminal's name, Claude's state,
  * split right, split down, zoom, close) over its terminal, or empty with buttons to open one. The
  * borders between them drag (a border moves only the panes on either side of it, never below
- * their least), a pane is moved by dragging its head onto another, and a double click on a border
- * shares its room out equally.
+ * their least), a pane is moved by dragging its head onto another, a middle click on its head
+ * closes its terminal as a tab's does, and a double click on a border shares its room out equally.
  */
 const props = defineProps<{
   project: Project;
@@ -470,6 +470,8 @@ defineExpose({ placed, shown, rectOf, dropAt });
           :title="terminalTip(views.get(pane.leaf.terminal))"
           @pointerdown="startMove($event, pane.leaf.key, nameOf(pane.leaf.terminal))"
           @dblclick="emit('rename', pane.leaf.terminal)"
+          @mousedown.middle.prevent
+          @mouseup.middle="emit('close', pane.leaf.terminal)"
           @contextmenu.prevent="paneMenu($event, pane.leaf.key, pane.leaf.terminal)"
         >
           <ClaudeLogo v-if="views.get(pane.leaf.terminal)?.kind === 'claude'" :size="11" />

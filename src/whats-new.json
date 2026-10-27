@@ -4,6 +4,27 @@
     {
       "kind": "fix",
       "title": {
+        "en": "Middle-click closes a pane",
+        "tr": "Bölmeler de orta tıkla kapanıyor",
+        "de": "Mittelklick schließt auch Teilfenster",
+        "es": "Clic central para cerrar una división",
+        "ru": "Средняя кнопка закрывает и области",
+        "ja": "ペインも中クリックで閉じられます",
+        "zh-Hans": "中键也能关闭窗格"
+      },
+      "body": {
+        "en": "Just like a tab: middle-click a split pane's top bar and its terminal closes.",
+        "tr": "Tıpkı sekmelerdeki gibi: bölünmüş terminalde bölmenin üst çubuğuna orta tıklayınca o terminal kapanıyor.",
+        "de": "Wie bei einem Tab: Ein Mittelklick auf die Kopfzeile eines Teilfensters schließt sein Terminal.",
+        "es": "Igual que con una pestaña: haz clic central en la barra superior de una división y su terminal se cierra.",
+        "ru": "Как со вкладкой: щёлкните средней кнопкой по заголовку области, и её терминал закроется.",
+        "ja": "タブと同じように、分割したペインの見出しを中クリックすればそのターミナルが閉じます。",
+        "zh-Hans": "和标签页一样：用中键点一下窗格的标题栏，它的终端就关掉了。"
+      }
+    },
+    {
+      "kind": "fix",
+      "title": {
         "en": "Pitwall by name in Login Items",
         "tr": "Giriş Öğeleri'nde Pitwall adıyla",
         "de": "Pitwall mit Namen bei den Anmeldeobjekten",
