@@ -7,7 +7,7 @@ import { absolutePath, changesOf, closeFiles, closeShownTab, COMMIT_TAB, forgetF
 import { gitLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../../lib/nativeMenu";
-import { closeChord, isMac, isWindows } from "../../lib/platform";
+import { closeChord, isMac, isWindows, TITLE_BAR } from "../../lib/platform";
 import { api, snapshot, visible } from "../../lib/store";
 import FileTree from "./FileTree.vue";
 import FileViewer from "./FileViewer.vue";
@@ -53,11 +53,11 @@ function fallback(): Rect {
   return { x: Math.min(x + step, Math.max(x, innerWidth - w - 8)), y: Math.min(y + step, Math.max(y, innerHeight - h - 8)), w, h };
 }
 
-/** Kept on screen: its bar always within reach. */
+/** Kept on screen: its bar always within reach, never under Windows' title bar (TitleBar). */
 function clamp(rect: Rect): Rect {
   const w = Math.min(Math.max(rect.w, MIN_W), innerWidth - 16);
   const h = Math.min(Math.max(rect.h, MIN_H), innerHeight - 16);
-  return { w, h, x: Math.min(Math.max(rect.x, 120 - w), innerWidth - 120), y: Math.min(Math.max(rect.y, 0), innerHeight - 44) };
+  return { w, h, x: Math.min(Math.max(rect.x, 120 - w), innerWidth - 120), y: Math.min(Math.max(rect.y, TITLE_BAR), innerHeight - 44) };
 }
 
 const rect = computed(() => win.rect ?? fallback());

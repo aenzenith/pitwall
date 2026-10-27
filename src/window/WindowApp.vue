@@ -21,7 +21,7 @@ import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/grou
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
 import { cardRequest, COLLAPSED_HEIGHT, followProject, openInPanel, panelOver, panelPath, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
-import { closeChord, dragRegion, isMac, keys, terminalChord } from "../lib/platform";
+import { closeChord, dragRegion, isMac, isWindows, keys, terminalChord } from "../lib/platform";
 import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
 import { focusTerminal, listRequest, openInWindow, openTarget } from "../lib/open";
 import { rowKeys } from "../lib/rows";
@@ -49,6 +49,7 @@ import WhatsNewDialog from "./WhatsNewDialog.vue";
 import TeamDeleteDialog from "./team/TeamDeleteDialog.vue";
 import TeamHead from "./team/TeamHead.vue";
 import TeamNameDialog from "./team/TeamNameDialog.vue";
+import TitleBar from "./TitleBar.vue";
 
 const filter = ref<Filter>("all");
 /** The project list, the track they run on, the day's timeline, Claude's sessions, the board of
@@ -822,10 +823,20 @@ function server(project: Project): string {
 
 <template>
   <div :class="['shell', { fullscreen }]">
+    <!-- Windows: Pitwall's own title bar across the top, the brand in it (the system's is off). -->
+    <TitleBar
+      v-if="isWindows"
+      class="title-row"
+      :version="update?.current ?? null"
+      :next="update?.version ?? null"
+      :update-button="updateButton"
+      :installing="installing"
+      @update="updateOpen = true"
+    />
     <aside class="sidebar">
       <!-- "deep": the logo and name drag the window too; so does the strip under the traffic lights.
-           macOS only (lib/platform: dragRegion): elsewhere the window has its own title bar. -->
-      <div class="brand" :data-tauri-drag-region="dragRegion">
+           macOS only (lib/platform: dragRegion): Linux has the system's title bar, Windows its own. -->
+      <div v-if="!isWindows" class="brand" :data-tauri-drag-region="dragRegion">
         <PitwallGlyph :size="30" lamps="var(--run)" />
         <span>Pitwall</span>
         <!-- Across from the logo: the installed version, and at the far right the way to a new one.
@@ -1194,6 +1205,32 @@ function server(project: Project): string {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
+  overflow: clip;
+}
+
+/* Windows: the title bar over the sidebar and the pages, one ground with the sidebar; the pages
+   lie in it like a sheet, their edge along the top and the left, rounded where the two meet. The
+   sidebar's first row is level with a page's heading. */
+:root[data-platform="windows"] .shell {
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / auto minmax(0, 1fr);
+  background: var(--bg-sidebar);
+}
+
+.title-row {
+  grid-column: 1 / -1;
+}
+
+:root[data-platform="windows"] .sidebar {
+  padding-top: 11px;
+  border-right: 0;
+}
+
+:root[data-platform="windows"] .pages {
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  border-top-left-radius: 10px;
+  background: var(--bg-app);
   overflow: clip;
 }
 

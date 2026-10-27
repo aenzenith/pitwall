@@ -55,6 +55,13 @@
   --bg-lit: #23272e;
   /* A button with no box of its own, under the pointer. */
   --bg-icon-hover: #262a33;
+  /* Windows' own title bar buttons (TitleBar): under the pointer and pressed, Windows' shades; ✕
+     goes Windows' red. */
+  --caption-hover: rgba(255, 255, 255, 0.06);
+  --caption-press: rgba(255, 255, 255, 0.04);
+  --caption-close: #c42b1c;
+  --caption-close-press: #b3271a;
+  --caption-close-text: #ffffff;
   --bg-dialog: #1b1e24;
   /* The tabs down a dialog's side (Settings): one under the pointer, and the one shown. */
   --bg-rail-hover: #23272e;
@@ -302,6 +309,11 @@
   --bg-nav-hover: #e5e8eb;
   --bg-lit: #dfe3e7;
   --bg-icon-hover: #e1e4e8;
+  --caption-hover: rgba(0, 0, 0, 0.04);
+  --caption-press: rgba(0, 0, 0, 0.025);
+  --caption-close: #c42b1c;
+  --caption-close-press: #b3271a;
+  --caption-close-text: #ffffff;
   --bg-dialog: #ffffff;
   --bg-rail-hover: #eff1f3;
   --bg-rail-on: #e4e7eb;
@@ -637,6 +649,16 @@ dialog::backdrop {
 
 :where(:root[data-theme="light"]) dialog::backdrop {
   background: rgba(15, 17, 20, 0.3);
+}
+
+/* Windows: the dim stops under Pitwall's own title bar (TitleBar), as it does under the system's;
+   the bar still takes its presses (TitleBar: `overBar`). No weight of their own either. */
+:where(:root[data-platform="windows"]) dialog::backdrop {
+  background: linear-gradient(transparent 36px, rgba(8, 9, 11, 0.55) 36px);
+}
+
+:where(:root[data-platform="windows"][data-theme="light"]) dialog::backdrop {
+  background: linear-gradient(transparent 36px, rgba(15, 17, 20, 0.3) 36px);
 }
 
 /* What a field asks for, in every field. */

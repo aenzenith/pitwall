@@ -80,6 +80,10 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     // the switcher is opaque there and its page paints the whole window.
     #[cfg(target_os = "linux")]
     let config = tauri::utils::config::WindowConfig { transparent: false, ..config };
+    // Windows: the main window draws its own title bar (window/TitleBar), the system's is off. Its
+    // edges, shadow, corners and resizing stay the system's (the shadow is on by default).
+    #[cfg(windows)]
+    let config = if label == MAIN { tauri::utils::config::WindowConfig { decorations: false, ..config } } else { config };
     // A new page, should an earlier window of this label have gone: not listening yet.
     pages().ready.retain(|l| l != label);
     let dev = app.config().build.dev_url.clone();

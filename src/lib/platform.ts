@@ -63,6 +63,12 @@ export const TERMINAL_MOD = isMac ? "mod" : "mod+Shift";
  */
 export const dragRegion: "deep" | undefined = isMac ? "deep" : undefined;
 
+/**
+ * The main window's own title bar (window/TitleBar), on Windows, where the system's is off
+ * (`windows.rs`): its height, which what floats over the page keeps clear of. None elsewhere.
+ */
+export const TITLE_BAR = isWindows ? 36 : 0;
+
 type Mod = "ctrl" | "alt" | "shift" | "meta";
 
 const MOD_TOKENS: Record<string, Mod> = {
