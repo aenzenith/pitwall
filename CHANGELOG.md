@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.18.2](https://github.com/aenzenith/pitwall/compare/v1.18.1...v1.18.2) (2026-10-27)
+
+
+### Bug Fixes
+
+* **extension:** the extension page opened in the browser when VS Code wasn't installed ([46a857a](https://github.com/aenzenith/pitwall/commit/46a857a70900cb8f378e840de02c2692819a4bae))
+* **macos:** Login Items showed Pitwall by its name, not the certificate's owner ([c00b315](https://github.com/aenzenith/pitwall/commit/c00b31523edc1835ce98a584e1ccd8dc4adcf496))
+* **shortcuts:** the quick switcher started on ⌃⌥P on a Mac, not ⌥⇧P ([f9350c9](https://github.com/aenzenith/pitwall/commit/f9350c94378f392a7a385f22dbd22e08adf728fb))
+* **sounds:** a server coming up played no sound until one was picked ([e36d31d](https://github.com/aenzenith/pitwall/commit/e36d31dd0130c7b3021802acc1737c8a9bef41dc))
+* **terminal:** a middle click on a pane's head didn't close its terminal as on a tab ([4c02325](https://github.com/aenzenith/pitwall/commit/4c023251b2ca836bfbda34e57fcce6b7f609c46a))
+
 ## [1.18.1](https://github.com/aenzenith/pitwall/compare/v1.18.0...v1.18.1) (2026-10-27)
 
 
