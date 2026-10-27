@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/aenzenith/pitwall/compare/v1.17.0...v1.18.0) (2026-10-27)
+
+
+### Features
+
+* **accounts:** switch between Claude accounts from the Fuel page ([9b79c86](https://github.com/aenzenith/pitwall/commit/9b79c8630e6662ebfd7af7e6d68fb85095bd9762))
+
 ## [1.17.0](https://github.com/aenzenith/pitwall/compare/v1.16.0...v1.17.0) (2026-10-25)
 
 
