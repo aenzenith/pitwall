@@ -11,6 +11,7 @@ mod git;
 mod hooks;
 mod i18n;
 mod links;
+mod login_item;
 // One API, one file per system: UserNotifications on macOS, toasts on Windows, D-Bus on Linux.
 #[cfg_attr(target_os = "linux", path = "notify_linux.rs")]
 #[cfg_attr(windows, path = "notify_windows.rs")]
@@ -326,10 +327,10 @@ pub fn run() {
             }
 
             // The login item points at whichever binary registered it; re-register from the
-            // installed app so it never launches a stale or dev build.
+            // installed app so it never launches a stale or dev build. An agent written before it
+            // named Pitwall's bundle gets the name here too (`login_item`).
             if is_bundled() && core.settings().launch_at_login {
-                use tauri_plugin_autostart::ManagerExt;
-                let _ = app.autolaunch().enable();
+                let _ = login_item::set(app.handle(), true);
             }
             let settings = core.settings();
             // The quick switcher's and the mini tower's, each on its own.

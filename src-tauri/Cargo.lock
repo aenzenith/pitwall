@@ -3297,6 +3297,7 @@ dependencies = [
 name = "pitwall"
 version = "1.18.1"
 dependencies = [
+ "auto-launch",
  "base64 0.22.1",
  "block2",
  "chrono",

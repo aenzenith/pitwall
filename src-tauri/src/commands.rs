@@ -1,7 +1,6 @@
 //! Everything the UI may do. The UI never spawns processes or touches files itself.
 
 use tauri::{AppHandle, State};
-use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -457,9 +456,7 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
             return Err(t!("core.error.launchAtLoginDev"));
         }
 
-        let autostart = app.autolaunch();
-        let result = if settings.launch_at_login { autostart.enable() } else { autostart.disable() };
-        result.map_err(|error| error.to_string())?;
+        crate::login_item::set(&app, settings.launch_at_login)?;
     }
 
     if settings.shortcut != before.shortcut {

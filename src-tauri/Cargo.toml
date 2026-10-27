@@ -60,6 +60,8 @@ strip = true
 tempfile = "3.27.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+# Launch at login's agent with the bundle it belongs to (`login_item.rs`); the autostart plugin's own.
+auto-launch = "0.6.0"
 mac-notification-sys = "0.6.15"
 objc2 = "0.6.4"
 block2 = "0.6.2"
