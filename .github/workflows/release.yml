@@ -131,7 +131,12 @@ jobs:
           exit 1
 
   # When a release is cut, the app is built from its tag on each platform and the installers are
-  # attached to the release. Unsigned until the app is signed (and notarized on macOS).
+  # attached to the release.
+  #
+  # macOS is signed with the Developer ID in tauri.conf.json when its certificate is among the
+  # secrets (APPLE_CERTIFICATE, the .p12 in base64, and APPLE_CERTIFICATE_PASSWORD), and notarized
+  # when Apple's account is too (APPLE_ID, APPLE_PASSWORD, an app-specific password, and
+  # APPLE_TEAM_ID). Without the certificate it is signed ad hoc, as before.
   #
   # With the updater's key among the secrets (TAURI_SIGNING_PRIVATE_KEY and its password), each
   # installer also gets a signature, and macOS the archive an update is installed from; the
@@ -166,6 +171,11 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -201,6 +211,10 @@ jobs:
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
             echo '{ "bundle": { "createUpdaterArtifacts": true } }' > "$GITHUB_WORKSPACE/updater.conf.json"
             args+=(--config "$GITHUB_WORKSPACE/updater.conf.json")
+          fi
+          if [ "$RUNNER_OS" = macOS ] && [ -z "$APPLE_CERTIFICATE" ]; then
+            echo '{ "bundle": { "macOS": { "signingIdentity": "-" } } }' > "$GITHUB_WORKSPACE/adhoc.conf.json"
+            args+=(--config "$GITHUB_WORKSPACE/adhoc.conf.json")
           fi
           npm run tauri build -- "${args[@]}"
 
