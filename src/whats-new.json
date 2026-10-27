@@ -1,25 +1,25 @@
 {
-  "since": "1.18.0",
+  "since": "1.18.1",
   "notes": [
     {
       "kind": "fix",
       "title": {
-        "en": "Panes stay put",
-        "tr": "Bölmeler yerinde kalıyor",
-        "de": "Teilfenster bleiben",
-        "es": "Las divisiones se quedan",
-        "ru": "Области остаются на месте",
-        "ja": "ペインがそのまま残ります",
-        "zh-Hans": "窗格不再收起"
+        "en": "The extension page always opens",
+        "tr": "Eklenti sayfası her zaman açılıyor",
+        "de": "Die Erweiterungsseite öffnet sich immer",
+        "es": "La página de la extensión siempre se abre",
+        "ru": "Страница расширения открывается всегда",
+        "ja": "拡張機能のページが必ず開きます",
+        "zh-Hans": "扩展页面总能打开"
       },
       "body": {
-        "en": "Closing one of two terminals or dragging it to the row no longer drops you back to Single, and a tab you pick from the row fills an empty pane first.",
-        "tr": "İki terminalden birini kapatınca ya da satıra sürükleyince artık Tek'e düşmüyorsun; satırdan seçtiğin sekme de önce boş bölmeyi dolduruyor.",
-        "de": "Schließt du eines von zwei Terminals oder ziehst es in die Leiste, springt die Anordnung nicht mehr auf Einzeln, und ein Tab aus der Leiste füllt zuerst ein leeres Teilfenster.",
-        "es": "Cerrar uno de dos terminales o arrastrarlo a la fila ya no te devuelve a Uno, y la pestaña que eliges en la fila ocupa primero una división vacía.",
-        "ru": "Если закрыть один из двух терминалов или перетащить его в ряд, раскладка больше не сбрасывается на «Один», а вкладка из ряда сначала занимает пустую область.",
-        "ja": "2つのターミナルの片方を閉じても、タブ列へドラッグしても「1つ」に戻らなくなりました。タブ列から選んだタブは空いたペインに先に入ります。",
-        "zh-Hans": "关闭两个终端中的一个，或把它拖回标签栏，布局都不再退回“单个”；从标签栏选中的标签页也会先放进空窗格。"
+        "en": "Without VS Code installed, Open extension page now takes you to the Marketplace in your browser instead of showing an error.",
+        "tr": "VS Code kurulu değilse Eklenti sayfasını aç artık hata vermiyor, Marketplace'i tarayıcıda açıyor.",
+        "de": "Ohne installiertes VS Code bringt dich „Erweiterungsseite öffnen“ jetzt im Browser zum Marketplace, statt einen Fehler zu zeigen.",
+        "es": "Si no tienes VS Code instalado, «Abrir la página de la extensión» ya no da error: te lleva al Marketplace en el navegador.",
+        "ru": "Если VS Code не установлен, «Открыть страницу расширения» больше не выдаёт ошибку, а открывает Marketplace в браузере.",
+        "ja": "VS Code が入っていなくても「拡張機能のページを開く」でエラーにならず、ブラウザで Marketplace が開くようになりました。",
+        "zh-Hans": "没装 VS Code 时，“打开扩展页面”不再报错，而是在浏览器里打开 Marketplace。"
       }
     }
   ]

@@ -126,10 +126,16 @@ pub fn extension_status(editor: String) -> crate::extension::ExtensionStatus {
     crate::extension::status(&editor)
 }
 
-/// Where to get Pitwall for VS Code for `editor`: its page in the editor, or the release.
+/// Where to get Pitwall for VS Code for `editor`: its page in the editor, or in the browser. An
+/// editor's link that nothing here opens (an editor removed since) falls back to the browser.
 #[tauri::command]
 pub fn open_extension_page(app: AppHandle, editor: String) -> Result<(), String> {
-    app.opener().open_url(crate::extension::page(&editor), None::<&str>).map_err(|error| error.to_string())
+    let page = crate::extension::page(&editor);
+    let web = crate::extension::web_page(&editor);
+    if app.opener().open_url(&page, None::<&str>).is_ok() || (page != web && app.opener().open_url(web, None::<&str>).is_ok()) {
+        return Ok(());
+    }
+    Err(t!("core.error.extensionPage"))
 }
 
 /* ---------- the first run's last step: the editors here, and notifications ---------- */

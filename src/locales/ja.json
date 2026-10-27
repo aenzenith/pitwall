@@ -1506,6 +1506,7 @@
   "core.error.workFolderMissing": "プロジェクトに「{folder}」というフォルダはありません",
   "core.error.workFolderOutside": "プロジェクト内のフォルダを選択してください",
   "core.error.linkScheme": "開けるのはウェブとメールのリンクだけです：{url}",
+  "core.error.extensionPage": "拡張機能のページを開けませんでした。",
   "core.error.invalidJson": "{file}は有効なJSONではないため、Pitwallは変更しません。",
   "core.error.forbiddenScript": "Pitwallはこのスクリプトを実行しません：「{script}」",
   "core.error.noScript": "package.jsonに「{script}」スクリプトがありません",

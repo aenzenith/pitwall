@@ -1563,6 +1563,7 @@
   "core.error.workFolderMissing": "Im Projekt gibt es keinen Ordner „{folder}“",
   "core.error.workFolderOutside": "Wähle einen Ordner innerhalb des Projekts",
   "core.error.linkScheme": "Nur Web- und E-Mail-Links werden geöffnet: {url}",
+  "core.error.extensionPage": "Die Erweiterungsseite ließ sich nicht öffnen.",
   "core.error.invalidJson": "{file} ist kein gültiges JSON; Pitwall ändert die Datei nicht.",
   "core.error.forbiddenScript": "Pitwall führt dieses Skript nicht aus: „{script}“",
   "core.error.noScript": "package.json enthält kein Skript „{script}“",

@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 pub const ID: &str = "aenzenith.pitwall-vscode";
+/// Its Marketplace page in the browser, for a VS Code that isn't here to open its own.
+const MARKETPLACE: &str = "https://marketplace.visualstudio.com/items?itemName=aenzenith.pitwall-vscode";
 /// Cursor and Windsurf install from Open VSX, where it isn't; they take the release's `.vsix`.
 const RELEASES: &str = "https://github.com/aenzenith/pitwall-vscode/releases/latest";
 
@@ -88,10 +90,21 @@ fn installed(_bundle: &str, command: &str) -> bool {
     crate::process::find_program(command).is_some()
 }
 
-/// Where to get it: its page in VS Code itself (one click installs), else the latest release.
+/// Where to get it: its page in VS Code itself (one click installs) when that VS Code is here,
+/// else its page in the browser (`web_page`).
 pub fn page(editor: &str) -> String {
     match editor {
-        "vscode" | "vscode-insiders" => format!("{editor}:extension/{ID}"),
-        _ => RELEASES.into(),
+        "vscode" | "vscode-insiders" if EDITORS.iter().any(|(name, bundle, command)| *name == editor && installed(bundle, command)) => {
+            format!("{editor}:extension/{ID}")
+        }
+        _ => web_page(editor).into(),
+    }
+}
+
+/// Its page in the browser: the Marketplace's for VS Code, else the latest release.
+pub fn web_page(editor: &str) -> &'static str {
+    match editor {
+        "vscode" | "vscode-insiders" => MARKETPLACE,
+        _ => RELEASES,
     }
 }

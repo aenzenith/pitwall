@@ -1677,6 +1677,7 @@
   "core.error.workFolderMissing": "В проекте нет папки «{folder}»",
   "core.error.workFolderOutside": "Выберите папку внутри проекта",
   "core.error.linkScheme": "Открываются только веб-ссылки и ссылки на почту: {url}",
+  "core.error.extensionPage": "Не удалось открыть страницу расширения.",
   "core.error.invalidJson": "{file} — некорректный JSON; Pitwall не будет его менять.",
   "core.error.forbiddenScript": "Pitwall не будет запускать этот скрипт: «{script}»",
   "core.error.noScript": "В package.json нет скрипта «{script}»",

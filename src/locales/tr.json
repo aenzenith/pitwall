@@ -1550,6 +1550,7 @@
   "core.error.workFolderMissing": "Projede \"{folder}\" diye bir klasör yok",
   "core.error.workFolderOutside": "Projenin içinden bir klasör seç",
   "core.error.linkScheme": "Yalnızca web ve e-posta bağlantıları açılır: {url}",
+  "core.error.extensionPage": "Eklenti sayfası açılamadı.",
   "core.error.invalidJson": "{file} geçerli bir JSON değil; Pitwall ona dokunmaz.",
   "core.error.forbiddenScript": "Pitwall bu script'i çalıştırmaz: \"{script}\"",
   "core.error.noScript": "package.json içinde \"{script}\" script'i yok",

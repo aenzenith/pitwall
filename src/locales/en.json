@@ -1563,6 +1563,7 @@
   "core.error.workFolderMissing": "There is no folder \"{folder}\" in the project",
   "core.error.workFolderOutside": "Choose a folder inside the project",
   "core.error.linkScheme": "Only web and mail links open: {url}",
+  "core.error.extensionPage": "The extension's page couldn't be opened.",
   "core.error.invalidJson": "{file} is not valid JSON; Pitwall won't change it.",
   "core.error.forbiddenScript": "Pitwall will not run this script: \"{script}\"",
   "core.error.noScript": "package.json has no \"{script}\" script",
