@@ -116,7 +116,7 @@ const form = reactive<Settings>({
   fuelEvery: 15,
   serversInBar: true,
   claudesInBar: true,
-  sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "", commandDone: "" },
+  sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "lightsout", commandDone: "" },
   launchAtLogin: false,
   shortcut: true,
   shortcutKeys: "Ctrl+Alt+KeyP",

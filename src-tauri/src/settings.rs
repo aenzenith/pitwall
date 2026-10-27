@@ -246,7 +246,7 @@ impl Default for Sounds {
             claude_finished: "boxbox".into(),
             claude_asking: "limiter".into(),
             server_crashed: "yellowflag".into(),
-            server_ready: String::new(),
+            server_ready: "lightsout".into(),
             command_done: String::new(),
         }
     }
