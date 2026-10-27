@@ -103,7 +103,9 @@ impl Core {
     }
 }
 
-#[cfg(test)]
+/// macOS's alone: only there is the hook a script (`hooks::Runner::Script`); elsewhere it runs the
+/// installed app, which a test binary isn't, so nothing is installed at all.
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 

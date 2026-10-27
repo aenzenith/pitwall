@@ -434,11 +434,14 @@ mod tests {
         assert_eq!(fs::read_to_string(dir.join("CLAUDE.md")).unwrap(), "mine");
         assert!(fs::symlink_metadata(dir.join("settings.json")).unwrap().file_type().is_symlink());
 
-        // A link of the user's own, to elsewhere, stays.
-        fs::remove_file(dir.join("skills")).unwrap();
-        symlink(tmp.path(), &dir.join("skills")).unwrap();
-        assert_eq!(unlink(home, &dir), 3);
-        assert_eq!(names(&dir), ["CLAUDE.md", "skills"]);
+        // A link of the user's own, to elsewhere, stays, though it is named as one of Pitwall's.
+        // Made under a name nothing had: on Windows a name just taken out may still be held a
+        // moment (a link being looked at by Defender), and no new link takes it meanwhile.
+        let elsewhere = home.join("elsewhere");
+        fs::create_dir(&elsewhere).unwrap();
+        symlink(&elsewhere, &dir.join("agents")).unwrap();
+        assert_eq!(unlink(home, &dir), 4);
+        assert_eq!(names(&dir), ["CLAUDE.md", "agents"]);
         assert_eq!(listing(&main), before, "the main account's folder is as it was");
     }
 
