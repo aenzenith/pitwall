@@ -1,25 +1,25 @@
 {
-  "since": "1.17.0",
+  "since": "1.18.0",
   "notes": [
     {
-      "kind": "new",
+      "kind": "fix",
       "title": {
-        "en": "More than one Claude account",
-        "tr": "Birden fazla Claude hesabı",
-        "de": "Mehrere Claude-Konten",
-        "es": "Varias cuentas de Claude",
-        "ru": "Несколько аккаунтов Claude",
-        "ja": "複数の Claude アカウント",
-        "zh-Hans": "多个 Claude 账户"
+        "en": "Panes stay put",
+        "tr": "Bölmeler yerinde kalıyor",
+        "de": "Teilfenster bleiben",
+        "es": "Las divisiones se quedan",
+        "ru": "Области остаются на месте",
+        "ja": "ペインがそのまま残ります",
+        "zh-Hans": "窗格不再收起"
       },
       "body": {
-        "en": "Add one in Settings › Claude (the new gear on Fuel takes you there) and switch with a click on Fuel. You sign in in your browser; Pitwall never stores your password or token.",
-        "tr": "Ayarlar › Claude'dan hesap ekle (Yakıt'taki yeni dişli seni oraya götürür), Yakıt'tan tek tıkla geç. Giriş tarayıcında yapılır; Pitwall şifreni de anahtarını da saklamaz.",
-        "de": "Leg eins unter Einstellungen › Claude an (das neue Zahnrad im Tank bringt dich hin) und wechsle im Tank mit einem Klick. Du meldest dich im Browser an; Passwort und Token speichert Pitwall nie.",
-        "es": "Añade una en Ajustes › Claude (el nuevo engranaje de Combustible te lleva allí) y cambia con un clic en Combustible. Inicias sesión en el navegador; Pitwall nunca guarda tu contraseña ni tu token.",
-        "ru": "Добавьте аккаунт в Настройки › Claude (туда ведёт новая шестерёнка в «Топливе») и переключайтесь одним щелчком в «Топливе». Вход — в браузере; пароль и токен Pitwall не хранит.",
-        "ja": "設定 › Claude で追加でき（燃料の新しい歯車から開けます）、燃料でワンクリックで切り替えられます。サインインはブラウザで。パスワードもトークンも Pitwall は保存しません。",
-        "zh-Hans": "在 设置 › Claude 中添加（燃料页的新齿轮可直达），在燃料页一键切换。登录在浏览器中完成，Pitwall 从不保存你的密码或令牌。"
+        "en": "Closing one of two terminals or dragging it to the row no longer drops you back to Single, and a tab you pick from the row fills an empty pane first.",
+        "tr": "İki terminalden birini kapatınca ya da satıra sürükleyince artık Tek'e düşmüyorsun; satırdan seçtiğin sekme de önce boş bölmeyi dolduruyor.",
+        "de": "Schließt du eines von zwei Terminals oder ziehst es in die Leiste, springt die Anordnung nicht mehr auf Einzeln, und ein Tab aus der Leiste füllt zuerst ein leeres Teilfenster.",
+        "es": "Cerrar uno de dos terminales o arrastrarlo a la fila ya no te devuelve a Uno, y la pestaña que eliges en la fila ocupa primero una división vacía.",
+        "ru": "Если закрыть один из двух терминалов или перетащить его в ряд, раскладка больше не сбрасывается на «Один», а вкладка из ряда сначала занимает пустую область.",
+        "ja": "2つのターミナルの片方を閉じても、タブ列へドラッグしても「1つ」に戻らなくなりました。タブ列から選んだタブは空いたペインに先に入ります。",
+        "zh-Hans": "关闭两个终端中的一个，或把它拖回标签栏，布局都不再退回“单个”；从标签栏选中的标签页也会先放进空窗格。"
       }
     }
   ]

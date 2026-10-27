@@ -74,6 +74,7 @@ import {
   takeCoreLayouts,
   type PaneAction,
   type PaneKind,
+  type PaneLeaf,
   type PaneNode,
   type Place,
   type Placed,
@@ -760,10 +761,10 @@ function kindOfTerminal(id: number | undefined): PaneKind {
 }
 
 /**
- * The panes changed: kept, the keyboard's pane `focus`; with fewer than two left, one terminal at
- * a time again, the one left shown.
+ * The panes changed: kept, the keyboard's pane `focus` and the maximized one `zoom` while it is
+ * there; with fewer than two left, one terminal at a time again, the one left shown.
  */
-function commitTree(tree: PaneNode | null, focus: string): void {
+function commitTree(tree: PaneNode | null, focus: string, zoom = layout.value?.zoom ?? null): void {
   const path = props.project.path;
   const panes = tree ? leaves(tree) : [];
   if (!tree || panes.length < 2) {
@@ -773,15 +774,26 @@ function commitTree(tree: PaneNode | null, focus: string): void {
     return;
   }
   const focused = panes.find((pane) => pane.key === focus) ?? panes[0];
-  const zoom = layout.value?.zoom ?? null;
   setPanes(path, { tree, focus: focused.key, zoom: panes.some((pane) => pane.key === zoom) ? zoom : null, rev: layout.value?.rev ?? 0 });
   if (focused.terminal !== null) chooseTab(path, { kind: "terminal", id: focused.terminal });
 }
 
-/** A pane taken out of the panes: its terminal, if it has one, stays open and waits. */
+/** One of the last two panes left empty: the keyboard goes to the other's terminal, and it is
+ * maximized no longer. The panes stay as they are for the next terminal. */
+function emptied(tree: PaneNode, key: string, focus: string, zoom: string | null): { tree: PaneNode; focus: string; zoom: string | null } {
+  const next = setTerminal(tree, key, null);
+  return { tree: next, focus: focus === key ? (leaves(next).find((pane) => pane.terminal !== null)?.key ?? focus) : focus, zoom: zoom === key ? null : zoom };
+}
+
+/** A pane taken out of the panes: its terminal, if it has one, stays open and waits. Of the last
+ * two, one with a terminal stays, empty, as a closed terminal's does; an empty one goes. */
 function takeOut(key: string): void {
   const now = layout.value;
   if (!now) return;
+  if (leaves(now.tree).length <= 2 && (findLeaf(now.tree, key)?.terminal ?? null) !== null) {
+    const out = emptied(now.tree, key, now.focus, now.zoom);
+    return commitTree(out.tree, out.focus, out.zoom);
+  }
   const { tree, neighbour } = removePane(now.tree, key);
   commitTree(tree, now.focus === key ? (neighbour ?? "") : now.focus);
 }
@@ -798,6 +810,12 @@ function focusPane(key: string, keyboard: boolean): void {
   chooseTab(props.project.path, { kind: "terminal", id });
   seeFinished(id);
   if (keyboard && same) focusView(id);
+}
+
+/** The empty pane a terminal coming goes into: the focused one if it is empty, else the first. */
+function emptyPane(tree: PaneNode, focus: string): PaneLeaf | undefined {
+  const panes = leaves(tree).filter((pane) => pane.terminal === null);
+  return panes.find((pane) => pane.key === focus) ?? panes[0];
 }
 
 /**
@@ -825,7 +843,7 @@ function placeTerminal(id: number, where: Place, kind: PaneKind = kindOfTerminal
     tree = setTerminal(now.tree, where.key, id);
     focus = where.key;
   } else {
-    const empty = leaves(now.tree).find((pane) => pane.terminal === null);
+    const empty = emptyPane(now.tree, now.focus);
     const rect = panesAsIs() ? placedNow()?.panes.find((pane) => pane.leaf.key === now.focus) : undefined;
     const kinds: [PaneKind, PaneKind] = [rect ? kindOf(rect.leaf) : "shell", kind];
     if (empty) {
@@ -852,7 +870,8 @@ function bring(id: number, into: string): void {
 }
 
 // A terminal that closed leaves its pane, the room going to its neighbour; so does one put into a
-// pane once it had closed.
+// pane once it had closed. Of the last two panes, its pane stays, empty: the panes are left as
+// they are for the next terminal, never back to one terminal at a time.
 watch(
   () => [props.project.path, terminals.value.map((term) => term.id).join(), layout.value ? leaves(layout.value.tree).map((pane) => pane.terminal).join() : ""] as const,
   () => {
@@ -864,13 +883,18 @@ watch(
     if (!gone.length) return;
     let tree: PaneNode | null = now.tree;
     let focus = now.focus;
+    let zoom = now.zoom;
     for (const pane of gone) {
       if (!tree) break;
+      if (leaves(tree).length <= 2) {
+        ({ tree, focus, zoom } = emptied(tree, pane.key, focus, zoom));
+        continue;
+      }
       const out = removePane(tree, pane.key);
       tree = out.tree;
       if (focus === pane.key) focus = out.neighbour ?? "";
     }
-    commitTree(tree, focus);
+    commitTree(tree, focus, zoom);
   },
   { immediate: true },
 );
@@ -1235,12 +1259,13 @@ function onRowClick(event: MouseEvent): void {
  * tab already shown takes the keyboard here, the watch on the shown tab not running for it: left
  * on the tab's label, a Backspace would close the tab. */
 function open(id: number): void {
-  // With panes, a tab waiting in the row comes into the pane with the keyboard.
+  // With panes, a tab waiting in the row comes into an empty pane, else into the pane with the
+  // keyboard.
   const now = layout.value;
   if (now) {
     const pane = leafOf(now.tree, id);
     if (pane) focusPane(pane.key, true);
-    else bring(id, now.focus);
+    else bring(id, emptyPane(now.tree, now.focus)?.key ?? now.focus);
     if (collapsed.value) toggleCollapsed();
     seeFinished(id);
     return;
