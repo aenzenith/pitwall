@@ -588,7 +588,7 @@ impl Default for Settings {
             sounds: Sounds::default(),
             launch_at_login: false,
             shortcut: true,
-            shortcut_keys: "Ctrl+Alt+KeyP".into(),
+            shortcut_keys: if cfg!(target_os = "macos") { "Alt+Shift+KeyP" } else { "Ctrl+Alt+KeyP" }.into(),
             projects: BTreeMap::new(),
             order: Vec::new(),
             added: None,

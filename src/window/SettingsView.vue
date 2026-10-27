@@ -12,7 +12,7 @@ import { useBackdropClose } from "../lib/dialog";
 import { ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../lib/open";
-import { keys, shortcutModifiers } from "../lib/platform";
+import { isMac, keys, shortcutModifiers } from "../lib/platform";
 import { recordingEnded, recordingStarts } from "../lib/shortcutRecording";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
@@ -119,7 +119,7 @@ const form = reactive<Settings>({
   sounds: { claudeFinished: "boxbox", claudeAsking: "limiter", serverCrashed: "yellowflag", serverReady: "lightsout", commandDone: "" },
   launchAtLogin: false,
   shortcut: true,
-  shortcutKeys: "Ctrl+Alt+KeyP",
+  shortcutKeys: isMac ? "Alt+Shift+KeyP" : "Ctrl+Alt+KeyP",
   autoUpdate: true,
   projects: {},
   order: [],
