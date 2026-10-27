@@ -278,6 +278,8 @@
   "terminal.shell.pwsh": "PowerShell 7",
   "terminal.admin": "{shell} (administrador)",
   "terminal.adminBadge": "Admin",
+  "terminal.adminTip": "Se ejecuta como administrador",
+  "terminal.accountTip": "Cuenta: {name}",
   "terminal.adminOutside": "La shell de administrador se abrió en su propia ventana. Para que se abra aquí, pon sudo en «En línea» en la configuración de Windows.",
   "terminal.adminSettings": "Abrir configuración",
   "terminal.adminDenied": "Windows no concedió permiso de administrador; la shell no se abrió.",

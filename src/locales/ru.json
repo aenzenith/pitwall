@@ -284,6 +284,8 @@
   "terminal.shell.pwsh": "PowerShell 7",
   "terminal.admin": "{shell} (администратор)",
   "terminal.adminBadge": "Админ",
+  "terminal.adminTip": "Запущено от имени администратора",
+  "terminal.accountTip": "Аккаунт: {name}",
   "terminal.adminOutside": "Оболочка администратора открылась в отдельном окне. Чтобы она открывалась здесь, выберите для sudo режим «Встроенный» в параметрах Windows.",
   "terminal.adminSettings": "Открыть параметры",
   "terminal.adminDenied": "Windows не дала прав администратора; оболочка не открылась.",

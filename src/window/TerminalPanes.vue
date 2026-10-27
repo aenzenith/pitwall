@@ -33,7 +33,7 @@ import {
 } from "../lib/panes";
 import { SHELL_LABELS, shellIcon } from "../lib/shells";
 import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
-import { attach, fitView } from "../lib/terminals";
+import { attach, fitView, terminalTip } from "../lib/terminals";
 import type { Project, Shell, ShellChoice, StartChoice, TerminalView } from "../lib/types";
 
 /**
@@ -467,7 +467,7 @@ defineExpose({ placed, shown, rectOf, dropAt });
       <template v-if="pane.leaf.terminal !== null">
         <div
           class="head"
-          :title="t('terminal.renameHint')"
+          :title="terminalTip(views.get(pane.leaf.terminal))"
           @pointerdown="startMove($event, pane.leaf.key, nameOf(pane.leaf.terminal))"
           @dblclick="emit('rename', pane.leaf.terminal)"
           @contextmenu.prevent="paneMenu($event, pane.leaf.key, pane.leaf.terminal)"
@@ -476,7 +476,7 @@ defineExpose({ placed, shown, rectOf, dropAt });
           <Icon v-else :name="shellIcon(views.get(pane.leaf.terminal)?.shell)" :size="11" />
           <span class="name">{{ nameOf(pane.leaf.terminal) }}</span>
           <span v-if="accountLabel(views.get(pane.leaf.terminal)?.account)" class="account">{{ accountLabel(views.get(pane.leaf.terminal)?.account) }}</span>
-          <span v-if="views.get(pane.leaf.terminal)?.elevated" class="admin"><Icon name="shield" :size="9" />{{ t("terminal.adminBadge") }}</span>
+          <span v-if="views.get(pane.leaf.terminal)?.elevated" class="admin" role="img" :aria-label="t('terminal.adminBadge')"><Icon name="shield" :size="10" /></span>
           <ClaudeDot v-if="live.has(pane.leaf.terminal)" :live="live.get(pane.leaf.terminal)" />
           <span v-if="live.get(pane.leaf.terminal)?.phase === 'waiting'" class="wait">{{ live.get(pane.leaf.terminal)?.text }}</span>
           <span class="grow"></span>
@@ -594,37 +594,22 @@ defineExpose({ placed, shown, rectOf, dropAt });
 /* Another Claude account's terminal: the account's name, quietly, as on its tab (TerminalPanel). */
 .account {
   flex-shrink: 0;
-  max-width: 120px;
-  height: 15px;
-  display: inline-block;
-  line-height: 15px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--bg-tag);
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--text-soft);
+  max-width: 64px;
+  font-size: 11px;
+  color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.admin {
-  flex-shrink: 0;
-  height: 15px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 5px;
-  border-radius: 4px;
-  border: 1px solid var(--warn-line);
-  background: var(--warn-bg);
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--warn-text);
+.account::before {
+  content: "· ";
 }
 
-.admin :deep(svg) {
+/* An administrator's shell: a shield in the warning's colour, the word in the tooltip. */
+.admin {
+  flex-shrink: 0;
+  display: inline-flex;
   color: var(--warn);
 }
 

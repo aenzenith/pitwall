@@ -272,6 +272,8 @@
   "terminal.shell.pwsh": "PowerShell 7",
   "terminal.admin": "{shell}（管理者）",
   "terminal.adminBadge": "管理者",
+  "terminal.adminTip": "管理者として実行中",
+  "terminal.accountTip": "アカウント: {name}",
   "terminal.adminOutside": "管理者シェルは別のウィンドウで開きました。ここで開くには、Windows の設定で sudo を「インライン」にしてください。",
   "terminal.adminSettings": "設定を開く",
   "terminal.adminDenied": "Windows が管理者の許可を出さなかったため、シェルは開きませんでした。",

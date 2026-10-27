@@ -276,6 +276,8 @@
   "terminal.shell.pwsh": "PowerShell 7",
   "terminal.admin": "{shell} (administrator)",
   "terminal.adminBadge": "Admin",
+  "terminal.adminTip": "Running as administrator",
+  "terminal.accountTip": "Account: {name}",
   "terminal.adminOutside": "The administrator shell opened in a window of its own. To have it open here, set sudo to Inline in Windows settings.",
   "terminal.adminSettings": "Open settings",
   "terminal.adminDenied": "Windows didn't give administrator permission; no shell opened.",

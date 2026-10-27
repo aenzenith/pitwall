@@ -272,6 +272,8 @@
   "terminal.shell.pwsh": "PowerShell 7",
   "terminal.admin": "{shell}（管理员）",
   "terminal.adminBadge": "管理员",
+  "terminal.adminTip": "以管理员身份运行",
+  "terminal.accountTip": "账户：{name}",
   "terminal.adminOutside": "管理员 Shell 已在单独的窗口中打开。要在这里打开，请在 Windows 设置中把 sudo 设为“内联”。",
   "terminal.adminSettings": "打开设置",
   "terminal.adminDenied": "Windows 未授予管理员权限，Shell 没有打开。",

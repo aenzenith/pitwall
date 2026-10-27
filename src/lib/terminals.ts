@@ -5,10 +5,12 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { watch } from "vue";
 
+import { accountLabel } from "./accounts";
 import { t } from "./i18n";
 import { isLinux, isMac, isWindows, keys, primary, terminalChord } from "./platform";
 import { api } from "./store";
 import { resolvedTheme, themeAt, type ResolvedTheme } from "./theme";
+import type { TerminalView } from "./types";
 
 /**
  * The window's terminal views. Each open project terminal gets one xterm, made the first time
@@ -313,4 +315,13 @@ export function dispose(id: number): void {
   view.term.dispose();
   view.element.remove();
   views.delete(id);
+}
+
+/** A terminal's tooltip, on its tab and its pane's head: what they show short said whole (the
+ * account it runs with, an administrator's shield), then how to rename it. */
+export function terminalTip(view: TerminalView | undefined): string {
+  const account = accountLabel(view?.account);
+  return [account && t("terminal.accountTip", { name: account }), view?.elevated && t("terminal.adminTip"), t("terminal.renameHint")]
+    .filter(Boolean)
+    .join("\n");
 }

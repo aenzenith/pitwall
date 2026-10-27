@@ -90,7 +90,7 @@ import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
-import { attach, fitView, focusView, measure, paneKeys } from "../lib/terminals";
+import { attach, fitView, focusView, measure, paneKeys, terminalTip } from "../lib/terminals";
 import type { Project, Shell, ShellChoice, StartChoice } from "../lib/types";
 import CardDialog from "./board/CardDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
@@ -1748,7 +1748,7 @@ defineExpose({ openTerminal, closeShown });
           :style="tabDrag.tabStyle(term.id)"
           :data-tab-id="term.id"
           role="none"
-          :title="`${term.name}\n${t('terminal.renameHint')}`"
+          :title="`${term.name}\n${terminalTip(term)}`"
           @pointerdown="tabDrag.down($event, term.id)"
           @click="clickTab(term.id)"
           @dblclick="renaming = { id: term.id, name: term.name }"
@@ -1769,7 +1769,7 @@ defineExpose({ openTerminal, closeShown });
             <Icon v-else :name="shellIcon(term.shell)" :size="11" />
             <span class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
             <span v-if="accountLabel(term.account)" class="tab-account">{{ accountLabel(term.account) }}</span>
-            <span v-if="term.elevated" class="admin"><Icon name="shield" :size="9" />{{ t("terminal.adminBadge") }}</span>
+            <span v-if="term.elevated" class="admin" role="img" :aria-label="t('terminal.adminBadge')"><Icon name="shield" :size="10" /></span>
             <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
           <button
@@ -2163,36 +2163,20 @@ defineExpose({ openTerminal, closeShown });
 
 /* Another Claude account's tab (its `claude` runs with it): the account's name, quietly. */
 .tab-account {
-  max-width: 120px;
-  height: 15px;
-  display: inline-block;
-  line-height: 15px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--bg-tag);
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--text-soft);
+  max-width: 64px;
+  font-size: 11px;
+  color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* An administrator's shell: a shield and the word, in the warning's colours. */
-.admin {
-  height: 15px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 5px;
-  border-radius: 4px;
-  border: 1px solid var(--warn-line);
-  background: var(--warn-bg);
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--warn-text);
+.tab-account::before {
+  content: "· ";
 }
 
-.admin :deep(svg) {
+/* An administrator's shell: a shield in the warning's colour, the word in the tooltip. */
+.admin {
+  display: inline-flex;
   color: var(--warn);
 }
 

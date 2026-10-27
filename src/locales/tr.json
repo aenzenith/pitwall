@@ -275,6 +275,8 @@
   "terminal.shell.pwsh": "PowerShell 7",
   "terminal.admin": "{shell} (yönetici)",
   "terminal.adminBadge": "Yönetici",
+  "terminal.adminTip": "Yönetici olarak çalışıyor",
+  "terminal.accountTip": "Hesap: {name}",
   "terminal.adminOutside": "Yönetici kabuğu ayrı bir pencerede açıldı. Pitwall'ın içinde açılması için Windows ayarlarında sudo'yu Satır içi kipine al.",
   "terminal.adminSettings": "Ayarları aç",
   "terminal.adminDenied": "Windows yönetici iznini vermedi; kabuk açılmadı.",
