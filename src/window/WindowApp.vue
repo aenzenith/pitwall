@@ -160,10 +160,11 @@ function openSettings(tab?: "claude" | "track" | "notifications", part?: Setting
   settingsOpen.value = true;
 }
 
-/** The first run's steps (SetupView), in place of the list and its details: once by themselves,
- * when the app starts with no project and they were never finished or put off, and again when
- * Settings asks for them. */
+/** The first run's steps (SetupView), over the whole window, their welcome first: once by
+ * themselves, there at once, when the app starts with no project and they were never finished or
+ * put off, and again, fading in, when Settings asks for them. */
 const setupOpen = ref(false);
+const setupFade = ref(false);
 let setupOffered = false;
 watch(
   snapshot,
@@ -175,10 +176,11 @@ watch(
   { immediate: true },
 );
 
-/** From Settings: the steps again, on the list's page. */
+/** From Settings: the steps again, the list's page under them. */
 function openSetup(): void {
   settingsOpen.value = false;
   view.value = "projects";
+  setupFade.value = true;
   setupOpen.value = true;
 }
 
@@ -362,7 +364,7 @@ function zone(project: Project): string | undefined {
  */
 const panelProject = computed(() => projects.value.find((p) => p.path === panelPath.value) ?? selected.value ?? projects.value[0] ?? null);
 /** The panel is drawn: the page keeps its tab row's height free for it, and no more. */
-const panelShown = computed(() => panelProject.value !== null && !(setupOpen.value && view.value === "projects"));
+const panelShown = computed(() => panelProject.value !== null && !setupOpen.value);
 
 // The list's selection is the panel's project, on the Projects page: picked there, its terminal
 // takes the keyboard (the panel open), as it always did; coming back to the page, the panel shows
@@ -415,7 +417,7 @@ function pick(id: Filter): void {
   teamFilter.value = null;
   looseShown.value = false;
   view.value = "projects";
-  // The list itself, not the setup steps in its place.
+  // The list itself, not the setup steps over it.
   setupOpen.value = false;
 }
 
@@ -650,6 +652,8 @@ const ROW_TITLES = { terminal: "window.rowTitleTerminal", files: "window.rowTitl
 /** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the
  * terminal panel's project, on whatever page; ⌘W closes what is in front (`closeFront`). */
 function onKey(event: KeyboardEvent): void {
+  // Under the first run's steps nothing of the window takes a key.
+  if (setupOpen.value) return;
   const terminals = terminalPanel.value;
   if (terminalChord(event) && event.code === "KeyT" && terminals) {
     event.preventDefault();
@@ -698,6 +702,8 @@ function revealPage(page: Page, tab?: "notifications"): void {
   else if (page === "add") void api.pickFolder();
   else {
     settingsOpen.value = false;
+    // The first run's steps would cover it too: they are put off, not ended, and come up again.
+    setupOpen.value = false;
     if (isFilter(page)) pick(page);
     else view.value = page;
   }
@@ -707,6 +713,7 @@ function revealPage(page: Page, tab?: "notifications"): void {
  * search or "Only favourites and open" hid it. Settings, which would cover it, closes. */
 function revealProject(path: string): void {
   settingsOpen.value = false;
+  setupOpen.value = false;
   view.value = "projects";
   if (!rows.value.some((p) => p.path === path)) {
     filter.value = "all";
@@ -833,7 +840,7 @@ function server(project: Project): string {
       :installing="installing"
       @update="updateOpen = true"
     />
-    <aside class="sidebar">
+    <aside class="sidebar" :inert="setupOpen">
       <!-- "deep": the logo and name drag the window too; so does the strip under the traffic lights.
            macOS only (lib/platform: dragRegion): Linux has the system's title bar, Windows its own. -->
       <div v-if="!isWindows" class="brand" :data-tauri-drag-region="dragRegion">
@@ -964,7 +971,7 @@ function server(project: Project): string {
 
     <!-- The page shown, and along its bottom the terminal panel, the same on every page: the page
          keeps the panel's tab row free (`COLLAPSED_HEIGHT`); open, the panel lies over it. -->
-    <div class="pages">
+    <div class="pages" :inert="setupOpen">
     <div class="page" :style="{ marginBottom: panelShown ? `${COLLAPSED_HEIGHT}px` : undefined, '--panel-over': `${panelOver}px` }">
     <DayView v-if="view === 'day'" />
     <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
@@ -978,8 +985,6 @@ function server(project: Project): string {
     />
     <BoardView v-else-if="view === 'board'" :project-path="selected?.path ?? null" @open-settings="openSettings('claude')" />
     <DepsView v-else-if="view === 'deps'" @open-project="revealProject" @open-output="revealOutput" />
-    <!-- The first run's steps, in place of the list and its details. -->
-    <SetupView v-else-if="setupOpen" :covered="settingsOpen" @done="setupOpen = false" @open-phone="openSettings('notifications', 'phone')" />
 
     <template v-else>
       <main class="main">
@@ -1159,10 +1164,22 @@ function server(project: Project): string {
     </template>
     </div>
 
-    <!-- The panel's project's outputs and terminals; not before there is a project, nor over the
+    <!-- The panel's project's outputs and terminals; not before there is a project, nor under the
          first run's steps. -->
     <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" />
     </div>
+
+    <!-- The first run's steps, over the sidebar and the pages, which take nothing while they are up. -->
+    <Transition name="setup">
+      <SetupView
+        v-if="setupOpen"
+        class="setup-layer"
+        :fade="setupFade"
+        :covered="settingsOpen"
+        @done="setupOpen = false"
+        @open-phone="openSettings('notifications', 'phone')"
+      />
+    </Transition>
 
     <!-- The selected project's files, floating over whatever page is up (⇧⌘E, the details' button). -->
     <FilesWindows />
@@ -1185,6 +1202,7 @@ function server(project: Project): string {
 
 <style scoped>
 .shell {
+  position: relative;
   height: 100%;
   display: flex;
   overflow: clip;
@@ -1219,6 +1237,25 @@ function server(project: Project): string {
 
 .title-row {
   grid-column: 1 / -1;
+}
+
+/* The first run's steps lie over the sidebar and the pages, under Windows' title bar. */
+:root[data-platform="windows"] .setup-layer {
+  grid-area: 2 / 1 / 3 / -1;
+}
+
+.setup-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.setup-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-leave-active {
+    transition: none;
+  }
 }
 
 :root[data-platform="windows"] .sidebar {

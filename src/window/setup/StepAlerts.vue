@@ -12,14 +12,12 @@ import type { CliState, Editor, NotifyAccess, PhoneChannel, PhoneView } from "..
 /**
  * The last step: whether the system lets Pitwall post notifications (with a test), the
  * `pitwall` command, the editor projects open in (only where more than one is installed) and
- * the phone's channel, each a row; and the button that ends the first run. What each row shows
- * is asked of the core when the step shows, again when the window comes back to the front and
- * when Settings over it closes (`covered`): nothing of it is kept.
- * `finishing`: the view is on its way out; `finish`: the button was pressed; `openPhone`: Settings
- * at the phone's part is asked for.
+ * the phone's channel, each a row. What each row shows is asked of the core when the step shows,
+ * again when the window comes back to the front and when Settings over it closes (`covered`):
+ * nothing of it is kept. `openPhone`: Settings at the phone's part is asked for.
  */
-const props = defineProps<{ shown: boolean; covered: boolean; finishing: boolean }>();
-const emit = defineEmits<{ finish: []; openPhone: [] }>();
+const props = defineProps<{ shown: boolean; covered: boolean }>();
+const emit = defineEmits<{ openPhone: [] }>();
 
 /* ---------- notifications ---------- */
 
@@ -202,12 +200,6 @@ onBeforeUnmount(() => window.removeEventListener("focus", onFocus));
 
 <template>
   <section class="pane">
-    <div class="head">
-      <span class="head-text">
-        <span class="title">{{ t("setup.step.alerts") }}</span>
-      </span>
-    </div>
-
     <div class="block options">
       <!-- Notifications: what the system allows; no line where it isn't asked. -->
       <div class="option">
@@ -292,13 +284,6 @@ onBeforeUnmount(() => window.removeEventListener("focus", onFocus));
         </span>
         <button type="button" class="control" @click="emit('openPhone')">{{ t("setup.alerts.phoneSetUp") }}</button>
       </div>
-    </div>
-
-    <div class="foot">
-      <button type="button" class="control primary" :disabled="finishing" :aria-busy="finishing" @click="emit('finish')">
-        <span :class="{ hidden: finishing }">{{ t("setup.finish") }}</span>
-        <Spinner v-if="finishing" class="over" :size="12" />
-      </button>
     </div>
   </section>
 </template>

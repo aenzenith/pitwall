@@ -235,6 +235,15 @@
   --tag-claude-line-on: #6b4a30;
   --tag-crash-line-on: #7a3434;
 
+  /* The first run (SetupView), a night in either theme, so the light set has none of these: the
+     patch of light the road lies in, the card a step is laid on, and the white button that starts
+     the steps and ends them, as the site's own. */
+  --road-sky: #15191f;
+  --bg-road-card: rgba(27, 30, 36, 0.94);
+  --btn-go-bg: #f2f3f5;
+  --btn-go-hover: #ffffff;
+  --btn-go-text: #0b0c0f;
+
   /* The Fuel page's cluster. A dial's pod of glass over the backdrop, from its top to its
      bottom, the light along its top edge, the hairline round it and the shadow it casts. */
   --glass-top: rgba(30, 32, 38, 0.72);

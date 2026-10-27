@@ -9,10 +9,9 @@ import type { TowerSettings } from "../../lib/types";
 
 /**
  * The fifth step: the quick switcher's shortcut, starting at login and the mini tower (shown or
- * not, its layout, its own shortcut), each a switch, and the button on to the next step. The keys
- * are only shown here (Settings records new ones). `next`: the button was pressed.
+ * not, its layout, its own shortcut), each a switch. The keys are only shown here (Settings
+ * records new ones).
  */
-const emit = defineEmits<{ next: [] }>();
 
 const caps = computed(() => shortcutCaps(snapshot.value?.settings.shortcutKeys ?? ""));
 
@@ -51,12 +50,6 @@ function setForm(form: TowerSettings["form"]): void {
 
 <template>
   <section class="pane">
-    <div class="head">
-      <span class="head-text">
-        <span class="title">{{ t("setup.step.startup") }}</span>
-      </span>
-    </div>
-
     <div class="block options">
       <div class="option">
         <label class="opt">
@@ -108,10 +101,6 @@ function setForm(form: TowerSettings["form"]): void {
         </div>
       </div>
       <p v-if="towerError" class="error" role="alert">{{ towerError }}</p>
-    </div>
-
-    <div class="foot">
-      <button type="button" class="control primary" @click="emit('next')">{{ t("setup.next") }}</button>
     </div>
   </section>
 </template>

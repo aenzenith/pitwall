@@ -2,6 +2,27 @@
   "since": "1.18.1",
   "notes": [
     {
+      "kind": "new",
+      "title": {
+        "en": "A new way into Pitwall",
+        "tr": "Kurulum baştan tasarlandı",
+        "de": "Ein neuer Einstieg",
+        "es": "Una nueva bienvenida",
+        "ru": "Новое знакомство с Pitwall",
+        "ja": "はじめの設定が新しく",
+        "zh-Hans": "全新的初始设置"
+      },
+      "body": {
+        "en": "Setup now comes one step at a time over Pitwall's own road, with Back and Next. Open it again any time from Settings › General.",
+        "tr": "Kurulum artık Pitwall'un yolunun üstünde, Geri ve İleri ile adım adım ilerliyor. Ne zaman istersen Ayarlar › Genel'den yeniden açabilirsin.",
+        "de": "Die Einrichtung führt jetzt Schritt für Schritt über Pitwalls eigene Strecke, mit Zurück und Weiter. Du kannst sie jederzeit unter Einstellungen › Allgemein wieder öffnen.",
+        "es": "La configuración va ahora paso a paso sobre la pista de Pitwall, con Atrás y Siguiente. Puedes volver a abrirla cuando quieras desde Ajustes › General.",
+        "ru": "Настройка теперь идёт шаг за шагом на фоне трассы Pitwall, с кнопками «Назад» и «Далее». Открыть её снова можно в любой момент: Настройки › Основные.",
+        "ja": "セットアップは Pitwall のコースを背景に、「戻る」と「次へ」で一歩ずつ進むようになりました。設定 › 一般 からいつでも開き直せます。",
+        "zh-Hans": "初始设置现在以 Pitwall 的赛道为背景，用“上一步”和“下一步”一步步完成。随时可以在 设置 › 通用 里重新打开。"
+      }
+    },
+    {
       "kind": "fix",
       "title": {
         "en": "Middle-click closes a pane",
