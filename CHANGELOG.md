@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.1](https://github.com/aenzenith/pitwall/compare/v1.18.0...v1.18.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **terminal:** the last two panes stay when a terminal closes or leaves them ([70a8813](https://github.com/aenzenith/pitwall/commit/70a881350e72e830e8a47be6cc0389ba960c6c44))
+
 ## [1.18.0](https://github.com/aenzenith/pitwall/compare/v1.17.0...v1.18.0) (2026-10-27)
 
 
