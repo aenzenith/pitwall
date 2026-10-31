@@ -80,7 +80,6 @@ what is left of Claude's limits and each project's dependencies are a click away
 
 - **Team radio.** Claude Code asks Pitwall about the dev server over MCP instead of starting one of
   its own, and can restart it or add a card to the board. Each tool has its own switch.
-  *macOS and Linux.*
 - **Command line.** `pitwall start`, `stop`, `logs -f` and `run` act on the project of the folder
   you are in. *macOS.*
 
