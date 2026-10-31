@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.0](https://github.com/aenzenith/pitwall/compare/v1.18.3...v1.19.0) (2026-10-31)
+
+
+### Features
+
+* **open:** a project opened on its terminal is selected on the page too ([26527da](https://github.com/aenzenith/pitwall/commit/26527da561eed15833808bffc4e1936694babb56))
+* **radio:** the team radio came to Windows ([f2410e7](https://github.com/aenzenith/pitwall/commit/f2410e7bddeb0bf6fb0d7a3526f43e2949ea6a58)), closes [#30](https://github.com/aenzenith/pitwall/issues/30)
+
 ## [1.18.3](https://github.com/aenzenith/pitwall/compare/v1.18.2...v1.18.3) (2026-10-31)
 
 
