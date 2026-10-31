@@ -12,7 +12,7 @@ import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { connectAccounts } from "../lib/accounts";
 import { claudeState, gitLine, meta } from "../lib/format";
-import { isLow, isStale, left, percentText, sessionWindow } from "../lib/fuel";
+import { isLow, isStale, leadWindow, left, percentText } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
 import { filters, isFilter, openOrAtWork, type Filter, type Page, type View } from "../lib/pages";
@@ -56,12 +56,13 @@ const filter = ref<Filter>("all");
  * cards, Claude's fuel, or the projects' dependencies. */
 const view = ref<"projects" | View>("projects");
 
-/** The sidebar's "26% left" beside Fuel: the session's share left, red when low, grey when stale. */
+/** The sidebar's "26% left" beside Fuel: the session's share left (the week's on a reading without
+ * one), red when low, grey when stale. */
 const fuelBadge = computed(() => {
   const limits = fuel.value?.limits;
-  const session = sessionWindow(fuel.value, now.value);
-  if (!limits || !session) return null;
-  return { text: t("fuel.left", { value: percentText(left(session.used), language.value) }), low: isLow(session.used), stale: isStale(limits) };
+  const lead = leadWindow(fuel.value, now.value);
+  if (!limits || !lead) return null;
+  return { text: t("fuel.left", { value: percentText(left(lead.used), language.value) }), low: isLow(lead.used), stale: isStale(limits) };
 });
 
 let unlistenFuel: (() => void) | null = null;

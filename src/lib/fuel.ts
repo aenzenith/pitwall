@@ -8,6 +8,8 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 /** The session window's length. */
 export const SESSION_MS = 5 * 60 * MINUTE;
+/** A week's window's length. */
+const WEEK_MS = 7 * 24 * HOUR;
 /** Before this much of the window has gone by, a pace says nothing yet. */
 const MIN_ELAPSED_MS = 5 * MINUTE;
 /** At or under this share left, a limit shows red. */
@@ -21,6 +23,11 @@ export function left(used: number): number {
 /** Little enough left to show red. */
 export function isLow(used: number): boolean {
   return left(used) <= LOW_LEFT;
+}
+
+/** How long a window lasts from its start to its reset: a week's 7 days, the session's 5 hours. */
+function span(window: UsageWindow): number {
+  return window.id.startsWith("seven_day") ? WEEK_MS : SESSION_MS;
 }
 
 /**
@@ -44,13 +51,13 @@ export type Pace =
   | { kind: "lasts"; start: number; end: number; emptyAt: number };
 
 /**
- * The session's pace, from a reading of it taken at `at`: the share used so far over the time
- * gone by since the window started (its reset less 5 h), carried on to empty.
+ * A window's pace, from a reading of it taken at `at`: the share used so far over the time gone
+ * by since the window started (its reset less 5 h, or 7 days for a week), carried on to empty.
  */
 export function pace(window: UsageWindow, at: number): Pace {
   if (window.resetsAt === null) return { kind: "idle" };
   const end = window.resetsAt;
-  const start = end - SESSION_MS;
+  const start = end - span(window);
   if (window.used >= 100) return { kind: "empty", start, end };
   const elapsed = at - start;
   if (window.used <= 0 || elapsed < MIN_ELAPSED_MS) return { kind: "early", start, end };
@@ -59,11 +66,11 @@ export function pace(window: UsageWindow, at: number): Pace {
   return emptyAt < end ? { kind: "out", start, end, emptyAt } : { kind: "lasts", start, end, emptyAt };
 }
 
-/** The session's burn rate: percent used per hour of the window gone by, as read at `at`; null
+/** A window's burn rate: percent used per hour of the window gone by, as read at `at`; null
  * before 5 minutes of it have gone by, or while it hasn't started. */
 export function burnRate(window: UsageWindow, at: number): number | null {
   if (window.resetsAt === null) return null;
-  const elapsed = at - (window.resetsAt - SESSION_MS);
+  const elapsed = at - (window.resetsAt - span(window));
   if (elapsed < MIN_ELAPSED_MS) return null;
   return (Math.max(0, window.used) / elapsed) * HOUR;
 }
@@ -114,12 +121,15 @@ export type Cluster = {
   windows: UsageWindow[];
   session: UsageWindow | null;
   week: UsageWindow | null;
+  /** The big dial's: the session, or the week on a reading without one (`leadWindow`). */
+  lead: UsageWindow | null;
   /** Beside the week: the most used model's week. */
   side: UsageWindow | null;
   extra: UsageExtra | null;
   /** Extra usage takes the side dial: no model's week, and it is on with a cap. */
   extraOnGauge: boolean;
-  /** Left to right: the week, the session (big), the side one. */
+  /** Left to right: the week, the session (big), the side one; without a session the week is
+   * the big one. */
   dials: ClusterDial[];
 };
 
@@ -138,13 +148,23 @@ export function cluster(usage: UsageState["usage"], now: number, translate: Tran
   const windows = (usage?.windows ?? []).map((window) => current(window, now));
   const session = windows.find((window) => window.id === "five_hour") ?? null;
   const week = windows.find((window) => window.id === "seven_day") ?? null;
+  const lead = session ?? week;
   const side = sideWindow(windows);
   const extra = usage?.extra ?? null;
   const extraOnGauge = !side && !!extra?.enabled && (extra.monthlyLimit ?? 0) > 0;
 
   const dials: ClusterDial[] = [];
-  if (week) dials.push({ key: "week", size: "side", left: left(week.used), name: translate("fuel.name.weekShort"), caption: refills(week, true, translate, lang), window: week });
-  if (session) dials.push({ key: "session", size: "big", left: left(session.used), name: translate("fuel.session"), caption: refills(session, false, translate, lang), window: session });
+  const weekDial = (size: ClusterDial["size"]): ClusterDial | null =>
+    week && { key: "week", size, left: left(week.used), name: translate("fuel.name.weekShort"), caption: refills(week, true, translate, lang), window: week };
+  if (session) {
+    const beside = weekDial("side");
+    if (beside) dials.push(beside);
+    dials.push({ key: "session", size: "big", left: left(session.used), name: translate("fuel.session"), caption: refills(session, false, translate, lang), window: session });
+  } else {
+    // No session in the reading: the week leads, on the big dial.
+    const big = weekDial("big");
+    if (big) dials.push(big);
+  }
   if (side) {
     dials.push({ key: "side", size: "side", left: left(side.used), name: windowName(side, translate), caption: refills(side, true, translate, lang), window: side });
   } else if (extraOnGauge && extra) {
@@ -153,7 +173,7 @@ export function cluster(usage: UsageState["usage"], now: number, translate: Tran
     const money = moneyText(Math.max(0, cap - extra.usedCredits), extra.currency, lang);
     dials.push({ key: "extra", size: "side", left: left(used), name: translate("fuel.extra"), caption: translate("fuel.left", { value: money }), window: null });
   }
-  return { windows, session, week, side, extra, extraOnGauge, dials };
+  return { windows, session, week, lead, side, extra, extraOnGauge, dials };
 }
 
 /** Where `at` falls in the window, 0–100. */
@@ -184,9 +204,12 @@ export function errorKeys(error: UsageError | null): [Key, Key] {
   return ERRORS[error ?? "unknown"] ?? ERRORS.unknown;
 }
 
-/** The session window as it stands now, if the plan has one and it has been read. */
-export function sessionWindow(fuel: Fuel | null, now: number): UsageWindow | null {
-  const found = fuel?.limits.usage?.windows.find((window) => window.id === "five_hour");
+/** The limit that leads, as it stands now: the session, else the week on a reading without one
+ * (the Fuel page's big dial, the sidebar's badge, the mini tower's share; the menu bar's is the
+ * core's `Fuel::bar`). None before a reading, or on a plan with neither. */
+export function leadWindow(fuel: Fuel | null, now: number): UsageWindow | null {
+  const windows = fuel?.limits.usage?.windows ?? [];
+  const found = windows.find((window) => window.id === "five_hour") ?? windows.find((window) => window.id === "seven_day");
   return found ? current(found, now) : null;
 }
 

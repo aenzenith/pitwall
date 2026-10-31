@@ -72,8 +72,8 @@ const shown = computed<Shown | null>(() => {
     const { windows, dials } = cluster(limits.usage, now.value, t, language.value);
     // An API-key account has no plan limits to draw; Extra usage alone is no cluster.
     if (!windows.length || !dials.length) return null;
-    // The session leads; on a plan without one, the first dial there is.
-    const lead = dials.find((dial) => dial.key === "session") ?? dials[0];
+    // The big dial leads (the session, or the week on a reading without one); else the first.
+    const lead = dials.find((dial) => dial.size === "big") ?? dials[0];
     const stale = isStale(limits);
     return { kind: "dials", lead: drawn(lead), rest: dials.filter((dial) => dial !== lead).map(drawn), stale, why: stale ? tag(limits) : null };
   }

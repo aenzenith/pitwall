@@ -19,7 +19,7 @@ import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
-import { isStale, left, LOW_LEFT, percentText, sessionWindow } from "../lib/fuel";
+import { isStale, leadWindow, left, LOW_LEFT, percentText } from "../lib/fuel";
 import { language, t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { openFromOutside } from "../lib/open";
@@ -46,12 +46,15 @@ const letters = computed(() => codes(projects.value));
 const running = computed(() => snapshot.value?.running ?? 0);
 const working = computed(() => projects.value.reduce((sum, project) => sum + project.claudeSessions.filter((session) => session.phase === "working").length, 0));
 
-/** The session's fuel left, when there is a reading of it. */
+/** The session's fuel left (the week's on a reading without one), when there is a reading of it;
+ * `label` says which. */
 const share = computed(() => {
-  const session = sessionWindow(fuel.value, now.value);
-  if (!session || !fuel.value) return null;
-  const rest = left(session.used);
-  return { text: percentText(rest, language.value), low: rest <= LOW_LEFT, stale: isStale(fuel.value.limits) };
+  const lead = leadWindow(fuel.value, now.value);
+  if (!lead || !fuel.value) return null;
+  const rest = left(lead.used);
+  const text = percentText(rest, language.value);
+  const label = t(lead.id === "five_hour" ? "tower.fuel" : "tower.fuelWeek", { share: text });
+  return { text, label, low: rest <= LOW_LEFT, stale: isStale(fuel.value.limits) };
 });
 
 /* ---------- what is pointed at ---------- */
@@ -302,7 +305,7 @@ onBeforeUnmount(() => {
       <span v-if="more" class="rest" role="img" :aria-label="t('flag.more', { count: more })" @mousedown="drag">{{ t("suggest.more", { count: more }) }}</span>
       <template v-if="share">
         <span class="rule" aria-hidden="true" @mousedown="drag"></span>
-        <span :class="['share', { low: share.low, stale: share.stale }]" role="img" :aria-label="t('tower.fuel', { share: share.text })" @mousedown="drag">{{ share.text }}</span>
+        <span :class="['share', { low: share.low, stale: share.stale }]" role="img" :aria-label="share.label" @mousedown="drag">{{ share.text }}</span>
       </template>
     </template>
 
@@ -313,7 +316,7 @@ onBeforeUnmount(() => {
         <span v-if="running" class="count run" role="img" :aria-label="t('popover.running', { count: running })">{{ running }}</span>
         <span v-if="working" class="count claude" role="img" :aria-label="t('core.tray.working', { count: working })">{{ working }}</span>
         <span class="grow"></span>
-        <span v-if="share" :class="['share', { low: share.low, stale: share.stale }]" role="img" :aria-label="t('tower.fuel', { share: share.text })">{{ share.text }}</span>
+        <span v-if="share" :class="['share', { low: share.low, stale: share.stale }]" role="img" :aria-label="share.label">{{ share.text }}</span>
         <button
           type="button"
           :class="['more', { lit: litAct('options') }]"

@@ -48,6 +48,9 @@ const stale = computed(() => !!usage.value && !!limits.value && isStale(limits.v
 const gauges = computed(() => cluster(usage.value, now.value, t, language.value));
 const windows = computed(() => gauges.value.windows);
 const session = computed(() => gauges.value.session);
+/** The big dial's limit: the session, or the week on a reading without one. The backdrop's glow
+ * and the trip computer follow it; the pace strip is the session's alone. */
+const lead = computed(() => gauges.value.lead);
 const extra = computed(() => gauges.value.extra);
 const extraOnGauge = computed(() => gauges.value.extraOnGauge);
 /** The limits without a dial, listed under the cluster on request; one never used isn't worth a line. */
@@ -58,10 +61,10 @@ function until(window: UsageWindow): string | null {
   return window.resetsAt !== null && window.resetsAt > now.value ? duration(window.resetsAt - now.value) : null;
 }
 
-/** The cluster's dials, left to right: the week, the session (big), the side one. `name` goes in
- * the pod, under the figure; `caption` under the pod; `until`: how long until it refills, after
- * the caption (the session's dial only). */
-const dials = computed(() => gauges.value.dials.map((dial) => ({ ...dial, until: dial.key === "session" && dial.window ? until(dial.window) : null })));
+/** The cluster's dials, left to right: the week, the session (big), the side one; without a
+ * session the week is the big one. `name` goes in the pod, under the figure; `caption` under the
+ * pod; `until`: how long until it refills, after the caption (the big dial only). */
+const dials = computed(() => gauges.value.dials.map((dial) => ({ ...dial, until: dial.size === "big" && dial.window ? until(dial.window) : null })));
 
 /** Nothing to show yet: the core hasn't answered, or its first reading is on its way. */
 const firstLoad = computed(() => !usage.value && (!fuel.value || status.value === "loading"));
@@ -194,7 +197,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
          instrument panel, drawn for both themes: smoked glass over embers in the dark one, frosted
          glass over a warm haze in the light one (the cluster's own roles in styles/tokens.css). -->
     <div class="stage">
-      <FuelBackdrop :window="session" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
+      <FuelBackdrop :window="lead" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
       <!-- The page's lower part on a ground of its own, from the bottom up to the trip computer's
            top: the trip computer, the session's pace and the foot stand on it, parted by lines. -->
       <div v-if="shade" class="shade" :style="{ height: `${shade}px` }" aria-hidden="true"></div>
@@ -232,7 +235,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
             <!-- The page's lower part, as wide as the page on its own ground (`.shade`): the trip
                  computer and the session's pace, parted by a line, the foot under them. -->
             <div class="lower">
-              <TripComputer ref="trip" :session="session" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
+              <TripComputer ref="trip" :window="lead" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
               <SessionPace v-if="session" ref="pace" :window="session" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" />
             </div>
           </section>

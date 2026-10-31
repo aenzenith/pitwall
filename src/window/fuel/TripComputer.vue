@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { burnRate, clockText, compactText, LOW_LEFT, leftAtRefill, moneyText, pace, percentText } from "../../lib/fuel";
+import { burnRate, clockText, compactText, dayClockText, LOW_LEFT, leftAtRefill, moneyText, pace, percentText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import type { SpendToday, UsageWindow } from "../../lib/types";
 
 /**
- * The cluster's trip computer: the session's burn rate, what is left when it refills (or when it
- * runs out first), and today's tokens with what the API would have charged. `readAt`: when the
- * session was read.
+ * The cluster's trip computer: the big dial's burn rate (the session's, or the week's on a reading
+ * without one), what is left when it refills (or when it runs out first), and today's tokens with
+ * what the API would have charged. `readAt`: when `window` was read.
  */
-const props = defineProps<{ session: UsageWindow | null; readAt: number; today: SpendToday | null; stale: boolean }>();
+const props = defineProps<{ window: UsageWindow | null; readAt: number; today: SpendToday | null; stale: boolean }>();
 
 const NONE = "—";
 
@@ -18,15 +18,17 @@ type Cell = { key: string; value: string; label: string; hot: boolean };
 
 const cells = computed<Cell[]>(() => {
   const lang = language.value;
-  const session = props.session;
-  const rate = session ? burnRate(session, props.readAt) : null;
-  const state = session ? pace(session, props.readAt) : null;
-  const atRefill = session ? leftAtRefill(session, props.readAt) : null;
+  const window = props.window;
+  const rate = window ? burnRate(window, props.readAt) : null;
+  const state = window ? pace(window, props.readAt) : null;
+  const atRefill = window ? leftAtRefill(window, props.readAt) : null;
   const today = props.today;
+  // A week's moment needs its day.
+  const when = (at: number) => (window?.id === "five_hour" ? clockText(at, lang) : dayClockText(at, lang));
 
   const refill: Cell =
     state?.kind === "out"
-      ? { key: "refill", value: t("fuel.strip.empty", { time: clockText(state.emptyAt, lang) }), label: t("fuel.trip.atPace"), hot: true }
+      ? { key: "refill", value: t("fuel.strip.empty", { time: when(state.emptyAt) }), label: t("fuel.trip.atPace"), hot: true }
       : {
           key: "refill",
           value: atRefill === null ? NONE : `~${percentText(atRefill, lang)}`,

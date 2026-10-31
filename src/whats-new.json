@@ -1,88 +1,25 @@
 {
-  "since": "1.18.1",
+  "since": "1.18.2",
   "notes": [
     {
-      "kind": "new",
-      "title": {
-        "en": "A new way into Pitwall",
-        "tr": "Kurulum baştan tasarlandı",
-        "de": "Ein neuer Einstieg",
-        "es": "Una nueva bienvenida",
-        "ru": "Новое знакомство с Pitwall",
-        "ja": "はじめの設定が新しく",
-        "zh-Hans": "全新的初始设置"
-      },
-      "body": {
-        "en": "Setup now comes one step at a time over Pitwall's own road, with Back and Next. Open it again any time from Settings › General.",
-        "tr": "Kurulum artık Pitwall'un yolunun üstünde, Geri ve İleri ile adım adım ilerliyor. Ne zaman istersen Ayarlar › Genel'den yeniden açabilirsin.",
-        "de": "Die Einrichtung führt jetzt Schritt für Schritt über Pitwalls eigene Strecke, mit Zurück und Weiter. Du kannst sie jederzeit unter Einstellungen › Allgemein wieder öffnen.",
-        "es": "La configuración va ahora paso a paso sobre la pista de Pitwall, con Atrás y Siguiente. Puedes volver a abrirla cuando quieras desde Ajustes › General.",
-        "ru": "Настройка теперь идёт шаг за шагом на фоне трассы Pitwall, с кнопками «Назад» и «Далее». Открыть её снова можно в любой момент: Настройки › Основные.",
-        "ja": "セットアップは Pitwall のコースを背景に、「戻る」と「次へ」で一歩ずつ進むようになりました。設定 › 一般 からいつでも開き直せます。",
-        "zh-Hans": "初始设置现在以 Pitwall 的赛道为背景，用“上一步”和“下一步”一步步完成。随时可以在 设置 › 通用 里重新打开。"
-      }
-    },
-    {
       "kind": "fix",
       "title": {
-        "en": "Middle-click closes a pane",
-        "tr": "Bölmeler de orta tıkla kapanıyor",
-        "de": "Mittelklick schließt auch Teilfenster",
-        "es": "Clic central para cerrar una división",
-        "ru": "Средняя кнопка закрывает и области",
-        "ja": "ペインも中クリックで閉じられます",
-        "zh-Hans": "中键也能关闭窗格"
+        "en": "No 5-hour limit? The week takes its place",
+        "tr": "5 saatlik sınır yoksa haftalık sınır gösteriliyor",
+        "de": "Ohne 5-Stunden-Limit zeigt Pitwall die Woche",
+        "es": "Sin límite de 5 horas, se muestra la semana",
+        "ru": "Нет 5-часового лимита — показывается неделя",
+        "ja": "5 時間の上限がないときは週間を表示",
+        "zh-Hans": "没有 5 小时限额时改为显示本周"
       },
       "body": {
-        "en": "Just like a tab: middle-click a split pane's top bar and its terminal closes.",
-        "tr": "Tıpkı sekmelerdeki gibi: bölünmüş terminalde bölmenin üst çubuğuna orta tıklayınca o terminal kapanıyor.",
-        "de": "Wie bei einem Tab: Ein Mittelklick auf die Kopfzeile eines Teilfensters schließt sein Terminal.",
-        "es": "Igual que con una pestaña: haz clic central en la barra superior de una división y su terminal se cierra.",
-        "ru": "Как со вкладкой: щёлкните средней кнопкой по заголовку области, и её терминал закроется.",
-        "ja": "タブと同じように、分割したペインの見出しを中クリックすればそのターミナルが閉じます。",
-        "zh-Hans": "和标签页一样：用中键点一下窗格的标题栏，它的终端就关掉了。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Pitwall by name in Login Items",
-        "tr": "Giriş Öğeleri'nde Pitwall adıyla",
-        "de": "Pitwall mit Namen bei den Anmeldeobjekten",
-        "es": "Pitwall con su nombre en los ítems de inicio",
-        "ru": "Pitwall под своим именем в объектах входа",
-        "ja": "ログイン項目に Pitwall の名前で表示",
-        "zh-Hans": "登录项里显示 Pitwall"
-      },
-      "body": {
-        "en": "With launch at login on, System Settings now shows Pitwall's own name and icon instead of the developer's name.",
-        "tr": "Girişte başlat açıksa Sistem Ayarları artık geliştiricinin adını değil, Pitwall'un adını ve simgesini gösteriyor.",
-        "de": "Ist „Beim Anmelden öffnen“ an, zeigen die Systemeinstellungen jetzt Pitwalls Namen und Symbol statt des Entwicklernamens.",
-        "es": "Con «Abrir al iniciar sesión» activado, Ajustes del Sistema muestra ahora el nombre y el icono de Pitwall en vez del nombre del desarrollador.",
-        "ru": "Если включено «Открывать при входе», Системные настройки теперь показывают имя и значок Pitwall, а не имя разработчика.",
-        "ja": "「ログイン時に起動」をオンにすると、システム設定に開発者名ではなく Pitwall の名前とアイコンが表示されるようになりました。",
-        "zh-Hans": "打开“登录时启动”后，系统设置里显示的是 Pitwall 的名称和图标，不再是开发者的名字。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "The extension page always opens",
-        "tr": "Eklenti sayfası her zaman açılıyor",
-        "de": "Die Erweiterungsseite öffnet sich immer",
-        "es": "La página de la extensión siempre se abre",
-        "ru": "Страница расширения открывается всегда",
-        "ja": "拡張機能のページが必ず開きます",
-        "zh-Hans": "扩展页面总能打开"
-      },
-      "body": {
-        "en": "Without VS Code installed, Open extension page now takes you to the Marketplace in your browser instead of showing an error.",
-        "tr": "VS Code kurulu değilse Eklenti sayfasını aç artık hata vermiyor, Marketplace'i tarayıcıda açıyor.",
-        "de": "Ohne installiertes VS Code bringt dich „Erweiterungsseite öffnen“ jetzt im Browser zum Marketplace, statt einen Fehler zu zeigen.",
-        "es": "Si no tienes VS Code instalado, «Abrir la página de la extensión» ya no da error: te lleva al Marketplace en el navegador.",
-        "ru": "Если VS Code не установлен, «Открыть страницу расширения» больше не выдаёт ошибку, а открывает Marketplace в браузере.",
-        "ja": "VS Code が入っていなくても「拡張機能のページを開く」でエラーにならず、ブラウザで Marketplace が開くようになりました。",
-        "zh-Hans": "没装 VS Code 时，“打开扩展页面”不再报错，而是在浏览器里打开 Marketplace。"
+        "en": "Claude no longer always reports a 5-hour session in its usage. When it doesn't, the Fuel page's big dial, the menu bar and the mini tower show what's left of the week instead of going blank.",
+        "tr": "Claude, kullanım bilgisinde 5 saatlik oturumu artık her zaman göndermiyor. O zaman Yakıt sayfasının büyük göstergesi, menü çubuğu ve mini kule boş kalmıyor, haftada kalanı gösteriyor.",
+        "de": "Claude meldet die 5-Stunden-Sitzung nicht mehr immer mit. Dann zeigen die große Anzeige im Tank, die Menüleiste und der Mini-Turm, was von der Woche übrig ist, statt leer zu bleiben.",
+        "es": "Claude ya no siempre informa de la sesión de 5 horas. Cuando falta, el indicador grande de Combustible, la barra de menús y la minitorre muestran lo que queda de la semana en vez de quedarse vacíos.",
+        "ru": "Claude теперь не всегда сообщает о 5-часовой сессии. Тогда большой циферблат на странице «Топливо», строка меню и мини-башня показывают остаток недели, а не пустоту.",
+        "ja": "Claude は使用状況に 5 時間セッションを含めないことがあります。そのときは燃料ページの大きなメーター、メニューバー、ミニタワーが空欄にならず、週間の残りを表示します。",
+        "zh-Hans": "Claude 现在不一定会报告 5 小时会话。这时燃料页的大仪表、菜单栏和迷你塔不再空着，而是显示本周还剩多少。"
       }
     }
   ]

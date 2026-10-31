@@ -1,7 +1,8 @@
 //! The Fuel page's data: Claude's plan limits (`usage.rs`) and today's tokens with their API price
 //! (`spend.rs`). Both are read off the main thread, sent to the main window, the popover and the
 //! mini tower as `fuel` when they change, and a limit passing 90 % brings one notification per
-//! window. The session's share left also goes beside the icon in the menu bar (`bar`). Each look
+//! window. The session's share left also goes beside the icon in the menu bar (`bar`), the week's
+//! when the reading has no session. Each look
 //! at the logs also goes to the core for the Today page (`DayFuel`), with the share of the
 //! week's limit the day took: told from the week as read at the day's first reading and after a
 //! refill, which the core writes into the day's file (`WeekMark`).
@@ -61,11 +62,13 @@ pub struct FuelView {
     pub accounts: Vec<AccountView>,
 }
 
-/// The session's fuel as the menu bar shows it.
+/// The session's fuel as the menu bar shows it, or the week's when the reading has no session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BarFuel {
     /// Percent left, 0–100.
     pub left: u8,
+    /// It is the week's: the reading has no 5-hour session.
+    pub week: bool,
     /// Little enough left to show red.
     pub low: bool,
     /// The limits couldn't be read this time: an older reading, shown dimmed.
@@ -212,19 +215,21 @@ impl Fuel {
         FuelView { limits: self.state_of(&in_use), today: lock(&self.today).clone(), accounts }
     }
 
-    /// The session's fuel for the menu bar: none while Settings hides it, before the first
-    /// reading, and on a plan without a session limit. The account in use's.
+    /// The session's fuel for the menu bar, the week's when the reading has no session (as the
+    /// page's big dial, `lead` in src/lib/fuel.ts): none while Settings hides it, before the
+    /// first reading, and on a plan with neither. The account in use's.
     pub fn bar(&self, settings: &Settings) -> Option<BarFuel> {
         if !settings.fuel_in_bar {
             return None;
         }
         let limits = self.state_of(&in_use_id(settings));
-        let session = limits.usage.as_ref()?.windows.iter().find(|window| window.id == "five_hour")?;
+        let windows = &limits.usage.as_ref()?.windows;
+        let lead = windows.iter().find(|window| window.id == "five_hour").or_else(|| windows.iter().find(|window| window.id == "seven_day"))?;
         // A window whose reset has passed has refilled, as the page shows it (`current`).
-        let refilled = session.resets_at.is_some_and(|at| at <= now_ms() as i64);
-        let left = if refilled { 100.0 } else { (100.0 - session.used).clamp(0.0, 100.0) };
+        let refilled = lead.resets_at.is_some_and(|at| at <= now_ms() as i64);
+        let left = if refilled { 100.0 } else { (100.0 - lead.used).clamp(0.0, 100.0) };
         let stale = !matches!(limits.status, Status::Ready | Status::Loading);
-        Some(BarFuel { left: left.round() as u8, low: left <= LOW_LEFT, stale })
+        Some(BarFuel { left: left.round() as u8, week: lead.id == "seven_day", low: left <= LOW_LEFT, stale })
     }
 
     /// Keeps both fresh for as long as the app runs.

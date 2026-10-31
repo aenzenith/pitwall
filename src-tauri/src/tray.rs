@@ -590,6 +590,7 @@ fn draw<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
     }
 
     let mut tooltip = match &title.fuel {
+        Some((fuel, left)) if fuel.week => t!("core.tray.tooltipFuelWeek", running = snapshot.running, waiting = snapshot.waiting, left = left),
         Some((_, left)) => t!("core.tray.tooltipFuel", running = snapshot.running, waiting = snapshot.waiting, left = left),
         None => t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting),
     };
