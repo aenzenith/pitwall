@@ -1,25 +1,25 @@
 {
-  "since": "1.18.2",
+  "since": "1.18.3",
   "notes": [
     {
-      "kind": "fix",
+      "kind": "new",
       "title": {
-        "en": "No 5-hour limit? The week takes its place",
-        "tr": "5 saatlik sınır yoksa haftalık sınır gösteriliyor",
-        "de": "Ohne 5-Stunden-Limit zeigt Pitwall die Woche",
-        "es": "Sin límite de 5 horas, se muestra la semana",
-        "ru": "Нет 5-часового лимита — показывается неделя",
-        "ja": "5 時間の上限がないときは週間を表示",
-        "zh-Hans": "没有 5 小时限额时改为显示本周"
+        "en": "Team radio on Windows",
+        "tr": "Takım radyosu artık Windows'ta",
+        "de": "Teamfunk jetzt auch unter Windows",
+        "es": "La radio del equipo llega a Windows",
+        "ru": "Командное радио теперь и в Windows",
+        "ja": "チーム無線が Windows でも使えるように",
+        "zh-Hans": "车队无线电来到 Windows"
       },
       "body": {
-        "en": "Claude no longer always reports a 5-hour session in its usage. When it doesn't, the Fuel page's big dial, the menu bar and the mini tower show what's left of the week instead of going blank.",
-        "tr": "Claude, kullanım bilgisinde 5 saatlik oturumu artık her zaman göndermiyor. O zaman Yakıt sayfasının büyük göstergesi, menü çubuğu ve mini kule boş kalmıyor, haftada kalanı gösteriyor.",
-        "de": "Claude meldet die 5-Stunden-Sitzung nicht mehr immer mit. Dann zeigen die große Anzeige im Tank, die Menüleiste und der Mini-Turm, was von der Woche übrig ist, statt leer zu bleiben.",
-        "es": "Claude ya no siempre informa de la sesión de 5 horas. Cuando falta, el indicador grande de Combustible, la barra de menús y la minitorre muestran lo que queda de la semana en vez de quedarse vacíos.",
-        "ru": "Claude теперь не всегда сообщает о 5-часовой сессии. Тогда большой циферблат на странице «Топливо», строка меню и мини-башня показывают остаток недели, а не пустоту.",
-        "ja": "Claude は使用状況に 5 時間セッションを含めないことがあります。そのときは燃料ページの大きなメーター、メニューバー、ミニタワーが空欄にならず、週間の残りを表示します。",
-        "zh-Hans": "Claude 现在不一定会报告 5 小时会话。这时燃料页的大仪表、菜单栏和迷你塔不再空着，而是显示本周还剩多少。"
+        "en": "Claude Code on Windows can now ask Pitwall about the dev server and write on the board too. Turn it on in Settings › Claude.",
+        "tr": "Windows'ta da Claude Code artık dev sunucusunu Pitwall'a sorabiliyor ve panoya kart ekleyebiliyor. Ayarlar › Claude'dan açabilirsin.",
+        "de": "Auch unter Windows kann Claude Code jetzt Pitwall nach dem Dev-Server fragen und aufs Board schreiben. Einschalten unter Einstellungen › Claude.",
+        "es": "En Windows, Claude Code ya puede preguntarle a Pitwall por el servidor de desarrollo y escribir en el tablero. Actívala en Ajustes › Claude.",
+        "ru": "Claude Code в Windows теперь тоже может спросить Pitwall о dev-сервере и написать на доске. Включается в Настройки › Claude.",
+        "ja": "Windows の Claude Code も、開発サーバーのことを Pitwall に聞いたり、ボードに書き込んだりできるようになりました。設定 › Claude でオンにできます。",
+        "zh-Hans": "Windows 上的 Claude Code 现在也能向 Pitwall 询问开发服务器，并在看板上写东西了。可在 设置 › Claude 中开启。"
       }
     }
   ]

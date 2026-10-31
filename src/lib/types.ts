@@ -846,9 +846,9 @@ export type RadioSettings = { on: boolean; tools: Record<string, boolean> };
  * settings' (`RadioSettings.tools`). */
 export type RadioTool = { name: string; acts: boolean };
 
-/** The radio as Claude Code has it. `unsupported`: not on this system. `missing`: Claude Code's CLI
- * wasn't found. `sessions`: Claude Code sessions with a line to Pitwall right now. */
-export type RadioState = { status: "on" | "off" | "unsupported"; missing: boolean; sessions: number };
+/** The radio as Claude Code has it. `missing`: Claude Code's CLI wasn't found. `sessions`: Claude
+ * Code sessions with a line to Pitwall right now. */
+export type RadioState = { status: "on" | "off"; missing: boolean; sessions: number };
 
 /** What came of a call over the radio, for its session's list: the server as it was answered,
  * lines of output read, a card added, a note left on the session's card, a saved command run. */

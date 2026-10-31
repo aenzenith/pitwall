@@ -7,7 +7,7 @@ import RoadSky from "../components/RoadSky.vue";
 import Spinner from "../components/Spinner.vue";
 import { shortcutLabel } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
-import { dragRegion, isMac, isWindows } from "../lib/platform";
+import { dragRegion, isMac } from "../lib/platform";
 import { api, snapshot, visible } from "../lib/store";
 import type { ExtensionStatus } from "../lib/types";
 import StepAlerts from "./setup/StepAlerts.vue";
@@ -30,10 +30,7 @@ const emit = defineEmits<{ done: []; openPhone: [] }>();
 
 type Step = "projects" | "hook" | "radio" | "extension" | "startup" | "alerts";
 
-/** The team radio is not on Windows yet: nothing of it is shown there. */
-const hasRadio = !isWindows;
-
-const every: Array<{ id: Step; title: Key; hint: Key }> = [
+const steps: Array<{ id: Step; title: Key; hint: Key }> = [
   { id: "projects", title: "setup.step.projects", hint: "setup.step.projectsHint" },
   { id: "hook", title: "setup.step.hook", hint: "setup.step.hookHint" },
   { id: "radio", title: "setup.step.radio", hint: "setup.step.radioHint" },
@@ -42,7 +39,6 @@ const every: Array<{ id: Step; title: Key; hint: Key }> = [
   // The pitwall command is macOS's alone so far: elsewhere its line says nothing of it.
   { id: "alerts", title: "setup.step.alerts", hint: isMac ? "setup.step.alertsHint" : "setup.step.alertsHintNoCli" },
 ];
-const steps = every.filter((item) => item.id !== "radio" || hasRadio);
 const order = steps.map((item) => item.id);
 
 /* ---------- Pitwall for VS Code ---------- */
@@ -229,7 +225,7 @@ const roadRunning = computed(() => visible.value && !props.covered);
       <div class="stage">
         <StepProjects v-show="page === 'projects'" id="setup-pane-projects" role="group" aria-labelledby="setup-title-projects" @added="go(order[1])" />
         <StepHook v-show="page === 'hook'" id="setup-pane-hook" role="group" aria-labelledby="setup-title-hook" />
-        <StepRadio v-if="hasRadio" v-show="page === 'radio'" id="setup-pane-radio" role="group" aria-labelledby="setup-title-radio" />
+        <StepRadio v-show="page === 'radio'" id="setup-pane-radio" role="group" aria-labelledby="setup-title-radio" />
         <StepExtension
           v-show="page === 'extension'"
           id="setup-pane-extension"

@@ -34,9 +34,6 @@ pub(in crate::core) use tools::{last_lines, saved};
 
 use register::Listed;
 
-/// Not on Windows yet: none of it has run there (how Claude Code starts its servers, the shell
-/// its CLI is asked through).
-const SUPPORTED: bool = cfg!(unix);
 /// Callers answered at once, each having shown the key; one more is closed unanswered.
 const CALLERS_MAX: usize = 16;
 /// Those who haven't shown the key yet, at once, on either line (this one and the command
@@ -118,7 +115,7 @@ pub enum CallResult {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RadioState {
-    /// `on` | `off` | `unsupported` (not on this system)
+    /// `on` | `off`
     pub status: &'static str,
     /// Claude Code's CLI wasn't found: Pitwall can't be added to it or taken out.
     pub missing: bool,
@@ -142,10 +139,6 @@ impl RadioState {
 
     fn on(missing: bool) -> Self {
         Self { status: "on", missing, sessions: register::lines() }
-    }
-
-    fn unsupported() -> Self {
-        Self { status: "unsupported", missing: false, sessions: 0 }
     }
 }
 
@@ -235,7 +228,7 @@ impl Core {
 
     /// At start: the endpoint opens when the radio is on. Off, a file a run before left goes.
     pub fn radio_start(self: &Arc<Self>) {
-        if SUPPORTED && self.lock().settings.radio.on {
+        if self.lock().settings.radio.on {
             if let Err(error) = self.radio_open() {
                 eprintln!("[pitwall] {error}");
             }
@@ -390,9 +383,6 @@ impl Core {
     /// asked (`radio_ask`). Until then it only answers that the radio is off. Claude Code's CLI
     /// is told to write here; it takes a moment, so off the main thread.
     pub fn radio_set(self: &Arc<Self>, on: bool) -> Result<RadioState, String> {
-        if !SUPPORTED {
-            return Ok(RadioState::unsupported());
-        }
         let asked = Arc::clone(&self.lock().radio.asked);
         let mut asked = asked.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         // Whatever comes of it, what Claude Code said before holds no more.
@@ -420,9 +410,6 @@ impl Core {
     /// The radio as Claude Code has it. What its CLI says is asked by one caller at a time and
     /// good for `ASKED_FOR`; it takes a moment, so off the main thread.
     pub fn radio_state(self: &Arc<Self>) -> RadioState {
-        if !SUPPORTED {
-            return RadioState::unsupported();
-        }
         let asked = Arc::clone(&self.lock().radio.asked);
         let mut asked = asked.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let state = match asked.as_ref().filter(|(at, _)| at.elapsed() < ASKED_FOR) {
@@ -449,7 +436,7 @@ impl Core {
     /// one), through Claude Code's CLI given that folder: added (`on`) or taken out.
     pub fn radio_account(&self, dir: &str, on: bool) -> Result<(), String> {
         // A folder that is gone isn't made again by Claude Code's CLI for this.
-        if !SUPPORTED || !Path::new(dir).is_dir() {
+        if !Path::new(dir).is_dir() {
             return Ok(());
         }
         if on {
@@ -540,6 +527,5 @@ impl Core {
     }
 }
 
-// The endpoint is on macOS and Linux only (`SUPPORTED`).
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests;

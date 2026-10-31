@@ -19,7 +19,6 @@ import { computed, onBeforeUnmount, onMounted } from "vue";
 
 import Spinner from "../../components/Spinner.vue";
 import { t, type Key } from "../../lib/i18n";
-import { isWindows } from "../../lib/platform";
 import { api, snapshot } from "../../lib/store";
 
 /**
@@ -61,8 +60,6 @@ if (!tools.value.length) {
   );
 }
 
-/** Not on Windows yet: nothing of it is shown there. */
-const hidden = computed(() => isWindows || asked.value?.status === "unsupported");
 const badge = computed(() => {
   if (!on.value) return t("radio.off");
   return asked.value?.status === "on" ? t("radio.onSessions", { count: asked.value.sessions }) : t("radio.on");
@@ -131,7 +128,7 @@ onBeforeUnmount(() => watcher?.disconnect());
 
 <template>
   <!-- A part of the Claude tab, its head a row as the hook's above it. -->
-  <div v-if="!hidden" ref="root" class="section radio" @change.stop>
+  <div ref="root" class="section radio" @change.stop>
     <div class="hook">
       <div class="hook-text">
         <span class="hook-title">
