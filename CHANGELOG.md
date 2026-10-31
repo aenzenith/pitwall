@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.3](https://github.com/aenzenith/pitwall/compare/v1.18.2...v1.18.3) (2026-10-31)
+
+
+### Bug Fixes
+
+* **fuel:** the week leads when Claude reports no 5-hour session ([a40e731](https://github.com/aenzenith/pitwall/commit/a40e731ecaeeea9f43a3bf1e55d332dd8aa05288))
+
 ## [1.18.2](https://github.com/aenzenith/pitwall/compare/v1.18.1...v1.18.2) (2026-10-27)
 
 
