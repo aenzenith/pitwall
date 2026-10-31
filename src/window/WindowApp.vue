@@ -23,7 +23,7 @@ import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu
 import { cardRequest, COLLAPSED_HEIGHT, followProject, openInPanel, panelOver, panelPath, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
 import { closeChord, dragRegion, isMac, isWindows, keys, terminalChord } from "../lib/platform";
 import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
-import { focusTerminal, listRequest, openInWindow, openTarget } from "../lib/open";
+import { focusTerminal, listRequest, openInWindow, openTarget, pickOnPage, pickRequest } from "../lib/open";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
@@ -739,6 +739,16 @@ watch(listRequest, (asked) => {
   if (asked) revealProject(asked.path);
 });
 
+// A project brought up on its terminal from outside the window (lib/open: pickRequest): selected
+// in the list too while the list shows it, its row in sight; the keyboard stays in the terminal and
+// the list is left as it is filtered.
+watch(pickRequest, (asked) => {
+  const path = asked?.path;
+  if (!path || view.value !== "projects" || !rows.value.some((p) => p.path === path)) return;
+  selectProject(path);
+  void nextTick(() => lines().find((line) => line.dataset.path === path)?.scrollIntoView({ block: "nearest" }));
+});
+
 /** From the switcher (⌘↵ on a command) or the Garage page: that command's output in the terminal
  * panel, open, on the page shown. */
 function revealOutput(path: string, job: string): void {
@@ -755,6 +765,7 @@ function revealOutput(path: string, job: string): void {
 async function revealTerminal(path: string, id: number): Promise<void> {
   settingsOpen.value = false;
   revealTab(path, id);
+  pickOnPage(path);
   if (view.value !== "board") return;
   // The board's cards, to know whether one runs in that terminal.
   if (!boardLink) boardLink = connectBoard();
@@ -794,6 +805,7 @@ onMounted(async () => {
   unlistenFocus = await listen<{ path: string }>("focus-terminal", (event) => {
     settingsOpen.value = false;
     focusTerminal(event.payload.path);
+    pickOnPage(event.payload.path);
   });
   // `/` in the switcher: one of the sidebar's pages.
   unlistenPage = await listen<{ page: Page; tab?: "notifications" }>("reveal-page", (event) => revealPage(event.payload.page, event.payload.tab));

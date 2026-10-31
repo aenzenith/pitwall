@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
-import { openInWindow } from "../lib/open";
+import { openInWindow, pickRequest } from "../lib/open";
 import { atWork } from "../lib/pages";
 import { terminalRequest, usePanelFollow } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
@@ -113,6 +113,12 @@ watch(
   },
   { immediate: true },
 );
+
+// A project brought up on its terminal from outside the window (lib/open: pickRequest): selected in
+// the tower too, while the tower holds it.
+watch(pickRequest, (asked) => {
+  if (asked && listed.value.some((project) => project.path === asked.path)) selectedPath.value = asked.path;
+});
 
 /* ---------- the stage ---------- */
 

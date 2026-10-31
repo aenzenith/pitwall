@@ -30,6 +30,19 @@ export const OPEN_LABELS = { terminal: "open.terminal", files: "open.files", edi
 /** A page asks the window for the project in the list (WindowApp takes it). */
 export const listRequest = ref<{ path: string; at: number } | null>(null);
 
+/**
+ * A project brought up on its terminal from outside the window (the popover, the quick switcher,
+ * the mini tower, a Claude session brought up): the page shown selects it too, where it lists it
+ * (the Projects page's list, the Track page's tower, the Today page's lanes, the Garage's list),
+ * so its details show beside the terminal. The page stays the one it is; only the page shown at
+ * that moment takes it.
+ */
+export const pickRequest = ref<{ path: string; at: number } | null>(null);
+
+export function pickOnPage(path: string): void {
+  pickRequest.value = { path, at: Date.now() };
+}
+
 function known(from: OpenFrom, value: unknown): OpenTarget | undefined {
   return OPEN_TARGETS[from].find((target) => target === value);
 }

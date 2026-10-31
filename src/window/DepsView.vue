@@ -10,7 +10,7 @@ const selectedPath = ref<string | null>(null);
 </script>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, nextTick, onMounted, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
@@ -37,6 +37,7 @@ import {
   type DepState,
 } from "../lib/deps";
 import { useNativeMenu } from "../lib/nativeMenu";
+import { pickRequest } from "../lib/open";
 import { dragRegion } from "../lib/platform";
 import { rowKeys } from "../lib/rows";
 import { api, deps, loadDeps, now, snapshot, visible } from "../lib/store";
@@ -240,6 +241,19 @@ async function recheck(): Promise<void> {
 function select(path: string): void {
   selectedPath.value = path;
 }
+
+// A project brought up on its terminal from outside the window (lib/open: pickRequest): selected in
+// the list too while the tabs and the search show it, its row in sight.
+watch(pickRequest, (asked) => {
+  const path = asked?.path;
+  if (!path || !rows.value.some((entry) => entry.project.path === path)) return;
+  select(path);
+  void nextTick(() =>
+    Array.from(document.querySelectorAll<HTMLElement>(".deps-rows [data-path]"))
+      .find((row) => row.dataset.path === path)
+      ?.scrollIntoView({ block: "nearest" }),
+  );
+});
 
 /** The tabs are one Tab stop: ←/→ (Home, End) pick and focus the next. */
 function onTabKey(event: KeyboardEvent, at: number): void {

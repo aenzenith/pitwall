@@ -5,6 +5,7 @@ import Icon from "../components/Icon.vue";
 import { lane, timeRange, type Live } from "../lib/day";
 import { claudeLine } from "../lib/format";
 import { t } from "../lib/i18n";
+import { pickRequest } from "../lib/open";
 import { api, now, snapshot, visible } from "../lib/store";
 import { provideTooltip } from "../lib/tooltip";
 import type { DaySummary } from "../lib/types";
@@ -65,6 +66,12 @@ const liveProjects = computed(() => {
 });
 
 const selected = computed(() => projects.value.find((p) => p.path === selectedPath.value) ?? projects.value[0] ?? null);
+
+// A project brought up on its terminal from outside the window (lib/open: pickRequest): selected
+// among the day's projects too, when the day shown has it.
+watch(pickRequest, (asked) => {
+  if (asked && projects.value.some((p) => p.path === asked.path)) selectedPath.value = asked.path;
+});
 
 /* ---------- life ---------- */
 

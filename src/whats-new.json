@@ -21,6 +21,27 @@
         "ja": "Windows の Claude Code も、開発サーバーのことを Pitwall に聞いたり、ボードに書き込んだりできるようになりました。設定 › Claude でオンにできます。",
         "zh-Hans": "Windows 上的 Claude Code 现在也能向 Pitwall 询问开发服务器，并在看板上写东西了。可在 设置 › Claude 中开启。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "The page picks the project you open",
+        "tr": "Açtığın proje sayfada da seçili",
+        "de": "Die Seite wählt das geöffnete Projekt mit",
+        "es": "La página selecciona el proyecto que abres",
+        "ru": "Страница выбирает открытый проект",
+        "ja": "開いたプロジェクトをページでも選択",
+        "zh-Hans": "打开的项目在页面上也会选中"
+      },
+      "body": {
+        "en": "Open a project's terminal from the menu bar or the quick switcher, and the page you're on selects it too.",
+        "tr": "Menü çubuğundan ya da hızlı geçişten bir projenin terminalini açınca, bulunduğun sayfa da o projeyi seçiyor.",
+        "de": "Öffnest du das Terminal eines Projekts aus der Menüleiste oder dem Projektumschalter, wählt die Seite, auf der du bist, es gleich mit aus.",
+        "es": "Si abres la terminal de un proyecto desde la barra de menús o el selector rápido, la página en la que estás también lo selecciona.",
+        "ru": "Откройте терминал проекта из строки меню или быстрого перехода, и текущая страница тоже выберет этот проект.",
+        "ja": "メニューバーやクイックスイッチャーからプロジェクトのターミナルを開くと、いまのページでもそのプロジェクトが選ばれます。",
+        "zh-Hans": "从菜单栏或快速切换器打开项目的终端时，当前页面也会选中这个项目。"
+      }
     }
   ]
 }
