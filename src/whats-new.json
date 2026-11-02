@@ -63,6 +63,27 @@
         "ja": "サイドバーから別のページに移ると、開いていたターミナルが折りたたまれ、新しいページ全体が見えます。",
         "zh-Hans": "从侧边栏打开另一个页面时，展开的终端会自动收起，新页面一览无余。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Commands run without pulling you away",
+        "tr": "Komutlar sizi yerinizden etmiyor",
+        "de": "Befehle laufen, ohne dich wegzuziehen",
+        "es": "Los comandos ya no te sacan de donde estás",
+        "ru": "Команды больше не уводят вас с места",
+        "ja": "コマンドを実行しても画面はそのまま",
+        "zh-Hans": "运行命令不再打断你"
+      },
+      "body": {
+        "en": "Running a command no longer opens the terminals or jumps to its output: you stay on the tab you were on. Its tab is there whenever you want a look.",
+        "tr": "Bir komutu çalıştırınca terminaller artık kendiliğinden açılmıyor, çıktısına da atlamıyor; olduğunuz sekmede kalıyorsunuz. Bakmak isterseniz sekmesi orada.",
+        "de": "Ein Befehl klappt die Terminals nicht mehr auf und springt nicht zu seiner Ausgabe: Du bleibst auf deinem Tab. Sein Tab wartet, falls du reinschauen willst.",
+        "es": "Ejecutar un comando ya no abre las terminales ni salta a su salida: te quedas en tu pestaña. La suya está ahí para cuando quieras mirarla.",
+        "ru": "Запуск команды больше не раскрывает терминалы и не переключает на её вывод: вы остаётесь на своей вкладке. Её вкладка рядом, если захотите заглянуть.",
+        "ja": "コマンドを実行しても、ターミナルが勝手に開いたり出力に切り替わったりしなくなりました。見たいときはそのタブを押すだけです。",
+        "zh-Hans": "运行命令时，终端不再自己展开，也不会跳到它的输出，你留在原来的标签页。想看时点它的标签页就行。"
+      }
     }
   ]
 }

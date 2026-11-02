@@ -38,7 +38,7 @@ const settings = computed(() => projectSettings(props.project));
 
 /* ---------- output ---------- */
 
-/** A command's output (its row's button, a run): in the terminal panel, open. */
+/** A command's output (its row's button): in the terminal panel, open. A run alone shows nothing. */
 function showTab(id: string): void {
   showOutput(props.project.path, id);
 }

@@ -135,7 +135,7 @@ export function usePanelFollow(target: () => { path: string; tab: number | null 
  * so that the press that asked doesn't fold it (TerminalPanel: a press outside). */
 export const panelAsks = ref(0);
 
-/** An output asked for (a command run or its row's button, the switcher's ⌘↵, the Garage page): its
+/** An output asked for (a command's row, the switcher's ⌘↵, the Garage page): its
  * project and tab in the panel, open. */
 export function showOutput(path: string, job: string | null): void {
   panelAsks.value++;

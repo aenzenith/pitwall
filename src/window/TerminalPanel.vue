@@ -289,9 +289,9 @@ const job = computed<string | null>(() => {
   return choice?.kind === "output" && outputs.value.some((item) => item.id === choice.job) ? choice.job : null;
 });
 /**
- * An output shows in the place of the terminal only once it was picked (its tab, a command run, an
- * output asked for); never by itself, a project with no terminal included: that one shows the
- * empty terminal (the user's word, 2026-10-22).
+ * An output shows in the place of the terminal only once it was picked (its tab, an output asked
+ * for); never by itself, a command run included (2026-11-02), nor a project with no terminal: that
+ * one shows the empty terminal (the user's word, 2026-10-22).
  */
 const showsOutput = computed(() => chosen.value?.kind === "output");
 

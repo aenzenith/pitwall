@@ -23,6 +23,8 @@ function mark(c: CommandView): string {
   return { running: "●", busy: "", ok: "✓", failed: "✕", idle: "·" }[commandStatus(c, now.value)];
 }
 
+/** A run leaves the terminal panel as it is, folded or on the tab it shows (the user's word,
+ * 2026-11-02): its output gets its tab in the panel's row, shown once picked there or by the row. */
 function run(c: CommandView): void {
   if (c.confirm && confirming.value !== c.id) {
     confirming.value = c.id;
@@ -30,7 +32,6 @@ function run(c: CommandView): void {
   }
   confirming.value = null;
   void api.runCommand(props.project.path, c.id);
-  emit("show", c.id);
 }
 
 /** A command that started with the server and waits: the button is the go-ahead, no second
@@ -38,7 +39,6 @@ function run(c: CommandView): void {
 function runHeld(c: CommandView): void {
   confirming.value = null;
   void api.runCommand(props.project.path, c.id);
-  emit("show", c.id);
 }
 
 function stop(c: CommandView): void {
