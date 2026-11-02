@@ -208,7 +208,7 @@ export const historyWidth = ref(HISTORY_WIDTH);
 export const terminalOrder = ref<Record<string, number[]>>({});
 
 /**
- * Handle behaviour for the panel: drag or arrow keys change its `height`, up to what `max()`
+ * Handle behaviour for the panel: drag, arrow keys or a double click change its `height`, up to what `max()`
  * allows (the room under the page's bar) and down to what `least()` does (its panes at their least).
  */
 export function useResizer(height: Ref<number>, max: () => number, least: () => number = () => PANEL_MIN) {
@@ -246,7 +246,23 @@ export function useResizer(height: Ref<number>, max: () => number, least: () => 
     height.value = Math.min(top, Math.max(least(), Math.min(height.value, top) + step));
   }
 
-  return { start, move, end, nudge, dragging };
+  /** The height before a double click took the panel to the top: the next one brings it back. */
+  let before: number | null = null;
+
+  /** A double click on the handle: the panel up to the page's bar; up there already after one, back
+   * to the height it had. */
+  function fill(): void {
+    const top = limit();
+    if (height.value >= top - 1 && before !== null) {
+      height.value = Math.min(top, Math.max(least(), before));
+      before = null;
+      return;
+    }
+    before = Math.min(height.value, top);
+    height.value = top;
+  }
+
+  return { start, move, end, nudge, fill, dragging };
 }
 
 /**

@@ -1,46 +1,25 @@
 {
-  "since": "1.18.3",
+  "since": "1.19.0",
   "notes": [
     {
       "kind": "new",
       "title": {
-        "en": "Team radio on Windows",
-        "tr": "Takım radyosu artık Windows'ta",
-        "de": "Teamfunk jetzt auch unter Windows",
-        "es": "La radio del equipo llega a Windows",
-        "ru": "Командное радио теперь и в Windows",
-        "ja": "チーム無線が Windows でも使えるように",
-        "zh-Hans": "车队无线电来到 Windows"
+        "en": "Terminals at full height",
+        "tr": "Terminaller tam boy",
+        "de": "Terminals auf voller Höhe",
+        "es": "Terminales a toda altura",
+        "ru": "Терминалы на всю высоту",
+        "ja": "ターミナルをページいっぱいに",
+        "zh-Hans": "终端一键拉满"
       },
       "body": {
-        "en": "Claude Code on Windows can now ask Pitwall about the dev server and write on the board too. Turn it on in Settings › Claude.",
-        "tr": "Windows'ta da Claude Code artık dev sunucusunu Pitwall'a sorabiliyor ve panoya kart ekleyebiliyor. Ayarlar › Claude'dan açabilirsin.",
-        "de": "Auch unter Windows kann Claude Code jetzt Pitwall nach dem Dev-Server fragen und aufs Board schreiben. Einschalten unter Einstellungen › Claude.",
-        "es": "En Windows, Claude Code ya puede preguntarle a Pitwall por el servidor de desarrollo y escribir en el tablero. Actívala en Ajustes › Claude.",
-        "ru": "Claude Code в Windows теперь тоже может спросить Pitwall о dev-сервере и написать на доске. Включается в Настройки › Claude.",
-        "ja": "Windows の Claude Code も、開発サーバーのことを Pitwall に聞いたり、ボードに書き込んだりできるようになりました。設定 › Claude でオンにできます。",
-        "zh-Hans": "Windows 上的 Claude Code 现在也能向 Pitwall 询问开发服务器，并在看板上写东西了。可在 设置 › Claude 中开启。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "The page picks the project you open",
-        "tr": "Açtığın proje sayfada da seçili",
-        "de": "Die Seite wählt das geöffnete Projekt mit",
-        "es": "La página selecciona el proyecto que abres",
-        "ru": "Страница выбирает открытый проект",
-        "ja": "開いたプロジェクトをページでも選択",
-        "zh-Hans": "打开的项目在页面上也会选中"
-      },
-      "body": {
-        "en": "Open a project's terminal from the menu bar or the quick switcher, and the page you're on selects it too.",
-        "tr": "Menü çubuğundan ya da hızlı geçişten bir projenin terminalini açınca, bulunduğun sayfa da o projeyi seçiyor.",
-        "de": "Öffnest du das Terminal eines Projekts aus der Menüleiste oder dem Projektumschalter, wählt die Seite, auf der du bist, es gleich mit aus.",
-        "es": "Si abres la terminal de un proyecto desde la barra de menús o el selector rápido, la página en la que estás también lo selecciona.",
-        "ru": "Откройте терминал проекта из строки меню или быстрого перехода, и текущая страница тоже выберет этот проект.",
-        "ja": "メニューバーやクイックスイッチャーからプロジェクトのターミナルを開くと、いまのページでもそのプロジェクトが選ばれます。",
-        "zh-Hans": "从菜单栏或快速切换器打开项目的终端时，当前页面也会选中这个项目。"
+        "en": "Double-click the handle on top of the terminals and they fill the page. Double-click again to bring them back.",
+        "tr": "Terminallerin üstündeki tutamaca çift tıklayınca bütün sayfayı kaplıyorlar. Bir daha çift tıklayınca eski boylarına dönüyorlar.",
+        "de": "Ein Doppelklick auf den Griff über den Terminals, und sie füllen die ganze Seite. Noch ein Doppelklick, und alles ist wie vorher.",
+        "es": "Haz doble clic en el asa de encima de las terminales y ocuparán toda la página. Otro doble clic y vuelven a como estaban.",
+        "ru": "Дважды щёлкните по ручке над терминалами, и они займут всю страницу. Ещё один двойной щелчок вернёт прежнюю высоту.",
+        "ja": "ターミナルの上端のハンドルをダブルクリックすると、ページいっぱいに広がります。もう一度ダブルクリックすれば元の高さに戻ります。",
+        "zh-Hans": "双击终端上方的把手，终端就会铺满整个页面；再双击一次，就回到原来的高度。"
       }
     }
   ]

@@ -247,15 +247,21 @@ watch(
   collapsed,
   (folded) => {
     if (folded && body.value?.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
-    animating.value = true;
-    clearTimeout(settle);
-    settle = setTimeout(() => {
-      animating.value = false;
-      if (!collapsed.value && active.value && !panesOn.value) fitView(active.value.id);
-    }, COLLAPSE_MS + 40);
+    slide();
   },
   { flush: "sync" },
 );
+
+/** The panel's height animates (folding, a double click on the handle): the shell is told the size
+ * it ends at. */
+function slide(): void {
+  animating.value = true;
+  clearTimeout(settle);
+  settle = setTimeout(() => {
+    animating.value = false;
+    if (!collapsed.value && active.value && !panesOn.value) fitView(active.value.id);
+  }, COLLAPSE_MS + 40);
+}
 
 /* ---------- the outputs ---------- */
 
@@ -1240,17 +1246,25 @@ function emptyPart(event: MouseEvent): boolean {
 /**
  * The tab row's empty part, and the handle: a click on a collapsed panel brings it up at once (the
  * user's word: no need to find the button). A double click on the row's empty part opens a Claude
- * tab, as "New Claude" does, only on a panel open all the way: folded or still coming up, a double
- * click is no more than the click that opens it (the user's word). A tab's own double click
- * renames it, and the project's name and the buttons keep theirs.
+ * tab, as "New Claude" does, and one on the handle takes the panel up to the page's bar and back
+ * (the user's word), only on a panel open all the way: folded or still coming up, a double click is
+ * no more than the click that opens it (the user's word). A tab's own double click renames it, and
+ * the project's name and the buttons keep theirs.
  */
 function onRowClick(event: MouseEvent): void {
   const empty = emptyPart(event);
+  const grip = (event.currentTarget as HTMLElement).classList.contains("grip");
   if (event.detail >= 2) {
-    if (empty && !collapsed.value && !animating.value) void openTerminal(true);
+    if (collapsed.value || animating.value) return;
+    if (grip) {
+      if (event.detail === 2) {
+        resizer.fill();
+        slide();
+      }
+    } else if (empty) void openTerminal(true);
     return;
   }
-  if (!collapsed.value || !(empty || (event.target as HTMLElement).classList.contains("grip"))) return;
+  if (!collapsed.value || !(empty || grip)) return;
   toggleCollapsed();
 }
 
