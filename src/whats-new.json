@@ -4,6 +4,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Codex beside Claude",
+        "tr": "Claude'un yanında Codex",
+        "de": "Codex neben Claude",
+        "es": "Codex junto a Claude",
+        "ru": "Codex рядом с Claude",
+        "ja": "Claude の隣に Codex",
+        "zh-Hans": "Codex 与 Claude 并肩"
+      },
+      "body": {
+        "en": "Pitwall now follows Codex too: open it from the terminal's +, give it cards and keep an eye on its fuel. Settings › Agents turns it on or off.",
+        "tr": "Pitwall artık Codex'i de izliyor: terminalin +'sından açın, kart verin, yakıtına göz atın. Ayarlar › Ajanlar'dan açıp kapatabilirsiniz.",
+        "de": "Pitwall behält jetzt auch Codex im Blick: im Terminal über + starten, Karten geben, den Tank im Auge behalten. Ein- und ausschalten unter Einstellungen › Agenten.",
+        "es": "Pitwall ahora también sigue a Codex: ábrelo desde el + de la terminal, dale tarjetas y vigila su combustible. Lo activas o desactivas en Ajustes › Agentes.",
+        "ru": "Теперь Pitwall следит и за Codex: запускайте его через + в терминале, отдавайте ему карточки, смотрите на его топливо. Включается и выключается в Настройках › Агенты.",
+        "ja": "Pitwall が Codex も見守るようになりました。ターミナルの + から開き、カードを渡し、燃料も確認できます。オン・オフは 設定 › エージェント で。",
+        "zh-Hans": "Pitwall 现在也照看 Codex：从终端的 + 打开它，把卡片交给它，随时看它的燃料。在 设置 › 智能体 中开关。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Terminals at full height",
         "tr": "Terminaller tam boy",
         "de": "Terminals auf voller Höhe",

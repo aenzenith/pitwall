@@ -3,10 +3,11 @@
 
 import { computed, ref } from "vue";
 
+import { AGENT_ORDER, agentKey, rowAgent } from "./format";
 import { parseKey, type Drop } from "./groupReorder";
 import { t } from "./i18n";
 import { api, snapshot } from "./store";
-import type { Project, Team } from "./types";
+import type { Agent, Project, Team } from "./types";
 
 /** The teams, in the order they are drawn. */
 export const teams = computed<Team[]>(() => snapshot.value?.settings.teams ?? []);
@@ -31,27 +32,37 @@ export const looseProjects = computed<Project[]>(() => {
 /** The start or stop asked for a team, until the core has answered the call. */
 const asked = ref<Record<string, "start" | "stop">>({});
 
-/** What Claude is at in some of a group's projects: waiting on you, or at work. */
+/** What Claude (or another agent) is at in some of a group's projects: waiting on you, or at work. */
 export type ClaudeNote = { phase: "waiting" | "working"; text: string };
 
+const STATES = ["permission", "asking", "finished", "working"] as const;
+
 /**
- * What Claude is at in `projects`, said for the group as a whole (its rows may be folded away):
- * a note for each state one of them is in, what waits on you first (a permission, a question, a
- * finished turn), then Claude at work. A project counts once, by what its row shows.
+ * What the agents are at in `projects`, said for the group as a whole (its rows may be folded
+ * away): a note for each state one of them is in, what waits on you first (a permission, a
+ * question, a finished turn), then at work; each agent's apart, named. A project counts once, by
+ * what its row shows (and for whom: `rowAgent`). With Claude alone, Claude's notes as ever.
  */
 export function claudeNotes(projects: Project[]): ClaudeNote[] {
-  const count = { permission: 0, asking: 0, finished: 0, working: 0 };
+  const count = new Map<string, number>();
+  const agents: Agent[] = [];
   for (const project of projects) {
-    if (project.claude) count[project.claude.kind]++;
-    else if (project.claudeWorking) count.working++;
+    const kind = project.claude ? project.claude.kind : project.claudeWorking ? "working" : null;
+    const agent = rowAgent(project);
+    if (!kind || !agent) continue;
+    if (!agents.includes(agent)) agents.push(agent);
+    count.set(`${kind}:${agent}`, (count.get(`${kind}:${agent}`) ?? 0) + 1);
   }
+  agents.sort((a, b) => AGENT_ORDER.indexOf(a) - AGENT_ORDER.indexOf(b));
 
-  return (["permission", "asking", "finished", "working"] as const)
-    .filter((kind) => count[kind] > 0)
-    .map((kind) => ({
-      phase: kind === "working" ? "working" : "waiting",
-      text: count[kind] === 1 ? t(`team.claude.${kind}`) : t(`team.claude.${kind}In`, { count: count[kind] }),
-    }));
+  return STATES.flatMap((kind) =>
+    agents.flatMap((agent) => {
+      const many = count.get(`${kind}:${agent}`) ?? 0;
+      if (!many) return [];
+      const phase: ClaudeNote["phase"] = kind === "working" ? "working" : "waiting";
+      return [{ phase, text: many === 1 ? t(agentKey(`team.claude.${kind}`, agent)) : t(agentKey(`team.claude.${kind}In`, agent), { count: many }) }];
+    }),
+  );
 }
 
 /**

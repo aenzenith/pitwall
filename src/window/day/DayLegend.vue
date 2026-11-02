@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { t } from "../../lib/i18n";
+
+/** `agents`: the day names its agents (lib/day: namesAgents), so the marks are any agent's. */
+defineProps<{ agents?: boolean }>();
 </script>
 
 <template>
   <div class="legend">
     <!-- What the timeline's marks mean; each key is drawn as its block is (DayLane). -->
-    <span><i class="key work"></i>{{ t("day.legend.work") }}</span>
-    <span><i class="key wait"></i>{{ t("day.legend.wait") }}</span>
+    <span><i class="key work"></i>{{ t(agents ? "day.legend.work.agents" : "day.legend.work") }}</span>
+    <span><i class="key wait"></i>{{ t(agents ? "day.legend.wait.agents" : "day.legend.wait") }}</span>
     <span><i class="key server"></i>{{ t("day.legend.server") }}</span>
     <span><i class="key commit"></i>{{ t("day.legend.commit") }}</span>
     <span><i class="key crash" aria-hidden="true">✕</i>{{ t("day.legend.crash") }}</span>

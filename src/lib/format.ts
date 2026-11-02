@@ -1,6 +1,73 @@
+import { computed } from "vue";
+
+import { agentInfo, agentOn, multiAgent } from "./agents";
 import { language, t, type Key } from "./i18n";
 import { keys } from "./platform";
-import type { CommandView, GitInfo, HeldBy, Project, Turn } from "./types";
+import { snapshot } from "./store";
+import type { Agent, CommandView, GitInfo, HeldBy, Project, Turn } from "./types";
+
+/** Every agent but Claude: each one's sentences are its own (`<key>.codex`). */
+type OtherAgent = Exclude<Agent, "claude">;
+
+/** A key whose sentence names Claude and that every other agent has written whole beside it:
+ * `core.notify.finished` and `core.notify.finished.codex`. A key without them isn't one, so the
+ * type check fails where a catalog misses an agent's sentence. */
+export type AgentKey = { [K in Key]: `${K}.${OtherAgent}` extends Key ? K : never }[Key];
+
+/** The key of a sentence that names `agent`: Claude's own, as it always was, else the same key
+ * with the agent's id after a dot. Languages bend a name ("Claude'a", "Codex'e"), so it is never a
+ * parameter. */
+export function agentKey(key: AgentKey, agent: Agent): Key {
+  // A payload without its agent (none is Claude) never asks for a key no catalog has.
+  return !agent || agent === "claude" ? key : (`${key}.${agent}` as Key);
+}
+
+/** The places that could name an agent do, unless Claude is the only one on (each then looks as it
+ * always did): with more than one on, or with Claude turned off and another on alone. Every
+ * surface that names an agent asks this, never `multiAgent` (which says whether there is a
+ * choice between agents). */
+export const namesAgent = computed(() => multiAgent.value || !agentOn("claude"));
+
+/** A key whose sentence names Claude and that has an `.agents` sentence for every agent beside it
+ * (`notifications.claude` and `notifications.claude.agents`): a label that covers them all. */
+export type AgentsKey = { [K in Key]: `${K}.agents` extends Key ? K : never }[Key];
+
+/** `key` as Claude alone has it, its `.agents` sentence once the places name agents. */
+export function agentsKey(key: AgentsKey): Key {
+  return namesAgent.value ? (`${key}.agents` as Key) : key;
+}
+
+/** Settings › Agents: the Claude tab is the Agents tab once another agent is on this Mac, or ever
+ * was turned on or off here (its id stays `claude`, so what opens Claude's tab opens it); until
+ * then it is Claude's as it always was. What names that tab (`Settings › Claude`) follows it. */
+export const agentsTab = computed(() => {
+  const said = snapshot.value?.settings.agents?.codex;
+  return !!agentInfo("codex")?.found || said?.on !== undefined || !!said?.told;
+});
+
+/** The agents in the order a count names them: Claude first, as the core lists them. */
+export const AGENT_ORDER: readonly Agent[] = ["claude", "codex"];
+
+type LiveSession = Project["claudeSessions"][number];
+
+/** The session a project's row speaks of (`claudeState`): the one that waits with the project's
+ * newest turn, else one at work; null when neither is listed. */
+export function rowSession(project: Project): LiveSession | null {
+  const sessions = project.claudeSessions;
+  const turn = project.claude;
+  if (turn) {
+    const waiting = sessions.filter((session) => session.phase === "waiting");
+    return waiting.find((session) => session.turn?.at === turn.at && session.turn.kind === turn.kind) ?? waiting[0] ?? null;
+  }
+  return project.claudeWorking ? (sessions.find((session) => session.phase === "working") ?? null) : null;
+}
+
+/** Whose state a project's row shows: the agent of `rowSession`, Claude's when the turn was read
+ * with no session listed for it; null while no agent waits or works there. */
+export function rowAgent(project: Project): Agent | null {
+  if (!project.claude && !project.claudeWorking) return null;
+  return rowSession(project)?.agent ?? "claude";
+}
 
 /** How long a command's run that ended well keeps its ✓ and its output's tab. */
 export const DONE_FOR_MS = 5 * 60_000;

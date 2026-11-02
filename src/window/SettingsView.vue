@@ -9,17 +9,21 @@ import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
 import ThemeSwitch from "../components/ThemeSwitch.vue";
 import { useBackdropClose } from "../lib/dialog";
-import { ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
+import { agentsTab, ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../lib/open";
 import { isMac, keys, shortcutModifiers } from "../lib/platform";
 import { recordingEnded, recordingStarts } from "../lib/shortcutRecording";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
-import type { ExtensionStatus, OpenTarget, Settings, Theme } from "../lib/types";
+import { agents } from "../lib/agents";
+import type { Agent, AgentDetail, ExtensionStatus, OpenTarget, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
 import AccountsSection from "./settings/AccountsSection.vue";
+import AgentHead from "./settings/AgentHead.vue";
+import AgentList from "./settings/AgentList.vue";
+import CodexDetail from "./settings/CodexDetail.vue";
 import CliSection from "./settings/CliSection.vue";
 import FlagSection from "./settings/FlagSection.vue";
 import RadioSection from "./settings/RadioSection.vue";
@@ -32,21 +36,26 @@ type Tab = "general" | "projects" | "servers" | "editor" | "claude" | "track" | 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
  * page's settings button Track's); `startPart`: a part of it scrolled to the top (the first run's
  * phone row asks for the phone's, the Fuel page's account panel for the accounts', with the add
- * dialog open for `addAccount`). `openSetup`: the first run's steps are asked for again;
+ * dialog open for `addAccount`); `startAgent`: with the tab Agents, the agent whose part it shows
+ * (Claude's unless said). `openSetup`: the first run's steps are asked for again;
  * `openWhatsNew`: this version's notes. */
-const props = defineProps<{ startTab?: Tab; startPart?: "phone" | "accounts" | "addAccount" }>();
+const props = defineProps<{ startTab?: Tab; startPart?: "phone" | "accounts" | "addAccount"; startAgent?: Agent }>();
 const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNew: [] }>();
 
-/** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others. */
-const tabs: Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "claude" | "flag" | "bell" }> = [
+/** Settings › Agents (lib/format `agentsTab`): until another agent shows, the tab is Claude's as it
+ * always was, and nothing else of the agents shows. */
+
+/** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others, and the
+ * Agents tab's a pinned chip. */
+const tabs = computed<Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "claude" | "agents" | "flag" | "bell" }>>(() => [
   { id: "general", label: "settings.general", icon: "settings" },
   { id: "projects", label: "common.projects", icon: "grid" },
   { id: "servers", label: "settings.servers", icon: "server" },
   { id: "editor", label: "settings.editor", icon: "editor" },
-  { id: "claude", label: "settings.claude", icon: "claude" },
+  agentsTab.value ? { id: "claude", label: "settings.agents", icon: "agents" } : { id: "claude", label: "settings.claude", icon: "claude" },
   { id: "track", label: "track.nav", icon: "flag" },
   { id: "notifications", label: "settings.notifications", icon: "bell" },
-];
+]);
 
 /** Pitwall's sounds (src-tauri/sounds). */
 const soundOptions: Array<{ id: string; label: Key }> = [
@@ -86,7 +95,7 @@ watch(
   },
 );
 /** The rail top to bottom: the sections, then About. */
-const railOrder: Tab[] = [...tabs.map((section) => section.id), "about"];
+const railOrder: Tab[] = [...tabs.value.map((section) => section.id), "about"];
 
 /** ↑/↓ (or ←/→), Home and End move along the rail. */
 function onRailKey(event: KeyboardEvent, id: Tab): void {
@@ -99,6 +108,49 @@ const body = ref<HTMLFormElement | null>(null);
 watch(tab, () => {
   if (body.value) body.value.scrollTop = 0;
 });
+
+/* ---------- Agents ---------- */
+
+/** The agent whose part shows, beside the list. */
+const agentPicked = ref<Agent>(props.startAgent ?? "claude");
+watch(
+  () => props.startAgent,
+  (asked) => {
+    if (asked) agentPicked.value = asked;
+  },
+);
+const codexInfo = computed(() => agents.value.find((info) => info.id === "codex") ?? null);
+/** The Agents tab shows the list and one agent's part, which scrolls by itself. */
+const split = computed(() => tab.value === "claude" && agentsTab.value);
+
+/** Each agent's version and home folder: asked of the core (and so of the CLIs) as the tab
+ * opens and as an agent is turned on or off, found or lost; good until then. */
+const details = ref<AgentDetail[]>([]);
+const detailOf = (agent: Agent): AgentDetail | null => details.value.find((detail) => detail.id === agent) ?? null;
+watch(
+  [split, () => agents.value.map((info) => `${info.id}:${info.on}:${info.found}`).join()],
+  ([shown]) => {
+    if (!shown) return;
+    void api.agentDetails().then(
+      (listed) => (details.value = listed ?? []),
+      () => undefined,
+    );
+  },
+  { immediate: true },
+);
+
+// Opening the Claude tab looks for the agents' home folders again: one just installed shows.
+watch(
+  () => tab.value === "claude",
+  (open) => {
+    if (open) void api.lookForAgents().catch(() => undefined);
+  },
+  { immediate: true },
+);
+
+/** An agent's part, for a part of it to be scrolled to: the one shown. */
+const claudePart = ref<HTMLElement | null>(null);
+const codexPart = ref<InstanceType<typeof CodexDetail> | null>(null);
 
 const version = ref("");
 const form = reactive<Settings>({
@@ -277,8 +329,11 @@ const PARTS = { phone: "phone-section", accounts: "accounts-section", addAccount
  * drawn (the phone's waits for the core's answer); not looked for after two seconds. */
 function revealPart(id: string): void {
   const reveal = (): boolean => {
-    const label = document.getElementById(id);
-    if (label && body.value) body.value.scrollTop += label.getBoundingClientRect().top - body.value.getBoundingClientRect().top - 16;
+    // On the Agents tab, the shown agent's part scrolls by itself, and holds the part.
+    const part = split.value ? (agentPicked.value === "codex" ? (codexPart.value?.$el as HTMLElement | undefined) : claudePart.value) : null;
+    const room = part ?? body.value;
+    const label = part ? part.querySelector<HTMLElement>(`#${id}`) : document.getElementById(id);
+    if (label && room) room.scrollTop += label.getBoundingClientRect().top - room.getBoundingClientRect().top - 16;
     return !!label;
   };
   if (reveal() || !body.value) return;
@@ -524,6 +579,12 @@ function setTheme(theme: Theme): void {
         >
           <span class="tab-icon">
             <ClaudeLogo v-if="section.icon === 'claude'" :size="14" color="currentColor" />
+            <!-- A pinned chip: the agents'. -->
+            <svg v-else-if="section.icon === 'agents'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+              <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" />
+              <path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3" />
+              <path d="M10 12h4" />
+            </svg>
             <Icon v-else :name="section.icon" :size="15" />
           </span>
           {{ t(section.label) }}
@@ -543,7 +604,7 @@ function setTheme(theme: Theme): void {
         </button>
       </nav>
 
-      <form ref="body" class="body" @submit.prevent="save" @change="save">
+      <form ref="body" :class="['body', { split }]" @submit.prevent="save" @change="save">
         <fieldset v-show="tab === 'projects'" :aria-label="t('common.projects')">
           <!-- Where projects come from: the tab's first part (Settings › General's until 2026-10-22). -->
           <div class="field">
@@ -623,8 +684,14 @@ function setTheme(theme: Theme): void {
           </label>
         </fieldset>
 
-        <fieldset v-show="tab === 'claude'" :aria-label="t('settings.claude')">
-          <label class="check">
+        <!-- Claude's, as it always was; as Agents, the list and the picked agent's part, Claude's
+             being the same content under its head. -->
+        <fieldset v-show="tab === 'claude'" :class="{ agents: agentsTab }" :aria-label="t(agentsTab ? 'settings.agents' : 'settings.claude')">
+          <AgentList v-if="agentsTab" :picked="agentPicked" :details="details" @pick="agentPicked = $event" />
+          <div v-show="!agentsTab || agentPicked === 'claude'" ref="claudePart" :class="['agent-part', { own: agentsTab }]">
+          <AgentHead v-if="agentsTab" agent="claude" :detail="detailOf('claude')" />
+          <!-- As Agents, the menu bar's count is every agent's: it is in General. -->
+          <label v-if="!agentsTab" class="check">
             <input v-model="form.claudesInBar" type="checkbox" />
             <span>{{ t("settings.claudesInBar") }}</span>
           </label>
@@ -674,8 +741,18 @@ function setTheme(theme: Theme): void {
             </button>
           </div>
           <p v-if="hookError" class="error">{{ hookError }}</p>
-          <RadioSection />
-          <AccountsSection :start-add="startPart === 'addAccount'" />
+          <RadioSection :stacked="agentsTab" />
+          <AccountsSection :start-add="startPart === 'addAccount' && (!agentsTab || agentPicked === 'claude')" />
+          </div>
+          <CodexDetail
+            v-if="agentsTab && codexInfo"
+            v-show="agentPicked === 'codex'"
+            ref="codexPart"
+            class="agent-part own"
+            :info="codexInfo"
+            :detail="detailOf('codex')"
+            :start-add="startPart === 'addAccount' && agentPicked === 'codex'"
+          />
         </fieldset>
 
         <!-- The Track page's own: each change goes to the core by its own command, never with the
@@ -768,6 +845,11 @@ function setTheme(theme: Theme): void {
           <label class="check">
             <input v-model="form.launchAtLogin" type="checkbox" />
             <span>{{ t("settings.launchAtLogin") }}</span>
+          </label>
+          <!-- With the agents, the menu bar counts every one's sessions: the count is General's. -->
+          <label v-if="agentsTab" class="check">
+            <input v-model="form.claudesInBar" type="checkbox" />
+            <span>{{ t("settings.sessionsInBar") }}</span>
           </label>
           <label class="check">
             <input v-model="form.shortcut" type="checkbox" />
@@ -1023,6 +1105,36 @@ function setTheme(theme: Theme): void {
   padding: 4px 28px 20px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The Agents tab: the list down its left edge, the agent's part beside it scrolling by itself. */
+.body.split {
+  padding: 0;
+  overflow: hidden;
+}
+
+fieldset.agents {
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+}
+
+/* Claude's tab as it always was: its rows are the fieldset's own. */
+.agent-part:not(.own) {
+  display: contents;
+}
+
+.agent-part.own {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }

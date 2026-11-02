@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import AgentMark from "../../components/AgentMark.vue";
 import StatusIcon from "../../components/StatusIcon.vue";
 import { toggleFiles } from "../../lib/explorer";
-import { claudeState, meta } from "../../lib/format";
+import { claudeState, meta, namesAgent, rowAgent } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
 import { openInWindow, openTarget } from "../../lib/open";
@@ -105,6 +106,8 @@ function onKey(event: KeyboardEvent): void {
             <span :class="{ bad: project.status === 'crashed' }">{{ line(project).server }}</span>
             <template v-if="line(project).claude">
               <span aria-hidden="true">·</span>
+              <!-- With more than one agent on, whose state it is: the most urgent session's mark. -->
+              <AgentMark v-if="namesAgent && rowAgent(project)" class="who-agent" :agent="rowAgent(project) ?? 'claude'" :size="10" />
               <span :class="project.claude ? 'waits' : 'works'">{{ line(project).claude }}</span>
             </template>
           </span>
@@ -252,6 +255,11 @@ function onKey(event: KeyboardEvent): void {
 
 .who-meta .works {
   color: var(--text-muted);
+}
+
+.who-meta .who-agent {
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .code {

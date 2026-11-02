@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
 import Icon from "../../components/Icon.vue";
 import Markdown from "../../components/Markdown.vue";
-import { COLUMN_LABELS, type CardStatus } from "../../lib/board";
+import { agentName, agentsOn } from "../../lib/agents";
+import { cardAgent, columnLabel, type CardStatus } from "../../lib/board";
 import type { Shot } from "../../lib/cardImages";
 import { t } from "../../lib/i18n";
 import { revealTab } from "../../lib/panel";
@@ -15,9 +18,13 @@ import CardImages from "./CardImages.vue";
  * in the terminal panel (TerminalPanel). A card with a session shows that session's details
  * instead (sessions/SessionDetail). `project`: its project's name; `images`: the images its note
  * names; `lastMessage`: what Claude last said in its session (Markdown), for a card whose session
- * isn't in the list (yet, or any more).
+ * isn't in the list (yet, or any more). A card given to Codex says so, under Codex's name.
  */
 const props = defineProps<{ card: Card; project: string; status: CardStatus | null; terminal: TerminalView | null; images: Shot[]; lastMessage: string }>();
+
+const codex = computed(() => cardAgent(props.card) === "codex");
+/** Its agent's section: Claude's as it always was, Codex's by its name. */
+const section = computed(() => (codex.value ? agentName("codex") : t("window.col.claude")));
 
 /** Its tab in the terminal panel, open, the keyboard in it. */
 function showTerminal(): void {
@@ -33,14 +40,14 @@ function showTerminal(): void {
       <div class="where">
         <span class="project">{{ project }}</span>
         <span class="dot" aria-hidden="true">·</span>
-        <span class="column">{{ t(COLUMN_LABELS[card.column]) }}</span>
+        <span class="column">{{ t(columnLabel(card.column, agentsOn)) }}</span>
       </div>
       <div class="path" :title="card.path">{{ card.path }}</div>
     </header>
 
     <div class="body">
-      <section v-if="status || terminal" class="block" :aria-label="t('window.col.claude')">
-        <div class="section-label">{{ t("window.col.claude") }}</div>
+      <section v-if="status || terminal" class="block" :aria-label="section">
+        <div class="section-label">{{ section }}</div>
         <span v-if="status" :class="['state', status.tone]">{{ status.text }}</span>
         <button v-if="terminal" type="button" class="text-button to-terminal" @click="showTerminal"><Icon name="terminal" :size="12" />{{ t("sessions.showTerminal") }}</button>
       </section>
@@ -56,7 +63,7 @@ function showTerminal(): void {
       <section v-if="lastMessage" class="block" :aria-label="t('sessions.lastMessage')">
         <div class="section-label">{{ t("sessions.lastMessage") }}</div>
         <Markdown :text="lastMessage" />
-        <span v-if="!terminal" class="said-note">{{ t("sessions.privacy") }}</span>
+        <span v-if="!terminal" class="said-note">{{ t(codex ? "sessions.privacy.codex" : "sessions.privacy") }}</span>
       </section>
     </div>
   </section>

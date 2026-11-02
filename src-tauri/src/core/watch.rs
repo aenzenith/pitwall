@@ -1,6 +1,6 @@
 //! File-system events instead of timers for what Pitwall reads off the disk: Claude Code's
-//! session logs and running sessions, the hook's event files and each listed project's Git
-//! state (FSEvents on macOS,
+//! session logs and running sessions, the hook's event files, Codex's rollouts of the day (while
+//! Codex is on) and its hook's events, and each listed project's Git state (FSEvents on macOS,
 //! through `notify`). Changes are gathered for a moment and handled on a thread of their own;
 //! the slow safety poll (`POLL_EVERY`) reads everything again in case some were missed (sleep,
 //! network volumes).
@@ -24,6 +24,9 @@ pub(super) struct Watch {
     claude: Vec<PathBuf>,
     /// Each listed project's watched Git folders.
     git: HashMap<String, Vec<PathBuf>>,
+    /// Codex's folders watched: its day folders, or where a day folder is yet to be made, and its
+    /// hook's events. None while Codex is off.
+    codex: Vec<PathBuf>,
     routes: Arc<Mutex<Routes>>,
 }
 
@@ -37,6 +40,11 @@ struct Routes {
     sessions: Option<PathBuf>,
     /// A project's Git folder, and the project.
     git: Vec<(PathBuf, String)>,
+    /// Codex's day folders followed: as events name them, and as the watch knows them.
+    codex_days: Vec<(PathBuf, PathBuf)>,
+    /// The folders a day folder of Codex's is yet to be made in.
+    codex_parents: Vec<PathBuf>,
+    codex_events: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -53,6 +61,11 @@ struct Changes {
     heads: HashSet<String>,
     /// Events were dropped: read everything again.
     rescan: bool,
+    /// Codex's rollouts that changed, as its watch knows their folders.
+    codex_files: HashSet<PathBuf>,
+    codex_events: bool,
+    /// A day folder of Codex's may have been made: its folders are looked at again.
+    codex_folders: bool,
 }
 
 impl Routes {
@@ -79,6 +92,25 @@ impl Routes {
                 changes.events = true;
             }
             return;
+        }
+
+        if self.codex_events.as_ref().is_some_and(|dir| path.starts_with(dir)) {
+            if path.extension().is_some_and(|ext| ext == "event") && path.exists() {
+                changes.codex_events = true;
+            }
+            return;
+        }
+        if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
+            if let Some((_, folder)) = self.codex_days.iter().find(|(dir, _)| dir == parent) {
+                if name.to_str().is_some_and(|name| name.starts_with("rollout-") && name.ends_with(".jsonl")) {
+                    changes.codex_files.insert(folder.join(name));
+                }
+                return;
+            }
+            if self.codex_parents.iter().any(|dir| dir == parent) {
+                changes.codex_folders = true;
+                return;
+            }
         }
 
         for (dir, project) in &self.git {
@@ -152,6 +184,8 @@ impl Core {
             claude.rescan();
         }
         crate::claude::take_events(&self.claude);
+        // Codex's, while it is on; let go while it is off.
+        self.follow_codex(&paths);
 
         self.watch_paths(&paths);
         self.lock().git.retain(|path, _| paths.contains(path));
@@ -176,6 +210,7 @@ impl Core {
             paths.iter().filter(|path| !before.contains(path)).cloned().collect()
         };
 
+        self.follow_codex_projects(paths);
         self.watch_paths(paths);
         self.lock().git.retain(|path, _| paths.contains(path));
         self.refresh_git(added);
@@ -198,7 +233,61 @@ impl Core {
         let shared = Arc::clone(&routes);
 
         thread::spawn(move || core.handle_changes(&receiver, &shared));
-        *slot = Some(Watch { watcher, claude: Vec::new(), git: HashMap::new(), routes });
+        *slot = Some(Watch { watcher, claude: Vec::new(), git: HashMap::new(), codex: Vec::new(), routes });
+    }
+
+    /// Watches Codex's folders while it is on (`CodexWatch::folders`: each home's today's and
+    /// yesterday's, a day folder not made yet by the nearest folder above it that is there) and
+    /// its hook's events; none of them while it is off.
+    pub(super) fn watch_codex(&self) {
+        let (days, events) = match self.codex.lock() {
+            Ok(codex) => {
+                let days = codex.folders();
+                let events = (!days.is_empty()).then(|| codex.events_dir().to_path_buf());
+                (days, events)
+            }
+            Err(_) => return,
+        };
+        let mut slot = self.watch_slot();
+        let Some(watch) = slot.as_mut() else {
+            return;
+        };
+
+        let mut found: Vec<PathBuf> = Vec::new();
+        let mut parents: Vec<PathBuf> = Vec::new();
+        for day in &days {
+            if day.is_dir() {
+                found.push(day.clone());
+            } else if let Some(above) = day.ancestors().skip(1).take(4).find(|dir| dir.is_dir()) {
+                parents.push(above.to_path_buf());
+            }
+        }
+        if let Some(events) = &events {
+            let _ = fs::create_dir_all(events);
+        }
+        let mut wanted: Vec<PathBuf> = found.iter().chain(&parents).cloned().chain(events.clone()).collect();
+        wanted.sort();
+        wanted.dedup();
+
+        if wanted != watch.codex {
+            let mut batch = watch.watcher.paths_mut();
+            for dir in watch.codex.iter().filter(|dir| !wanted.contains(dir)) {
+                let _ = batch.remove(dir);
+            }
+            let mut watched: Vec<PathBuf> = watch.codex.iter().filter(|dir| wanted.contains(dir)).cloned().collect();
+            for dir in wanted.iter().filter(|dir| !watch.codex.contains(dir)) {
+                if batch.add(dir, RecursiveMode::NonRecursive).is_ok() {
+                    watched.push(dir.clone());
+                }
+            }
+            let _ = batch.commit();
+            watch.codex = watched;
+        }
+
+        let mut routes = watch.routes.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        routes.codex_days = found.iter().filter(|dir| watch.codex.contains(dir)).map(|dir| (canonical(dir), dir.clone())).collect();
+        routes.codex_parents = parents.iter().filter(|dir| watch.codex.contains(dir)).map(|dir| canonical(dir)).collect();
+        routes.codex_events = events.filter(|dir| watch.codex.contains(dir)).map(|dir| canonical(&dir));
     }
 
     /// Watches the Claude folders and the Git folders of `paths`, and stops watching those of
@@ -322,6 +411,29 @@ impl Core {
                 // A turn that ended may have changed files: their Git state too.
                 git.extend(crate::claude::take_events(&self.claude));
             }
+        }
+
+        // Codex's, while it is on (its folders aren't watched while it is off).
+        let codex_changed = (changes.rescan || changes.codex_events || changes.codex_folders || !changes.codex_files.is_empty()) && self.agent_on(Agent::Codex);
+        if codex_changed {
+            if changes.codex_events || changes.rescan {
+                git.extend(self.codex_take_events());
+            }
+            if let Ok(mut codex) = self.codex.lock() {
+                // Events may tell of a session whose rollout is an older day's.
+                if changes.rescan || changes.codex_events || changes.codex_folders {
+                    crate::agent::AgentWatch::rescan(&mut *codex);
+                }
+                for file in &changes.codex_files {
+                    codex.refresh_file(file);
+                }
+            }
+            if changes.codex_events || changes.codex_folders || changes.rescan {
+                self.watch_codex();
+            }
+        }
+
+        if claude_changed || codex_changed {
             self.refresh_claude();
         }
 

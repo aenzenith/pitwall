@@ -12,6 +12,7 @@ use super::board::tab_name;
 use super::reveal::is_session_id;
 use super::shells::{self, Shell};
 use super::*;
+use crate::agent::Agent;
 use crate::start::Start;
 
 /// Output kept per terminal to redraw it when its view comes back.
@@ -25,9 +26,12 @@ pub(super) const TAB_NAME_MAX: usize = 200;
 const GATHER: Duration = Duration::from_millis(8);
 /// The most output one event to the window carries.
 const EVENT_BYTES: usize = 64 * 1024;
-/// How long a tab just opened counts as one Claude may be starting in, before its processes can
-/// tell (`claude_may_run_in`).
+/// How long a tab just opened counts as one its agent may be starting in, before its processes
+/// can tell (`agent_may_run_in`).
 pub(super) const STARTING: Duration = Duration::from_secs(1);
+/// The variable that gives Codex its home folder: another Codex account's tab gets it, the main
+/// account's never one of Pitwall's.
+const CODEX_HOME: &str = "CODEX_HOME";
 /// An administrator's tab whose sudo ends with a failure this soon after it was opened is one
 /// Windows wasn't given the permission for (`refused_exit`), whatever its code.
 const REFUSED_WITHIN: Duration = Duration::from_secs(10);
@@ -42,7 +46,8 @@ pub struct TerminalView {
     pub path: String,
     /// The tab's title; the user can rename it.
     pub name: String,
-    /// `shell` | `claude`: a Claude Code session started from its own button.
+    /// `shell` | `claude` | `codex`: a session of that agent started from its own button
+    /// (`Agent::tab_kind`).
     pub kind: String,
     /// The shell of the list a shell tab runs on Windows (`shells.rs`); none elsewhere and for a
     /// Claude tab.
@@ -56,7 +61,9 @@ pub struct TerminalView {
     /// the refill's line), not by the user: it doesn't take the keyboard. Set as the tab is made,
     /// so the first snapshot it is in says so.
     pub unasked: bool,
-    /// The Claude account it runs with (`accounts/`), by id; none: the main one.
+    /// The account of its agent it runs with, by id; none: the main one. A Claude tab's and a
+    /// shell tab's is a Claude account (`accounts/`), a Codex tab's a Codex account
+    /// (`core/codex_accounts.rs`).
     pub account: Option<String>,
 }
 
@@ -81,6 +88,22 @@ pub(super) enum Launch {
     /// Claude Code with a session that has ended opened again (`claude --resume`), then the
     /// shell: a board card's session, going on.
     Resume { session: String },
+    /// Codex, then the shell, as `Claude` is: with a first prompt, with the model and in the mode
+    /// of `start`'s Codex part, and with the card's images (`codex_command`).
+    Codex { prompt: Option<String>, start: Start, images: Option<PathBuf> },
+    /// Codex with a session that has ended opened again (`codex resume`), then the shell.
+    ResumeCodex { session: String },
+}
+
+impl Launch {
+    /// The agent the tab starts; none for a shell.
+    pub(super) fn agent(&self) -> Option<Agent> {
+        match self {
+            Self::Shell { .. } => None,
+            Self::Claude { .. } | Self::Resume { .. } => Some(Agent::Claude),
+            Self::Codex { .. } | Self::ResumeCodex { .. } => Some(Agent::Codex),
+        }
+    }
 }
 
 /// What a terminal's reader hands on to the thread that sends its output to the window.
@@ -104,7 +127,7 @@ pub(super) struct Session {
     scrollback: String,
     /// Number of the last chunk sent to the window.
     seq: u64,
-    /// When the tab was opened (`claude_may_run_in`, `refused`).
+    /// When the tab was opened (`agent_may_run_in`, `refused`).
     opened: Instant,
     /// An administrator's shell, through sudo.
     elevated: bool,
@@ -167,8 +190,17 @@ impl Core {
     /// `open_claude_terminal` with the account `account` names ("Start with account ›";
     /// `accounts::MAIN` for the main one); none: the one in use.
     pub fn open_claude_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>) -> Result<TerminalView, String> {
-        let start = start.unwrap_or_else(|| self.project_start(path));
+        let start = start.unwrap_or_else(|| self.lock().settings.project(path).start_with(Agent::Claude));
         self.open_terminal_with(path, &Launch::Claude { prompt: None, start, images: None }, None, false, size, false, account)
+    }
+
+    /// A Codex tab in the project's folder ("New Codex"), as `open_claude_terminal_with` is
+    /// Claude's: with the model and in the mode of `start`'s Codex part, or, without one, as the
+    /// project's own settings say for Codex; with the Codex account `account` names
+    /// (`accounts::MAIN` for the main one), else the one in use.
+    pub fn open_codex_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>) -> Result<TerminalView, String> {
+        let start = start.unwrap_or_else(|| self.lock().settings.project(path).start_with(Agent::Codex));
+        self.open_terminal_with(path, &Launch::Codex { prompt: None, start, images: None }, None, false, size, false, account)
     }
 
     /// How a Claude session of the project at `path` starts when nothing else was chosen: the
@@ -193,10 +225,12 @@ impl Core {
         self.open_terminal_with(path, launch, name, renamed, size, unasked, None)
     }
 
-    /// `open_terminal_as` with the Claude account the tab runs with: the one `account` names
+    /// `open_terminal_as` with the account the tab runs with: the one `account` names
     /// (`accounts::MAIN` for the main one), else the one in use. Another account than the main
     /// one is given to the tab's shell, and so to Claude in it, as `CLAUDE_CONFIG_DIR`: only the
     /// folder of an account listed, as the settings hold it; the main one gets nothing of it.
+    /// A Codex tab's account is a Codex account (`codex_start_with`), given as `CODEX_HOME` in
+    /// the same way, and its Claude is the main one. Codex starts in no tab while it is off.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn open_terminal_with(
         self: &Arc<Self>,
@@ -212,11 +246,20 @@ impl Core {
         if !Path::new(path).is_dir() {
             return Err(t!("core.error.notFolder", path = path));
         }
-        let account = {
-            let inner = self.lock();
-            crate::accounts::start_with(&inner.settings.accounts, account)?.map(|account| (account.id.clone(), account.dir.clone()))
+        let agent = launch.agent();
+        let account = match agent {
+            Some(Agent::Codex) => {
+                if !self.agent_on(Agent::Codex) {
+                    return Err(t!("terminal.codexOff"));
+                }
+                self.codex_start_with(account)?
+            }
+            _ => {
+                let inner = self.lock();
+                crate::accounts::start_with(&inner.settings.accounts, account)?.map(|account| (account.id.clone(), PathBuf::from(&account.dir)))
+            }
         };
-        let claude = !matches!(launch, Launch::Shell { .. });
+        let claude = agent.is_some();
         let (shell, elevated) = match launch {
             Launch::Shell { shell, elevated } => (shells::on_this_system(*shell), *elevated),
             _ => (None, false),
@@ -230,6 +273,8 @@ impl Core {
         let mut command = match launch {
             Launch::Claude { prompt, start, images } => claude_command(&shell_path, prompt.as_deref(), *start, images.as_deref()),
             Launch::Resume { session } => resume_command(&shell_path, session)?,
+            Launch::Codex { prompt, start, images } => codex_command(&shell_path, prompt.as_deref(), *start, images.as_deref())?,
+            Launch::ResumeCodex { session } => codex_resume_command(&shell_path, session)?,
             Launch::Shell { .. } => shells::command(shell, elevated)?,
         };
         command.cwd(path);
@@ -242,9 +287,17 @@ impl Core {
             }
         }
         // The main account is Claude Code without the variable, whatever the app was started with.
-        match &account {
-            Some((_, dir)) => command.env(crate::accounts::ENV, dir),
-            None => command.env_remove(crate::accounts::ENV),
+        // A Codex tab's account is Codex's; its main one is the home Pitwall follows as the main
+        // (`Agent::home_in`: the app's own `CODEX_HOME`, else `~/.codex`), so it is left as is.
+        match (agent, &account) {
+            (Some(Agent::Codex), account) => {
+                command.env_remove(crate::accounts::ENV);
+                if let Some((_, home)) = account {
+                    command.env(CODEX_HOME, home);
+                }
+            }
+            (_, Some((_, dir))) => command.env(crate::accounts::ENV, dir),
+            (_, None) => command.env_remove(crate::accounts::ENV),
         }
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
@@ -254,11 +307,11 @@ impl Core {
             command.env("LANG", "en_US.UTF-8");
         }
         let base = match shell {
-            _ if claude => "claude".to_string(),
+            _ if claude => agent.map_or("claude", Agent::tab_kind).to_string(),
             Some(shell) => shell.name(),
             None => Path::new(&shell_path).file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_else(|| "shell".into()),
         };
-        let kind = if claude { "claude" } else { "shell" };
+        let kind = agent.map_or("shell", Agent::tab_kind);
 
         let mut child = pair.slave.spawn_command(command).map_err(|error| error.to_string())?;
         drop(pair.slave);
@@ -441,8 +494,10 @@ impl Core {
     /// `/resume`: once the session has one, and again when it changes (`/rename`, or another
     /// session in the tab). A tab the user renamed keeps their title, and a session without a
     /// name leaves the tab's as it is. Runs after every refresh of Claude's state
-    /// (`refresh_claude`) and costs nothing while no tab is left to name.
+    /// (`refresh_claude`) and costs nothing while no tab is left to name. Codex's tabs are named
+    /// the same way first (`name_codex_terminals`).
     pub(super) fn name_terminals(&self) {
+        self.name_codex_terminals();
         let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == "claude" && !t.renamed).map(|t| t.id).collect();
         if open.is_empty() {
             return;
@@ -452,25 +507,8 @@ impl Core {
             return;
         };
 
-        // Each tab's session: the Claude nearest its shell (one that Claude started itself runs
-        // further down), the one started last of two as near.
         let shells = self.terminal_shells();
-        let mut sessions: HashMap<u64, (usize, u64, &String, &str)> = HashMap::new();
-        for (session, run) in &running {
-            let Some((depth, terminal, path)) =
-                shells.iter().find_map(|(shell, terminal, path)| Some((run.lineage.iter().position(|pid| pid == shell)?, *terminal, path.as_str())))
-            else {
-                continue;
-            };
-            if !open.contains(&terminal) {
-                continue;
-            }
-            let started = run.started_at.unwrap_or(0);
-            let nearer = sessions.get(&terminal).is_none_or(|&(near, last, id, _)| (depth, std::cmp::Reverse(started), session) < (near, std::cmp::Reverse(last), id));
-            if nearer {
-                sessions.insert(terminal, (depth, started, session, run.cwd.as_deref().unwrap_or(path)));
-            }
-        }
+        let sessions = tab_sessions(&running, &shells, &open);
         if sessions.is_empty() {
             return;
         }
@@ -478,12 +516,51 @@ impl Core {
         let names: Vec<(u64, String)> = match self.claude.lock() {
             Ok(mut watch) => sessions
                 .iter()
-                .filter_map(|(terminal, (_, _, session, folder))| Some((*terminal, tab_name(&watch.peek(session, folder)?.title?))))
+                .filter_map(|(terminal, (session, folder))| Some((*terminal, tab_name(&watch.peek(session, folder)?.title?))))
                 .filter(|(_, name)| !name.is_empty())
                 .collect(),
             Err(_) => return,
         };
+        self.give_names(names);
+    }
 
+    /// Gives each Codex tab the name of the session that runs in it, as `name_terminals` does
+    /// Claude's: the name `/rename` gave it (`session_index.jsonl`), as Codex's watch holds it
+    /// for the session (`SessionState::title`). Nothing while Codex is off or no Codex tab is
+    /// left to name.
+    fn name_codex_terminals(&self) {
+        let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == Agent::Codex.tab_kind() && !t.renamed).map(|t| t.id).collect();
+        if open.is_empty() {
+            return;
+        }
+        let Some(running) = self.codex_running() else {
+            return;
+        };
+        let shells = self.terminal_shells();
+        let sessions = tab_sessions(&running, &shells, &open);
+        if sessions.is_empty() {
+            return;
+        }
+
+        let names: Vec<(u64, String)> = {
+            let inner = self.lock();
+            sessions
+                .iter()
+                .filter_map(|(terminal, (session, _))| {
+                    let title = inner.scanned.iter().find(|state| state.agent == Agent::Codex && &state.id == *session)?.title.as_deref()?;
+                    Some((*terminal, tab_name(title)))
+                })
+                .filter(|(_, name)| !name.is_empty())
+                .collect()
+        };
+        self.give_names(names);
+    }
+
+    /// Each tab of `names` takes its new title, unless the user renamed it meanwhile.
+    fn give_names(&self, names: Vec<(u64, String)>) {
+        if names.is_empty() {
+            return;
+        }
         let named = {
             let mut inner = self.lock();
             let mut named = false;
@@ -572,12 +649,14 @@ impl Core {
         self.terminal_sessions().iter().filter_map(|(id, session)| Some((session.pid?, *id, session.path.clone()))).collect()
     }
 
-    /// Whether Claude may still run in terminal `id`, one a session was opened again in: a
-    /// process under its shell names `claude`, or on Unix the shell itself still does until
-    /// Claude ends there and it becomes the plain login shell (`resume_command`; `cmd.exe` keeps
-    /// `/K claude` in its line for good). A tab just opened, or one whose processes can't be told,
-    /// may be such a tab too. Command lines are only tested, as `read_running` tests them.
-    pub(super) fn claude_may_run_in(&self, id: u64) -> bool {
+    /// Whether its agent may still run in terminal `id`, one a session was opened again in: a
+    /// process under its shell names the tab's agent (`claude`, or `codex` in a Codex tab), or on
+    /// Unix the shell itself still does until the agent ends there and it becomes the plain login
+    /// shell (`resume_command`, `codex_resume_command`; `cmd.exe` keeps `/K claude` in its line for
+    /// good). A tab just opened, or one whose processes can't be told, may be such a tab too.
+    /// Command lines are only tested, as `read_running` tests them.
+    pub(super) fn agent_may_run_in(&self, id: u64) -> bool {
+        let agent = self.lock().terminal_list.iter().find(|t| t.id == id).and_then(|t| Agent::of_tab(&t.kind)).unwrap_or_default();
         let Some((shell, opened)) = self.terminal_sessions().get(&id).map(|session| (session.pid, session.opened)) else {
             return false;
         };
@@ -588,9 +667,10 @@ impl Core {
             return true;
         };
 
+        let word = agent.tab_kind();
         table.iter().any(|(&pid, process)| {
             let under = || if pid == shell { cfg!(unix) } else { super::sessions::lineage(&table, pid).contains(&shell) };
-            process.line.to_lowercase().contains("claude") && under()
+            process.line.to_lowercase().contains(word) && under()
         })
     }
 
@@ -737,6 +817,100 @@ pub(super) fn resume_command(_shell: &str, session: &str) -> Result<CommandBuild
     Ok(command)
 }
 
+/// The user's shell running Codex and then becoming an ordinary shell, as `claude_command` does
+/// for Claude: `codex --no-daemon` (its process stays the tab's own, under its shell), then the
+/// model and the mode of `start.codex` (`CodexStart::line`), and a first prompt only through
+/// `PITWALL_PROMPT` after `--`; the card's images' folder as `--add-dir "$PITWALL_IMAGES"`, as
+/// Claude's. Every word on the line is a constant: never an option that skips Codex's approvals
+/// or its sandbox.
+#[cfg(unix)]
+pub(super) fn codex_command(shell: &str, prompt: Option<&str>, start: Start, images: Option<&Path>) -> Result<CommandBuilder, String> {
+    let quoted = shell.replace('\'', "'\\''");
+    let mode = start.codex.line();
+    let images = images.filter(|_| prompt.is_some());
+    let script = match (prompt, images) {
+        (Some(_), Some(_)) => format!("codex --no-daemon{mode} --add-dir \"${IMAGES_VAR}\" -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} -u {IMAGES_VAR} '{quoted}' -l"),
+        (Some(_), None) => format!("codex --no-daemon{mode} -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} '{quoted}' -l"),
+        (None, _) => format!("codex --no-daemon{mode}; exec '{quoted}' -l"),
+    };
+
+    let mut command = CommandBuilder::new(shell);
+    command.args(["-l", "-i", "-c", &script]);
+    if let Some(prompt) = prompt {
+        command.env(PROMPT_VAR, prompt);
+    }
+    if let Some(images) = images {
+        command.env(IMAGES_VAR, images);
+    }
+    Ok(command)
+}
+
+/// On Windows Codex starts without the card's text, as Claude does (`claude_command`).
+#[cfg(windows)]
+pub(super) fn codex_command(_shell: &str, _prompt: Option<&str>, start: Start, _images: Option<&Path>) -> Result<CommandBuilder, String> {
+    let mut command = CommandBuilder::new("cmd.exe");
+    command.args(codex_windows_args(start));
+    Ok(command)
+}
+
+/// What `cmd.exe` is given for Codex on Windows: `/K codex --no-daemon`, then the model and the
+/// mode as arguments of their own (`CodexStart::args`), each a constant.
+#[cfg(any(windows, test))]
+fn codex_windows_args(start: Start) -> Vec<&'static str> {
+    let mut args = vec!["/K", "codex", "--no-daemon"];
+    args.extend(start.codex.args());
+    args
+}
+
+/// The same shell opening a Codex session again (`codex resume --no-daemon <id>`), then becoming
+/// an ordinary shell: only a session id gets into the line (`is_session_id`), never a session's
+/// name, which `codex resume` would take too.
+#[cfg(unix)]
+pub(super) fn codex_resume_command(shell: &str, session: &str) -> Result<CommandBuilder, String> {
+    if !is_session_id(session) {
+        return Err(format!("not a session id: {session}"));
+    }
+    let quoted = shell.replace('\'', "'\\''");
+    let script = format!("codex resume --no-daemon {session}; exec '{quoted}' -l");
+
+    let mut command = CommandBuilder::new(shell);
+    command.args(["-l", "-i", "-c", &script]);
+    Ok(command)
+}
+
+#[cfg(windows)]
+pub(super) fn codex_resume_command(_shell: &str, session: &str) -> Result<CommandBuilder, String> {
+    if !is_session_id(session) {
+        return Err(format!("not a session id: {session}"));
+    }
+    let mut command = CommandBuilder::new("cmd.exe");
+    command.args(["/K", "codex", "resume", "--no-daemon", session]);
+    Ok(command)
+}
+
+/// Each tab of `open`'s session among `running`: the one nearest its shell (one that the agent
+/// started itself runs further down), the one started last of two as near; with the session's
+/// folder, else the tab's project.
+fn tab_sessions<'a>(running: &'a HashMap<String, super::sessions::Running>, shells: &'a [(u32, u64, String)], open: &[u64]) -> HashMap<u64, (&'a String, &'a str)> {
+    let mut sessions: HashMap<u64, (usize, u64, &String, &str)> = HashMap::new();
+    for (session, run) in running {
+        let Some((depth, terminal, path)) =
+            shells.iter().find_map(|(shell, terminal, path)| Some((run.lineage.iter().position(|pid| pid == shell)?, *terminal, path.as_str())))
+        else {
+            continue;
+        };
+        if !open.contains(&terminal) {
+            continue;
+        }
+        let started = run.started_at.unwrap_or(0);
+        let nearer = sessions.get(&terminal).is_none_or(|&(near, last, id, _)| (depth, std::cmp::Reverse(started), session) < (near, std::cmp::Reverse(last), id));
+        if nearer {
+            sessions.insert(terminal, (depth, started, session, run.cwd.as_deref().unwrap_or(path)));
+        }
+    }
+    sessions.into_iter().map(|(terminal, (_, _, session, folder))| (terminal, (session, folder))).collect()
+}
+
 /// Whether an administrator's tab whose sudo ended so, `age` after it was opened, was refused the
 /// permission: sudo's code for a cancelled elevation at any age, or any failure within
 /// `REFUSED_WITHIN` (another code, or one that couldn't be read).
@@ -798,10 +972,10 @@ fn trim_scrollback(scrollback: &mut String) {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use crate::start::{Mode, Model};
+    use crate::start::{CodexMode, CodexModel, CodexStart, Mode, Model};
 
-    /// Every way a session starts, with what it must put on the command line, written out: on
-    /// Unix as part of the shell's line, on Windows as arguments of `cmd.exe`.
+    /// Every way a Claude session starts, with what it must put on the command line, written out:
+    /// on Unix as part of the shell's line, on Windows as arguments of `cmd.exe`.
     const STARTS: [(Option<Model>, Mode, &str, &[&str]); 15] = [
         (None, Mode::Normal, "", &[]),
         (None, Mode::Plan, " --permission-mode plan", &["--permission-mode", "plan"]),
@@ -820,27 +994,65 @@ mod tests {
         (Some(Model::Haiku), Mode::AcceptEdits, " --model haiku --permission-mode acceptEdits", &["--model", "haiku", "--permission-mode", "acceptEdits"]),
     ];
 
+    /// Every way a Codex session starts, the same way, after `codex --no-daemon`.
+    const CODEX_STARTS: [(Option<CodexModel>, CodexMode, &str, &[&str]); 10] = [
+        (None, CodexMode::Normal, "", &[]),
+        (None, CodexMode::ReadOnly, " -s read-only", &["-s", "read-only"]),
+        (Some(CodexModel::Sol), CodexMode::Normal, " -m gpt-6.1-sol", &["-m", "gpt-6.1-sol"]),
+        (Some(CodexModel::Sol), CodexMode::ReadOnly, " -m gpt-6.1-sol -s read-only", &["-m", "gpt-6.1-sol", "-s", "read-only"]),
+        (Some(CodexModel::Terra), CodexMode::Normal, " -m gpt-6.1-terra", &["-m", "gpt-6.1-terra"]),
+        (Some(CodexModel::Terra), CodexMode::ReadOnly, " -m gpt-6.1-terra -s read-only", &["-m", "gpt-6.1-terra", "-s", "read-only"]),
+        (Some(CodexModel::Astra), CodexMode::Normal, " -m gpt-6-astra", &["-m", "gpt-6-astra"]),
+        (Some(CodexModel::Astra), CodexMode::ReadOnly, " -m gpt-6-astra -s read-only", &["-m", "gpt-6-astra", "-s", "read-only"]),
+        (Some(CodexModel::Luna), CodexMode::Normal, " -m gpt-6-luna", &["-m", "gpt-6-luna"]),
+        (Some(CodexModel::Luna), CodexMode::ReadOnly, " -m gpt-6-luna -s read-only", &["-m", "gpt-6-luna", "-s", "read-only"]),
+    ];
+
+    /// Both agents' starts: the start, how its line begins, its own words for the model and the
+    /// mode, and everything `cmd.exe` is given on Windows.
+    fn every_start() -> Vec<(Start, &'static str, &'static str, Vec<&'static str>)> {
+        let claude = STARTS.into_iter().map(|(model, mode, line, args)| (Start::claude(model, mode), "claude", line, [&["/K", "claude"][..], args].concat()));
+        let codex = CODEX_STARTS.into_iter().map(|(model, mode, line, args)| {
+            (Start { agent: Agent::Codex, codex: CodexStart { model, mode }, ..Start::default() }, "codex --no-daemon", line, [&["/K", "codex", "--no-daemon"][..], args].concat())
+        });
+        claude.chain(codex).collect()
+    }
+
+    /// The tab's command for `start`, as `open_terminal_with` makes it for its agent.
+    fn command(start: Start, prompt: Option<&str>, images: Option<&Path>) -> CommandBuilder {
+        match start.agent {
+            Agent::Claude => claude_command("/bin/zsh", prompt, start, images),
+            Agent::Codex => codex_command("/bin/zsh", prompt, start, images).unwrap(),
+        }
+    }
+
+    fn windows(start: Start) -> Vec<&'static str> {
+        match start.agent {
+            Agent::Claude => windows_args(start),
+            Agent::Codex => codex_windows_args(start),
+        }
+    }
+
     fn script(command: &CommandBuilder) -> String {
         command.get_argv().last().unwrap().to_string_lossy().into_owned()
     }
 
-    /// The model and the mode are the one thing of the user's choosing that is written into
-    /// Claude's command line. In both forms of it (the script the Unix shell runs, the arguments
-    /// `cmd.exe` gets on Windows) that is the fixed words of the two lists, before `--`, and
-    /// nothing else: a choice named in any other words starts Claude as if none had been made.
+    /// The model and the mode are the one thing of the user's choosing that is written into an
+    /// agent's command line. In both forms of it (the script the Unix shell runs, the arguments
+    /// `cmd.exe` gets on Windows) that is the fixed words of the agent's two lists, before `--`,
+    /// and nothing else: a choice named in any other words starts the agent as if none had been
+    /// made, and Codex never with an option that skips its approvals or its sandbox.
     #[test]
     fn the_model_and_the_mode_are_on_the_command_line_in_their_own_words_only() {
-        for (model, mode, line, args) in STARTS {
-            let start = Start { model, mode };
-
-            assert_eq!(script(&claude_command("/bin/zsh", None, start, None)), format!("claude{line}; exec '/bin/zsh' -l"));
-            assert_eq!(script(&claude_command("/bin/zsh", Some("x"), start, None)), format!("claude{line} -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT '/bin/zsh' -l"));
+        for (start, program, line, args) in every_start() {
+            assert_eq!(script(&command(start, None, None)), format!("{program}{line}; exec '/bin/zsh' -l"));
+            assert_eq!(script(&command(start, Some("x"), None)), format!("{program}{line} -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT '/bin/zsh' -l"));
             assert_eq!(
-                script(&claude_command("/bin/zsh", Some("x"), start, Some(Path::new("/tmp/images")))),
-                format!("claude{line} --add-dir \"$PITWALL_IMAGES\" -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT -u PITWALL_IMAGES '/bin/zsh' -l")
+                script(&command(start, Some("x"), Some(Path::new("/tmp/images")))),
+                format!("{program}{line} --add-dir \"$PITWALL_IMAGES\" -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT -u PITWALL_IMAGES '/bin/zsh' -l")
             );
 
-            assert_eq!(windows_args(start), [&["/K", "claude"][..], args].concat());
+            assert_eq!(windows(start), args);
         }
 
         // Named in other words (by the window, a settings file, the board's file): nothing of it
@@ -851,50 +1063,62 @@ mod tests {
             ("$(touch /tmp/pwned)", "`touch /tmp/pwned`"),
             ("claude-opus-5-5", "acceptEdits --dangerously-skip-permissions"),
             ("' -- ; touch /tmp/pwned #", "dontAsk"),
+            ("gpt-6.1-sol; touch /tmp/pwned", "read-only; touch /tmp/pwned"),
+            ("gpt-6.1-sol --dangerously-bypass-approvals-and-sandbox", "danger-full-access"),
+            ("GPT-6-LUNA", "workspace-write"),
+            ("gpt-5.5", "--yolo"),
+            ("-c sandbox_mode=danger-full-access", "readOnly --full-auto"),
         ] {
             let said = Start::of(Some(model), Some(mode));
             let read: Start = serde_json::from_value(serde_json::json!({ "model": model, "mode": mode })).unwrap();
             for start in [said, read] {
-                assert_eq!(script(&claude_command("/bin/zsh", None, start, None)), "claude; exec '/bin/zsh' -l", "{model} {mode}");
-                assert_eq!(script(&claude_command("/bin/zsh", Some("x"), start, None)), "claude -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT '/bin/zsh' -l", "{model} {mode}");
-                assert_eq!(windows_args(start), ["/K", "claude"], "{model} {mode}");
+                assert_eq!(script(&command(start, None, None)), "claude; exec '/bin/zsh' -l", "{model} {mode}");
+                assert_eq!(script(&command(start, Some("x"), None)), "claude -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT '/bin/zsh' -l", "{model} {mode}");
+                assert_eq!(windows(start), ["/K", "claude"], "{model} {mode}");
+            }
+
+            let said = Start::chosen(Some("codex"), Some(model), Some(mode));
+            let read: Start = serde_json::from_value(serde_json::json!({ "agent": "codex", "codex": { "model": model, "mode": mode } })).unwrap();
+            for start in [said, read] {
+                assert_eq!(script(&command(start, None, None)), "codex --no-daemon; exec '/bin/zsh' -l", "{model} {mode}");
+                assert_eq!(script(&command(start, Some("x"), None)), "codex --no-daemon -- \"$PITWALL_PROMPT\"; exec env -u PITWALL_PROMPT '/bin/zsh' -l", "{model} {mode}");
+                assert_eq!(windows(start), ["/K", "codex", "--no-daemon"], "{model} {mode}");
             }
         }
     }
 
-    /// A card's text reaches Claude only through `PITWALL_PROMPT`: shell syntax in it never
+    /// A card's text reaches the agent only through `PITWALL_PROMPT`: shell syntax in it never
     /// becomes part of the command line, whatever it holds.
     #[test]
     fn a_card_never_reaches_the_command_line() {
         let title = r#""; touch /tmp/pwned; echo ""#;
-        let prompt = format!("{title}\n\n$(touch /tmp/pwned) `touch /tmp/pwned` ' --dangerously-skip-permissions");
+        let prompt = format!("{title}\n\n$(touch /tmp/pwned) `touch /tmp/pwned` ' --dangerously-skip-permissions --yolo");
         let argv = |command: &CommandBuilder| -> Vec<String> { command.get_argv().iter().map(|arg| arg.to_string_lossy().into_owned()).collect() };
 
-        for (model, mode, _, _) in STARTS {
-            let start = Start { model, mode };
-            let command = claude_command("/bin/zsh", Some(&prompt), start, None);
-            let args = argv(&command);
+        for (start, _, _, _) in every_start() {
+            let made = command(start, Some(&prompt), None);
+            let args = argv(&made);
             for arg in &args {
-                assert!(!arg.contains("pwned") && !arg.contains("dangerously"), "{arg}");
+                assert!(!arg.contains("pwned") && !arg.contains("dangerously") && !arg.contains("yolo"), "{arg}");
             }
-            assert_eq!(command.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
+            assert_eq!(made.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
             // The same command line for any text: it only names the variable.
-            assert_eq!(args, argv(&claude_command("/bin/zsh", Some("x"), start, None)));
+            assert_eq!(args, argv(&command(start, Some("x"), None)));
 
             let script = args.last().unwrap();
             assert!(script.contains(r#"-- "$PITWALL_PROMPT";"#), "{script}");
-            // The shell that stays after Claude doesn't keep it.
+            // The shell that stays after the agent doesn't keep it.
             assert!(script.ends_with("exec env -u PITWALL_PROMPT '/bin/zsh' -l"), "{script}");
 
             // The folder of its images travels the same way, whatever its path holds.
             let folder = Path::new(r#"/Users/it's "me"; touch /tmp/pwned/board-images/a-0"#);
-            let command = claude_command("/bin/zsh", Some(&prompt), start, Some(folder));
-            let args = argv(&command);
+            let made = command(start, Some(&prompt), Some(folder));
+            let args = argv(&made);
             for arg in &args {
-                assert!(!arg.contains("pwned") && !arg.contains("dangerously"), "{arg}");
+                assert!(!arg.contains("pwned") && !arg.contains("dangerously") && !arg.contains("yolo"), "{arg}");
             }
-            assert_eq!(command.get_env("PITWALL_IMAGES"), Some(folder.as_os_str()));
-            assert_eq!(command.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
+            assert_eq!(made.get_env("PITWALL_IMAGES"), Some(folder.as_os_str()));
+            assert_eq!(made.get_env("PITWALL_PROMPT"), Some(std::ffi::OsStr::new(&prompt)));
             let script = args.last().unwrap();
             assert!(script.contains(r#" --add-dir "$PITWALL_IMAGES" -- "$PITWALL_PROMPT";"#), "{script}");
             assert!(script.ends_with("exec env -u PITWALL_PROMPT -u PITWALL_IMAGES '/bin/zsh' -l"), "{script}");
@@ -902,16 +1126,17 @@ mod tests {
     }
 
     /// A session opened again has its id written into the command line: nothing but a session
-    /// id is ever written there.
+    /// id is ever written there, for either agent (never a Codex session's name, which
+    /// `codex resume` would take too).
     #[test]
     fn only_a_session_id_reaches_the_resume_command() {
         let id = "9bb85e86-f618-4861-9858-03ec8fc36c28";
-        let command = resume_command("/bin/zsh", id).unwrap();
-        let script = command.get_argv().last().unwrap().to_string_lossy().into_owned();
-        assert_eq!(script, format!("claude --resume {id}; exec '/bin/zsh' -l"));
+        assert_eq!(script(&resume_command("/bin/zsh", id).unwrap()), format!("claude --resume {id}; exec '/bin/zsh' -l"));
+        assert_eq!(script(&codex_resume_command("/bin/zsh", id).unwrap()), format!("codex resume --no-daemon {id}; exec '/bin/zsh' -l"));
 
-        for bad in ["", "x; touch /tmp/pwned", "$(touch /tmp/pwned)", "9bb85e86-f618-4861-9858-03ec8fc36c2;", "--dangerously-skip-permissions"] {
+        for bad in ["", "x; touch /tmp/pwned", "$(touch /tmp/pwned)", "9bb85e86-f618-4861-9858-03ec8fc36c2;", "--dangerously-skip-permissions", "--last", "my session", "--yolo"] {
             assert!(resume_command("/bin/zsh", bad).is_err(), "{bad}");
+            assert!(codex_resume_command("/bin/zsh", bad).is_err(), "{bad}");
         }
     }
 }

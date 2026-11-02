@@ -144,6 +144,11 @@ pub(crate) struct Row {
     pub claude: Option<ClaudeAt>,
     pub server_text: String,
     pub claude_text: String,
+    /// What Codex is at, the same way; none from an app of before there were agents.
+    #[serde(default)]
+    pub codex: Option<ClaudeAt>,
+    #[serde(default)]
+    pub codex_text: String,
 }
 
 /// A saved command, as a start asks about it: by its id, its name and its command line.
@@ -379,11 +384,13 @@ fn table(rows: &[Row], paint: Paint) -> String {
     let width = cells;
     let gap = |text: &str, column: usize| " ".repeat(column.saturating_sub(width(text)) + 2);
     let names = rows.iter().map(|row| width(&row.name)).max().unwrap_or(0);
-    let servers = rows.iter().filter(|row| !row.claude_text.is_empty()).map(|row| width(&row.server_text)).max().unwrap_or(0);
+    let servers = rows.iter().filter(|row| !row.claude_text.is_empty() || !row.codex_text.is_empty()).map(|row| width(&row.server_text)).max().unwrap_or(0);
 
     let mut text = String::new();
     for row in rows {
-        let (name, server, claude) = (clean(&row.name), clean(&row.server_text), clean(&row.claude_text));
+        let (name, server) = (clean(&row.name), clean(&row.server_text));
+        // Each agent at work in it, Claude first, as the list shows them.
+        let claude = [&row.claude_text, &row.codex_text].into_iter().map(|said| clean(said)).filter(|said| !said.is_empty()).collect::<Vec<_>>().join("  ");
         let mark = match row.status.as_str() {
             "running" => paint.with("32", "●"),
             "crashed" => paint.with("31", "✕"),
@@ -402,7 +409,7 @@ fn table(rows: &[Row], paint: Paint) -> String {
 fn rows_json(rows: &[Row]) -> String {
     let rows: Vec<_> = rows
         .iter()
-        .map(|row| json!({ "name": row.name, "status": row.status, "port": row.port, "url": row.url, "startedAt": row.started_at, "issue": row.issue, "claude": row.claude }))
+        .map(|row| json!({ "name": row.name, "status": row.status, "port": row.port, "url": row.url, "startedAt": row.started_at, "issue": row.issue, "claude": row.claude, "codex": row.codex }))
         .collect();
     serde_json::to_string_pretty(&rows).unwrap_or_default()
 }
@@ -756,19 +763,24 @@ enum Unasked {
     Usage(String),
     /// It was started from inside a Claude Code session.
     InsideClaude,
+    /// It was started from inside a Codex session.
+    InsideCodex,
 }
 
 /// What a start of the command is to do: what its `words` ask for, unless it was started from
 /// inside a Claude Code session (one of that session's variables among `vars`, the variables
-/// the process was started with; an empty one isn't set). From there the command asks the app
-/// nothing: Claude's way to Pitwall is the team radio, with its switch per tool and its one
-/// project. What the command says of itself (its help, its version) it still says. A guard, not
+/// the process was started with; an empty one isn't set) or a Codex one. From there the command
+/// asks the app nothing: Claude's way to Pitwall is the team radio, with its switch per tool and
+/// its one project, and so is Codex's. What the command says of itself (its help, its version) it still says. A guard, not
 /// a wall: whatever runs as the user can read the line's file.
 fn asked(words: &[String], vars: impl Iterator<Item = (OsString, OsString)>) -> Result<Parsed, Unasked> {
     let parsed = parse(words).map_err(Unasked::Usage)?;
-    let names = vars.filter(|(_, value)| !value.is_empty()).map(|(name, _)| name.to_string_lossy().into_owned());
-    if matches!(parsed, Parsed::Call { .. }) && process::in_claude_session(names) {
+    let names: Vec<String> = vars.filter(|(_, value)| !value.is_empty()).map(|(name, _)| name.to_string_lossy().into_owned()).collect();
+    if matches!(parsed, Parsed::Call { .. }) && process::in_claude_session(names.iter().cloned()) {
         return Err(Unasked::InsideClaude);
+    }
+    if matches!(parsed, Parsed::Call { .. }) && process::in_codex_session(names.into_iter()) {
+        return Err(Unasked::InsideCodex);
     }
     Ok(parsed)
 }
@@ -804,6 +816,10 @@ pub fn cli_mode(mut args: impl Iterator<Item = OsString>) -> Option<i32> {
             eprintln!("{}", t!("core.cli.insideClaude"));
             FAILED
         }
+        Err(Unasked::InsideCodex) => {
+            eprintln!("{}", t!("core.cli.insideClaude.codex"));
+            FAILED
+        }
         Err(Unasked::Usage(usage)) => {
             eprintln!("{usage}");
             USAGE
@@ -836,9 +852,10 @@ mod tests {
         assert!(parse(&words("run migrate web --confirmed")).is_err());
     }
 
-    /// Run from a Claude Code session's shell, no call reaches the app, whatever it asks for:
-    /// the radio's switches would otherwise bind nothing. Its help and version are still said.
-    /// Told from the variables the command was started with, as `cli_mode` hands them over.
+    /// Run from a Claude Code session's shell, or a Codex session's, no call reaches the app,
+    /// whatever it asks for: the radio's switches would otherwise bind nothing. Its help and
+    /// version are still said. Told from the variables the command was started with, as
+    /// `cli_mode` hands them over.
     #[test]
     fn nothing_is_asked_from_inside_a_claude_session() {
         let vars = |set: &[(&str, &str)]| set.iter().map(|(name, value)| (OsString::from(name), OsString::from(value))).collect::<Vec<_>>().into_iter();
@@ -852,9 +869,16 @@ mod tests {
             for mark in ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT"] {
                 assert_eq!(asked(&words(line), inside(mark)), Err(Unasked::InsideClaude), "{line:?} is held with {mark} set");
             }
+            for mark in ["CODEX_THREAD_ID", "CODEX_SESSION_ID"] {
+                assert_eq!(asked(&words(line), inside(mark)), Err(Unasked::InsideCodex), "{line:?} is held with {mark} set");
+            }
+            // Codex's own home set in the user's terminal is no session.
+            assert!(matches!(asked(&words(line), vars(&[("CODEX_HOME", "/Users/me/.codex"), ("CODEX_THREAD_ID", "")])), Ok(Parsed::Call { .. })), "{line:?}");
         }
-        assert_eq!(asked(&words("--help"), inside("CLAUDECODE")), Ok(Parsed::Help));
-        assert_eq!(asked(&words("--version"), inside("CLAUDECODE")), Ok(Parsed::Version));
-        assert!(matches!(asked(&words("bogus"), inside("CLAUDECODE")), Err(Unasked::Usage(_))));
+        for mark in ["CLAUDECODE", "CODEX_THREAD_ID"] {
+            assert_eq!(asked(&words("--help"), inside(mark)), Ok(Parsed::Help));
+            assert_eq!(asked(&words("--version"), inside(mark)), Ok(Parsed::Version));
+            assert!(matches!(asked(&words("bogus"), inside(mark)), Err(Unasked::Usage(_))));
+        }
     }
 }

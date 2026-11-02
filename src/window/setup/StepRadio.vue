@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 import Icon from "../../components/Icon.vue";
 import Rich from "../../components/Rich.vue";
 import Spinner from "../../components/Spinner.vue";
+import { agentsTab } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { api, snapshot } from "../../lib/store";
 
@@ -57,7 +58,7 @@ async function turnOn(): Promise<void> {
             <template #command><code>claude mcp add</code></template>
           </Rich>
         </li>
-        <li>{{ t("setup.radio.acts") }}</li>
+        <li>{{ t(agentsTab ? "setup.radio.acts.agents" : "setup.radio.acts") }}</li>
       </ul>
     </div>
 

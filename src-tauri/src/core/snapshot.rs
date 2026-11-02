@@ -18,6 +18,8 @@ pub struct Owner {
 #[serde(rename_all = "camelCase")]
 pub struct LiveSession {
     pub id: String,
+    /// The agent it is a session of.
+    pub agent: Agent,
     /// `working` | `waiting`
     pub phase: SessionPhase,
     /// While it waits: the turn it waits with.
@@ -113,6 +115,11 @@ pub struct Snapshot {
     /// window keeps the one taken last. 0 in the one `notify` compares, so it never counts as a
     /// change.
     pub seq: u64,
+    /// Every agent, in `Agent::ALL`'s order, whether on or not (`agents.rs`).
+    pub agents: Vec<crate::agent::AgentInfo>,
+    /// When the latest event of Codex's hook came, to the minute: none before the first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codex_heard: Option<u64>,
 }
 
 /// The last `Snapshot::seq` given.
@@ -146,7 +153,7 @@ impl Core {
         // Crashes are told, servers that came up are heard (`signals.rs`), the lock let go first:
         // however many turned at once, each sound once.
         let (crashed, up): (Vec<_>, Vec<_>) = turned.into_iter().partition(|(_, _, crashed)| *crashed);
-        self.signals(crashed.into_iter().map(|(path, name, _)| Signal { kind: SignalKind::ServerCrashed, path, name, detail: None }).collect());
+        self.signals(crashed.into_iter().map(|(path, name, _)| Signal { kind: SignalKind::ServerCrashed, path, name, detail: None, agent: Agent::Claude }).collect());
         if !up.is_empty() {
             let up: Vec<&str> = up.iter().map(|(path, ..)| path.as_str()).collect();
             self.sound(&up, |sounds| &sounds.server_ready);
@@ -333,5 +340,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         projects,
         radio_calls: inner.radio.noted,
         seq: 0,
+        agents: super::agents::agent_infos(inner),
+        codex_heard: inner.codex_heard,
     }
 }

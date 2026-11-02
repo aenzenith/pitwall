@@ -8,7 +8,7 @@ import { compactText, modelName, moneyText } from "./fuel";
 import { fuzzy } from "./fuzzy";
 import { t, type Key } from "./i18n";
 import { stamp } from "./period";
-import type { Project, SessionOrigin, SessionRow, SessionSpan, TerminalView, Turn } from "./types";
+import type { Agent, Project, SessionOrigin, SessionRow, SessionSpan, TerminalView, Turn } from "./types";
 
 /** The list's sections, top to bottom. `open`: running, nothing going on, nothing unseen. */
 export type Section = "waiting" | "working" | "open" | "ended";
@@ -177,10 +177,16 @@ export function statusLine(row: SessionRow, now: number): Status {
 export type OriginIcon = "pitwall" | "editor" | "terminal" | "external" | "info";
 
 /** `short` for the row (a VS Code window by its name when that isn't the project's), `long` for
- * the details and the row's tooltip. */
-export type OriginView = { icon: OriginIcon; short: string; long: string };
+ * the details and the row's tooltip; `icon` null: none. */
+export type OriginView = { icon: OriginIcon | null; short: string; long: string };
 
-export function originView(origin: SessionOrigin, project: string, editor: string | undefined): OriginView {
+/** Where a session of `agent` runs, as the row and the details name it. Codex's is known only in
+ * the tabs Pitwall started it in: any other is "elsewhere". */
+export function originView(origin: SessionOrigin, project: string, editor: string | undefined, agent: Agent = "claude"): OriginView {
+  if (agent === "codex" && origin.kind !== "pitwall") {
+    const text = t("sessions.origin.elsewhere");
+    return { icon: null, short: text, long: text };
+  }
   const app = editorName(editor);
   switch (origin.kind) {
     case "pitwall": {
@@ -284,7 +290,7 @@ export function sessionWaits(rows: SessionRow[]): Map<string, Turn["kind"]> {
 
 /** The command that continues it in a terminal. */
 export function resumeCommand(row: SessionRow): string {
-  return `claude --resume ${row.id}`;
+  return row.agent === "codex" ? `codex resume ${row.id}` : `claude --resume ${row.id}`;
 }
 
 /* ---------- spend ---------- */

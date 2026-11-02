@@ -1,7 +1,7 @@
 //! What was open when Pitwall quit, and putting it back at the next start: the dev servers it
 //! ran, the commands it kept running, and its terminal tabs (a Claude tab comes back with its
-//! session, `claude --resume`, unless that session isn't known to have ended: it may run
-//! somewhere else by then; a shell tab as a new shell). Unlike a restart for an update
+//! session, `claude --resume`, a Codex tab with its own, `codex resume`, unless that session isn't
+//! known to have ended: it may run somewhere else by then; a shell tab as a new shell). Unlike a restart for an update
 //! (`restore.rs`) nothing a terminal showed is kept: the record names projects, command ids,
 //! session ids, the tab names the user gave and how the panel laid the tabs out (by their
 //! places, `layout.rs`), and is read once and deleted at the next start. An administrator's tab
@@ -27,13 +27,16 @@ const FILE: &str = "last-session.json";
 struct OpenTab {
     /// The name the user gave it; a tab that had its own name gets a new one.
     name: Option<String>,
-    /// The Claude session that ran in it.
+    /// The agent's session that ran in it.
     session: Option<String>,
+    /// Whose that session is; none written (every record before Codex): Claude's.
+    #[serde(skip_serializing_if = "Agent::is_claude")]
+    agent: Agent,
     /// The shell of the list it ran on Windows; none comes back as Command Prompt there, and
     /// elsewhere as the user's own shell.
     #[serde(deserialize_with = "shell_or_none", skip_serializing_if = "Option::is_none")]
     shell: Option<Shell>,
-    /// The Claude account it ran with, by id; none: the main one (`accounts/`).
+    /// The account it ran with, by id, its session's agent's; none: the main one (`accounts/`).
     #[serde(skip_serializing_if = "Option::is_none")]
     account: Option<String>,
 }
@@ -153,7 +156,7 @@ impl Core {
         }
         for tab in &standing.tabs {
             let name = tab.renamed.then(|| tab.name.clone());
-            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), shell: tab.shell, account: tab.account.clone() })));
+            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), agent: tab.agent, shell: tab.shell, account: tab.account.clone() })));
         }
         let elevated: Vec<usize> = standing.elevated.iter().map(|(path, _)| entry(path)).collect();
         for (at, server, command, tab) in filled {
@@ -283,14 +286,18 @@ impl Core {
         self.notify();
     }
 
-    /// What a tab comes back as: its Claude session going on, or a shell. None for a session
+    /// What a tab comes back as: its agent's session going on, or a shell. None for a session
     /// that isn't known to have ended: a running session is never opened a second time
-    /// (`reveal.rs`), so its tab stays away.
+    /// (`reveal.rs`), so its tab stays away; so does a Codex session while Codex is off.
     fn launch_of(&self, tab: &OpenTab) -> Option<Launch> {
         let Some(session) = &tab.session else {
             return Some(Launch::Shell { shell: tab.shell, elevated: false });
         };
-        matches!(self.liveness(session), Liveness::Stopped | Liveness::Ended).then(|| Launch::Resume { session: session.clone() })
+        let session = session.clone();
+        match tab.agent {
+            Agent::Claude => matches!(self.liveness(&session), Liveness::Stopped | Liveness::Ended).then_some(Launch::Resume { session }),
+            Agent::Codex => matches!(self.codex_liveness(&session), Liveness::Stopped | Liveness::Ended).then_some(Launch::ResumeCodex { session }),
+        }
     }
 
     fn put_back(self: &Arc<Self>, kept: Kept) {
@@ -303,12 +310,12 @@ impl Core {
                     opened.push(None);
                     continue;
                 };
-                let account = self.account_back(tab.account.as_deref());
+                let account = self.account_back_for(&launch, tab.account.as_deref());
                 let open = || self.open_terminal_with(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false, Some(&account));
                 let id = match &launch {
                     // Once, whoever opens it first: a click in the terminals' history may have
-                    // opened it since the start, before Claude Code lists its process.
-                    Launch::Resume { session } => match self.open_once(session, open) {
+                    // opened it since the start, before its agent lists its process.
+                    Launch::Resume { session } | Launch::ResumeCodex { session } => match self.open_once(session, open) {
                         Opened::New(view) => {
                             self.board_resumed(session, view.id);
                             Some(view.id)
@@ -356,6 +363,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.join("registry"),
                 claude_dir: tmp.join("claude").join("projects"),
+                codex_home: tmp.join("codex"),
                 settings_file: tmp.join("config").join("settings.json"),
                 claude_settings: tmp.join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -381,7 +389,7 @@ mod tests {
         let core = core_in(tmp.path());
         core.add_project(&listed).unwrap();
 
-        let tab = |session: Option<&str>| OpenTab { name: None, session: session.map(str::to_string), shell: None, account: None };
+        let tab = |session: Option<&str>| OpenTab { session: session.map(str::to_string), ..OpenTab::default() };
         let record = Record {
             v: 1,
             at: now_ms(),
@@ -468,6 +476,8 @@ mod tests {
         let side_by_side = |left, right| PaneNode::Split { dir: SplitDir::Row, sizes: vec![0.25, 0.75], kids: vec![pane(left), pane(right)] };
         core.set_terminal_layout(&project, Some(TerminalLayout { tree: side_by_side(second, first), focus: Some(first), zoom: None, rev: 0 }));
         core.save_last_session();
+        // Claude's and shell tabs are written as before Codex: a record an older app reads the same.
+        assert!(!fs::read_to_string(core.resume_file()).unwrap().contains("agent"));
         core.close_terminal(first);
         core.close_terminal(second);
 
@@ -562,7 +572,7 @@ mod tests {
         let claude = tmp.path().join("claude");
         let core = core_in(tmp.path());
         let id = "9bb85e86-f618-4861-9858-03ec8fc36c28";
-        let tab = OpenTab { name: None, session: Some(id.into()), shell: None, account: None };
+        let tab = OpenTab { session: Some(id.into()), ..OpenTab::default() };
 
         // Its log, written a moment ago, and Claude Code's file of the process that runs it.
         let log = claude.join("projects").join("-paddock").join(format!("{id}.jsonl"));
@@ -580,6 +590,11 @@ mod tests {
         drop(sleeper);
         assert_eq!(core.launch_of(&tab), Some(Launch::Resume { session: id.into() }));
         assert_eq!(core.launch_of(&OpenTab::default()), Some(Launch::Shell { shell: None, elevated: false }));
+
+        // A Codex tab's session while Codex is off (no home of it here): nothing of Codex is read
+        // for it, and the tab stays away rather than start Claude or Codex on that id.
+        let codex = OpenTab { session: Some(id.into()), agent: Agent::Codex, ..OpenTab::default() };
+        assert_eq!(core.launch_of(&codex), None);
     }
 
     /// Two processes on one session write one log. A session opened again in a tab, where
@@ -619,11 +634,11 @@ mod tests {
         let started = process::wait_until(Duration::from_secs(15), || !core.terminal_buffer(tab).data.is_empty());
         core.write_terminal(tab, "sh -c 'sleep 30; true' claude\r");
         thread::sleep(super::super::terminal::STARTING);
-        let held = started && process::wait_until(Duration::from_secs(15), || core.claude_may_run_in(tab));
+        let held = started && process::wait_until(Duration::from_secs(15), || core.agent_may_run_in(tab));
 
         let (mut tabs, mut restored, mut clicked, mut given, mut followed) = (Vec::new(), None, None, None, None);
         if held {
-            let record = Record { v: 1, at: now_ms(), projects: vec![OpenProject { path: project.clone(), tabs: vec![OpenTab { name: None, session: Some(id.into()), shell: None, account: None }], ..OpenProject::default() }] };
+            let record = Record { v: 1, at: now_ms(), projects: vec![OpenProject { path: project.clone(), tabs: vec![OpenTab { session: Some(id.into()), ..OpenTab::default() }], ..OpenProject::default() }] };
             write_private(&core.resume_file(), &serde_json::to_string(&record).unwrap()).unwrap();
             core.resume_start(false);
             core.resume_restore(false);

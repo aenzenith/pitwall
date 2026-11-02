@@ -4,6 +4,7 @@ import { onMounted, ref } from "vue";
 import Spinner from "../../components/Spinner.vue";
 import { useBackdropClose } from "../../lib/dialog";
 import { openUnfocused, useReturnFocus } from "../../lib/dialogFocus";
+import { cardAgent } from "../../lib/board";
 import { t } from "../../lib/i18n";
 import { api } from "../../lib/store";
 import type { Card } from "../../lib/types";
@@ -52,7 +53,7 @@ async function remove(): Promise<void> {
         <div class="dd-card">{{ card.title }}</div>
       </div>
       <p class="dd-text">{{ t("board.delete.body") }}</p>
-      <p v-if="running" class="dd-text">{{ t("board.delete.running") }}</p>
+      <p v-if="running" class="dd-text">{{ t(cardAgent(card) === "codex" ? "board.delete.running.codex" : "board.delete.running") }}</p>
       <p v-if="error" class="dd-error" role="alert">{{ error }}</p>
       <div class="dd-actions">
         <button ref="cancelButton" type="button" class="dd-control" @click="dialog?.close()">{{ t("common.cancel") }}</button>

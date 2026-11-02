@@ -7,11 +7,12 @@ import { useBackdropClose } from "../../lib/dialog";
 import { openUnfocused, useReturnFocus } from "../../lib/dialogFocus";
 import { t } from "../../lib/i18n";
 import { api } from "../../lib/store";
-import type { ClaudeAccount } from "../../lib/types";
+import type { Agent, ClaudeAccount } from "../../lib/types";
 
 /** Asks before an added account goes: Remove takes back what Pitwall added to its folder (the
- * folder and its sign-in stay); Esc, Cancel or a click outside keeps it. */
-const props = defineProps<{ account: ClaudeAccount }>();
+ * folder and its sign-in stay); Esc, Cancel or a click outside keeps it. `agent`: whose account
+ * (none: Claude's). */
+const props = defineProps<{ account: ClaudeAccount; agent?: Agent }>();
 const emit = defineEmits<{ close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
@@ -31,7 +32,7 @@ async function remove(): Promise<void> {
   busy.value = true;
   error.value = "";
   try {
-    await api.accountRemove(props.account.id);
+    await (props.agent && props.agent !== "claude" ? api.agentAccountRemove(props.agent, props.account.id) : api.accountRemove(props.account.id));
     dialog.value?.close();
   } catch (reason) {
     error.value = String(reason);

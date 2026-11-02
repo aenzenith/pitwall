@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AgentMark from "../../components/AgentMark.vue";
 import ClaudeDot from "../../components/ClaudeDot.vue";
 import type { Lane, Live, Tick } from "../../lib/day";
 import { t } from "../../lib/i18n";
@@ -62,7 +63,8 @@ function onKey(event: KeyboardEvent): void {
       <span class="names">
         <span class="name">{{ lane.project.name }}</span>
         <span v-if="lane.total" class="lane-total">{{ lane.total }}</span>
-        <span v-if="lane.tokens" class="lane-total">{{ lane.tokens }}<template v-if="lane.week"> · <span class="lane-week">{{ lane.week }}</span></template></span>
+        <!-- Each agent's tokens apart, by its mark, once Codex used any there (D8). -->
+        <span v-if="lane.tokens || lane.codexTokens" class="lane-total"><template v-if="lane.tokens"><AgentMark v-if="lane.codexTokens" class="lane-agent" agent="claude" :size="9" />{{ lane.tokens }}<template v-if="lane.week"> · <span class="lane-week">{{ lane.week }}</span></template></template><template v-if="lane.codexTokens"><AgentMark :class="['lane-agent', { apart: lane.tokens }]" agent="codex" :size="9" />{{ lane.codexTokens }}</template></span>
       </span>
     </span>
     <!-- Drawn for the eye; VoiceOver hears each block as the arrows reach it. -->
@@ -161,6 +163,15 @@ function onKey(event: KeyboardEvent): void {
 
 .lane-week {
   color: var(--claude-text);
+}
+
+.lane-agent {
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+
+.lane-agent.apart {
+  margin-left: 8px;
 }
 
 /* Square, like the blocks on it. */

@@ -37,6 +37,11 @@ const CARD_NOTE_MAX: usize = 8_000;
 const NO_PROJECT: &str = "This folder isn't one of Pitwall's projects, so there is nothing here to ask Pitwall about.";
 const SWITCHED_OFF: &str = "The user has switched this tool off in Pitwall (Settings › Claude).";
 const NO_CARD: &str = "This session was given no card on Pitwall's board, so there is none to note on.";
+/// Codex's own words: its radio is its own switch, in its own part of Settings.
+const CODEX_SWITCHED_OFF: &str = "The user has switched this tool off in Pitwall (Settings › Agents › Codex).";
+const CODEX_UNTIED: &str = "Pitwall can't tell which Codex session this call comes from, so it does nothing for it. It answers a Codex session \
+     started in Pitwall's terminal, once Pitwall's hook is approved in Codex with /hooks; a session run by Codex's shared background server \
+     can't be told apart from the others it runs.";
 
 type Outcome = (Reply, CallResult);
 
@@ -135,6 +140,9 @@ impl Core {
     /// One call, through the gates (see the top of `radio`): the radio on, a tool there is, a
     /// folder of a listed project, the tool's switch.
     pub(super) fn radio_call(self: &Arc<Self>, caller: &Caller, tool: &str, args: &Value) -> Reply {
+        if let Some(daemon) = self.radio_codex_parent(caller.ppid) {
+            return self.radio_codex_call(caller.ppid, daemon, tool, args);
+        }
         let (on, allowed) = {
             let inner = self.lock();
             (inner.settings.radio.on, inner.settings.radio.allows(tool))
@@ -150,19 +158,76 @@ impl Core {
         let (reply, result) = match self.radio_project(&caller.cwd) {
             None => refused(NO_PROJECT),
             Some(_) if !allowed => refused(SWITCHED_OFF),
-            Some(project) => match tool.name {
-                "server_status" => status(&project),
-                "server_output" => self.radio_output(&project, args),
-                "server_restart" => self.radio_act(&project, args),
-                "run_command" => self.radio_run(&project, args),
-                "board_add" => self.radio_card(&project, args),
-                "board_note" => self.radio_card_note(&project, session.as_deref(), args),
-                _ => refused(format!("Unknown tool: {}", tool.name)),
-            },
+            Some(project) => self.radio_dispatch(Agent::Claude, &project, tool.name, session.as_deref(), args),
         };
 
         self.radio_note(session.as_deref(), tool.name, result);
         reply
+    }
+
+    /// The tool `name` for `agent`'s session, its gates passed.
+    fn radio_dispatch(self: &Arc<Self>, agent: Agent, project: &ProjectView, name: &str, session: Option<&str>, args: &Value) -> Outcome {
+        match name {
+            "server_status" => status(project),
+            "server_output" => self.radio_output(agent, project, args),
+            "server_restart" => self.radio_act(agent, project, args),
+            "run_command" => self.radio_run(project, args),
+            "board_add" => self.radio_card(project, args),
+            "board_note" => self.radio_card_note(agent, project, session, args),
+            _ => refused(format!("Unknown tool: {name}")),
+        }
+    }
+
+    /// Whether the server that calls was started by Codex (its parent is Codex's program), and
+    /// then whether by its shared server; none for any other caller, Claude's as before. A Claude
+    /// Code session's own pid among those read already is Claude's without a look at the
+    /// processes.
+    pub(super) fn radio_codex_parent(&self, ppid: u32) -> Option<bool> {
+        if ppid == 0 || self.running_cached().is_some_and(|running| running.values().any(|run| run.pid == ppid)) {
+            return None;
+        }
+        let table = process::process_table()?;
+        let parent = table.get(&ppid).filter(|parent| process::is_codex(parent))?;
+        Some(register::is_codex_daemon(parent))
+    }
+
+    /// A Codex call, through its own gates: Codex's radio on (and Codex), a tool there is, the
+    /// one session it comes from, that session's folder in a listed project, the tool's switch.
+    /// Codex's server is told no session and its folder isn't the session's: what it acts on
+    /// comes from the session alone, and a call tied to none, or to more than one, is refused.
+    fn radio_codex_call(self: &Arc<Self>, ppid: u32, daemon: bool, tool: &str, args: &Value) -> Reply {
+        if !self.codex_radio_on() {
+            return Reply::refused(mcp::CODEX_RADIO_OFF);
+        }
+        let allowed = self.lock().settings.radio.allows(tool);
+        let Some(tool) = TOOLS.iter().find(|known| known.name == tool) else {
+            return Reply::refused(format!("Unknown tool: {tool}"));
+        };
+        // Noted nowhere: there is no session to note it for.
+        let Some((session, cwd)) = (!daemon).then(|| self.radio_codex_session(ppid)).flatten() else {
+            return Reply::refused(CODEX_UNTIED);
+        };
+
+        let (reply, result) = match self.radio_project(&cwd) {
+            None => refused(NO_PROJECT),
+            Some(_) if !allowed => refused(CODEX_SWITCHED_OFF),
+            Some(project) => self.radio_dispatch(Agent::Codex, &project, tool.name, Some(&session), args),
+        };
+
+        self.radio_note(Some(&session), tool.name, result);
+        reply
+    }
+
+    /// The one Codex session that runs as process `pid` (as the hook told it, `codex_running`),
+    /// or under it through a process in between, and its folder.
+    fn radio_codex_session(&self, pid: u32) -> Option<(String, String)> {
+        let running = self.codex_running()?;
+        let mut tied = running.into_iter().filter(|(_, run)| run.pid == pid || run.lineage.iter().take(2).any(|own| *own == pid));
+        let (session, run) = tied.next()?;
+        if tied.next().is_some() {
+            return None;
+        }
+        Some((session, run.cwd?))
     }
 
     /// The listed project that holds `cwd`: the longest match, each folder taken as the file
@@ -214,7 +279,7 @@ impl Core {
         }
     }
 
-    fn radio_output(&self, project: &ProjectView, args: &Value) -> Outcome {
+    fn radio_output(&self, agent: Agent, project: &ProjectView, args: &Value) -> Outcome {
         let count = args.get("lines").and_then(Value::as_u64).map_or(OUTPUT_LINES_DEFAULT, |count| (count as usize).clamp(1, OUTPUT_LINES_MAX));
 
         let lines = match text(args, "command") {
@@ -225,8 +290,9 @@ impl Core {
             None => {
                 let lines = self.output(&project.path);
                 // Marked in the output Claude read, each time: of several in a row the output
-                // keeps the last (`output.rs`: `keep_line`).
-                if !lines.is_empty() {
+                // keeps the last (`output.rs`: `keep_line`). The marks say Claude: Codex's
+                // reading leaves none.
+                if !lines.is_empty() && agent == Agent::Claude {
                     self.push_marker(&project.path, "claude-read", None);
                 }
                 lines
@@ -240,7 +306,7 @@ impl Core {
 
     /// Start, stop or restart, routed as a click on the project's button is, and answered once
     /// its spinner would stop.
-    fn radio_act(self: &Arc<Self>, project: &ProjectView, args: &Value) -> Outcome {
+    fn radio_act(self: &Arc<Self>, agent: Agent, project: &ProjectView, args: &Value) -> Outcome {
         let Some(action) = text(args, "action").and_then(Action::parse) else {
             return refused("`action` is one of: start, stop, restart.");
         };
@@ -265,12 +331,16 @@ impl Core {
         };
         // As a click is, but for the browser: nobody asked to see this start's address. Marked
         // in the output where it happens: a stop once it is under way, a start where its run
-        // begins (`output.rs`: `mark_run`). A start the core refuses leaves no mark.
+        // begins (`output.rs`: `mark_run`). A start the core refuses leaves no mark, and nor does
+        // Codex's: the marks say Claude. Its start is routed as Claude's over the radio is, the
+        // commands marked "ask first" held the same way, as Codex's (`Origin::Codex`).
+        let marked = agent == Agent::Claude;
         self.mark_pending(path, action);
-        if action != Action::Stop {
+        if action != Action::Stop && marked {
             self.lock().asked_by_claude.insert(path.to_string(), kind);
         }
-        if self.route(path, action, false, Origin::Claude) && action == Action::Stop {
+        let by = if marked { Origin::Claude } else { Origin::Codex };
+        if self.route(path, action, false, by) && action == Action::Stop && marked {
             self.push_marker(path, kind, None);
         }
         self.radio_wait(ACT_LIMIT, |inner| start_done(inner, path));
@@ -338,7 +408,7 @@ impl Core {
     /// with Claude's name, the day and the time over it; the card goes to review, which is told
     /// as it is of a card the board moves there itself. Only a card of this project that is with
     /// Claude or in review: one the user put elsewhere stays theirs.
-    fn radio_card_note(&self, project: &ProjectView, session: Option<&str>, args: &Value) -> Outcome {
+    fn radio_card_note(&self, agent: Agent, project: &ProjectView, session: Option<&str>, args: &Value) -> Outcome {
         let Some(note) = text(args, "note").filter(|note| note.chars().count() <= NOTE_MAX) else {
             return refused(format!("`note` is what to write on the card ({NOTE_MAX} characters at most)."));
         };
@@ -357,7 +427,7 @@ impl Core {
         let Some((id, column, before)) = held else {
             return refused(NO_CARD);
         };
-        let signed = format!("Claude · {} {}\n{note}", crate::clock::day_name(now), crate::clock::clock(now as i64));
+        let signed = format!("{} · {} {}\n{note}", agent.name(), crate::clock::day_name(now), crate::clock::clock(now as i64));
         let noted = if before.is_empty() { signed } else { format!("{before}\n\n{signed}") };
         // Counted as the dialog's field counts.
         let over = noted.encode_utf16().count().saturating_sub(CARD_NOTE_MAX);
@@ -378,7 +448,7 @@ impl Core {
         self.board_changed(board);
         // Once, where it got there; the board's own pass tells only of the cards it moves.
         if moved {
-            self.signal(Signal { kind: SignalKind::CardReview, path: project.path.clone(), name: project.name.clone(), detail: None });
+            self.signal(Signal { kind: SignalKind::CardReview, path: project.path.clone(), name: project.name.clone(), detail: None, agent });
         }
 
         (Reply::ok(format!("Noted on the card \"{title}\", which is in review now.")), CallResult::Noted)

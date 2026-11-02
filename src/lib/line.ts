@@ -1,15 +1,17 @@
 // The line of board cards that wait for the 5-hour session's refill. The core gives them one at a
 // time (`board_due_at` in src-tauri/src/core/board.rs) in the board's order: the projects as
 // listed, then each one's Up next from the top; a card of a folder no longer listed is never
-// given. Here: each waiting card's place in its line, where a card told to wait now would stand,
-// and what a waiting card says of when it is given.
+// given. Each agent's refill has a line of its own (the card's `start.agent`). Here: each waiting
+// card's place in its line, where a card told to wait now would stand, and what a waiting card
+// says of when it is given.
 
 import { computed } from "vue";
 
+import { agentOf } from "./agents";
 import { t } from "./i18n";
-import { timeParams } from "./start";
+import { momentDay, timeParams } from "./start";
 import { board, snapshot } from "./store";
-import type { Card, CardSchedule } from "./types";
+import type { Agent, Card, CardSchedule } from "./types";
 
 /** Two moments this close are one refill: a session's next refill is hours after the last, and the
  * core moves every card that waits for it to each new reading of its moment (`board_refill`). */
@@ -18,7 +20,7 @@ const SAME_REFILL_MS = 60_000;
 /** Two cards stand in one line: both wait for the same refill, or both had theirs come and wait
  * their turn (`line`), whatever moment their line last moved at. */
 function sameLine(a: CardSchedule, b: CardSchedule): boolean {
-  if (!!a.line !== !!b.line) return false;
+  if (!!a.line !== !!b.line || agentOf(a.start?.agent) !== agentOf(b.start?.agent)) return false;
   return !!a.line || Math.abs(a.at - b.at) < SAME_REFILL_MS;
 }
 
@@ -38,11 +40,12 @@ export function linePlaces(cards: Card[], paths: string[]): Map<string, number> 
   return places;
 }
 
-/** Where the card `id` would stand, told now to wait for the refill at `at`, among the cards
+/** Where the card `id` would stand, told now to wait for `agent`'s refill at `at`, among the cards
  * that wait for it already. Null for a card no line takes (not up next, or not of a listed
  * project). */
-export function placeAtRefill(cards: Card[], paths: string[], id: string, at: number): number | null {
-  const told = cards.map((card) => (card.id === id ? { ...card, schedule: { at, refill: true, start: {} } } : card));
+export function placeAtRefill(cards: Card[], paths: string[], id: string, at: number, agent: Agent = "claude"): number | null {
+  const start = agent === "claude" ? {} : { agent };
+  const told = cards.map((card) => (card.id === id ? { ...card, schedule: { at, refill: true, start } } : card));
   return linePlaces(told, paths).get(id) ?? null;
 }
 
@@ -52,8 +55,8 @@ const listed = computed(() => (snapshot.value?.projects ?? []).map((project) => 
 export const places = computed(() => linePlaces(board.value ?? [], listed.value));
 
 /** `placeAtRefill` on the board as it is. */
-export function boardPlaceAtRefill(id: string, at: number): number | null {
-  return placeAtRefill(board.value ?? [], listed.value, id, at);
+export function boardPlaceAtRefill(id: string, at: number, agent: Agent = "claude"): number | null {
+  return placeAtRefill(board.value ?? [], listed.value, id, at, agent);
 }
 
 const englishOrdinal = new Intl.PluralRules("en", { type: "ordinal" });
@@ -71,5 +74,7 @@ export function placeParams(place: number): { place: number; nth: string } {
 export function waitText(schedule: CardSchedule, place: number | null, lang: string): string {
   if (schedule.line) return place === null ? t("start.waitsTurn") : t("start.waitsTurnAt", placeParams(place));
   const time = timeParams(schedule.at, lang);
+  const day = momentDay(schedule.at, schedule.start?.agent, lang);
+  if (day) return place !== null && place > 1 ? t("start.givenAfterDay", { ...time, day, ...placeParams(place) }) : t("start.givenAtDay", { ...time, day });
   return place !== null && place > 1 ? t("start.givenAfter", { ...time, ...placeParams(place) }) : t("start.givenAt", time);
 }

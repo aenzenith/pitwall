@@ -140,6 +140,7 @@ impl Core {
             let heard = [day.map(|d| d.end), last(id).filter(within), log.and_then(|l| l.created).filter(within)];
             rows.push(SessionRow {
                 id: id.clone(),
+                agent: day.map_or(Agent::Claude, |d| d.agent),
                 path: listed.map(|(path, _)| path.clone()),
                 project: listed.map_or_else(|| folder_name(&folder), |(_, name)| name.clone()),
                 folder,
@@ -179,7 +180,7 @@ impl Core {
             .into_iter()
             .filter(|row| row.path.as_deref().is_some_and(|listed| same_path(listed, path)))
             .filter(|row| folder.join(format!("{}.jsonl", row.id)).is_file())
-            .map(|row| PastSession { id: row.id, title: row.title, at: row.since })
+            .map(|row| PastSession { id: row.id, agent: Agent::Claude, title: row.title, at: row.since })
             .collect()
     }
 }
@@ -189,6 +190,8 @@ impl Core {
 #[serde(rename_all = "camelCase")]
 pub struct PastSession {
     pub id: String,
+    /// The agent it is a session of: `claude --resume` or `codex resume` opens it again.
+    pub agent: Agent,
     pub title: Option<String>,
     pub at: Option<u64>,
 }

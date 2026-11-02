@@ -35,6 +35,15 @@
 //! one fresh quota: they are given one at a time, each next one once Claude is no longer at work
 //! on the one before, or ten minutes after it when Claude was never seen at work on it
 //! (`Board::line_held`).
+//!
+//! A card goes to an agent (`agent.rs`): Claude, or Codex, as its project's settings say or as
+//! chosen for it, and only while that agent is on. Its agent is that of its start
+//! (`Card::agent`), and everything above holds for each agent the same way: a Codex card opens a
+//! Codex tab (`--no-daemon`, so its session is told from the tab's processes, `codex_running`),
+//! follows that session, opens it again with `codex resume`, and waits for Codex's own refill.
+//! The cards that wait for one agent's refill stand in that agent's line: one agent's quota is
+//! not the other's. A session Codex runs elsewhere (under its daemon) is never bound to a card
+//! by its processes, only by the user linking it.
 
 use std::io::ErrorKind;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -264,13 +273,28 @@ pub struct Card {
     /// The images pasted into its note, by number.
     #[serde(default)]
     pub images: Vec<CardImage>,
-    /// The model and the mode its last new session was started with; none before the first.
+    /// The agent, the model and the mode its last new session was started with; none before the
+    /// first. Linked to a session Pitwall didn't start, that session's agent (with its project's
+    /// model and mode for it), unless it was that agent's already.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "part_or_none")]
     pub start: Option<Start>,
     /// In `queued`: told to wait, the core gives it when its moment comes (`board_due`). It goes
     /// when the card is given, edited, moved to another column or to another project.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "part_or_none")]
     pub schedule: Option<Schedule>,
+    /// In `claude`, given to Codex, no session of its own found yet while Codex still runs in its
+    /// tab, for up to `UNSEEN_MS` after the give (`follow_board`): it is starting, and holds its
+    /// line. This run's only: never read from the file, written only while true.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not", skip_deserializing)]
+    pub starting: bool,
+}
+
+impl Card {
+    /// The agent of the session it follows: that of its start, Claude before it has one (and for
+    /// every card of a file that names none).
+    pub(super) fn agent(&self) -> Agent {
+        self.start.map(|start| start.agent).unwrap_or_default()
+    }
 }
 
 pub(super) struct Board {
@@ -297,8 +321,8 @@ pub(super) struct Board {
     /// `board_due_at`): the next run would give it at its moment, a second time.
     filed_waiting: HashSet<String>,
     /// The cards given from the line of those that waited for the refill (at their turn, or by
-    /// hand), while Claude may still be at work on them: the next in line waits for them all
-    /// (`line_held`). This run's own: the Claude a card was given to ends with the run.
+    /// hand), while Claude may still be at work on them: the next in that agent's line waits for
+    /// them all (`line_held`). This run's own: the Claude a card was given to ends with the run.
     line: HashMap<String, Lined>,
     /// Pitwall quits (`board_quit`): no card is given at its moment from then on, while the
     /// loop that looks at them still runs.
@@ -313,11 +337,13 @@ struct Lined {
     /// Its Claude has been seen at work since (`follow_board`): working, or waiting on a
     /// permission or a question.
     worked: bool,
+    /// The agent it was given to: whose line it holds.
+    agent: Agent,
 }
 
 impl Lined {
-    fn given(at: u64) -> Self {
-        Self { at, worked: false }
+    fn given(at: u64, agent: Agent) -> Self {
+        Self { at, worked: false, agent }
     }
 }
 
@@ -415,6 +441,7 @@ impl Board {
             card.moved_at = now;
             card.rested = false;
             card.schedule = None;
+            card.starting = false;
         }
 
         let slots: Vec<usize> =
@@ -435,19 +462,20 @@ impl Board {
     /// past `ADOPT_MS` its own Claude never started in its tab (the board shows it closed): it
     /// holds nothing. Nor does one whose Claude wasn't seen at work within `UNSEEN_MS` of the
     /// give (`Lined::worked`): it stays in `claude`, and the next goes. The cards that no longer
-    /// hold the line are let go.
-    fn line_held(&mut self, now: u64) -> bool {
+    /// hold the line are let go. Each agent has a line of its own: `agent`'s is held by the cards
+    /// given to it alone.
+    fn line_held(&mut self, now: u64, agent: Agent) -> bool {
         let Self { cards, giving, line, .. } = self;
         line.retain(|id, lined| {
             giving.contains(id)
                 || cards.iter().any(|card| {
                     card.id == *id
                         && card.column == Column::Claude
-                        && (card.session.is_some() || now.saturating_sub(card.given_at.unwrap_or(card.moved_at)) <= ADOPT_MS)
+                        && (card.session.is_some() || card.starting || now.saturating_sub(card.given_at.unwrap_or(card.moved_at)) <= ADOPT_MS)
                         && (lined.worked || now.saturating_sub(lined.at) <= UNSEEN_MS)
                 })
         });
-        !line.is_empty()
+        line.values().any(|lined| lined.agent == agent)
     }
 }
 
@@ -624,6 +652,15 @@ fn no_card(id: &str) -> String {
     format!("no such card: {id}")
 }
 
+/// Why a card isn't given to `agent`: it is turned off (Settings), and an agent that is off is
+/// started for nothing.
+fn agent_off(agent: Agent) -> String {
+    match agent {
+        Agent::Claude => t!("board.agentOff.claude"),
+        Agent::Codex => t!("board.agentOff.codex"),
+    }
+}
+
 fn new_id(cards: &[Card], now: u64) -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     loop {
@@ -740,6 +777,7 @@ impl Core {
             images: held,
             start: None,
             schedule: None,
+            starting: false,
         };
         board.cards.push(card.clone());
         board.place(&card.id, Column::Queued, usize::MAX, now);
@@ -862,17 +900,18 @@ impl Core {
     /// followed where it is, with no tab opened (`None`); one that has ended opens again in a
     /// tab, as it was.
     ///
-    /// A new session starts with the model and in the mode of the card's project
+    /// A new session starts with the agent, the model and the mode of the card's project
     /// (`board_give_with`: with those chosen for it).
     pub fn board_give(self: &Arc<Self>, id: &str, give: Give, size: Option<(u16, u16)>) -> Result<Option<TerminalView>, String> {
         self.board_give_with(id, give, None, size)
     }
 
-    /// `board_give`, with the model and the mode chosen for the card (`chosen`). Without a
-    /// choice, a card that waited for its moment starts with what was chosen when it was told to
-    /// wait (it is given by hand now, and waits no longer); any other as its project's settings
-    /// say, or, going on without a session to go on with (`Give::Continue`), as it started last.
-    /// `Give::Plan` is plan mode whatever else holds.
+    /// `board_give`, with the agent, the model and the mode chosen for the card (`chosen`).
+    /// Without a choice, a card that waited for its moment starts with what was chosen when it was
+    /// told to wait (it is given by hand now, and waits no longer); any other as its project's
+    /// settings say (`give_start`), or, going on without a session to go on with
+    /// (`Give::Continue`), as it started last. `Give::Plan` is Claude's plan mode whatever else
+    /// holds. An agent that is off is given nothing (`launch_card`).
     ///
     /// A card on its way to Claude already (a tab is opening for it) is left to that: `None`.
     /// A card the board's file says waits is not given while that file can't be written, by
@@ -887,8 +926,8 @@ impl Core {
             let waited = card.schedule.take();
             let card = card.clone();
             // Taken from the line by hand: the next in line waits for it too.
-            if waited.is_some_and(|schedule| schedule.line) {
-                board.line.insert(id.to_string(), Lined::given(now_ms()));
+            if let Some(schedule) = waited.filter(|schedule| schedule.line) {
+                board.line.insert(id.to_string(), Lined::given(now_ms(), schedule.start.agent));
             }
             // Its schedule is off the file before anything starts (`board_due`).
             if waited.is_some() || board.filed_waiting.contains(id) {
@@ -900,7 +939,7 @@ impl Core {
         };
 
         let kept = card.start.filter(|_| give == Give::Continue);
-        let mut start = chosen.or(waited.map(|schedule| schedule.start)).or(kept).unwrap_or_else(|| self.project_start(&card.path));
+        let mut start = chosen.or(waited.map(|schedule| schedule.start)).or(kept).unwrap_or_else(|| self.give_start(&card.path));
         if give == Give::Plan {
             start.mode = Mode::Plan;
         }
@@ -910,10 +949,23 @@ impl Core {
         given
     }
 
-    /// How card `id` starts when nothing is chosen for it: as its project's settings say.
+    /// How card `id` starts when nothing is chosen for it: as its project's settings say
+    /// (`give_start`).
     pub fn board_start(&self, id: &str) -> Option<Start> {
         let path = self.board().find(id)?.path.clone();
-        Some(self.project_start(&path))
+        Some(self.give_start(&path))
+    }
+
+    /// How a card of the project at `path` starts when nothing is chosen for it: with the agent,
+    /// the model and the mode of the project's settings, while that agent is on; else with the
+    /// first agent that is, and the project's model and mode for it. Not under the board's lock:
+    /// it takes the core's.
+    fn give_start(&self, path: &str) -> Start {
+        let start = self.project_start(path);
+        if self.agent_on(start.agent) {
+            return start;
+        }
+        Agent::ALL.into_iter().find(|&agent| self.agent_on(agent)).map_or(start, |agent| Start { agent, ..start })
     }
 
     /// "Give now" on a card that waits for its moment: given at once, with what was chosen for
@@ -922,19 +974,25 @@ impl Core {
     /// it, so never twice for one. Nor is it given while the board's file can't be written
     /// (`board_noted`): refused, in the words the board has for that, it waits on.
     pub fn board_give_now(self: &Arc<Self>, id: &str, size: Option<(u16, u16)>) -> Result<Option<TerminalView>, String> {
+        // Before the board is locked: it takes the core's own lock.
+        let off: Vec<Agent> = Agent::ALL.into_iter().filter(|&agent| !self.agent_on(agent)).collect();
         let (card, schedule) = {
             let mut board = self.board();
             if board.giving.contains(id) {
                 return Ok(None);
             }
             let card = board.find_mut(id).ok_or_else(|| no_card(id))?;
+            // For an agent that is off: refused, and it waits on as it did.
+            if let Some(agent) = card.schedule.map(|schedule| schedule.start.agent).filter(|agent| off.contains(agent)) {
+                return Err(agent_off(agent));
+            }
             let Some(schedule) = card.schedule.take() else {
                 return Ok(None);
             };
             let card = card.clone();
             // Taken from the line by hand: the next in line waits for it too.
             if schedule.line {
-                board.line.insert(id.to_string(), Lined::given(now_ms()));
+                board.line.insert(id.to_string(), Lined::given(now_ms(), schedule.start.agent));
             }
             self.board_noted(board, id, Some(schedule))?;
             (card, schedule)
@@ -946,9 +1004,13 @@ impl Core {
     }
 
     /// Tells a card in `queued` to wait until `at` (ms): the core gives it then (`board_due`),
-    /// with `start`. `refill`: the moment is the 5-hour session's refill, and follows the
-    /// reading (`board_refill`). Only a listed project's card waits: no other is ever given.
+    /// with `start`. `refill`: the moment is the refill of `start`'s agent's limit, and follows
+    /// that agent's reading (`board_refill_of`). Only a listed project's card waits: no other is
+    /// ever given; nor does one for an agent that is off.
     pub fn board_schedule(&self, id: &str, at: u64, refill: bool, start: Start) -> Result<(), String> {
+        if !self.agent_on(start.agent) {
+            return Err(agent_off(start.agent));
+        }
         let listed = self.listed_paths();
         let mut board = self.board();
         if board.giving.contains(id) {
@@ -977,6 +1039,25 @@ impl Core {
         }
     }
 
+    /// An agent is off (turned off, or no longer found): the cards that wait for it no longer
+    /// do, as if the user had called each wait off (`board_unschedule`), and stay where they are.
+    /// Nothing waits for what can't start. Claude is always on: its cards keep waiting.
+    pub(super) fn board_agents_off(&self) {
+        let off: Vec<Agent> = Agent::ALL.into_iter().filter(|&agent| !self.agent_on(agent)).collect();
+        if off.is_empty() {
+            return;
+        }
+        let mut board = self.board();
+        let mut changed = false;
+        for card in board.cards.iter_mut().filter(|card| card.schedule.is_some_and(|schedule| off.contains(&schedule.start.agent))) {
+            card.schedule = None;
+            changed = true;
+        }
+        if changed {
+            self.board_changed(board);
+        }
+    }
+
     /// A reading of Claude's limits says the 5-hour session refills at `at`: the cards that wait
     /// for the refill follow it. Only while their own moment is still ahead (one that has passed
     /// is `board_due`'s, whatever is read later), and only to a moment of the session they wait
@@ -984,13 +1065,20 @@ impl Core {
     /// card that followed it would be given at once, or dropped as long past (`LATE_MS`). A card
     /// in the line has had its refill: it waits its turn, whatever is read.
     pub fn board_refill(&self, at: u64) {
+        self.board_refill_of(Agent::Claude, at);
+    }
+
+    /// `board_refill` of `agent`'s limits: the cards that wait for that agent's refill follow
+    /// it, and only those. Codex's moment is its 5-hour window's refill, or its week's for a plan
+    /// without one (`Fuel::refill_of`).
+    pub fn board_refill_of(&self, agent: Agent, at: u64) {
         let now = now_ms();
         if at <= now {
             return;
         }
         let mut board = self.board();
         let mut moved = false;
-        for schedule in board.cards.iter_mut().filter_map(|card| card.schedule.as_mut()) {
+        for schedule in board.cards.iter_mut().filter_map(|card| card.schedule.as_mut()).filter(|schedule| schedule.start.agent == agent) {
             if schedule.refill && !schedule.line && schedule.at > now && schedule.at != at && at < schedule.at + REFILL_REACH_MS {
                 schedule.at = at;
                 moved = true;
@@ -1040,13 +1128,15 @@ impl Core {
     /// given from the line holds it (`Board::line_held`), the others wait their turn in the line
     /// (`Schedule::line`), where no moment makes them late. A card of the line that is not given
     /// (its project no longer listed, its give failed) holds nothing: the next goes in its place.
-    /// A card waiting for a moment of its own (not the refill) is given at it, line or not.
+    /// A card waiting for a moment of its own (not the refill) is given at it, line or not. Each
+    /// agent's refill has its own line (the card's `start`): Claude's cards and Codex's are given
+    /// side by side, each one at a time.
     fn board_due_at(&self, now: u64, give: &mut dyn FnMut(&Card, Start) -> Result<(), String>) {
         {
             let mut board = self.board();
             let new = board.cards.iter().any(|card| card.schedule.is_some_and(|schedule| schedule.at <= now && !schedule.line));
-            let lined = board.cards.iter().any(|card| card.schedule.is_some_and(|schedule| schedule.line));
-            if !new && !(lined && !board.line_held(now)) {
+            let lined: HashSet<Agent> = board.cards.iter().filter_map(|card| card.schedule.filter(|schedule| schedule.line)).map(|schedule| schedule.start.agent).collect();
+            if !new && !lined.into_iter().any(|agent| !board.line_held(now, agent)) {
                 return;
             }
         }
@@ -1059,7 +1149,7 @@ impl Core {
         if board.quit {
             return;
         }
-        let mut free = !board.line_held(now);
+        let mut free: HashSet<Agent> = Agent::ALL.into_iter().filter(|&agent| !board.line_held(now, agent)).collect();
         let mut changed = false;
         let mut due: Vec<(Card, Start)> = Vec::new();
         let Board { cards, giving, line, .. } = &mut *board;
@@ -1080,22 +1170,22 @@ impl Core {
         // The refill's, in the line.
         let mut order: Vec<usize> = (0..cards.len()).filter(|&i| cards[i].schedule.is_some_and(|schedule| schedule.refill && schedule.at <= now)).collect();
         order.sort_by_key(|&i| (place(&cards[i].path), i));
-        let mut moved = false;
+        let mut moved: HashSet<Agent> = HashSet::new();
         for i in order {
             let card = &mut cards[i];
             let Some(mut schedule) = card.schedule else {
                 continue;
             };
+            let agent = schedule.start.agent;
             let late = !schedule.line && now - schedule.at > LATE_MS;
             if late || card.column != Column::Queued || !listed.contains(&card.path) {
                 card.schedule = None;
                 changed = true;
-            } else if free {
+            } else if free.remove(&agent) {
                 card.schedule = None;
                 changed = true;
-                free = false;
-                moved = true;
-                line.insert(card.id.clone(), Lined::given(now));
+                moved.insert(agent);
+                line.insert(card.id.clone(), Lined::given(now, agent));
                 // On its way already, by hand: that give is its own.
                 if giving.insert(card.id.clone()) {
                     due.push((card.clone(), schedule.start));
@@ -1107,11 +1197,9 @@ impl Core {
                 changed = true;
             }
         }
-        // What is left in the line saw it move now: after a restart it goes on from here.
-        if moved {
-            for schedule in cards.iter_mut().filter_map(|card| card.schedule.as_mut()).filter(|schedule| schedule.line) {
-                schedule.at = now;
-            }
+        // What is left in a line that moved saw it move now: after a restart it goes on from here.
+        for schedule in cards.iter_mut().filter_map(|card| card.schedule.as_mut()).filter(|schedule| schedule.line && moved.contains(&schedule.start.agent)) {
+            schedule.at = now;
         }
 
         if !changed {
@@ -1129,9 +1217,10 @@ impl Core {
         }
     }
 
-    /// Starts `card`'s work as `give` says (`board_give`), a new session with `start`. `card`:
-    /// as the board had it when the give was decided. `unasked`: given at its moment by the core
-    /// (`board_due`), not by the user: its tab says so (`TerminalView::unasked`).
+    /// Starts `card`'s work as `give` says (`board_give`), a new session with `start` (of its
+    /// agent: a Claude tab or a Codex one). `card`: as the board had it when the give was decided.
+    /// `unasked`: given at its moment by the core (`board_due`), not by the user: its tab says so
+    /// (`TerminalView::unasked`). Nothing is started for an agent that is off.
     fn launch_card(self: &Arc<Self>, card: &Card, give: Give, start: Start, size: Option<(u16, u16)>, unasked: bool) -> Result<Option<TerminalView>, String> {
         let id = card.id.as_str();
 
@@ -1144,7 +1233,10 @@ impl Core {
                 self.follow_card(id);
                 return Ok(None);
             }
-            (Carry::Resume, Some(session)) => Launch::Resume { session: session.clone() },
+            (Carry::Resume, Some(session)) => match card.agent() {
+                Agent::Claude => Launch::Resume { session: session.clone() },
+                Agent::Codex => Launch::ResumeCodex { session: session.clone() },
+            },
             _ => {
                 let mut text = if card.note.is_empty() { card.title.clone() } else { format!("{}\n\n{}", card.title, card.note) };
                 // What `[Image #n]` in the note stands for: Claude reads the file.
@@ -1158,15 +1250,27 @@ impl Core {
                 // A one-word card alone would be read as one of Claude's subcommands (`update`,
                 // `doctor`, `mcp`…) even after `--`; with the line under it, it never is one word.
                 let prompt = format!("{text}\n\n{}", t!("board.summaryPrompt"));
-                Launch::Claude { prompt: Some(prompt), start, images: images.map(|(dir, _)| dir) }
+                let images = images.map(|(dir, _)| dir);
+                match start.agent {
+                    Agent::Claude => Launch::Claude { prompt: Some(prompt), start, images },
+                    Agent::Codex => Launch::Codex { prompt: Some(prompt), start, images },
+                }
             }
         };
+        if let Some(agent) = launch.agent().filter(|&agent| !self.agent_on(agent)) {
+            return Err(agent_off(agent));
+        }
         let resumed = match &launch {
-            Launch::Resume { session } => Some(session.clone()),
+            Launch::Resume { session } | Launch::ResumeCodex { session } => Some(session.clone()),
             _ => None,
         };
 
-        let new_tab = || self.open_terminal_as(&card.path, &launch, Some(tab_name(&card.title)), false, size, unasked);
+        // A Codex session goes on with the account whose home keeps it (`reopen_codex`).
+        let account = match &launch {
+            Launch::ResumeCodex { session } => self.codex_rollout(session).map(|(account, _, _)| account),
+            _ => None,
+        };
+        let new_tab = || self.open_terminal_with(&card.path, &launch, Some(tab_name(&card.title)), false, size, unasked, account.as_deref());
         // `held`: its session goes on in a tab opened for it a moment ago (a click in the
         // terminals' history, before Claude Code lists its process): the card follows it there.
         let (view, held) = match &resumed {
@@ -1238,34 +1342,136 @@ impl Core {
         self.board_changed(board);
     }
 
+    /// The sessions of `agent` whose process runs now (`running_cached`, `codex_running`); none
+    /// when nothing could be read.
+    fn running_of(&self, agent: Agent) -> Option<HashMap<String, Running>> {
+        match agent {
+            Agent::Claude => self.running_cached(),
+            Agent::Codex => self.codex_running(),
+        }
+    }
+
     /// How `card`, moved back into `claude`, goes on (`carry`), from what is known of its session
-    /// now.
+    /// now. A Codex session runs while `codex_running` lists it; it can be opened again while
+    /// Codex keeps its rollout, which its watch read or which is still among the plain ones
+    /// (`codex_logged`).
     fn carry_of(&self, card: &Card) -> Carry {
         let Some(session) = card.session.as_deref() else {
             let starting = card.terminal.is_some_and(|terminal| self.terminal_sessions().contains_key(&terminal));
             return carry(false, starting, &Liveness::Unknown, false, false);
         };
 
+        let heard = self.lock().scanned.iter().any(|s| s.id == session && s.ended);
+        if card.agent() == Agent::Codex {
+            let running = self.codex_running();
+            if running.as_ref().is_some_and(|running| running.contains_key(session)) {
+                return Carry::Follow;
+            }
+            let cli = self.codex_rollout(session).is_some_and(|(_, file, _)| super::reveal::codex_cli(&file));
+            let gone = card.ran && running.as_ref().is_some_and(|running| !super::reveal::codex_runs_unseen(running, cli));
+            return carry(true, false, &Liveness::Unknown, self.codex_logged(session, card.given_at), gone || heard);
+        }
+
         let liveness = self.liveness(session);
         let logged = self.session_log(session).is_some();
         let gone = card.ran && self.running_cached().is_some_and(|running| !running.contains_key(session));
-        let heard = self.lock().scanned.iter().any(|s| s.id == session && s.ended);
         carry(true, false, &liveness, logged, gone || heard)
     }
 
-    /// Hands a card to a session that already runs (a Claude Code tab in VS Code…).
+    /// Codex keeps the rollout of `session` (given to a card at `given`): its watch read it, or a
+    /// plain rollout named for it was written since a day before the give, in one of Codex's
+    /// homes. Only file names are looked at; nothing of a rollout is read here.
+    fn codex_logged(&self, session: &str, given: Option<u64>) -> bool {
+        if self.lock().scanned.iter().any(|s| s.id == session && s.agent == Agent::Codex) {
+            return true;
+        }
+        let since = given.unwrap_or(0).saturating_sub(24 * 60 * 60 * 1000);
+        let ending = format!("-{session}.jsonl");
+        self.codex_homes().iter().any(|home| crate::codex::rollouts_since(home, since).iter().any(|file| file.file_name().is_some_and(|name| name.to_string_lossy().ends_with(&ending))))
+    }
+
+    /// The Codex cards whose session no process ties to their tab (`follow_board`): Codex's TUI
+    /// without Pitwall's hook (or before the user trusted it in `/hooks`), or under the shared
+    /// daemon, whose parents never reach the tab. A card in `claude` given lately takes its
+    /// project's one session of Codex's TUI that no card holds and no Pitwall tab's process runs,
+    /// its rollout begun within `ADOPT_MS` after the give; a session goes to the card given last
+    /// before it began, and a card two sessions would go to takes neither. Of a rollout only its
+    /// `session_meta` is read (`codex::rollout_meta`). The answer: the tabs of the cards still
+    /// without a session while Codex runs in them, up to `UNSEEN_MS` after the give.
+    fn codex_adopt(&self, links: &mut HashMap<u64, (String, u64)>, running: &HashMap<Agent, HashMap<String, Running>>, shells: &[(u32, u64, String)]) -> HashSet<u64> {
+        let now = now_ms();
+        let (cards, held): (Vec<(u64, u64, String)>, HashSet<String>) = {
+            let board = self.board();
+            let cards = board
+                .cards
+                .iter()
+                .filter(|card| card.column == Column::Claude && card.session.is_none() && card.agent() == Agent::Codex)
+                .filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at), card.path.clone())))
+                .filter(|(terminal, given, _)| !links.contains_key(terminal) && now.saturating_sub(*given) <= UNSEEN_MS)
+                .collect();
+            (cards, board.cards.iter().filter_map(|card| card.session.clone()).collect())
+        };
+        if cards.is_empty() {
+            return HashSet::new();
+        }
+
+        let in_tab = |run: &Running| shells.iter().any(|(shell, _, _)| run.lineage.contains(shell));
+        let codex = running.get(&Agent::Codex);
+        let free: Vec<(String, String)> = self
+            .lock()
+            .scanned
+            .iter()
+            .filter(|s| s.agent == Agent::Codex && !s.ended && !held.contains(&s.id) && cards.iter().any(|(_, _, path)| *path == s.path))
+            .filter(|s| !codex.and_then(|running| running.get(&s.id)).is_some_and(in_tab) && !links.values().any(|(linked, _)| *linked == s.id))
+            .map(|s| (s.id.clone(), s.path.clone()))
+            .collect();
+        let mut found: HashMap<u64, Vec<(String, u64)>> = HashMap::new();
+        for (session, path) in free {
+            let Some(began) = self.codex_began(&session) else {
+                continue;
+            };
+            let card = cards.iter().filter(|(_, given, of)| *of == path && *given <= began && began <= given + ADOPT_MS).max_by_key(|(_, given, _)| *given);
+            if let Some((terminal, _, _)) = card {
+                found.entry(*terminal).or_default().push((session, began));
+            }
+        }
+        for (terminal, sessions) in found {
+            if let [(session, began)] = sessions.as_slice() {
+                links.insert(terminal, (session.clone(), *began));
+            }
+        }
+        cards.iter().filter(|(terminal, _, _)| !links.contains_key(terminal) && self.agent_may_run_in(*terminal)).map(|(terminal, _, _)| *terminal).collect()
+    }
+
+    /// When Codex's session `id` began, as the `session_meta` of the rollout Codex's watch read
+    /// says: a session of Codex's TUI (`cli`) only, what a card's tab runs.
+    fn codex_began(&self, id: &str) -> Option<u64> {
+        let file = self.codex.lock().ok()?.rollout_of(id)?;
+        let meta = crate::codex::rollout_meta(&file)?;
+        (meta.id == id && meta.source.as_deref() == Some("cli")).then_some(meta.started).flatten()
+    }
+
+    /// Hands a card to a session that already runs (a Claude Code tab in VS Code, a Codex session
+    /// started elsewhere…). The card takes that session's agent.
     pub fn board_link(&self, id: &str, session: &str) -> Result<(), String> {
         if !is_session_id(session) {
             return Err(format!("not a session id: {session}"));
         }
-        // At work on something else right now: that turn's end isn't the card's (`follow_board`).
-        let running = self.running_cached();
         let scanned = self.lock().scanned.iter().find(|s| s.id == session).cloned();
+        let agent = scanned.as_ref().map_or(Agent::Claude, |s| s.agent);
+        // At work on something else right now: that turn's end isn't the card's (`follow_board`).
+        let running = self.running_of(agent);
         let busy = stand(session, scanned.as_ref(), running.as_ref(), false) == Stand::Busy;
+        // Of another agent than it started with: that agent's, as its project starts it.
+        let path = self.board().find(id).map(|card| card.path.clone()).ok_or_else(|| no_card(id))?;
+        let linked = self.lock().settings.project(&path).start_with(agent);
 
         let now = now_ms();
         let mut board = self.board();
         let card = board.place(id, Column::Claude, usize::MAX, now).ok_or_else(|| no_card(id))?;
+        if card.agent() != agent {
+            card.start = Some(linked);
+        }
         card.session = Some(session.to_string());
         card.terminal = None;
         card.given_at = Some(now);
@@ -1318,14 +1524,16 @@ impl Core {
         self.board_changed(board);
     }
 
-    /// Follows the cards given to Claude: a card started in a Pitwall terminal takes the session
-    /// that starts in it, a card whose session took a new id in its process (`/clear`) takes that
+    /// Follows the cards given to an agent: a card started in a Pitwall terminal takes the session
+    /// of its agent that starts in it, a card whose session took a new id in its process (`/clear`) takes that
     /// one, and a card goes to `review` once its session's turn is over (after it was seen at
     /// work) or the session ended; one whose turn the user interrupted goes there without a
     /// word. A card in `review` goes back to `claude` when its session,
     /// seen at rest since the card got there, is at work again; a session several cards hold
-    /// works for the one given last, and only that one follows it back. Runs after every refresh
-    /// of Claude's state (`refresh_claude`: each heartbeat and each change to Claude's files),
+    /// works for the one given last, and only that one follows it back. A card's session is looked
+    /// for among its own agent's running ones only (`running_of`). Runs after every refresh of
+    /// Claude's state (`refresh_claude`: each heartbeat and each change to Claude's files, Codex's
+    /// merged into it),
     /// with or without the window, and costs nothing while no card in `claude` or `review` has a
     /// session to follow.
     pub(super) fn follow_board(&self) {
@@ -1339,33 +1547,39 @@ impl Core {
         let (unlinked, linked, processes, first) = {
             let mut board = self.board();
             let first = !std::mem::replace(&mut board.followed, true);
-            let unlinked: Vec<(u64, u64)> = board
+            let unlinked: Vec<(u64, u64, Agent)> = board
                 .cards
                 .iter()
                 .filter(|card| card.column == Column::Claude && card.session.is_none())
-                .filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at))))
+                .filter_map(|card| Some((card.terminal?, card.given_at.unwrap_or(card.moved_at), card.agent())))
                 .collect();
-            let linked: Vec<String> = board.cards.iter().filter(|card| matches!(card.column, Column::Claude | Column::Review)).filter_map(|card| card.session.clone()).collect();
+            let linked: Vec<(String, Agent)> =
+                board.cards.iter().filter(|card| matches!(card.column, Column::Claude | Column::Review)).filter_map(|card| Some((card.session.clone()?, card.agent()))).collect();
             (unlinked, linked, board.pids.clone(), first)
         };
         if unlinked.is_empty() && linked.is_empty() {
             return;
         }
 
-        // Read again when Claude's sessions folder changed, else at most every 30 s.
-        let running = self.running_cached();
+        // Read again when Claude's sessions folder changed, else at most every 30 s; Codex's only
+        // while a card follows one of its sessions. An agent missing here: nothing could be read.
+        let followed: HashSet<Agent> = unlinked.iter().map(|(_, _, agent)| *agent).chain(linked.iter().map(|(_, agent)| *agent)).collect();
+        // Before the running ones: a Codex session missing from them has ended only if the hook
+        // tied it this run (`codex_tied_ids`); one Pitwall lost sight of may well work on.
+        let tied = if followed.contains(&Agent::Codex) { self.codex_tied_ids() } else { HashSet::new() };
+        let running: HashMap<Agent, HashMap<String, Running>> = followed.into_iter().filter_map(|agent| Some((agent, self.running_of(agent)?))).collect();
 
         // Each waiting terminal's session: that of the first Claude started in it, soon after
         // the give. Its process's start tells, not the session's own `startedAt`: Claude Code
         // lists a session only once its folder is trusted, however long that question stood.
+        let shells = self.terminal_shells();
         let mut links: HashMap<u64, (String, u64)> = HashMap::new();
-        if let (false, Some(running)) = (unlinked.is_empty(), &running) {
-            let shells = self.terminal_shells();
-            for (session, run) in running {
+        if !unlinked.is_empty() && !running.is_empty() {
+            for (agent, session, run) in running.iter().flat_map(|(agent, running)| running.iter().map(move |(session, run)| (*agent, session, run))) {
                 let Some(terminal) = shells.iter().find(|(shell, _, _)| run.lineage.contains(shell)).map(|(_, id, _)| *id) else {
                     continue;
                 };
-                let Some(&(_, given)) = unlinked.iter().find(|(id, _)| *id == terminal) else {
+                let Some(&(_, given, _)) = unlinked.iter().find(|(id, _, of)| *id == terminal && *of == agent) else {
                     continue;
                 };
                 let born = process::started_at(run.pid).or(run.started_at);
@@ -1378,21 +1592,28 @@ impl Core {
                 }
             }
         }
+        // Codex's cards no process ties to their tab: by their rollouts.
+        let starting = self.codex_adopt(&mut links, &running, &shells);
 
         // A held session gone from the list while its process runs another one: the same
         // conversation under a new id (`/clear`).
         let mut renamed: HashMap<String, String> = HashMap::new();
-        if let Some(running) = &running {
-            for session in linked.iter().filter(|session| !running.contains_key(*session)) {
-                let next = processes.get(session).and_then(|pid| running.iter().find(|(_, run)| run.pid == *pid));
-                if let Some((next, _)) = next {
-                    renamed.insert(session.clone(), next.clone());
-                }
+        for (session, agent) in &linked {
+            let Some(running) = running.get(agent).filter(|running| !running.contains_key(session)) else {
+                continue;
+            };
+            let next = processes.get(session).and_then(|pid| running.iter().find(|(_, run)| run.pid == *pid));
+            // Codex's: only its own TUI's process (`--no-daemon`, its parents reaching a terminal) is
+            // one conversation's. The shared daemon runs every session, and another one there is
+            // not this one gone on.
+            let next = next.filter(|(_, run)| *agent == Agent::Claude || (run.entrypoint.as_deref() == Some("cli") && (run.app.is_some() || shells.iter().any(|(shell, _, _)| run.lineage.contains(shell)))));
+            if let Some((next, _)) = next {
+                renamed.insert(session.clone(), next.clone());
             }
         }
 
         let ids: HashSet<String> =
-            linked.iter().map(|session| renamed.get(session).unwrap_or(session).clone()).chain(links.values().map(|(session, _)| session.clone())).collect();
+            linked.iter().map(|(session, _)| renamed.get(session).unwrap_or(session).clone()).chain(links.values().map(|(session, _)| session.clone())).collect();
         let scanned: HashMap<String, SessionState> = self.lock().scanned.iter().filter(|s| ids.contains(&s.id)).map(|s| (s.id.clone(), s.clone())).collect();
 
         let now = now_ms();
@@ -1400,7 +1621,7 @@ impl Core {
         let mut changed = false;
         let Board { cards, resumed, pids, linked_busy, line, .. } = &mut *board;
 
-        if let Some(running) = &running {
+        for running in running.values() {
             pids.extend(ids.iter().filter_map(|id| Some((id.clone(), running.get(id)?.pid))));
             // Opened again and running: followed like any other from here.
             resumed.retain(|id, _| !running.contains_key(id));
@@ -1434,15 +1655,22 @@ impl Core {
                     changed = true;
                 }
             }
+            let starts = card.column == Column::Claude && card.session.is_none() && card.terminal.is_some_and(|terminal| starting.contains(&terminal));
+            if card.starting != starts {
+                card.starting = starts;
+                changed = true;
+            }
             let Some(session) = card.session.as_deref() else {
                 continue;
             };
-            if !card.ran && running.as_ref().is_some_and(|running| running.contains_key(session)) {
+            let running = running.get(&card.agent());
+            if !card.ran && running.is_some_and(|running| running.contains_key(session)) {
                 card.ran = true;
                 changed = true;
             }
 
-            let state = stand(session, scanned.get(session), running.as_ref(), card.ran);
+            let ran = card.ran && (card.agent() == Agent::Claude || tied.contains(session));
+            let state = stand(session, scanned.get(session), running, ran);
             if card.column == Column::Review {
                 match state {
                     // At work again after the rest that left the card here: its session went on.
@@ -1523,7 +1751,7 @@ impl Core {
         // Told of once the board's lock is let go: a card is there to be looked at (`signals.rs`).
         for path in reviewed.into_iter().filter(|_| !first) {
             let name = self.project_name(&path);
-            self.signal(super::signals::Signal { kind: SignalKind::CardReview, path, name, detail: None });
+            self.signal(super::signals::Signal { kind: SignalKind::CardReview, path, name, detail: None, agent: Agent::Claude });
         }
     }
 }
@@ -1550,6 +1778,7 @@ mod tests {
             images: Vec::new(),
             start: None,
             schedule: None,
+            starting: false,
         }
     }
 
@@ -1612,6 +1841,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.path().join("registry"),
                 claude_dir: tmp.path().join("claude").join("projects"),
+                codex_home: tmp.path().join("codex"),
                 settings_file: settings_file.clone(),
                 claude_settings: tmp.path().join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -1647,6 +1877,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.path().join("registry"),
                 claude_dir: tmp.path().join("claude").join("projects"),
+                codex_home: tmp.path().join("codex"),
                 settings_file: config.join("settings.json"),
                 claude_settings: tmp.path().join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -1715,6 +1946,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.path().join("registry"),
                 claude_dir: tmp.path().join("claude").join("projects"),
+                codex_home: tmp.path().join("codex"),
                 settings_file: tmp.path().join("config").join("settings.json"),
                 claude_settings: tmp.path().join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -1754,6 +1986,7 @@ mod tests {
             CoreConfig {
                 registry_dir: root.join("registry"),
                 claude_dir: root.join("claude").join("projects"),
+                codex_home: root.join("codex"),
                 settings_file: root.join("config").join("settings.json"),
                 claude_settings: root.join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -1773,7 +2006,13 @@ mod tests {
         path
     }
 
-    const CHOSEN: Start = Start { model: Some(crate::start::Model::Sonnet), mode: Mode::Plan };
+    const CHOSEN: Start = Start::claude(Some(crate::start::Model::Sonnet), Mode::Plan);
+    const CODEX: Start = Start {
+        agent: Agent::Codex,
+        model: None,
+        mode: Mode::Normal,
+        codex: crate::start::CodexStart { model: Some(crate::start::CodexModel::Sol), mode: crate::start::CodexMode::ReadOnly },
+    };
 
     /// The board's file says card `id` waits for a moment.
     fn waits_on_disk(file: &Path, id: &str) -> bool {
@@ -1854,6 +2093,19 @@ mod tests {
         assert_eq!((tries, schedule_of(&restarted, &failing)), (1, None));
         assert_eq!(look(&restarted, at + 1_000), []);
         assert!(restarted.board().giving.is_empty());
+
+        // Codex's card the same: once, with Codex's choice, beside Claude's. None waits for Codex
+        // while it is off (its home not found), and a start then gives nothing.
+        let codex = restarted.board_add(&project, "Codex's", "", &[]).unwrap().id;
+        assert!(restarted.board_schedule(&codex, at, false, CODEX).is_err());
+        fs::create_dir_all(tmp.path().join("codex")).unwrap();
+        restarted.look_for_agents();
+        restarted.board_schedule(&codex, at, false, CODEX).unwrap();
+        let claude = waiting(&restarted, &project, "Claude's", at);
+        assert_eq!(schedule_of(&restarted, &codex), Some(Schedule { at, refill: false, start: CODEX, line: false }));
+        assert_eq!(look(&restarted, at), [(codex.clone(), CODEX), (claude.clone(), CHOSEN)]);
+        assert_eq!(look(&restarted, at + 1_000), []);
+        assert_eq!(look(&core_at(tmp.path()), at + 2_000), []);
 
         // The board can't be written: nothing is given, in this run or the next.
         let unwritten = waiting(&restarted, &project, "Unwritten", at);
@@ -2068,10 +2320,19 @@ mod tests {
         let refill = core.board_add(&project, "At the refill", "", &[]).unwrap().id;
         core.board_schedule(&refill, at, true, CHOSEN).unwrap();
         let fixed = waiting(&core, &project, "At its hour", at);
+        // Codex's card follows Codex's reading, and Claude's card Claude's, each alone.
+        fs::create_dir_all(tmp.path().join("codex")).unwrap();
+        core.look_for_agents();
+        let codex = core.board_add(&project, "At Codex's refill", "", &[]).unwrap().id;
+        core.board_schedule(&codex, at, true, CODEX).unwrap();
 
         core.board_refill(at + minutes(7));
         assert_eq!(schedule_of(&core, &refill).map(|schedule| schedule.at), Some(at + minutes(7)));
         assert_eq!(schedule_of(&core, &fixed).map(|schedule| schedule.at), Some(at));
+        assert_eq!(schedule_of(&core, &codex).map(|schedule| schedule.at), Some(at));
+        core.board_refill_of(Agent::Codex, at + minutes(3));
+        assert_eq!(schedule_of(&core, &codex).map(|schedule| schedule.at), Some(at + minutes(3)));
+        assert_eq!(schedule_of(&core, &refill).map(|schedule| schedule.at), Some(at + minutes(7)));
         assert_eq!(look(&core, at), [(fixed.clone(), CHOSEN)]);
 
         // Earlier again; the next session's refill is not followed.
@@ -2099,32 +2360,34 @@ mod tests {
         assert_eq!(schedule_of(&core, &ahead).map(|schedule| schedule.at), Some(at));
     }
 
-    /// One look at the cards at `now` (`board_due_at`), and Claude started on each card given as
-    /// `launch_card` leaves it: with Claude, in a tab of its own, its session found (a new one).
+    /// One look at the cards at `now` (`board_due_at`), and its agent started on each card given
+    /// as `launch_card` leaves it: with that agent, in a tab of its own, its session found (a new
+    /// one).
     fn give_due(core: &Core, now: u64) -> Vec<String> {
         let mut given = Vec::new();
-        core.board_due_at(now, &mut |card, _| {
-            given.push(card.id.clone());
+        core.board_due_at(now, &mut |card, start| {
+            given.push((card.id.clone(), start));
             Ok(())
         });
-        for id in &given {
+        for (id, start) in &given {
             let mut board = core.board();
             let n = board.cards.iter().filter(|card| card.session.is_some()).count();
             let session = format!("9bb85e86-f618-4861-9858-{n:012}");
             let card = board.place(id, Column::Claude, usize::MAX, now_ms()).unwrap();
-            (card.terminal, card.given_at, card.session, card.worked, card.ran) = (Some(1), Some(now), Some(session), false, false);
+            (card.terminal, card.given_at, card.session, card.worked, card.ran, card.start) = (Some(1), Some(now), Some(session), false, false, Some(*start));
         }
-        given
+        given.into_iter().map(|(id, _)| id).collect()
     }
 
     /// Where card `id`'s session stands, as the hook tells it; then the board follows it.
     fn session_is(core: &Core, id: &str, phase: SessionPhase, turn: Option<(TurnKind, u64)>, ended: bool) {
-        let session = core.board_state().into_iter().find(|card| card.id == id).unwrap().session.unwrap();
+        let card = core.board_state().into_iter().find(|card| card.id == id).unwrap();
+        let (session, agent) = (card.session.clone().unwrap(), card.agent());
         {
             let mut inner = core.lock();
             inner.scanned.retain(|state| state.id != session);
             let turn = turn.map(|(kind, at)| crate::claude::Turn { kind, at });
-            inner.scanned.push(SessionState { id: session, path: String::new(), folder: None, title: None, phase, turn, since: Some(now_ms()), hooked: true, ended, tool: None, subagents: 0, interrupted: false });
+            inner.scanned.push(SessionState { id: session, agent, path: String::new(), folder: None, title: None, phase, turn, since: Some(now_ms()), hooked: true, ended, tool: None, subagents: 0, interrupted: false });
         }
         core.follow_board();
     }
@@ -2138,10 +2401,12 @@ mod tests {
     /// order the board shows them: at the refill only the first; the next only once Claude is no
     /// longer at work on the one before (its turn over, or its session ended), not while it
     /// works or waits on a permission. A restart in the middle goes on the same way: the Claude
-    /// it was at work on ended with the run, and only the next card goes.
+    /// it was at work on ended with the run, and only the next card goes. Codex's cards wait for
+    /// Codex's refill in a line of their own, one at a time as well, whatever Claude's line does.
     #[test]
     fn cards_that_wait_for_one_refill_are_given_one_at_a_time() {
         let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("codex")).unwrap();
         let core = core_at(tmp.path());
         let project = listed_project(&core, tmp.path());
         let at = now_ms() + 3_600_000;
@@ -2156,18 +2421,32 @@ mod tests {
         let [first, second, third, fourth] = <[String; 4]>::try_from(cards).unwrap();
         // Up next, the fourth stands second.
         core.board_move(&fourth, "queued", 1).unwrap();
+        let mut codex = Vec::new();
+        for title in ["Codex first", "Codex second"] {
+            let id = core.board_add(&project, title, "", &[]).unwrap().id;
+            core.board_schedule(&id, at, true, CODEX).unwrap();
+            codex.push(id);
+        }
+        let [codex_first, codex_second] = <[String; 2]>::try_from(codex).unwrap();
 
-        // At the refill only the first goes; a second look gives nothing more.
+        // At the refill only the first of each line goes; a second look gives nothing more.
         assert_eq!(give_due(&core, at - 1), Vec::<String>::new());
-        assert_eq!(give_due(&core, at), [first.as_str()]);
+        assert_eq!(give_due(&core, at), [first.as_str(), codex_first.as_str()]);
         assert_eq!(give_due(&core, at + 1_000), Vec::<String>::new());
-        assert!([&second, &third, &fourth].iter().all(|id| column_of(&core, id) == Column::Queued));
+        assert!([&second, &third, &fourth, &codex_second].iter().all(|id| column_of(&core, id) == Column::Queued));
+        session_is(&core, &codex_first, SessionPhase::Working, None, false);
 
         // Claude at work on it, then waiting on a permission: the line waits.
         session_is(&core, &first, SessionPhase::Working, None, false);
         assert_eq!(give_due(&core, at + minutes(10)), Vec::<String>::new());
         session_is(&core, &first, SessionPhase::Waiting, Some((TurnKind::Permission, at + minutes(20))), false);
         assert_eq!(give_due(&core, at + minutes(60)), Vec::<String>::new());
+
+        // Codex's turn is over meanwhile: Codex's next goes, alone, while Claude's line waits.
+        session_is(&core, &codex_first, SessionPhase::Waiting, Some((TurnKind::Finished, at + minutes(60))), false);
+        assert_eq!(column_of(&core, &codex_first), Column::Review);
+        assert_eq!(give_due(&core, at + minutes(60)), [codex_second.as_str()]);
+        assert_eq!(give_due(&core, at + minutes(60) + 1_000), Vec::<String>::new());
 
         // Its turn is over: the next on the board, alone.
         session_is(&core, &first, SessionPhase::Waiting, Some((TurnKind::Finished, at + minutes(61))), false);
@@ -2188,6 +2467,57 @@ mod tests {
         session_is(&restarted, &second, SessionPhase::Working, None, true);
         assert_eq!(column_of(&restarted, &second), Column::Review);
         assert_eq!(give_due(&restarted, at + minutes(67)), [third.as_str()]);
+    }
+
+    /// A rollout of Codex's TUI in `home`'s folder of today, begun at `began`, a turn under way.
+    fn codex_rollout(home: &Path, id: &str, cwd: &str, began: u64) {
+        let (year, month, day) = crate::clock::local_date(now_ms());
+        let dir = home.join("sessions").join(year.to_string()).join(format!("{month:02}")).join(format!("{day:02}"));
+        fs::create_dir_all(&dir).unwrap();
+        let iso = |ms: u64| chrono::DateTime::from_timestamp_millis(ms as i64).unwrap().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let meta = serde_json::json!({ "timestamp": iso(began), "type": "session_meta", "payload": { "id": id, "session_id": id, "timestamp": iso(began), "cwd": cwd, "source": "cli" } });
+        let turn = serde_json::json!({ "timestamp": iso(began + 1_000), "type": "event_msg", "payload": { "type": "task_started", "started_at": (began + 1_000) / 1000 } });
+        fs::write(dir.join(format!("rollout-2026-11-02T10-00-00-{id}.jsonl")), format!("{meta}\n{turn}\n")).unwrap();
+    }
+
+    /// Codex without Pitwall's hook (not put in, or not trusted yet in `/hooks`), or under its
+    /// shared daemon: no process ties a card's session to its tab. A card given to it from the
+    /// refill's line, Codex at work on it (its rollout, begun in the project just after the give,
+    /// says so), still holds that line: the next Codex card is not started beside it on the same
+    /// fresh quota. An older session of the project's is not the card's.
+    #[test]
+    fn a_codex_card_no_process_ties_to_its_session_holds_its_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("codex");
+        fs::create_dir_all(&home).unwrap();
+        let core = core_at(tmp.path());
+        let project = listed_project(&core, tmp.path());
+        let at = now_ms() + 60_000;
+        let first = core.board_add(&project, "First for Codex", "", &[]).unwrap().id;
+        let second = core.board_add(&project, "Second for Codex", "", &[]).unwrap().id;
+        core.board_schedule(&first, at, true, CODEX).unwrap();
+        core.board_schedule(&second, at, true, CODEX).unwrap();
+        assert_eq!(look(&core, at).into_iter().map(|(id, _)| id).collect::<Vec<_>>(), std::slice::from_ref(&first));
+
+        // As `launch_card` leaves it: in its tab, its session not known yet.
+        let given = now_ms() - 30_000;
+        {
+            let mut board = core.board();
+            let card = board.place(&first, Column::Claude, usize::MAX, given).unwrap();
+            (card.terminal, card.given_at, card.session, card.start) = (Some(1), Some(given), None, Some(CODEX));
+        }
+        let older = "019a0000-0000-7000-8000-0000000000a0";
+        let session = "019a0000-0000-7000-8000-0000000000aa";
+        codex_rollout(&home, older, &project, given - 600_000);
+        codex_rollout(&home, session, &project, given + 5_000);
+        core.poll_files();
+        core.follow_agents();
+        core.follow_board();
+
+        let card = core.board_state().into_iter().find(|card| card.id == first).unwrap();
+        assert_eq!(card.session.as_deref(), Some(session));
+        assert_eq!(look(&core, at + ADOPT_MS + 1_000), []);
+        assert_eq!(column_of(&core, &second), Column::Queued);
     }
 
     /// A card given from the line whose Claude never goes to work (it started and sits idle, or
@@ -2256,24 +2586,38 @@ mod tests {
         assert_eq!(old.cards.iter().map(|card| (card.id.as_str(), card.title.as_str(), card.column)).collect::<Vec<_>>(), [("mf1x-0", "Invoice header", Column::Queued), ("mf1x-1", "Coupon rounding", Column::Review)]);
         assert_eq!(old.cards[0].images, [CardImage { n: 1, kind: ImageKind::Png }]);
         assert_eq!((old.cards[1].session.as_deref(), old.cards[1].given_at, old.cards[1].worked), (Some("9bb85e86-f618-4861-9858-03ec8fc36c28"), Some(1_790_000_100_000), true));
-        assert!(old.cards.iter().all(|card| card.start.is_none() && card.schedule.is_none()));
+        assert!(old.cards.iter().all(|card| card.start.is_none() && card.schedule.is_none() && card.agent() == Agent::Claude));
         assert_eq!(fs::read_to_string(&file).unwrap(), before, "loading it changes nothing");
 
         // As this version writes it: a card that waits, and one given with a model and a mode.
         let mut new = Board::load(file.clone(), now);
         new.cards[0].schedule = Some(Schedule { at: now + 3_600_000, refill: true, start: CHOSEN, line: false });
-        new.cards[1].start = Some(Start { model: Some(crate::start::Model::Opus), mode: Mode::AcceptEdits });
+        new.cards[1].start = Some(Start { model: Some(crate::start::Model::Opus), mode: Mode::AcceptEdits, ..Start::default() });
         assert!(new.save());
         let again = Board::load(file.clone(), now);
         assert_eq!(again.cards, new.cards);
         assert_eq!(again.cards[0].schedule, Some(Schedule { at: now + 3_600_000, refill: true, start: CHOSEN, line: false }));
+        // Claude's cards are written as before Codex: no agent, no Codex part.
+        let written = fs::read_to_string(&file).unwrap();
+        assert!(!written.contains("\"agent\"") && !written.contains("\"codex\""), "{written}");
+
+        // A card given to Codex, and one that waits for Codex: they load back Codex's.
+        let mut codex = Board::load(file.clone(), now);
+        codex.cards[0].schedule = Some(Schedule { at: now + 3_600_000, refill: true, start: CODEX, line: false });
+        codex.cards[1].start = Some(CODEX);
+        assert!(codex.save());
+        let raw: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(raw["cards"][1]["start"], serde_json::json!({ "agent": "codex", "codex": { "model": "gpt-6.1-sol", "mode": "readOnly" } }));
+        let back = Board::load(file.clone(), now);
+        assert_eq!(back.cards, codex.cards);
+        assert_eq!((back.cards[0].schedule.map(|schedule| schedule.start.agent), back.cards[1].agent()), (Some(Agent::Codex), Agent::Codex));
 
         // Parts that don't fit cost only themselves: the cards and the file stay.
         let mut odd: Value = serde_json::from_str(&before).unwrap();
         odd["cards"][0]["schedule"] = serde_json::json!({ "at": "at four", "start": { "model": "sonnet" } });
         odd["cards"][0]["start"] = serde_json::json!("opus");
         odd["cards"][1]["schedule"] = serde_json::json!({ "at": now + 3_600_000, "refill": 1 });
-        odd["cards"][1]["start"] = serde_json::json!({ "model": "opus; touch /tmp/pwned", "mode": "bypassPermissions", "later": true });
+        odd["cards"][1]["start"] = serde_json::json!({ "agent": "gemini", "model": "opus; touch /tmp/pwned", "mode": "bypassPermissions", "later": true });
         fs::write(&file, odd.to_string()).unwrap();
         let read = Board::load(file.clone(), now);
         assert!(read.writable);
@@ -2315,5 +2659,29 @@ mod tests {
         for (session, starting, liveness, logged, ended, expected) in cases {
             assert_eq!(carry(session, starting, &liveness, logged, ended), expected, "{session} {starting} {liveness:?} {logged} {ended}");
         }
+    }
+
+    /// A card's Codex session goes on as one that ended (`codex resume`) only while every Codex
+    /// process that runs is a tied session's: an untied one may be the card's session, and two
+    /// processes would write one rollout. The card follows it instead.
+    #[test]
+    #[cfg(unix)]
+    fn a_codex_card_follows_while_an_untied_codex_process_runs() {
+        use crate::codex::tests::{write_rollouts, CLI, CLI_ID};
+        use std::os::unix::process::CommandExt;
+        let tmp = tempfile::tempdir().unwrap();
+        write_rollouts(&tmp.path().join("codex"), &[(CLI_ID, CLI)]);
+        let mut elsewhere = std::process::Command::new("/bin/sleep").arg0("codex").arg("30").spawn().unwrap();
+        let core = core_at(tmp.path());
+        core.look_for_agents();
+        let mut given = card("c", Column::Review);
+        given.start = Some(CODEX);
+        given.session = Some(CLI_ID.into());
+        given.ran = true;
+        given.given_at = Some(now_ms());
+        let carry = core.carry_of(&given);
+        let _ = elsewhere.kill();
+        let _ = elsewhere.wait();
+        assert_eq!(carry, Carry::Follow);
     }
 }

@@ -18,8 +18,11 @@ impl Core {
     pub fn mark_seen(&self, path: &str) {
         // Before the watch is locked: it may read the process table.
         let running: Option<HashSet<String>> = self.running_cached().map(|running| running.into_keys().collect());
+        // Codex's permission requests still open there wait as Claude's do; the seen book is
+        // shared, so a look clears both agents' finished turns.
+        let codex_open = self.codex_open_prompt(path);
         let seen = match self.claude.lock() {
-            Ok(mut watch) => watch.mark_seen(path, running.as_ref()),
+            Ok(mut watch) => watch.mark_seen_before(path, running.as_ref(), codex_open),
             Err(_) => now_ms(),
         };
         let unseen = |turn: Option<Turn>| turn.is_some_and(|turn| turn.at > seen);
@@ -59,6 +62,7 @@ impl Core {
         // Before the watch is locked: it may read the process table.
         let busy = self.busy_sessions();
         let idle = self.idle_sessions();
+        self.codex_set_running();
         let announce = {
             let Ok(mut watch) = self.claude.lock() else {
                 return false;
@@ -69,12 +73,15 @@ impl Core {
 
             watch.set_busy(busy);
             watch.set_idle(idle);
-            let scan = watch.evaluate();
+            let mut scan = watch.evaluate();
+            // Every other agent that is on, as if Claude had its sessions too.
+            let merged = self.merge_agents(&mut scan);
             let (announce, projects) = {
                 let mut inner = self.lock();
                 let first = !inner.claude_scanned;
+                let fresh = first_scans(&mut inner, &merged, &scan);
                 let mut announce = due_notifications(&mut inner, &scan.waiting, &scan.sessions);
-                announce.extend(long_turns(&mut inner, &scan.sessions, first));
+                announce.extend(long_turns(&mut inner, &scan.sessions, first, &fresh));
                 turns_seen(&mut inner, &scan.waiting);
                 inner.waiting = scan.waiting;
                 inner.working = scan.working;
@@ -90,6 +97,8 @@ impl Core {
         // Banner, sound, quiet and the phone are the door's to decide (`signals.rs`).
         self.signals(announce);
 
+        // Codex's hook is at work once its events come.
+        self.update_codex_hook_status();
         self.notify();
         // Cards given to Claude follow their sessions from the state just read.
         self.follow_board();
@@ -133,10 +142,26 @@ fn live_sessions(sessions: &[crate::claude::SessionState]) -> HashMap<String, Ve
     for session in sessions.iter().filter(|s| s.phase != SessionPhase::Idle) {
         // Only the hook tells when the work began; a log's last line doesn't.
         let since = session.since.filter(|_| session.hooked && session.phase == SessionPhase::Working);
-        let live = LiveSession { id: session.id.clone(), phase: session.phase, turn: session.turn, since, tool: session.tool.clone() };
+        let live = LiveSession { id: session.id.clone(), agent: session.agent, phase: session.phase, turn: session.turn, since, tool: session.tool.clone() };
         found.entry(session.path.clone()).or_default().push(live);
     }
     found
+}
+
+/// The agents `merged` into this scan for the first time since they came on (found, switched on);
+/// one no longer merged is forgotten, and is new again when it comes back. What they wait with now
+/// waited before: it is taken note of as announced, as Claude's first scan after launch does, so
+/// an agent coming on tells of nothing that was there already.
+fn first_scans(inner: &mut Inner, merged: &[Agent], scan: &crate::claude::ScanResult) -> Vec<Agent> {
+    inner.agents_scanned.retain(|agent| merged.contains(agent));
+    let fresh: Vec<Agent> = merged.iter().copied().filter(|agent| inner.agents_scanned.insert(*agent)).collect();
+    for (path, turn) in &scan.waiting {
+        if scan.sessions.iter().any(|session| &session.path == path && session.turn == Some(*turn) && fresh.contains(&session.agent)) {
+            let noted = inner.notified.entry(path.clone()).or_insert(0);
+            *noted = (*noted).max(turn.at);
+        }
+    }
+    fresh
 }
 
 /// Waiting turns to announce now, a permission's with the tool the hook named (`sessions`: the
@@ -169,15 +194,15 @@ fn due_notifications(inner: &mut Inner, waiting: &HashMap<String, Turn>, session
                 inner.notified.insert(path.clone(), turn.at);
 
                 let name = name_of(inner, path);
+                // The session that waits with the turn: its agent, and a permission's tool.
+                let asker = sessions.iter().find(|session| &session.path == path && session.turn == Some(*turn));
+                let agent = asker.map_or(Agent::Claude, |session| session.agent);
                 let (kind, detail) = match turn.kind {
                     TurnKind::Finished => (SignalKind::ClaudeFinished, None),
                     TurnKind::Asking => (SignalKind::ClaudeAsking, None),
-                    TurnKind::Permission => {
-                        let asker = sessions.iter().find(|session| &session.path == path && session.turn == Some(*turn));
-                        (SignalKind::ClaudePermission, asker.and_then(|session| session.tool.clone()))
-                    }
+                    TurnKind::Permission => (SignalKind::ClaudePermission, asker.and_then(|session| session.tool.clone())),
                 };
-                due.push(Signal { kind, path: path.clone(), name, detail });
+                due.push(Signal { kind, path: path.clone(), name, detail, agent });
             }
             Some((at, _)) if *at == turn.at => {}
             _ => {

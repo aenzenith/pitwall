@@ -1,6 +1,7 @@
 //! Pitwall among Claude Code's MCP servers: added and taken out through Claude Code's own CLI
 //! (`claude mcp add | remove | get`), never by editing `~/.claude.json`, which Claude Code
-//! rewrites all the time. The CLI runs in the user's shell, as a dev server does, and is told
+//! rewrites all the time; and among Codex's the same way (`codex mcp add | remove | get`), never
+//! by editing its `config.toml`. The CLI runs in the user's shell, as a dev server does, and is told
 //! to write when the user turns the radio on or off; showing the state only asks, but for two
 //! things it puts right: a server whose app is gone while the radio is on, and this app left
 //! there by a removal that failed when the radio was turned off.
@@ -48,13 +49,18 @@ fn run(line: &str) -> Option<Said> {
 
 /// `run` for the Claude account whose folder is `account` (none: the main one).
 fn run_in(line: &str, account: Option<&str>) -> Option<Said> {
+    let extra: Vec<(&str, &str)> = account.map(|dir| (crate::accounts::ENV, dir)).into_iter().collect();
+    run_with(line, &extra)
+}
+
+/// `run` with `extra` in the command's environment: an account's folder for its agent's CLI.
+fn run_with(line: &str, extra: &[(&str, &str)]) -> Option<Said> {
     if cfg!(test) {
         return None;
     }
 
     let home = dirs::home_dir()?;
-    let extra: Vec<(&str, &str)> = account.map(|dir| (crate::accounts::ENV, dir)).into_iter().collect();
-    let child = process::spawn_shell_with(line, &home.to_string_lossy(), &extra).ok()?;
+    let child = process::spawn_shell_with(line, &home.to_string_lossy(), extra).ok()?;
     let pid = child.id();
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
@@ -97,14 +103,20 @@ fn add_line(app: &Path) -> String {
 
 /// What a command that was to change something came to, as an error for Settings.
 fn settled(said: Option<Said>) -> Result<(), String> {
+    settled_for(Agent::Claude, said)
+}
+
+/// `settled` for `agent`'s CLI, in words that name it.
+fn settled_for(agent: Agent, said: Option<Said>) -> Result<(), String> {
+    let codex = agent == Agent::Codex;
     match said {
         Some(Said { code: Some(0), .. }) => Ok(()),
-        Some(Said { code: Some(code), .. }) if NOT_FOUND.contains(&code) => Err(t!("radio.missing")),
+        Some(Said { code: Some(code), .. }) if NOT_FOUND.contains(&code) => Err(t!(if codex { "radio.missing.codex" } else { "radio.missing" })),
         Some(said) => {
             let last = said.text.lines().rev().map(str::trim).find(|line| !line.is_empty()).unwrap_or_default();
-            Err(t!("core.radio.cliFailed", error = last))
+            Err(t!(if codex { "core.radio.cliFailed.codex" } else { "core.radio.cliFailed" }, error = last))
         }
-        None => Err(t!("core.radio.cliSilent")),
+        None => Err(t!(if codex { "core.radio.cliSilent.codex" } else { "core.radio.cliSilent" })),
     }
 }
 
@@ -178,6 +190,12 @@ pub(super) fn remove_in(account: Option<&str>) -> Result<(), String> {
 /// Claude Code sessions with a line to Pitwall now: this app's `--mcp` processes, one per
 /// session. A command line is only tested.
 pub(super) fn lines() -> usize {
+    lines_of(Agent::Claude)
+}
+
+/// `lines` of `agent`'s sessions: a line whose server Codex started is Codex's (`process::is_codex`), any
+/// other Claude's, as before there were agents.
+pub(super) fn lines_of(agent: Agent) -> usize {
     let names: Vec<std::ffi::OsString> =
         [own_app(), std::env::current_exe().ok()].into_iter().flatten().filter_map(|app| app.file_name().map(|name| name.to_owned())).collect();
     let Some(table) = process::process_table() else {
@@ -188,7 +206,81 @@ pub(super) fn lines() -> usize {
         .values()
         .filter(|process| Path::new(&process.program).file_name().is_some_and(|name| names.iter().any(|own| own == name)))
         .filter(|process| process.line.strip_prefix(&process.program).is_some_and(|rest| rest.trim() == MCP_FLAG))
+        .filter(|process| table.get(&process.parent).is_some_and(crate::process::is_codex) == (agent == Agent::Codex))
         .count()
+}
+
+
+/// Whether `process`, Codex's, is its shared server (`codex app-server`), whose sessions no call
+/// can be told apart by. Its command line is only tested.
+pub(super) fn is_codex_daemon(process: &process::ProcessInfo) -> bool {
+    process.line.split_whitespace().any(|word| word == "app-server")
+}
+
+/// What `agent`'s CLI says its version is (`claude --version`, `codex --version`: the words of
+/// the fixed list), for its line in Settings › Agents: the first version in what it printed,
+/// nothing else of it.
+pub(in crate::core) fn cli_version(agent: Agent) -> Option<String> {
+    let said = run(&format!("{} --version", agent.id()))?;
+    if said.code != Some(0) {
+        return None;
+    }
+    crate::deps::version_in(&said.text)
+}
+
+/// Codex's CLI, for the home `home` (none: the main one, `~/.codex` or `$CODEX_HOME` as the app
+/// was given it, which never gets the variable from Pitwall).
+fn codex_run(line: &str, home: Option<&Path>) -> Option<Said> {
+    let home = home.map(|home| home.to_string_lossy().into_owned());
+    let extra: Vec<(&str, &str)> = home.as_deref().map(|home| ("CODEX_HOME", home)).into_iter().collect();
+    run_with(line, &extra)
+}
+
+/// The command line that adds `app` as Codex's MCP server; `add` puts it in the place of
+/// whatever is there under the name, as Codex's CLI does.
+fn codex_add_line(app: &Path) -> String {
+    format!("codex mcp add {SERVER_NAME} -- {} {MCP_FLAG}", quote(&app.to_string_lossy()))
+}
+
+/// What Codex has under Pitwall's name in `home`: `get --json`, whose `transport.command` names
+/// the app. It changes nothing.
+pub(super) fn codex_listed(home: Option<&Path>) -> Listed {
+    let Some(said) = codex_run(&format!("codex mcp get {SERVER_NAME} --json"), home) else {
+        return Listed::Unknown;
+    };
+
+    match said.code {
+        Some(0) => {
+            // The JSON is all it prints; a line before it (a warning) is skipped.
+            let json = said.text.find('{').map_or("", |start| &said.text[start..]);
+            let command = serde_json::from_str::<serde_json::Value>(json)
+                .ok()
+                .and_then(|server| server.pointer("/transport/command").and_then(serde_json::Value::as_str).map(PathBuf::from));
+            match command.map(fs::canonicalize) {
+                None => Listed::Unknown,
+                Some(Err(_)) => Listed::Gone,
+                Some(Ok(app)) if Some(app.clone()) == own_app().and_then(|own| fs::canonicalize(own).ok()) => Listed::Own,
+                Some(Ok(_)) => Listed::Other,
+            }
+        }
+        Some(code) if NOT_FOUND.contains(&code) => Listed::Missing,
+        _ if said.text.contains(NO_SERVER) => Listed::No,
+        _ => Listed::Unknown,
+    }
+}
+
+/// Adds this app as Codex's MCP server `pitwall` in `home`.
+pub(super) fn codex_add(home: Option<&Path>) -> Result<(), String> {
+    let app = own_app().ok_or_else(|| t!("core.radio.cliSilent.codex"))?;
+    settled_for(Agent::Codex, codex_run(&codex_add_line(&app), home))
+}
+
+/// Takes Pitwall out of Codex's MCP servers in `home`; not being there is as good.
+pub(super) fn codex_remove(home: Option<&Path>) -> Result<(), String> {
+    match codex_run(&format!("codex mcp remove {SERVER_NAME}"), home) {
+        Some(said) if said.text.contains(NO_SERVER) => Ok(()),
+        said => settled_for(Agent::Codex, said),
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -205,6 +297,12 @@ mod tests {
             let words: Vec<&str> = std::str::from_utf8(&output.stdout).unwrap().lines().collect();
 
             assert_eq!(words, ["mcp", "add", "--scope", "user", "pitwall", "--", path, "--mcp"], "{line}");
+
+            let line = codex_add_line(Path::new(path)).replacen("codex", "printf '%s\\n'", 1);
+            let output = std::process::Command::new("/bin/sh").args(["-c", &line]).output().unwrap();
+            let words: Vec<&str> = std::str::from_utf8(&output.stdout).unwrap().lines().collect();
+
+            assert_eq!(words, ["mcp", "add", "pitwall", "--", path, "--mcp"], "{line}");
         }
     }
 }

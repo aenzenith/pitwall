@@ -15,7 +15,11 @@
 //! - the tool's switch in Settings (`run_command` starts off).
 //!
 //! Whose call it is comes from the caller's parent pid, through Claude Code's running sessions
-//! (`sessions.rs`: its allowed fields only). Today's calls are kept per session, in memory, for
+//! (`sessions.rs`: its allowed fields only). Codex has a radio of its own beside Claude's
+//! (Settings › Agents › Codex), on the same endpoint: a call whose server Codex started is
+//! Codex's, tied to its session through the hook's pid (`codex_running`) and acting on the
+//! project of that session's folder; one that can't be tied to exactly one session (Codex's
+//! shared server, a session the hook never told of) is refused, and says why. Today's calls are kept per session, in memory, for
 //! that session's details: the tool, the time and what came of it, never what an argument said
 //! but a new card's title.
 
@@ -31,6 +35,8 @@ mod tools;
 
 // The command line (`cli`) tells a saved command and an output's current run the same way.
 pub(in crate::core) use tools::{last_lines, saved};
+// An agent's version for Settings › Agents is asked of its CLI as the radio's questions are.
+pub(in crate::core) use register::cli_version;
 
 use register::Listed;
 
@@ -75,6 +81,8 @@ pub(super) struct Radio {
     /// What Claude Code last said of the radio, and when. Held while its CLI is asked or told:
     /// one of those at a time.
     asked: Arc<Mutex<Option<(Instant, RadioState)>>>,
+    /// The same of Codex's radio, as its CLI said it.
+    codex_asked: Arc<Mutex<Option<(Instant, RadioState)>>>,
 }
 
 /// Who calls: the folder Claude Code started its server in, and Claude Code's own pid.
@@ -140,6 +148,16 @@ impl RadioState {
     fn on(missing: bool) -> Self {
         Self { status: "on", missing, sessions: register::lines() }
     }
+
+    /// Codex's radio on: its sessions' lines only.
+    fn codex_on(missing: bool) -> Self {
+        Self { status: "on", missing, sessions: register::lines_of(Agent::Codex) }
+    }
+}
+
+/// The endpoint is wanted while Claude's radio or Codex's is on, Codex's only while Codex is.
+fn wanted(inner: &Inner) -> bool {
+    inner.settings.radio.on || (inner.settings.agents.codex.radio && super::agents::agent_on(inner, Agent::Codex))
 }
 
 /// The tools there are (`mcp::TOOLS`), for their rows in Settings. Nothing is asked for it: the
@@ -226,14 +244,27 @@ impl Core {
         mcp::endpoint_file(&self.cfg.registry_dir)
     }
 
-    /// At start: the endpoint opens when the radio is on. Off, a file a run before left goes.
+    /// At start: the endpoint opens when the radio is on (Claude's or Codex's). Off, a file a
+    /// run before left goes.
     pub fn radio_start(self: &Arc<Self>) {
-        if self.lock().settings.radio.on {
+        if wanted(&self.lock()) {
             if let Err(error) = self.radio_open() {
                 eprintln!("[pitwall] {error}");
             }
         } else {
             let _ = fs::remove_file(self.radio_file());
+        }
+    }
+
+    /// An agent was turned on or off, or found or gone: the endpoint opens or closes as it is now
+    /// wanted. One this run didn't open is left alone.
+    pub(super) fn radio_follow(self: &Arc<Self>) {
+        if wanted(&self.lock()) {
+            if let Err(error) = self.radio_open() {
+                eprintln!("[pitwall] {error}");
+            }
+        } else if self.lock().radio.listening.is_some() {
+            self.radio_close();
         }
     }
 
@@ -351,6 +382,8 @@ impl Core {
         // and nothing is done for it.
         let reply = if hello.v == mcp::ENDPOINT_VERSION {
             self.radio_call(&Caller { cwd: call.cwd, ppid: call.ppid }, &call.tool, &call.args)
+        } else if self.radio_codex_parent(call.ppid).is_some() {
+            Reply::refused(mcp::CODEX_OTHER_VERSION)
         } else {
             Reply::refused(mcp::OTHER_VERSION)
         };
@@ -359,17 +392,31 @@ impl Core {
 
     /// The radio's own switch: the endpoint follows it, now and at the next start.
     fn radio_turn(self: &Arc<Self>, on: bool) -> Result<(), String> {
-        self.lock().settings.radio.on = on;
+        self.radio_switch(Agent::Claude, on)
+    }
+
+    /// `agent`'s radio switch (Claude's is `settings.radio.on`, as before): the endpoint is open
+    /// while one of them is on.
+    fn radio_switch(self: &Arc<Self>, agent: Agent, on: bool) -> Result<(), String> {
+        let set = |inner: &mut Inner, on: bool| match agent {
+            Agent::Claude => inner.settings.radio.on = on,
+            Agent::Codex => inner.settings.agents.codex.radio = on,
+        };
+        let open = {
+            let mut inner = self.lock();
+            set(&mut inner, on);
+            wanted(&inner)
+        };
         self.save_settings();
 
-        let opened = if on {
+        let opened = if open {
             self.radio_open()
         } else {
             self.radio_close();
             Ok(())
         };
         if opened.is_err() {
-            self.lock().settings.radio.on = false;
+            set(&mut self.lock(), false);
             self.save_settings();
         }
         self.notify();
@@ -476,6 +523,120 @@ impl Core {
             }
             listed => RadioState::on(listed == Listed::Missing),
         }
+    }
+
+    /// Codex's radio as Codex has it, for its part of Settings › Agents. Codex turned off is asked
+    /// nothing: its switch as the settings have it. Otherwise as `radio_state`.
+    pub fn codex_radio_state(self: &Arc<Self>) -> RadioState {
+        if !self.agent_on(Agent::Codex) {
+            return if self.lock().settings.agents.codex.radio { RadioState { status: "on", missing: false, sessions: 0 } } else { RadioState::off(false) };
+        }
+
+        let asked = Arc::clone(&self.lock().radio.codex_asked);
+        let mut asked = asked.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = match asked.as_ref().filter(|(at, _)| at.elapsed() < ASKED_FOR) {
+            Some((_, state)) => state.clone(),
+            None => {
+                let state = self.codex_radio_ask();
+                *asked = Some((Instant::now(), state.clone()));
+                state
+            }
+        };
+        drop(asked);
+        state
+    }
+
+    /// Turns Codex's radio on or off, as `radio_set` does Claude's: Pitwall added to Codex's MCP
+    /// servers through its CLI (`codex mcp add`) in every Codex home, the main one first, then the
+    /// endpoint opens; or taken out again (`codex mcp remove`), from every home too. Only while
+    /// Codex is on, but for taking it out.
+    pub fn codex_radio_set(self: &Arc<Self>, on: bool) -> Result<RadioState, String> {
+        if on && !self.agent_on(Agent::Codex) {
+            return Err(t!("core.radio.agentOff.codex"));
+        }
+        let asked = Arc::clone(&self.lock().radio.codex_asked);
+        let mut asked = asked.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        *asked = None;
+
+        let others = self.codex_others();
+        let state = if on {
+            register::codex_add(None)?;
+            if let Err(error) = self.radio_switch(Agent::Codex, true) {
+                let _ = register::codex_remove(None);
+                return Err(error);
+            }
+            for home in &others {
+                let _ = self.codex_radio_home(home, true);
+            }
+            RadioState::codex_on(false)
+        } else {
+            let removed = register::codex_remove(None);
+            let _ = self.radio_switch(Agent::Codex, false);
+            for home in &others {
+                let _ = self.codex_radio_home(home, false);
+            }
+            removed?;
+            RadioState::off(false)
+        };
+        *asked = Some((Instant::now(), state.clone()));
+        Ok(state)
+    }
+
+    /// The Codex homes besides the main one: its accounts' that are there, whether Codex is on or
+    /// not (Pitwall taken out while it is off leaves no entry behind in an account's home).
+    fn codex_others(&self) -> Vec<PathBuf> {
+        let main = &self.cfg.codex_home;
+        self.codex_accounts().others.into_iter().map(|account| PathBuf::from(account.dir)).filter(|home| home.is_dir() && home != main).collect()
+    }
+
+    /// Pitwall among the MCP servers of the Codex home `home` (an account's, not the main one),
+    /// through Codex's CLI given that home: added (`on`) or taken out. For an account added while
+    /// Codex's radio is on, and one removed.
+    pub fn codex_radio_home(&self, home: &Path, on: bool) -> Result<(), String> {
+        // A home that is gone isn't made again for this: Codex's CLI refuses one that isn't there.
+        if !home.is_dir() || *home == self.cfg.codex_home {
+            return Ok(());
+        }
+        if on {
+            register::codex_add(Some(home))
+        } else {
+            register::codex_remove(Some(home))
+        }
+    }
+
+    /// Asks Codex's CLI how its radio stands, in the main home; puts right what `radio_ask`
+    /// puts right for Claude.
+    fn codex_radio_ask(self: &Arc<Self>) -> RadioState {
+        if !self.lock().settings.agents.codex.radio {
+            return match register::codex_listed(None) {
+                Listed::Own => {
+                    let _ = register::codex_remove(None);
+                    RadioState::off(false)
+                }
+                listed => RadioState::off(listed == Listed::Missing),
+            };
+        }
+
+        match register::codex_listed(None) {
+            Listed::No => {
+                let _ = self.radio_switch(Agent::Codex, false);
+                RadioState::off(false)
+            }
+            Listed::Gone => {
+                let _ = register::codex_add(None);
+                for home in self.codex_others() {
+                    let _ = self.codex_radio_home(&home, true);
+                }
+                RadioState::codex_on(false)
+            }
+            listed => RadioState::codex_on(listed == Listed::Missing),
+        }
+    }
+
+    /// Whether Codex's radio answers now: its switch on, and Codex on.
+    fn codex_radio_on(&self) -> bool {
+        let inner = self.lock();
+        inner.settings.agents.codex.radio && super::agents::agent_on(&inner, Agent::Codex)
     }
 
     /// One tool's switch.

@@ -1,5 +1,6 @@
 //! The day's activity, for the "Today" timeline. Pitwall writes down what it already watches,
-//! as it changes: Claude sessions (working, waiting on you, idle, with their names), dev servers
+//! as it changes: the agents' sessions (working, waiting on you, idle, with their names; each
+//! agent's under its own `kind`, `Agent::day_kind`: an older Pitwall skips Codex's), dev servers
 //! (running, stopped, crashed) and custom commands (started, finished). One file per local day
 //! in the app's own folder. A day's summary is built from that file and the projects' `git log`.
 //! The day's Claude tokens go into the same file (`day_tokens.rs`): the week's limit as read at
@@ -12,6 +13,7 @@ use std::io::Write as _;
 use serde::Deserialize;
 
 use super::*;
+use crate::agent::Agent;
 use crate::claude::{SessionPhase, SessionState};
 use crate::clock::{day_name, local_midnight};
 
@@ -30,9 +32,10 @@ pub(super) struct Event {
     /// The project; empty for the app's own events.
     #[serde(default)]
     path: String,
-    /// `claude` | `server` | `command` | `app` | `week` | `spend`
+    /// `claude` | `codex` | `server` | `command` | `app` | `week` | `spend` | `codexWeek` |
+    /// `codexSpend`
     kind: String,
-    /// claude: working | waiting | idle · server: running | stopped | crashed ·
+    /// claude, codex: working | waiting | idle · server: running | stopped | crashed ·
     /// command: running | ok | failed | stopped · app: start | stop | pause · week: start | reset ·
     /// spend: measured | estimated | unread (the week's share as `week` holds it)
     state: String,
@@ -115,6 +118,7 @@ pub(super) struct Recorder {
 }
 
 struct Seen {
+    agent: Agent,
     phase: SessionPhase,
     title: Option<String>,
     path: String,
@@ -135,6 +139,8 @@ pub(super) struct Sighting {
 pub(super) struct SessionDay {
     /// The project it was written down under.
     pub path: String,
+    /// The agent it is a session of.
+    pub agent: Agent,
     pub title: Option<String>,
     pub work: u64,
     pub wait: u64,
@@ -183,6 +189,8 @@ pub struct Span {
 #[serde(rename_all = "camelCase")]
 pub struct DaySession {
     pub id: String,
+    /// The agent it is a session of, as its events' `kind` says (`Agent::day_kind`).
+    pub agent: Agent,
     pub title: Option<String>,
     pub start: u64,
     pub end: u64,
@@ -221,6 +229,9 @@ pub struct DayProject {
     pub commands: Vec<DayCommand>,
     /// Claude's tokens in it that day; none when nothing is known of them.
     pub spend: Option<ProjectSpend>,
+    /// Codex's, the same way (`codexSpend` events); none for every day Codex wasn't counted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codex_spend: Option<ProjectSpend>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -236,6 +247,9 @@ pub struct DaySummary {
     pub projects: Vec<DayProject>,
     /// Claude's tokens that day, in all projects; none for a day before they were written down.
     pub spend: Option<DaySpend>,
+    /// Codex's, the same way.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codex_spend: Option<DaySpend>,
 }
 
 impl Core {
@@ -301,10 +315,11 @@ impl Core {
                 let title = session.title.clone().or_else(|| before.and_then(|seen| seen.title.clone()));
 
                 if changed {
-                    events.push(Event { session: Some(session.id.clone()), title: title.clone(), ..Event::new(now, &session.path, "claude", phase_name(session.phase)) });
+                    let kind = session.agent.day_kind();
+                    events.push(Event { session: Some(session.id.clone()), title: title.clone(), ..Event::new(now, &session.path, kind, phase_name(session.phase)) });
                 }
                 let since = before.filter(|seen| seen.phase == session.phase).map_or(now, |seen| seen.since);
-                recorder.sessions.insert(session.id.clone(), Seen { phase: session.phase, title, path: session.path.clone(), since });
+                recorder.sessions.insert(session.id.clone(), Seen { agent: session.agent, phase: session.phase, title, path: session.path.clone(), since });
             }
 
             recorder.sessions.retain(|id, seen| {
@@ -312,7 +327,7 @@ impl Core {
                     return true;
                 }
                 if seen.phase != SessionPhase::Idle {
-                    events.push(Event { session: Some(id.clone()), ..Event::new(now, &seen.path, "claude", "idle") });
+                    events.push(Event { session: Some(id.clone()), ..Event::new(now, &seen.path, seen.agent.day_kind(), "idle") });
                 }
                 false
             });
@@ -359,13 +374,23 @@ impl Core {
 
     /// The week's limit at the start of a stretch of the day (`WeekMark`).
     pub fn record_week(&self, mark: &WeekMark) {
+        self.record_week_of(Agent::Claude, mark);
+    }
+
+    /// `record_week` of `agent`'s week (`Agent::week_kind`).
+    pub fn record_week_of(&self, agent: Agent, mark: &WeekMark) {
         let state = if mark.before.is_some() { "reset" } else { "start" };
-        self.record(&Event { used: Some(mark.used), before: mark.before, resets: mark.resets, ..Event::new(mark.t, "", "week", state) });
+        self.record(&Event { used: Some(mark.used), before: mark.before, resets: mark.resets, ..Event::new(mark.t, "", agent.week_kind(), state) });
     }
 
     /// The day's week marks, the earliest first, and the week's limit used as that day's file
     /// last has it.
     pub fn week_marks(&self, day: &str) -> (Vec<WeekMark>, Option<f64>) {
+        self.week_marks_of(Agent::Claude, day)
+    }
+
+    /// `week_marks` of `agent`'s week.
+    pub fn week_marks_of(&self, agent: Agent, day: &str) -> (Vec<WeekMark>, Option<f64>) {
         let mut events = self.read_day(day);
         events.sort_by_key(|event| event.t);
 
@@ -373,11 +398,11 @@ impl Core {
         let mut last = None;
         for event in events {
             match (event.kind.as_str(), event.used) {
-                ("week", Some(used)) => {
+                (kind, Some(used)) if kind == agent.week_kind() => {
                     marks.push(WeekMark { t: event.t, used, before: event.before, resets: event.resets });
                     last = Some(used);
                 }
-                ("spend", Some(used)) => last = Some(used),
+                (kind, Some(used)) if kind == agent.spend_kind() => last = Some(used),
                 _ => {}
             }
         }
@@ -386,6 +411,11 @@ impl Core {
 
     /// The day's tokens as they stand at `t`, written into that moment's day.
     pub(super) fn record_spend(&self, t: u64, record: &SpendRecord) {
+        self.record_spend_of(Agent::Claude, t, record);
+    }
+
+    /// `record_spend` of `agent`'s tokens (`Agent::spend_kind`).
+    pub(super) fn record_spend_of(&self, agent: Agent, t: u64, record: &SpendRecord) {
         let state = match (record.week, record.estimated) {
             (None, _) => "unread",
             (Some(_), true) => "estimated",
@@ -396,7 +426,7 @@ impl Core {
             week: record.week,
             used: record.used,
             projects: Some(record.projects.clone()),
-            ..Event::new(t, "", "spend", state)
+            ..Event::new(t, "", agent.spend_kind(), state)
         });
     }
 
@@ -460,15 +490,13 @@ impl Core {
         // Claude's tokens: today's as the logs were last looked at, a day before's as its file
         // last has them.
         let today = (start..end).contains(&now);
-        let (spend, mut parts) = if today {
-            let owners: HashMap<String, String> =
-                day.projects.iter().flat_map(|(path, built)| built.sessions.iter().map(move |session| (session.id.clone(), path.clone()))).collect();
-            let listed: Vec<String> = names.keys().cloned().collect();
-            self.tokens_today(&day_name(start), &owners, &listed)
-        } else {
-            spend_of(&events, start, end)
-        };
-        for path in parts.keys().filter(|path| !path.is_empty()) {
+        let owners: HashMap<String, String> =
+            day.projects.iter().flat_map(|(path, built)| built.sessions.iter().map(move |session| (session.id.clone(), path.clone()))).collect();
+        let listed: Vec<String> = names.keys().cloned().collect();
+        let tokens_of = |agent: Agent| if today { self.tokens_today_of(agent, &day_name(start), &owners, &listed) } else { spend_of(&events, agent, start, end) };
+        let (spend, mut parts) = tokens_of(Agent::Claude);
+        let (codex_spend, mut codex_parts) = tokens_of(Agent::Codex);
+        for path in parts.keys().chain(codex_parts.keys()).filter(|path| !path.is_empty()) {
             day.project(path);
         }
 
@@ -479,17 +507,25 @@ impl Core {
             .map(|(path, built)| {
                 let name = names.get(&path).cloned().unwrap_or_else(|| folder_name(&path));
                 let spend = parts.remove(&path);
-                built.finish(path, name, spend)
+                let codex_spend = codex_parts.remove(&path);
+                built.finish(path, name, spend, codex_spend)
             })
             .filter(|p| {
-                !(p.work.is_empty() && p.wait.is_empty() && p.server.is_empty() && p.crashes.is_empty() && p.commits.is_empty() && p.commands.is_empty() && p.spend.is_none())
+                !(p.work.is_empty()
+                    && p.wait.is_empty()
+                    && p.server.is_empty()
+                    && p.crashes.is_empty()
+                    && p.commits.is_empty()
+                    && p.commands.is_empty()
+                    && p.spend.is_none()
+                    && p.codex_spend.is_none())
             })
             .collect();
 
         let claude_time = |p: &DayProject| p.work.iter().chain(&p.wait).map(|span| span.end - span.start).sum::<u64>();
         projects.sort_by(|a, b| claude_time(b).cmp(&claude_time(a)).then(b.commits.len().cmp(&a.commits.len())).then(a.name.cmp(&b.name)));
 
-        DaySummary { date: day_name(start), start, end, today, now, projects, spend }
+        DaySummary { date: day_name(start), start, end, today, now, projects, spend, codex_spend }
     }
 }
 
@@ -584,6 +620,7 @@ fn session_days(events: &[Event], start: u64, until: u64) -> HashMap<String, Ses
 
             let day = SessionDay {
                 path: path.clone(),
+                agent: session.agent,
                 title: session.title,
                 work: session.work,
                 wait: session.wait,
@@ -598,10 +635,10 @@ fn session_days(events: &[Event], start: u64, until: u64) -> HashMap<String, Ses
     found
 }
 
-/// A day's tokens as the last `spend` event between `start` and `end` has them: in all, and per
-/// project path (empty: projects not listed).
-fn spend_of(events: &[Event], start: u64, end: u64) -> (Option<DaySpend>, BTreeMap<String, ProjectSpend>) {
-    let Some(event) = events.iter().rev().find(|event| event.kind == "spend" && (start..end).contains(&event.t)) else {
+/// A day's tokens of `agent` as its last `spend` event (`Agent::spend_kind`) between `start` and
+/// `end` has them: in all, and per project path (empty: projects not listed).
+fn spend_of(events: &[Event], agent: Agent, start: u64, end: u64) -> (Option<DaySpend>, BTreeMap<String, ProjectSpend>) {
+    let Some(event) = events.iter().rev().find(|event| event.kind == agent.spend_kind() && (start..end).contains(&event.t)) else {
         return (None, BTreeMap::new());
     };
     let Some(tokens) = event.tokens else {
@@ -613,9 +650,9 @@ fn spend_of(events: &[Event], start: u64, end: u64) -> (Option<DaySpend>, BTreeM
     (Some(spend), parts)
 }
 
-/// The day's Claude, server and command events folded into each project's spans, cut to the
+/// The day's agent, server and command events folded into each project's spans, cut to the
 /// day (`start`) and to `until`; what was already going on at midnight comes from the day
-/// before. Commits aren't in it.
+/// before. Commits aren't in it. A session's agent is its events' `kind`.
 fn fold_day(events: &[Event], start: u64, until: u64) -> Day {
     let mut day = Day { start, until, projects: BTreeMap::new() };
     let mut sessions: HashMap<String, Open> = HashMap::new();
@@ -625,9 +662,10 @@ fn fold_day(events: &[Event], start: u64, until: u64) -> Day {
     for event in events.iter().filter(|event| event.t < until) {
         let counts = event.t >= start;
 
+        let agent = Agent::ALL.into_iter().find(|agent| agent.day_kind() == event.kind);
         match event.kind.as_str() {
-            "claude" => {
-                let Some(id) = event.session.as_deref() else {
+            _ if agent.is_some() => {
+                let (Some(id), Some(agent)) = (event.session.as_deref(), agent) else {
                     continue;
                 };
                 let phase = match event.state.as_str() {
@@ -641,15 +679,15 @@ fn fold_day(events: &[Event], start: u64, until: u64) -> Day {
                     if let Some(open) = sessions.remove(id) {
                         day.close_session(id, &open, event.t);
                         if open.phase == SessionPhase::Working && counts {
-                            day.project(&open.path).session(id).turns += 1;
+                            day.project(&open.path).session(id, open.agent).turns += 1;
                         }
                     }
                     if phase != SessionPhase::Idle {
-                        sessions.insert(id.to_string(), Open { path: event.path.clone(), phase, since: event.t });
+                        sessions.insert(id.to_string(), Open { agent, path: event.path.clone(), phase, since: event.t });
                     }
                 }
                 if let Some(title) = &event.title {
-                    day.project(&event.path).session(id).title = Some(title.clone());
+                    day.project(&event.path).session(id, agent).title = Some(title.clone());
                 }
             }
             "server" => {
@@ -704,8 +742,9 @@ fn fold_day(events: &[Event], start: u64, until: u64) -> Day {
     day
 }
 
-/// A Claude session's state since it was written down.
+/// An agent's session's state since it was written down.
 struct Open {
+    agent: Agent,
     path: String,
     phase: SessionPhase,
     since: u64,
@@ -739,7 +778,7 @@ impl Day {
             project.wait.push(span);
         }
 
-        let session = project.session(id);
+        let session = project.session(id, open.agent);
         session.start = session.start.min(from);
         session.end = session.end.max(to);
         if working {
@@ -770,9 +809,9 @@ struct Building {
 }
 
 impl Building {
-    fn session(&mut self, id: &str) -> &mut DaySession {
+    fn session(&mut self, id: &str, agent: Agent) -> &mut DaySession {
         let at = self.sessions.iter().position(|s| s.id == id).unwrap_or_else(|| {
-            self.sessions.push(DaySession { id: id.into(), title: None, start: u64::MAX, end: 0, work: 0, wait: 0, turns: 0 });
+            self.sessions.push(DaySession { id: id.into(), agent, title: None, start: u64::MAX, end: 0, work: 0, wait: 0, turns: 0 });
             self.sessions.len() - 1
         });
         &mut self.sessions[at]
@@ -786,7 +825,7 @@ impl Building {
         &mut self.commands[at]
     }
 
-    fn finish(mut self, path: String, name: String, spend: Option<ProjectSpend>) -> DayProject {
+    fn finish(mut self, path: String, name: String, spend: Option<ProjectSpend>, codex_spend: Option<ProjectSpend>) -> DayProject {
         // Only sessions that did something that day; the earliest first.
         self.sessions.retain(|s| s.work + s.wait > 0);
         self.sessions.sort_by_key(|s| s.start);
@@ -807,6 +846,7 @@ impl Building {
             commits: self.commits,
             commands: self.commands,
             spend,
+            codex_spend,
         }
     }
 }
@@ -924,5 +964,78 @@ mod tests {
         assert_eq!(commits.iter().map(|commit| commit.subject.as_str()).collect::<Vec<_>>(), ["Signed work"], "the log is read");
         let ran: Vec<&str> = [("fsmonitor hook", &fsmonitor_ran), ("signature program", &gpg_ran)].into_iter().filter(|(_, marker)| marker.exists()).map(|(name, _)| name).collect();
         assert!(ran.is_empty(), "the repository's own programs ran: {ran:?}");
+    }
+}
+
+#[cfg(test)]
+mod agent_tests {
+    use std::io::Write;
+
+    use serde_json::json;
+
+    use super::*;
+    use crate::claude::{Turn, TurnKind};
+
+    fn session(id: &str, agent: Agent, phase: SessionPhase) -> SessionState {
+        let turn = (phase == SessionPhase::Waiting).then_some(Turn { kind: TurnKind::Permission, at: 1_000 });
+        SessionState {
+            id: id.into(),
+            agent,
+            path: "/work/paddock".into(),
+            folder: Some("/work/paddock".into()),
+            title: Some(format!("{id} at work")),
+            phase,
+            turn,
+            since: Some(1_000),
+            hooked: true,
+            ended: false,
+            tool: None,
+            subagents: 0,
+            interrupted: false,
+        }
+    }
+
+    /// The day's file is kept for months and read by older Pitwalls too: a Codex session goes in
+    /// under its own `kind` (which an older Pitwall skips, so it never counts as Claude's), a
+    /// Claude session exactly as before, and each is read back as its own agent's, a line written
+    /// before there were agents as Claude's.
+    #[test]
+    fn each_agent_is_written_and_read_back_as_its_own() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = Core::new(
+            CoreConfig {
+                registry_dir: tmp.path().join("registry"),
+                claude_dir: tmp.path().join("claude"),
+                codex_home: tmp.path().join("codex"),
+                settings_file: tmp.path().join("config").join("settings.json"),
+                claude_settings: tmp.path().join("claude-settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            Arc::new(|_| {}),
+        );
+
+        core.record_activity(&[session("claude-1", Agent::Claude, SessionPhase::Working), session("codex-1", Agent::Codex, SessionPhase::Waiting)], &[]);
+        let file = core.activity_dir().unwrap().join(format!("{}.jsonl", day_name(now_ms())));
+        let written: Vec<serde_json::Value> = fs::read_to_string(&file).unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        let kind = |id: &str| written.iter().find(|line| line["session"] == id).map(|line| line["kind"].clone());
+        assert_eq!((kind("claude-1"), kind("codex-1")), (Some(json!("claude")), Some(json!("codex"))), "{written:?}");
+        assert!(written.iter().all(|line| line.get("agent").is_none()), "a line names its agent by its kind alone: {written:?}");
+
+        // A line as a Pitwall before agents wrote it, and the app stopping a minute on.
+        let at = written[0]["t"].as_u64().unwrap();
+        let mut old = fs::OpenOptions::new().append(true).open(&file).unwrap();
+        writeln!(old, "{}", json!({ "t": at, "path": "/work/paddock", "kind": "claude", "state": "working", "session": "before-agents" })).unwrap();
+        drop(old);
+        let mut events = core.read_day(&day_name(at));
+        events.push(Event::new(at + 60_000, "", "app", "stop"));
+
+        let day = fold_day(&events, at - 1, at + 120_000);
+        let mut sessions: Vec<(String, Agent, u64, u64)> = day.projects["/work/paddock"].sessions.iter().map(|s| (s.id.clone(), s.agent, s.work, s.wait)).collect();
+        sessions.sort();
+        assert_eq!(
+            sessions,
+            [("before-agents".to_string(), Agent::Claude, 60_000, 0), ("claude-1".to_string(), Agent::Claude, 60_000, 0), ("codex-1".to_string(), Agent::Codex, 0, 60_000)]
+        );
     }
 }

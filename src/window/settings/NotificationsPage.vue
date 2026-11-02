@@ -7,7 +7,8 @@
 import { computed, ref, watch } from "vue";
 
 import Icon from "../../components/Icon.vue";
-import { t } from "../../lib/i18n";
+import { agentsKey } from "../../lib/format";
+import { t, type Key } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
 import { EVENTS, eventOn, notifications, type NotifyEvent } from "../../lib/quiet";
 import { api, snapshot } from "../../lib/store";
@@ -21,6 +22,12 @@ async function flip(event: Event, send: (on: boolean) => Promise<unknown>, store
   } catch {
     box.checked = stored();
   }
+}
+
+/** A switch's words: Claude's alone as they always were; once the places name agents, the switches
+ * that cover every agent say so. */
+function labelOf(label: Key): Key {
+  return label === "notifications.claude" || label === "notifications.longTurn" ? agentsKey(label) : label;
 }
 
 function setEvent(event: Event, id: NotifyEvent): void {
@@ -82,7 +89,7 @@ function pickProject(event: MouseEvent): void {
   <div class="notif">
     <div class="rows">
       <label v-for="event in EVENTS" :key="event.id" class="row">
-        <span class="name">{{ t(event.label) }}</span>
+        <span class="name">{{ t(labelOf(event.label)) }}</span>
         <input type="checkbox" role="switch" :checked="eventOn(event.id)" @change="setEvent($event, event.id)" />
       </label>
     </div>

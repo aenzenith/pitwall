@@ -31,7 +31,7 @@ import type {
   ShellChoice,
   SignalKind,
   Snapshot,
-  StartChoice,
+  AgentStartChoice,
   SyncReport,
   TerminalLayout,
   TerminalOpened,
@@ -286,7 +286,7 @@ export const api = {
     path: string,
     claude = false,
     size: { cols: number; rows: number } | null = null,
-    start: StartChoice | null = null,
+    start: AgentStartChoice | null = null,
     shell: ShellChoice | null = null,
     account: string | null = null,
   ) =>
@@ -436,7 +436,7 @@ export const api = {
   /** Starts a Claude session in a new Pitwall terminal with the card's text (`plan`: in plan mode).
    * `continue`: the session the card holds goes on instead; one that still runs opens no terminal (null).
    * `start`: the model and the mode chosen for a new session; without it, the project's own. */
-  boardGive: (id: string, mode: "new" | "plan" | "continue", size: { cols: number; rows: number } | null = null, start: StartChoice | null = null) =>
+  boardGive: (id: string, mode: "new" | "plan" | "continue", size: { cols: number; rows: number } | null = null, start: AgentStartChoice | null = null) =>
     invoke<TerminalView | null>("board_give", { id, mode, cols: size?.cols, rows: size?.rows, start: start ?? undefined }),
   boardLink: (id: string, session: string) => invoke("board_link", { id, session }),
   /** Every card of the folder `from` goes to the project `to`, each in its column. */
@@ -520,8 +520,8 @@ export const api = {
   /** Whether an event brings a notification. */
   notifyEvent: (event: "claude" | "serverCrashed" | "command" | "longTurn" | "deps" | "fuel", on: boolean) => invoke("notify_event", { event, on }),
   muteProject: (path: string, muted: boolean) => invoke("mute_project", { path, muted }),
-  /** Opens what a missed notification was about; its line goes. */
-  missedOpen: (path: string, kind: SignalKind) => invoke("missed_open", { path, kind }),
+  /** Opens what a missed notification was about; its line goes. `agent`: whose line it is. */
+  missedOpen: (path: string, kind: SignalKind, agent: import("./types").Agent = "claude") => invoke("missed_open", { path, kind, agent }),
   missedClear: () => invoke("missed_clear"),
 
   /* The team radio (core/radio): Claude Code asks Pitwall. */
@@ -607,12 +607,44 @@ export const api = {
   lastLooked: () => invoke<string | null>("last_looked"),
   /** Tells a card up next to wait until the 5-hour session refills (the core's own reading of
    * that moment): the core gives it then, with `start`. */
-  boardSchedule: (id: string, start: StartChoice) => invoke("board_schedule", { id, start }),
+  boardSchedule: (id: string, start: AgentStartChoice) => invoke("board_schedule", { id, start }),
   /** The card waits no longer; it stays up next. */
   boardUnschedule: (id: string) => invoke("board_unschedule", { id }),
   /** "Give now" on a card that waits: given at once with what was chosen for it; null when it
    * no longer waits (the core gave it a moment ago). */
   boardGiveNow: (id: string, size: { cols: number; rows: number } | null = null) => invoke<TerminalView | null>("board_give_now", { id, cols: size?.cols, rows: size?.rows }),
+  /** Pitwall's hook in Codex's `hooks.json`; Codex runs it once the user trusted it in `/hooks`. */
+  installCodexHook: () => invoke("install_codex_hook"),
+  uninstallCodexHook: () => invoke("uninstall_codex_hook"),
+  /** The terminal's history of Codex: the project's sessions `codex resume` finds. */
+  codexPast: (path: string) => invoke<import("./types").PastSession[]>("codex_past", { path }),
+  /** A Codex session of the terminal's history brought up where it runs, or opened again in a new
+   * tab (`codex resume`) once it has ended, as `resumeClaude` is Claude's. */
+  resumeCodex: (path: string, session: string) => invoke<import("./types").Resumed>("resume_codex", { path, session }),
+  /* An agent's accounts (Codex's: `fuel.codex.accounts`; events `codex-account-login`,
+     `codex-account-sync`: lib/accounts). With "claude" these are the calls above. */
+  agentAccountUse: (agent: import("./types").Agent, id: string) => invoke("account_use", { id, agent }),
+  agentAccountRename: (agent: import("./types").Agent, id: string, name: string) => invoke("account_rename", { id, name, agent }),
+  agentAccountRemove: (agent: import("./types").Agent, id: string) => invoke("account_remove", { id, agent }),
+  agentAccountSetSync: (agent: import("./types").Agent, id: string, on: boolean) => invoke("account_set_sync", { id, on, agent }),
+  agentAccountReveal: (agent: import("./types").Agent, id: string) => invoke("account_reveal", { id, agent }),
+  agentAccountFolder: (agent: import("./types").Agent, name: string) => invoke<{ shown: string; exists: boolean }>("account_folder", { name, agent }),
+  agentAccountPickFolder: (agent: import("./types").Agent) => invoke<{ path: string; shown: string } | null>("account_pick_folder", { agent }),
+  /** Codex's sign-in is `codex login` with the account's own `CODEX_HOME`. */
+  agentAccountLogin: (agent: import("./types").Agent, name: string, dir: string | null, shared: boolean, sync: boolean) => invoke("account_login", { name, dir, shared, sync, agent }),
+  agentAccountSync: (agent: import("./types").Agent, id: string) => invoke<import("./types").AgentSyncReport>("account_sync", { id, agent }),
+  agentAccountSyncPlan: (agent: import("./types").Agent, id: string) => invoke<import("./types").AgentSyncReport>("account_sync_plan", { id, agent }),
+  /** Turns an agent on or off at the user's word; a look finds it again for nothing after. */
+  agentSetOn: (agent: import("./types").Agent, on: boolean) => invoke("agent_set_on", { agent, on }),
+  /** The user was told that an agent was found and turned on: the notice closes for good. */
+  agentTold: (agent: import("./types").Agent) => invoke("agent_told", { agent }),
+  /** Looks for the agents' home folders again; true when that changed what is found. */
+  lookForAgents: () => invoke<boolean>("look_for_agents"),
+  /** Each agent's CLI version and home folder, for Settings › Agents. */
+  agentDetails: () => invoke<import("./types").AgentDetail[]>("agent_details"),
+  /** Codex's team radio, as `radioState` / `radioSet` are Claude's. */
+  codexRadioState: () => invoke<RadioState>("codex_radio_state"),
+  codexRadioSet: (on: boolean) => invoke<RadioState>("codex_radio_set", { on }),
 };
 
 /** The Track page's settings as just picked, on the page or in Settings: shown at once, the core

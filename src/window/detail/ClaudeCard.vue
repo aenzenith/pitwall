@@ -2,7 +2,8 @@
 import { computed } from "vue";
 
 import ClaudeSpark from "../../components/ClaudeSpark.vue";
-import { ago } from "../../lib/format";
+import { agentOn } from "../../lib/agents";
+import { agentKey, ago, namesAgent, rowAgent } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { PROMPT_LEAD_MS } from "../../lib/sessions";
 import { api, now } from "../../lib/store";
@@ -21,18 +22,28 @@ const finished = computed(() => {
   return (turn?.kind === "finished" && seeable(turn.at)) || sessions.some((session) => session.phase === "waiting" && session.turn?.kind === "finished" && seeable(session.turn.at));
 });
 
+/** Whose state the card shows: the most urgent session's agent, as the project's row has it; else
+ * the agent the project starts while that one is on, Claude's otherwise. */
+const agent = computed(() => {
+  const chosen = props.project.settings.agent;
+  return rowAgent(props.project) ?? (chosen && agentOn(chosen) ? chosen : "claude");
+});
+
 const claudeTitle = computed(() => {
   const turn = props.project.claude;
-  if (!turn) return t(props.project.claudeWorking ? "detail.claudeWorking" : "detail.noSession");
-  return t(({ finished: "detail.claudeFinished", asking: "detail.claudeAsking", permission: "detail.claudePermission" } as const)[turn.kind]);
+  if (!turn) return props.project.claudeWorking ? t(agentKey("detail.claudeWorking", agent.value)) : t("detail.noSession");
+  return t(agentKey(({ finished: "detail.claudeFinished", asking: "detail.claudeAsking", permission: "detail.claudePermission" } as const)[turn.kind], agent.value));
 });
+
+/** The section's head: "Claude", or "Agent" while more than one agent is on (the list's column). */
+const heading = computed(() => t(namesAgent.value ? "window.col.agent" : "window.col.claude"));
 </script>
 
 <template>
-  <section class="block" :aria-label="t('window.col.claude')">
-    <div class="section-label">{{ t("window.col.claude") }}</div>
+  <section class="block" :aria-label="heading">
+    <div class="section-label">{{ heading }}</div>
     <div :class="['card', { hot: project.claude }]">
-      <ClaudeSpark :state="project.claude ? 'waiting' : project.claudeWorking ? 'working' : 'quiet'" />
+      <ClaudeSpark :state="project.claude ? 'waiting' : project.claudeWorking ? 'working' : 'quiet'" :agent="agent" />
       <div class="card-text">
         <span class="card-title">{{ claudeTitle }}</span>
         <span class="card-sub">

@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 
+import AgentMark from "../components/AgentMark.vue";
 import ClaudeDot from "../components/ClaudeDot.vue";
-import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
-import { accountLabel, accountName, accounts, severalAccounts } from "../lib/accounts";
+import { agentOn } from "../lib/agents";
 import { depJobName, depJobs } from "../lib/deps";
 import { commandFaded } from "../lib/format";
 import { shellRequest } from "../lib/flag";
 import { t } from "../lib/i18n";
-import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { plainText, shownLines } from "../lib/outputLines";
 import { useOutputSearch } from "../lib/outputSearch";
 import { useOutputStream, type OutputLine } from "../lib/outputStream";
@@ -83,15 +82,16 @@ import {
   type Side,
   type SplitDir,
 } from "../lib/panes";
-import { isMac, isWindows, primary } from "../lib/platform";
+import { isWindows, primary } from "../lib/platform";
 import { sessionWaits, statusLine } from "../lib/sessions";
-import { SHELL_LABELS, shellIcon } from "../lib/shells";
-import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
+import { shellIcon } from "../lib/shells";
+import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
-import { attach, fitView, focusView, measure, paneKeys, terminalTip } from "../lib/terminals";
-import type { Project, Shell, ShellChoice, StartChoice } from "../lib/types";
+import { attach, fitView, focusView, measure, paneKeys, tabAccountLabel, terminalTip } from "../lib/terminals";
+import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../lib/types";
+import AddMenu from "./AddMenu.vue";
 import CardDialog from "./board/CardDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
@@ -158,11 +158,12 @@ const rowTabs = computed(() => {
 /** The names the row and the panes show: two of the same name told apart ("zsh", "zsh 2"). */
 const names = computed(() => distinctNames(terminals.value));
 
-// A Claude session's pane is larger at least (lib/panes): which of these terminals are Claude's.
+// An agent's session's pane is larger at least (lib/panes): which of these terminals are an
+// agent's (Claude's or Codex's).
 watch(
   terminals,
   (list) => {
-    claudeTerminals.value = new Set(list.filter((term) => term.kind === "claude").map((term) => term.id));
+    claudeTerminals.value = new Set(list.filter((term) => term.kind !== "shell").map((term) => term.id));
   },
   { immediate: true },
 );
@@ -576,13 +577,13 @@ function openSudoSettings(): void {
   void api.openSudoSettings().catch(() => undefined);
 }
 
-/** A new tab: the shell, or with `claude` a Claude Code session (`start`: with the model and in
- * the mode picked from its list; without one, as the project's settings say). With panes, or
+/** A new tab: the shell, or with `claude` an agent's session (`start`: the agent, with the model
+ * and in the mode picked from its list; without one, Claude as the project's settings say). With panes, or
  * `where` asked for, it goes into a pane (`placeTerminal`). `shell`: on Windows, the shell of the
  * list picked, an administrator's or not; an administrator's that opened in a window of its own,
- * or that Windows refused, opens no tab and the panel says so (`notice`). `account`: the Claude
- * account it runs with ("Start with account"); without one, the account in use. */
-async function openTerminal(claude = false, start: StartChoice | null = null, where: Place | null = null, shell: ShellChoice | null = null, account: string | null = null): Promise<void> {
+ * or that Windows refused, opens no tab and the panel says so (`notice`). `account`: the agent's
+ * account it runs with (picked in "+"'s details); without one, the account in use. */
+async function openTerminal(claude = false, start: AgentStartChoice | null = null, where: Place | null = null, shell: ShellChoice | null = null, account: string | null = null): Promise<void> {
   if (opening.value) return;
   opening.value = true;
   try {
@@ -667,12 +668,7 @@ watch(
  */
 let asked: number | null = null;
 
-/* ---------- "+": a new tab, or a Claude session ---------- */
-
-/** How "New Claude" starts a session here when nothing is picked: the project's own settings. */
-const defaults = computed(() => projectChoice(props.project));
-
-const menu = useNativeMenu();
+/* ---------- "+": a new tab, or an agent's session ---------- */
 
 /** The shells installed here, Windows' alone (none elsewhere): asked of the core once. */
 const shells = ref<Shell[]>([]);
@@ -683,51 +679,26 @@ if (isWindows) {
     .catch(() => undefined);
 }
 
-/** "+"'s submenu on Windows: each shell installed, then each as an administrator's. */
-function shellItems(): MenuEntry[] {
-  const open = (shell: Shell, elevated: boolean) => () => void openTerminal(false, null, null, { shell, elevated });
-  return [
-    ...shells.value.map((shell) => ({ text: t(SHELL_LABELS[shell]), action: open(shell, false) })),
-    "separator",
-    ...shells.value.map((shell) => ({ text: t("terminal.admin", { shell: t(SHELL_LABELS[shell]) }), action: open(shell, true) })),
-  ];
-}
+/** "+"'s menu (AddMenu): a new tab, "New Claude", "New Codex" for the agents that are on, each
+ * opening at a click as the project's settings say, its details beside it. */
+const addMenuView = ref<InstanceType<typeof AddMenu> | null>(null);
 
-/** The "+" menu, under it: a Claude session as the project's settings say, a shell tab, on
- * Windows in a submenu the shells (and each as an administrator's), and in a submenu the models
- * (the project's own checked) and plan mode, each starting a session at once with that one
- * change, the rest as the project's settings say. With more than one Claude account, in a
- * submenu the accounts (the one in use checked): a session with that one. */
 function addMenu(event: Event): void {
   if (opening.value) return;
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const { model, mode } = defaults.value;
-  void menu.popup({ clientX: box.left, clientY: box.bottom + 4 }, [
-    { text: t("terminal.newClaude"), action: () => void openTerminal(true) },
-    { text: t("terminal.newTab"), accelerator: isMac ? "Cmd+T" : "Ctrl+Shift+T", action: () => void openTerminal() },
-    "separator",
-    ...(shells.value.length ? [{ text: t("terminal.openWith"), items: shellItems() }] : []),
-    {
-      text: t("terminal.claudeWith"),
-      items: [
-        ...MODELS.map((each) => ({ text: t(MODEL_LABELS[each]), checked: model === each, action: () => void openTerminal(true, { model: each, mode }) })),
-        "separator",
-        { text: t("start.newClaudePlan"), checked: mode === "plan", action: () => void openTerminal(true, { model, mode: "plan" }) },
-      ],
-    },
-    ...(severalAccounts.value ? [{ text: t("terminal.accountWith"), items: accountItems() }] : []),
-  ]);
+  addMenuView.value?.show(event.currentTarget as HTMLElement, event.type === "keydown");
 }
 
-/** "+"'s "Start with account": every account, the one in use checked; one whose folder is gone
- * can't be picked. */
-function accountItems(): MenuEntry[] {
-  return accounts.value.map((account) => ({
-    text: accountName(account),
-    checked: account.inUse,
-    enabled: !account.missing,
-    action: () => void openTerminal(true, null, null, null, account.id),
-  }));
+/** What "+" says it opens: a tab or the agents that are on. */
+const addLabel = computed(() => {
+  const claude = agentOn("claude");
+  if (!agentOn("codex")) return t("terminal.add");
+  return claude ? t("terminal.add.all") : t("terminal.add.codex");
+});
+
+/** A new agent's tab as the project's settings say: Claude's, or Codex's while Claude is off. */
+function openAgent(agent: Agent | null = null, account: string | null = null): void {
+  const which = agent ?? (agentOn("claude") || !agentOn("codex") ? "claude" : "codex");
+  void openTerminal(true, which === "codex" ? projectCodexChoice(props.project) : null, null, null, account);
 }
 
 /* ---------- the panes ---------- */
@@ -1066,7 +1037,7 @@ function onPanelKey(event: KeyboardEvent): void {
 
 /** Something dragged onto the terminals from elsewhere in the panel: a session from the history
  * (TerminalHistory) or, one terminal at a time, a tab from the row. */
-type Incoming = { kind: "session" | "tab"; id: string | number; name: string; claude: boolean; x: number; y: number };
+type Incoming = { kind: "session" | "tab"; id: string | number; name: string; agent: Agent | null; x: number; y: number };
 const incoming = ref<Incoming | null>(null);
 /** Where it would land: a pane (`pane`; none with one terminal at a time) and its side, or the
  * middle (`side` none: into that pane, or for a session with one terminal at a time, a tab). */
@@ -1103,7 +1074,7 @@ function landingAt(drag: Incoming): Landing | null {
   const side = near.sort((a, b) => a[1] - b[1])[0][0];
   const middle = rx > 0.3 && rx < 0.7 && ry > 0.3 && ry < 0.7;
   const room = roomAt(Math.min(Math.max(panesHeight.value, PANES_HEIGHT), tallest()));
-  const coming: PaneKind = drag.kind === "session" || drag.claude ? "claude" : "shell";
+  const coming: PaneKind = drag.kind === "session" || drag.agent ? "claude" : "shell";
   if (!middle && canSplit({ x: 0, y: 0, ...room }, side === "left" || side === "right" ? "row" : "col", [kindOfTerminal(shown.id), coming])) return { pane: null, side };
   return drag.kind === "tab" ? null : { pane: null, side: null };
 }
@@ -1147,8 +1118,8 @@ function placeDropped(id: number, place: Place): void {
  * that brings its terminal takes it (`terminalRequest`). */
 let dropPlace: { place: Place; at: number } | null = null;
 
-function sessionDragged(drag: { id: string; name: string; x: number; y: number } | null): void {
-  incoming.value = drag ? { kind: "session", ...drag, claude: true } : null;
+function sessionDragged(drag: { id: string; name: string; agent: Agent; x: number; y: number } | null): void {
+  incoming.value = drag ? { kind: "session", ...drag } : null;
 }
 
 /** A session let go on the terminals: it opens there (`resume_claude` in the history), a tab of
@@ -1219,7 +1190,7 @@ const tabElsewhere = {
       return false;
     }
     const term = terminals.value.find((each) => each.id === id);
-    incoming.value = { kind: "tab", id, name: names.value.get(id) ?? term?.name ?? "", claude: term?.kind === "claude", x, y };
+    incoming.value = { kind: "tab", id, name: names.value.get(id) ?? term?.name ?? "", agent: term && term.kind !== "shell" ? term.kind : null, x, y };
     return true;
   },
   drop(id: number): boolean {
@@ -1261,7 +1232,7 @@ function onRowClick(event: MouseEvent): void {
         resizer.fill();
         slide();
       }
-    } else if (empty) void openTerminal(true);
+    } else if (empty) openAgent();
     return;
   }
   if (!collapsed.value || !(empty || grip)) return;
@@ -1576,7 +1547,8 @@ watch(
     if (request.path !== path) return;
     openRequest.value = null;
     await nextTick();
-    void openTerminal(request.claude, null, null, null, request.account);
+    if (request.claude) openAgent(request.agent ?? "claude", request.account);
+    else void openTerminal(false, null, null, null, request.account);
   },
   { immediate: true },
 );
@@ -1779,10 +1751,10 @@ defineExpose({ openTerminal, closeShown });
             aria-describedby="terminal-tab-keys"
             @keydown="onTabKey($event, term.id)"
           >
-            <ClaudeLogo v-if="term.kind === 'claude'" :size="11" />
+            <AgentMark v-if="term.kind !== 'shell'" :agent="term.kind" :size="11" />
             <Icon v-else :name="shellIcon(term.shell)" :size="11" />
             <span class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
-            <span v-if="accountLabel(term.account)" class="tab-account">{{ accountLabel(term.account) }}</span>
+            <span v-if="tabAccountLabel(term)" class="tab-account">{{ tabAccountLabel(term) }}</span>
             <span v-if="term.elevated" class="admin" role="img" :aria-label="t('terminal.adminBadge')"><Icon name="shield" :size="10" /></span>
             <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
@@ -1802,14 +1774,14 @@ defineExpose({ openTerminal, closeShown });
       <!-- The terminals' tabs and right after them the button that opens one; at the right end, the
            outputs' tabs, the shown output's tools, the history and collapse. -->
       <span :class="['divider', { shown: rowTabs.length }]" aria-hidden="true"></span>
-      <!-- A shell tab, a Claude session, or one with a model or mode of its own: a menu under it. -->
+      <!-- A shell tab, an agent's session, or one with a model or mode of its own: a menu under it. -->
       <button
         type="button"
         class="icon add"
         aria-haspopup="menu"
         aria-keyshortcuts="ArrowDown"
-        :aria-label="t('terminal.add')"
-        :title="t('terminal.add')"
+        :aria-label="addLabel"
+        :title="addLabel"
         :disabled="opening"
         @click="addMenu"
         @contextmenu.prevent="addMenu"
@@ -1817,6 +1789,13 @@ defineExpose({ openTerminal, closeShown });
       >
         <Icon name="plus" :size="13" />
       </button>
+      <AddMenu
+        ref="addMenuView"
+        :project="project"
+        :shells="shells"
+        @shell="(choice) => openTerminal(false, null, null, choice)"
+        @agent="(start, account) => openTerminal(true, start, null, null, account)"
+      />
       <span class="grow"></span>
       <!-- The outputs, always at the right end: the dev server's, then the commands' that ran. -->
       <div class="outlist" role="tablist" :aria-label="t('detail.output')">
@@ -1894,13 +1873,16 @@ defineExpose({ openTerminal, closeShown });
           <div ref="viewport" class="viewport" @pointerdown="pressScreen"></div>
           <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
             <span>{{ t("terminal.none", { name: project.name }) }}</span>
-            <!-- The "+" menu's first two, at hand where there is nothing yet. -->
+            <!-- The "+" menu's rows, at hand where there is nothing yet. -->
             <div class="empty-actions">
               <button type="button" class="control" :disabled="opening" @click="openTerminal()">
                 <Icon name="terminal" :size="12" /> {{ t("terminal.newTab") }}
               </button>
-              <button type="button" class="control" :disabled="opening" @click="openTerminal(true)">
-                <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
+              <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="openAgent('claude')">
+                <AgentMark agent="claude" :size="12" /> {{ t("terminal.newClaude") }}
+              </button>
+              <button v-if="agentOn('codex')" type="button" class="control" :disabled="opening" @click="openAgent('codex')">
+                <AgentMark agent="codex" :size="12" /> {{ t("terminal.newCodex") }}
               </button>
             </div>
           </div>
@@ -1997,7 +1979,7 @@ defineExpose({ openTerminal, closeShown });
     </Transition>
 
     <div v-if="incoming" class="ghost" :style="{ left: `${incoming.x + 12}px`, top: `${incoming.y + 10}px` }" aria-hidden="true">
-      <ClaudeLogo v-if="incoming.claude" :size="11" />
+      <AgentMark v-if="incoming.agent" :agent="incoming.agent" :size="11" />
       <Icon v-else name="terminal" :size="11" />
       {{ incoming.name }}
     </div>

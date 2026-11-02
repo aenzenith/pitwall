@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
 import { clock, duration } from "../../lib/day";
+import { AGENT_ORDER, agentKey } from "../../lib/format";
 import { useBackdropClose } from "../../lib/dialog";
 import { openUnfocused, useReturnFocus } from "../../lib/dialogFocus";
 import { shellRequest } from "../../lib/flag";
@@ -78,7 +79,8 @@ type Row =
   | { key: string; part: "review" | "scheduled"; path: string; name: string; count: string; label: string }
   | { key: string; part: "running"; name: string; sub: string };
 
-type Part = { id: Row["part"]; label: string; count: string; rows: Row[] };
+/** `key`: told apart where one part comes once an agent (Claude's, Codex's sessions). */
+type Part = { id: Row["part"]; key?: string; label: string; count: string; rows: Row[] };
 
 /** Stands in for a tool's name while its sentence is put together (no name ever holds it). */
 const TOOL = "\uE000";
@@ -111,12 +113,16 @@ const parts = computed<Part[]>(() => {
       rows: open.push.map((row) => ({ key: `push\u001f${row.path}`, part: "push", path: row.path, name: row.name, branch: row.branch, count: t("flag.commits", { count: row.count }), label: t("flag.openTerminal", { name: row.name }) })),
     });
   }
-  if (open.claude.length) {
+  // Where the agents wait on you: a part each, Claude's first, counted alike.
+  for (const agent of AGENT_ORDER) {
+    const waits = open.claude.filter((row) => (row.agent ?? "claude") === agent);
+    if (!waits.length) continue;
     list.push({
       id: "claude",
-      label: t("flag.claude"),
-      count: t("flag.sessions", { count: open.claude.length }),
-      rows: open.claude.map((row) => {
+      key: `claude\u001f${agent}`,
+      label: t(agentKey("flag.claude", agent)),
+      count: t("flag.sessions", { count: waits.length }),
+      rows: waits.map((row) => {
         const wait = lasting(row.since);
         const status =
           row.kind === "permission"
@@ -400,7 +406,7 @@ onBeforeUnmount(() => {
       <span id="flag-keys" class="sr-only">{{ t("flag.keys") }}</span>
       <div class="parts" role="grid" :aria-label="t('flag.title')" aria-describedby="flag-keys" :inert="quitting">
         <div ref="list" class="rows" role="rowgroup" @keydown="onKey">
-          <template v-for="part in parts" :key="part.id">
+          <template v-for="part in parts" :key="part.key ?? part.id">
             <div class="part-head" role="row">
               <span role="columnheader" class="section-label">{{ part.label }}</span>
               <span role="gridcell" class="part-count">{{ part.count }}</span>

@@ -12,9 +12,15 @@
 //!
 //! Which sessions run, and under which processes, comes from Claude Code's
 //! `~/.claude/sessions/<pid>.json` (see `sessions.rs` for what is read of it).
+//!
+//! A Codex session (`codex_liveness`) comes up in its tab of Pitwall's terminals; one that runs
+//! elsewhere only brings the project's window up (nothing links into VS Code's Codex); one that
+//! has ended opens again in a new tab (`codex resume`). While Codex is off nothing of it is read.
 
+use super::sessions::{lineage, terminal_app, Running};
 use super::terminal::Launch;
 use super::*;
+use crate::process::ProcessInfo;
 
 /// How long a finished session waits for its project's window to open and take the command.
 const WINDOW_WAIT: Duration = Duration::from_secs(15);
@@ -186,8 +192,14 @@ impl Core {
     /// where it runs, as `reveal_claude` brings it. With none to name (its turn was read from a
     /// log no running session owns), the project's editor window.
     pub fn open_claude(self: &Arc<Self>, path: &str) {
+        self.open_waiting(path, None);
+    }
+
+    /// `open_claude` among `agent`'s sessions only (a click on that agent's banner, a line of the
+    /// quiet list); none: any agent's.
+    pub fn open_waiting(self: &Arc<Self>, path: &str, agent: Option<Agent>) {
         let waiting = self.lock().claude_sessions.get(path).and_then(|sessions| {
-            let waiting = sessions.iter().filter(|session| session.phase == SessionPhase::Waiting);
+            let waiting = sessions.iter().filter(|session| session.phase == SessionPhase::Waiting && agent.is_none_or(|agent| session.agent == agent));
             waiting.max_by_key(|session| session.turn.map(|turn| turn.at)).map(|session| session.id.clone())
         });
 
@@ -198,8 +210,86 @@ impl Core {
     }
 
     fn reveal_now(self: &Arc<Self>, path: &str, session: &str) {
+        if is_session_id(session) && self.is_codex_session(session) {
+            let liveness = self.codex_liveness(session);
+            return self.reveal_codex_as(path, session, liveness);
+        }
         let liveness = if is_session_id(session) { self.liveness(session) } else { Liveness::Unknown };
         self.reveal_as(path, session, liveness);
+    }
+
+    /// Whether `session` (a session id) is Codex's: as Codex's watch has it, else one Codex runs
+    /// or keeps a rollout of. Never while Codex is off.
+    fn is_codex_session(&self, session: &str) -> bool {
+        if !self.agent_on(Agent::Codex) {
+            return false;
+        }
+        if let Some(agent) = self.lock().scanned.iter().find(|state| state.id == session).map(|state| state.agent) {
+            return agent == Agent::Codex;
+        }
+        self.codex_running().is_some_and(|running| running.contains_key(session)) || self.codex_rollout(session).is_some()
+    }
+
+    /// A Codex session of the terminal's history (its project `path`, listed), as `resume_claude`
+    /// is Claude's: brought up in its tab while it runs in one, the project's window while it runs
+    /// elsewhere; once it has ended, opened again in a new tab (`codex resume`). Whatever can't be
+    /// told to have ended is never opened.
+    pub fn resume_codex(self: &Arc<Self>, path: &str, session: &str) -> Resumed {
+        if !is_session_id(session) {
+            return Resumed::Missing;
+        }
+        let liveness = self.codex_liveness(session);
+        match plan_resume(&liveness, || self.codex_rollout(session).is_some()) {
+            Resume::Reveal => {
+                let own = matches!(&liveness, Liveness::Running { lineage, .. } if self.pitwall_terminal(lineage).is_some());
+                self.reveal_codex_as(path, session, liveness);
+                if own { Resumed::Shown } else { Resumed::Elsewhere }
+            }
+            Resume::Reopen if self.reopen_codex(path, session) => Resumed::Opened,
+            Resume::Reopen | Resume::Missing => Resumed::Missing,
+            Resume::Unsure => Resumed::Unsure,
+        }
+    }
+
+    /// A Codex session brought up: its tab of Pitwall's terminals; one that runs elsewhere, or
+    /// that can't be opened again, the project's window only.
+    fn reveal_codex_as(self: &Arc<Self>, path: &str, session: &str, liveness: Liveness) {
+        match &liveness {
+            Liveness::Running { lineage, .. } => match self.pitwall_terminal(lineage) {
+                Some((id, path)) => self.emit(CoreEvent::RevealTerminal { path, id }),
+                None => self.launch_editor(path),
+            },
+            Liveness::Ended | Liveness::Stopped if self.reopen_codex(path, session) => {}
+            Liveness::Ended | Liveness::Stopped | Liveness::Unknown => self.launch_editor(path),
+        }
+    }
+
+    /// Opens a Codex session no process runs again (`codex resume`) in a new tab of its project's
+    /// terminals, with the Codex account whose home keeps its rollout, and shows it; a card that
+    /// holds it follows it there. `false` when there is no such tab to open: a folder that isn't
+    /// listed has no terminals, and a session without a rollout nothing to open. Held as
+    /// `reopen` holds Claude's (`open_once`): never a second process on one rollout.
+    fn reopen_codex(self: &Arc<Self>, path: &str, session: &str) -> bool {
+        let Some(path) = self.listed_paths().into_iter().find(|listed| same_path(listed, path)) else {
+            return false;
+        };
+        let Some((account, _, _)) = self.codex_rollout(session) else {
+            return false;
+        };
+
+        let open = || self.open_terminal_with(&path, &Launch::ResumeCodex { session: session.to_string() }, None, false, None, false, Some(&account));
+        let tab = match self.open_once(session, open) {
+            Opened::Opening => return true,
+            Opened::Failed(_) => return false,
+            Opened::Held(tab) => tab,
+            Opened::New(view) => {
+                self.board_resumed(session, view.id);
+                view.id
+            }
+        };
+
+        self.emit(CoreEvent::RevealTerminal { path, id: tab });
+        true
     }
 
     /// A session of the terminal's history (its project `path`, listed) brought up: where it runs
@@ -283,14 +373,14 @@ impl Core {
 
     /// Opens a session no process runs again in a new tab, which `open` makes, unless it holds
     /// one: its tab is on its way, or it was opened again in a tab where Claude may still run it
-    /// (`claude_may_run_in`). Every such opening goes through here, in whatever order they come:
+    /// (`agent_may_run_in`). Every such opening goes through here, in whatever order they come:
     /// a click (`reopen`), a card that goes on with its session (`launch_card`), what the last
     /// quit left open (`put_back`) and what a restart for an update did (`restore`). Two
     /// processes would write one log.
     pub(super) fn open_once(&self, session: &str, open: impl FnOnce() -> Result<TerminalView, String>) -> Opened {
         // Its tab's processes are read first, not while the claim is held.
         let held = self.sessions_cache().reopened.get(session).copied().filter(|&tab| tab != OPENING);
-        let runs = held.is_some_and(|tab| self.claude_may_run_in(tab));
+        let runs = held.is_some_and(|tab| self.agent_may_run_in(tab));
         let claimed = {
             let mut cache = self.sessions_cache();
             // A tab it was given since has only just opened.
@@ -367,6 +457,95 @@ impl Core {
     fn log_modified(&self, session: &str) -> Option<u64> {
         self.session_log(session).map(|(_, modified)| modified)
     }
+
+    /// Whether a Codex session runs, as `liveness` tells Claude's: running while Codex's watch has
+    /// its process (`codex_running`); ended or just stopped once it hasn't and its rollout says
+    /// when it last changed. A session can run unseen (its hook's events taken by an earlier run
+    /// of Pitwall, or never sent), so while a process of Codex's runs that may hold it and no tied
+    /// session accounts for it can't be told (`codex_runs_unseen`). Unknown while Codex is off,
+    /// with nothing read.
+    pub(super) fn codex_liveness(&self, session: &str) -> Liveness {
+        if !self.agent_on(Agent::Codex) {
+            return Liveness::Unknown;
+        }
+        let Some(running) = self.codex_running() else {
+            return Liveness::Unknown;
+        };
+        if let Some(run) = running.get(session) {
+            return Liveness::Running { entrypoint: run.entrypoint.clone(), lineage: run.lineage.clone() };
+        }
+        let rollout = self.codex_rollout(session);
+        let cli = rollout.as_ref().is_some_and(|(_, file, _)| codex_cli(file));
+        if codex_runs_unseen(&running, cli) {
+            return Liveness::Unknown;
+        }
+
+        match rollout {
+            Some((_, _, modified)) if now_ms().saturating_sub(modified) > crate::claude::WORKING_WINDOW_MS => Liveness::Ended,
+            Some(_) => Liveness::Stopped,
+            None => Liveness::Unknown,
+        }
+    }
+
+    /// The rollout of Codex session `session` (a session id) in one of Codex's homes
+    /// (`codex_homes`, none while Codex is off): the account whose home it is
+    /// (`accounts::MAIN` for the main one), the file and when it last changed; the newest should
+    /// several be there. Compressed rollouts (a week idle) aren't looked at.
+    pub(super) fn codex_rollout(&self, session: &str) -> Option<(String, PathBuf, u64)> {
+        let homes = self.codex_homes();
+        if homes.is_empty() {
+            return None;
+        }
+        let others = self.lock().settings.agents.codex.accounts.others.clone();
+        homes.iter().enumerate().find_map(|(index, home)| {
+            let account = match index {
+                0 => crate::accounts::MAIN.to_string(),
+                _ => others.iter().find(|account| same_path(&account.dir, &home.to_string_lossy()))?.id.clone(),
+            };
+            let file = crate::codex::rollouts_since(home, 0).into_iter().find(|file| file.file_name().is_some_and(|name| name.to_string_lossy().contains(session)))?;
+            let modified = fs::metadata(&file).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as u64;
+            Some((account, file, modified))
+        })
+    }
+}
+
+/// Whether the rollout at `file` is a thread of Codex's TUI (its `source` is `cli`), not an
+/// editor's (`vscode`, or none written) or anything else's.
+pub(super) fn codex_cli(file: &Path) -> bool {
+    crate::codex::rollout_meta(file).is_some_and(|meta| meta.source.as_deref() == Some("cli"))
+}
+
+/// Whether a process of Codex's runs (`process::is_codex`; only tested) that may hold a session
+/// `running` (the tied ones, `codex_running`) doesn't list, or the process table can't be read:
+/// such a session can't be told, whatever the hook's state. `cli`: it is a thread of Codex's TUI
+/// (`codex_cli`).
+pub(super) fn codex_runs_unseen(running: &HashMap<String, Running>, cli: bool) -> bool {
+    process::process_table().is_none_or(|table| untied_codex(&table, running, cli))
+}
+
+/// Whether a `codex` process of `table` may hold a session `running` doesn't list. An editor's own
+/// (`editor_codex`) holds that editor's threads only, and any of them: never a CLI session
+/// (`cli`), any other one whether tied or not. Any other is accounted for only as one of a tied
+/// session's processes (its own and those above it, `Running::lineage`) or one started under a
+/// tied session's own.
+fn untied_codex(table: &HashMap<u32, ProcessInfo>, running: &HashMap<String, Running>, cli: bool) -> bool {
+    let tied = |pid: &u32| running.values().any(|run| run.pid == *pid);
+    let above = |pid: &u32| running.values().any(|run| run.lineage.contains(pid));
+    table.iter().filter(|(_, process)| process::is_codex(process)).any(|(pid, _)| match editor_codex(table, *pid) {
+        true => !cli,
+        false => !above(pid) && !lineage(table, *pid).iter().any(tied),
+    })
+}
+
+/// Whether `codex` process `pid` is an editor's own (its Codex extension's): the first of its
+/// parents that isn't Codex's is the editor itself, VS Code, Cursor or Windsurf as `terminal_app`
+/// names them (the editors `extension.rs` offers), not a shell in the editor's terminal.
+fn editor_codex(table: &HashMap<u32, ProcessInfo>, pid: u32) -> bool {
+    let chain = lineage(table, pid);
+    let Some(at) = chain.iter().position(|pid| table.get(pid).is_some_and(|process| !process::is_codex(process))) else {
+        return false;
+    };
+    at > 0 && matches!(terminal_app(table, &chain[at - 1..=at]), Some("VS Code" | "Cursor" | "Windsurf"))
 }
 
 #[cfg(test)]
@@ -434,6 +613,99 @@ mod tests {
         }
     }
 
+    /// A Codex session that may run unseen (its hook's events taken by an earlier run of Pitwall,
+    /// or never sent) is never told as ended or stopped, whatever the hook's state: opened again,
+    /// it would have two processes writing one rollout. A `codex` process is accounted for only as
+    /// a tied session's own, one above it or one it started; its command line is not what counts.
+    /// An editor's own (its extension's, right under the editor) holds that editor's threads, so
+    /// it leaves a CLI session to be told and no other session, tied or not; a `codex` in the
+    /// editor's terminal is a TUI like any other.
+    #[test]
+    fn a_codex_session_cant_be_told_while_an_untied_codex_process_runs() {
+        let code = "/Applications/Visual Studio Code.app/Contents";
+        let table = |pids: &[u32]| -> HashMap<u32, ProcessInfo> {
+            let all = [
+                (10, 1, "iTerm2", "iTerm2".to_string()),
+                (11, 10, "zsh", "zsh".into()),
+                (12, 11, "codex", "codex".into()),
+                (13, 12, "codex", "codex".into()),
+                (14, 13, "codex", "codex".into()),
+                (15, 11, "node", "node".into()),
+                (16, 10, "zsh", "zsh".into()),
+                (17, 16, "codex", "codex".into()),
+                (30, 1, "Code", format!("{code}/MacOS/Code")),
+                (31, 30, "Code Helper (Plugin)", format!("{code}/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)")),
+                (32, 31, "codex", format!("{code}/Resources/app/extensions/codex")),
+                (34, 30, "Code Helper", format!("{code}/Frameworks/Code Helper.app/Contents/MacOS/Code Helper")),
+                (35, 34, "zsh", "zsh".into()),
+                (36, 35, "codex", "codex".into()),
+            ];
+            let info = |parent: u32, name: &str, program: &str| ProcessInfo { parent, line: format!("{name} /Users/me/projects/codex-kit"), name: name.into(), program: program.into() };
+            all.iter().filter(|(pid, ..)| pids.contains(pid)).map(|(pid, parent, name, program)| (*pid, info(*parent, name, program))).collect()
+        };
+        let run = |pid: u32, lineage: Vec<u32>| Running { pid, entrypoint: Some("cli".into()), cwd: None, started_at: None, status: None, status_at: None, lineage, app: None };
+        let tied = HashMap::from([("5c1d0a7e-1111-7222-8333-944455556666".to_string(), run(13, vec![13, 12, 11, 10]))]);
+        let in_editor = HashMap::from([("4ef9f383-bbab-7470-84c7-a2b6db02e9a2".to_string(), run(32, vec![32, 31, 30]))]);
+        let none = HashMap::new();
+        // The processes, the tied sessions, whether the session asked of is a CLI one, and
+        // whether it can't be told.
+        type Tied = HashMap<String, Running>;
+        let cases: [(&[u32], &Tied, bool, bool); 10] = [
+            (&[10, 11, 15], &none, true, false),
+            (&[10, 11, 12, 13, 14, 15], &tied, true, false),
+            (&[10, 11, 12, 13, 14, 15, 16, 17], &tied, true, true),
+            (&[10, 11, 12, 13], &none, true, true),
+            (&[10, 11, 12, 13], &none, false, true),
+            (&[30, 31, 32], &none, true, false),
+            (&[10, 11, 12, 13, 14, 30, 31, 32], &tied, true, false),
+            (&[30, 31, 32], &none, false, true),
+            (&[30, 31, 32], &in_editor, false, true),
+            (&[30, 34, 35, 36], &none, true, true),
+        ];
+        for (pids, running, cli, expected) in cases {
+            assert_eq!(untied_codex(&table(pids), running, cli), expected, "{pids:?}, {} tied, cli {cli}", running.len());
+        }
+
+        // So in `codex_liveness`, with Pitwall's hook at work in Codex: a `codex` in another
+        // terminal, tied to no session, keeps a session whose rollout stopped from being opened.
+        #[cfg(unix)]
+        {
+            use crate::codex::tests::{write_rollouts, CLI, CLI_ID};
+            use std::os::unix::process::CommandExt;
+            let tmp = tempfile::tempdir().unwrap();
+            let codex_home = tmp.path().join("codex");
+            let registry = tmp.path().join("registry");
+            fs::create_dir_all(&registry).unwrap();
+            write_rollouts(&codex_home, &[(CLI_ID, CLI)]);
+            fs::write(
+                codex_home.join("hooks.json"),
+                r#"{"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"/Applications/Pitwall.app/Contents/MacOS/pitwall --codex-hook Stop"}]}]}}"#,
+            )
+            .unwrap();
+            let mut elsewhere = std::process::Command::new("/bin/sleep").arg0("codex").arg("30").spawn().unwrap();
+            let core = Core::new(
+                CoreConfig {
+                    registry_dir: registry,
+                    claude_dir: tmp.path().join("claude").join("projects"),
+                    codex_home,
+                    settings_file: tmp.path().join("config").join("settings.json"),
+                    claude_settings: tmp.path().join("claude").join("settings.json"),
+                    legacy_registries: Vec::new(),
+                    title: "Pitwall".into(),
+                },
+                Arc::new(|_| {}),
+            );
+            core.look_for_agents();
+            core.follow_agents();
+            let hook = core.lock().codex_hook;
+            let liveness = core.codex_liveness(CLI_ID);
+            let _ = elsewhere.kill();
+            let _ = elsewhere.wait();
+            assert_ne!(hook, HookState::Missing);
+            assert_eq!(liveness, Liveness::Unknown);
+        }
+    }
+
     /// A session opens again only when Claude Code's own list says no process runs it: without
     /// that list a fresh log may be a running session's. And asked twice before the new process
     /// is listed, it is opened once: two would write one log.
@@ -446,6 +718,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.path().join("registry"),
                 claude_dir: claude.join("projects"),
+                codex_home: claude.with_file_name("codex"),
                 settings_file: tmp.path().join("config").join("settings.json"),
                 claude_settings: claude.join("settings.json"),
                 legacy_registries: Vec::new(),

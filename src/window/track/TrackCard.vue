@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import ClaudeLogo from "../../components/ClaudeLogo.vue";
+import AgentMark from "../../components/AgentMark.vue";
 import Icon from "../../components/Icon.vue";
 import Marquee from "../../components/Marquee.vue";
 import { serverLines, useAddress } from "../../lib/address";
 import { filesShown, toggleFiles } from "../../lib/explorer";
-import { editorName, gitLine, heldLine, turnLine } from "../../lib/format";
+import { agentKey, editorName, gitLine, heldLine, rowAgent, turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { keys } from "../../lib/platform";
 import { sessionTitle } from "../../lib/sessions";
@@ -100,15 +100,15 @@ function nameOf(id: string): string {
         :title="[nameOf(session.id), session.turn ? turnLine(session.turn, now) : '', t('sessions.action.bringUpTitle')].filter(Boolean).join(' · ')"
         @click="api.revealClaude(project.path, session.id)"
       >
-        <span class="session-mark"><ClaudeLogo :size="12" /></span>
+        <span class="session-mark"><AgentMark :agent="session.agent" :size="12" /></span>
         <span class="session-name">{{ nameOf(session.id) }}</span>
       </button>
       <div v-if="project.claude && !waiting.length" class="card-session">
-        <span class="session-mark"><ClaudeLogo :size="12" /></span>
+        <span class="session-mark"><AgentMark :agent="rowAgent(project) ?? 'claude'" :size="12" /></span>
         <span class="session-lines"><span class="session-turn">{{ turnLine(project.claude, now) }}</span></span>
         <button v-if="project.claude.kind === 'finished'" type="button" class="claude-open" @click="api.markSeen(project.path)">{{ t("detail.markSeen") }}</button>
       </div>
-      <div v-for="session in working" :key="session.id" class="card-session working" :title="`${nameOf(session.id)}: ${t('detail.claudeWorking')}`">
+      <div v-for="session in working" :key="session.id" class="card-session working" :title="`${nameOf(session.id)}: ${t(agentKey('detail.claudeWorking', session.agent))}`">
         <span class="session-mark"><span class="ring" aria-hidden="true"></span></span>
         <span class="session-lines"><span class="session-name">{{ nameOf(session.id) }}</span></span>
       </div>

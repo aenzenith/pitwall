@@ -2,11 +2,12 @@
 // Claude's spark in its square, showing Claude's state: waiting on you, a solid square that pings
 // (with `lock`, a permission prompt: a lock in place of the spark); working, a line running round
 // the square's edge; quiet, dimmed. The project details' Claude card and the session details
-// show it.
-import ClaudeLogo from "./ClaudeLogo.vue";
+// show it. `agent`: whose mark is in the square, Claude's unless told (AgentMark).
+import AgentMark from "./AgentMark.vue";
 import Icon from "./Icon.vue";
+import type { Agent } from "../lib/types";
 
-withDefaults(defineProps<{ state: "waiting" | "working" | "quiet"; lock?: boolean }>(), { lock: false });
+withDefaults(defineProps<{ state: "waiting" | "working" | "quiet"; lock?: boolean; agent?: Agent }>(), { lock: false, agent: "claude" });
 
 // The working line round the spark's square, faded from head to tail: TRACE_STEPS strokes share
 // one head, the k-th k steps long at opacity 1/k, so their overlap rises evenly from 1/n at the
@@ -51,7 +52,7 @@ const traceQuarters = Array.from({ length: 4 }, (_, q) => ({
 <template>
   <span :class="['spark', state]" aria-hidden="true">
     <Icon v-if="lock && state === 'waiting'" name="lock" :size="16" class="lock" />
-    <ClaudeLogo v-else :size="18" :color="state === 'waiting' ? 'var(--on-claude-mark)' : undefined" />
+    <AgentMark v-else :agent="agent" :size="18" :color="state === 'waiting' ? 'var(--on-claude-mark)' : undefined" />
     <span v-if="state === 'working'" class="trace">
       <span v-for="(quarter, q) in traceQuarters" :key="q" class="quarter" :style="{ transform: quarter.turn }">
         <span class="side">

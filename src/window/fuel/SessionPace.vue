@@ -4,14 +4,14 @@ import { computed } from "vue";
 import Rich from "../../components/Rich.vue";
 import { clockText, pace, position } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
-import type { UsageWindow } from "../../lib/types";
+import type { Agent, UsageWindow } from "../../lib/types";
 
 /**
  * The session window as a strip from its start to its reset: the time gone by, now, what is still
  * ahead and, at the pace so far, when the fuel runs out. `readAt`: when `window` was read, the
- * moment the pace is measured to.
+ * moment the pace is measured to. `agent`: whose window (none: Claude's), named in what it says.
  */
-const props = defineProps<{ window: UsageWindow; readAt: number; now: number; stale: boolean }>();
+const props = defineProps<{ window: UsageWindow; readAt: number; now: number; stale: boolean; agent?: Agent }>();
 
 const HOUR = 3_600_000;
 
@@ -48,9 +48,11 @@ const strip = computed(() => {
 });
 
 const SENTENCES = { idle: "fuel.pace.idle", empty: "fuel.pace.empty", early: "fuel.pace.early", out: "fuel.pace.out", lasts: "fuel.pace.lasts" } as const;
+/** Codex's, where the sentence names the agent. */
+const CODEX_SENTENCES = { ...SENTENCES, idle: "fuel.pace.idle.codex", empty: "fuel.pace.empty.codex", out: "fuel.pace.out.codex" } as const;
 
 /** What the strip means in words; all of it red once the fuel is out. */
-const sentence = computed(() => ({ key: SENTENCES[state.value.kind], out: state.value.kind === "empty" }));
+const sentence = computed(() => ({ key: (props.agent === "codex" ? CODEX_SENTENCES : SENTENCES)[state.value.kind], out: state.value.kind === "empty" }));
 </script>
 
 <template>

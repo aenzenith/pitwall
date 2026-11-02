@@ -1,6 +1,6 @@
 //! What a restart for an update (`update.rs`) does to what is open, and what it puts back: the
 //! dev servers this app ran, its terminal tabs with their last output, and the Claude sessions
-//! in them (`claude --resume`). The record is written beside the settings just before the
+//! in them (`claude --resume`) and Codex's (`codex resume`, while Codex is on). The record is written beside the settings just before the
 //! restart, read once and deleted at the next start.
 //!
 //! A command that was running in a tab is not started again, and a Claude turn at work is lost
@@ -27,8 +27,8 @@ const RESET: &str = "\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b
 /// One thing a restart cuts off for good.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Cut {
-    /// `claude`: a turn at work in a tab (its session is opened again). `shell`: a command
-    /// running in a tab. `admin`: an administrator's tab (Windows), which never comes back.
+    /// `claude`: a turn at work in a tab (its session is opened again); `codex`: the same of
+    /// Codex's. `shell`: a command running in a tab. `admin`: an administrator's tab (Windows), which never comes back.
     /// `command`: a running custom command that is one-off or asks first.
     pub kind: &'static str,
     /// The project's name.
@@ -46,6 +46,9 @@ pub struct RestartPlan {
     pub servers: Vec<String>,
     /// The projects of the Claude sessions opened again, one entry per session.
     pub claude: Vec<String>,
+    /// The projects of the Codex sessions opened again, the same way; none with Claude alone.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub codex: Vec<String>,
     pub terminals: usize,
     pub terminal_projects: usize,
 }
@@ -58,6 +61,8 @@ pub struct Restored {
     pub servers: usize,
     pub terminals: usize,
     pub sessions: usize,
+    /// Codex's sessions among them, apart from Claude's (`sessions`).
+    pub codex: usize,
     /// The main window was up.
     pub window: bool,
 }
@@ -73,13 +78,17 @@ pub(super) struct Tab {
     /// The user gave it that name: it doesn't take its session's.
     #[serde(default)]
     pub(super) renamed: bool,
-    /// The Claude session running in it.
+    /// The agent's session running in it.
     pub(super) session: Option<String>,
+    /// Whose that session is; none written (every record before Codex): Claude's.
+    #[serde(default, skip_serializing_if = "Agent::is_claude")]
+    pub(super) agent: Agent,
     /// The shell of the list it ran on Windows; none comes back as Command Prompt there, and
     /// elsewhere as the user's own shell.
     #[serde(default, deserialize_with = "shell_or_none", skip_serializing_if = "Option::is_none")]
     pub(super) shell: Option<Shell>,
-    /// The Claude account it ran with, by id; none: the main one (`accounts/`).
+    /// The account it ran with, by id, its session's agent's (a Codex session's a Codex
+    /// account); none: the main one (`accounts/`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) account: Option<String>,
     /// That session was at work, or (without one) a command was running.
@@ -166,6 +175,14 @@ pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
     written
 }
 
+/// The account a record keeps for a tab whose session is `agent`'s (or, without one, a shell
+/// tab, Claude's): the tab's own when it was opened for that agent, else the main one (a Codex
+/// tab's shell runs Claude with the main account, a shell tab's Codex with the main home).
+fn tab_account(view: &TerminalView, agent: Agent) -> Option<String> {
+    let tab = Agent::of_tab(&view.kind).unwrap_or_default();
+    (tab == agent).then(|| view.account.clone()).flatten()
+}
+
 impl Core {
     fn restore_file(&self) -> PathBuf {
         self.cfg.settings_file.with_file_name(FILE)
@@ -173,10 +190,21 @@ impl Core {
 
     pub(super) fn standing(&self) -> Standing {
         // Each tab's Claude session, by the shell among the session's parents.
-        let mut sessions: HashMap<u64, (String, bool)> = HashMap::new();
+        let mut sessions: HashMap<u64, (String, bool, Agent)> = HashMap::new();
         for (id, run) in self.read_running().unwrap_or_default() {
             if let Some((terminal, _)) = self.pitwall_terminal(&run.lineage) {
-                sessions.insert(terminal, (id, run.status.as_deref() == Some("busy")));
+                sessions.insert(terminal, (id, run.status.as_deref() == Some("busy"), Agent::Claude));
+            }
+        }
+        // Codex's the same way, while Codex is on, in a tab Claude runs in no session of; at
+        // work as Codex's watch has it.
+        if let Some(running) = self.codex_running() {
+            let working: HashSet<String> = self.lock().scanned.iter().filter(|state| state.agent == Agent::Codex && state.phase == SessionPhase::Working).map(|state| state.id.clone()).collect();
+            for (id, run) in running {
+                if let Some((terminal, _)) = self.pitwall_terminal(&run.lineage) {
+                    let busy = working.contains(&id);
+                    sessions.entry(terminal).or_insert((id, busy, Agent::Codex));
+                }
             }
         }
         // Without a foreground group to ask, a shell with a child is running something.
@@ -199,15 +227,17 @@ impl Core {
                 let state = states.iter().find(|state| state.id == view.id)?;
                 let session = sessions.get(&view.id);
                 let running = state.foreground || state.pid.is_some_and(|pid| parents.contains(&pid));
+                let agent = session.map_or(Agent::Claude, |(_, _, agent)| *agent);
                 Some(Tab {
                     id: view.id,
                     path: view.path.clone(),
                     name: view.name.clone(),
                     renamed: view.renamed,
-                    session: session.map(|(id, _)| id.clone()),
+                    session: session.map(|(id, _, _)| id.clone()),
+                    agent,
                     shell: view.shell,
-                    account: view.account.clone(),
-                    cut: session.map_or(running, |(_, busy)| *busy),
+                    account: tab_account(view, agent),
+                    cut: session.map_or(running, |(_, busy, _)| *busy),
                     cols: state.cols,
                     rows: state.rows,
                     // `claude --resume` draws the conversation itself.
@@ -239,6 +269,19 @@ impl Core {
         Standing { servers, commands, tabs, elevated }
     }
 
+    /// The account a tab put back by a record runs with, as its launch's agent has it: a
+    /// Codex session's Codex account, else the Claude account (`account_back`); one no longer
+    /// listed (or whose folder is gone) is the main one.
+    pub(super) fn account_back_for(&self, launch: &Launch, recorded: Option<&str>) -> String {
+        match launch.agent() {
+            Some(Agent::Codex) => match recorded.map(|id| self.codex_start_with(Some(id))) {
+                Some(Ok(Some((id, _)))) => id,
+                _ => crate::accounts::MAIN.to_string(),
+            },
+            _ => self.account_back(recorded),
+        }
+    }
+
     /// What a restart would cut off and what it would bring back.
     pub fn restart_plan(&self) -> RestartPlan {
         let standing = self.standing();
@@ -246,7 +289,7 @@ impl Core {
             .tabs
             .iter()
             .filter(|tab| tab.cut)
-            .map(|tab| Cut { kind: if tab.session.is_some() { "claude" } else { "shell" }, project: folder_name(&tab.path), name: tab.name.clone() })
+            .map(|tab| Cut { kind: if tab.session.is_some() { tab.agent.id() } else { "shell" }, project: folder_name(&tab.path), name: tab.name.clone() })
             .collect();
         // An administrator's tab never comes back.
         cut.extend(standing.elevated.iter().map(|(path, name)| Cut { kind: "admin", project: folder_name(path), name: name.clone() }));
@@ -258,7 +301,8 @@ impl Core {
         RestartPlan {
             cut,
             servers: standing.servers.iter().map(|path| folder_name(path)).collect(),
-            claude: standing.tabs.iter().filter(|tab| tab.session.is_some()).map(|tab| folder_name(&tab.path)).collect(),
+            claude: standing.tabs.iter().filter(|tab| tab.session.is_some() && tab.agent == Agent::Claude).map(|tab| folder_name(&tab.path)).collect(),
+            codex: standing.tabs.iter().filter(|tab| tab.session.is_some() && tab.agent == Agent::Codex).map(|tab| folder_name(&tab.path)).collect(),
             terminals: standing.tabs.len(),
             terminal_projects: projects.len(),
         }
@@ -315,23 +359,25 @@ impl Core {
         let listed: Vec<String> = self.snapshot().projects.into_iter().map(|project| project.path).collect();
         let known = |path: &str| listed.iter().any(|listed| same_path(listed, path)) && Path::new(path).is_dir();
 
-        let mut restored = Restored { version: record.version, servers: 0, terminals: 0, sessions: 0, window: record.window };
+        let mut restored = Restored { version: record.version, servers: 0, terminals: 0, sessions: 0, codex: 0, window: record.window };
         // The terminal each of the record's tabs came back as, and its project.
         let mut opened: Vec<Option<(u64, String)>> = vec![None; record.tabs.len()];
 
         for (at, tab) in record.tabs.into_iter().enumerate().filter(|(_, tab)| known(&tab.path)) {
-            let session = tab.session.filter(|id| is_session_id(id));
-            let launch = match &session {
-                Some(session) => Launch::Resume { session: session.clone() },
-                None => Launch::Shell { shell: tab.shell, elevated: false },
+            // A Codex session while Codex is off comes back as a shell: nothing of Codex is read.
+            let session = tab.session.filter(|id| is_session_id(id)).filter(|_| tab.agent.is_claude() || self.agent_on(Agent::Codex));
+            let launch = match (&session, tab.agent) {
+                (Some(session), Agent::Claude) => Launch::Resume { session: session.clone() },
+                (Some(session), Agent::Codex) => Launch::ResumeCodex { session: session.clone() },
+                (None, _) => Launch::Shell { shell: tab.shell, elevated: false },
             };
             let name: String = tab.name.trim().chars().take(TAB_NAME_MAX).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
-            let account = self.account_back(tab.account.as_deref());
+            let account = self.account_back_for(&launch, tab.account.as_deref());
             let open = || self.open_terminal_with(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false, Some(&account));
             let id = match &session {
-                // Once, whoever opens it first: a click on it may come before Claude Code lists
-                // its process.
+                // Once, whoever opens it first: a click on it may come before its agent lists its
+                // process.
                 Some(session) => match self.open_once(session, open) {
                     Opened::New(view) => view.id,
                     Opened::Held(_) | Opened::Opening | Opened::Failed(_) => continue,
@@ -346,7 +392,10 @@ impl Core {
             restored.terminals += 1;
             match session {
                 Some(session) => {
-                    restored.sessions += 1;
+                    match tab.agent {
+                        Agent::Claude => restored.sessions += 1,
+                        Agent::Codex => restored.codex += 1,
+                    }
                     self.board_resumed(&session, id);
                 }
                 None => self.seed_terminal(id, &replay(&tab.scrollback, tab.cut, record.at)),
@@ -398,6 +447,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.join("registry"),
                 claude_dir: tmp.join("claude").join("projects"),
+                codex_home: tmp.join("codex"),
                 settings_file: tmp.join("config").join("settings.json"),
                 claude_settings: tmp.join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -409,7 +459,7 @@ mod tests {
 
     #[cfg(unix)]
     fn tab(path: &str, session: Option<&str>) -> Tab {
-        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), shell: None, account: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
+        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), agent: Agent::Claude, shell: None, account: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
     }
 
     fn write(core: &Core, at: u64, servers: Vec<String>, tabs: Vec<Tab>) {
@@ -429,7 +479,7 @@ mod tests {
         assert!(!core.restore_file().exists(), "a stale record is deleted too");
 
         write(&core, now_ms(), Vec::new(), Vec::new());
-        assert_eq!(core.restore(), Some(Restored { version: "9.9.9".into(), servers: 0, terminals: 0, sessions: 0, window: true }));
+        assert_eq!(core.restore(), Some(Restored { version: "9.9.9".into(), servers: 0, terminals: 0, sessions: 0, codex: 0, window: true }));
         assert_eq!(core.restore(), None);
         assert!(!core.restore_file().exists());
     }
@@ -454,13 +504,19 @@ mod tests {
             &core,
             now_ms(),
             vec![unlisted.clone()],
-            vec![tab(&unlisted, None), tab(&listed, Some("x; touch pwned")), tab(&tmp.path().join("gone").to_string_lossy(), None)],
+            vec![
+                tab(&unlisted, None),
+                tab(&listed, Some("x; touch pwned")),
+                tab(&tmp.path().join("gone").to_string_lossy(), None),
+                // A Codex session, Codex being off here: a shell, nothing of Codex started or read.
+                Tab { agent: Agent::Codex, ..tab(&listed, Some("9bb85e86-f618-4861-9858-03ec8fc36c28")) },
+            ],
         );
         let restored = core.restore().expect("a fresh record");
 
-        assert_eq!((restored.servers, restored.terminals, restored.sessions), (0, 1, 0));
+        assert_eq!((restored.servers, restored.terminals, restored.sessions), (0, 2, 0));
         let tabs = core.lock().terminal_list.clone();
-        assert_eq!(tabs.iter().map(|tab| (tab.path.as_str(), tab.kind.as_str())).collect::<Vec<_>>(), vec![(listed.as_str(), "shell")]);
+        assert_eq!(tabs.iter().map(|tab| (tab.path.as_str(), tab.kind.as_str())).collect::<Vec<_>>(), vec![(listed.as_str(), "shell"), (listed.as_str(), "shell")]);
         let shown = core.terminal_buffer(tabs[0].id).data;
         assert!(shown.starts_with("old output\r\n") && shown.contains("──"), "{shown:?}");
 

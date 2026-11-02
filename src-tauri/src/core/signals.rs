@@ -34,6 +34,9 @@ const NIGHT_ENDS: u32 = 4;
 /// are the project's path, as they always were.
 const BANNER: &str = "pitwall:signal:";
 const DETAIL: char = '\u{1f}';
+/// Another agent's turn says whose it is: `pitwall:agent:<agent>:<path>`. It opens as Claude's
+/// does (`open_claude`), and a newer one of the same agent and project takes its place.
+const AGENT_BANNER: &str = "pitwall:agent:";
 /// The first run's test banner (`test_banner`); a click on it brings Pitwall's window up (lib.rs).
 pub const TEST_BANNER: &str = "pitwall:signal:test";
 
@@ -73,6 +76,21 @@ pub struct Signal {
     pub name: String,
     /// A permission's tool, a command's name: see `SignalKind`. Nothing else.
     pub detail: Option<String>,
+    /// The agent it is about (whose session waits, worked long, used its limit); Claude for what
+    /// is about no agent (a server, a command, a card, the Garage).
+    pub agent: Agent,
+}
+
+/// The catalog key of a sentence that names `agent`: Claude's own key, as it always was; another
+/// agent's the same key with its id after a dot (`core.notify.finished.codex`). Languages bend a
+/// name ("Claude'a", "Codex'e"), so each agent's sentence is written whole, never with the name
+/// as a parameter.
+pub fn agent_key(agent: Agent, key: &str) -> String {
+    if agent.is_claude() {
+        key.to_string()
+    } else {
+        format!("{key}.{}", agent.id())
+    }
 }
 
 impl SignalKind {
@@ -142,6 +160,8 @@ pub struct Missed {
     /// What its banner names: a permission's tool, a command's name, the fuel alert's line.
     pub detail: Option<String>,
     pub at: u64,
+    /// The agent it is about, as the signal had it: the line names it.
+    pub agent: Agent,
 }
 
 /// A banner: what a click on it opens (`open_banner`), and its two lines.
@@ -229,7 +249,10 @@ fn trouble(signal: &Signal) -> Option<(SignalKind, String, Option<String>)> {
 
 fn banner_id(signal: &Signal) -> String {
     if signal.kind.is_claudes() {
-        return signal.path.clone();
+        return match signal.agent {
+            Agent::Claude => signal.path.clone(),
+            agent => format!("{AGENT_BANNER}{}:{}", agent.id(), signal.path),
+        };
     }
     let mut id = format!("{BANNER}{}:{}", signal.kind.id(), signal.path);
     if let Some(detail) = &signal.detail {
@@ -245,12 +268,14 @@ fn banner(signal: &Signal) -> Option<Banner> {
     use SignalKind::*;
 
     let detail = signal.detail.as_deref().unwrap_or_default();
+    // A waiting turn and a long one name their agent, in its own sentence.
+    let said = |key: &str| agent_key(signal.agent, key);
     let body = match signal.kind {
-        ClaudeAsking => t!("core.notify.asking"),
-        ClaudePermission if signal.detail.is_some() => t!("core.signal.permission", tool = detail),
-        ClaudePermission => t!("core.notify.permission"),
-        ClaudeFinished => t!("core.notify.finished"),
-        ClaudeLongTurn => t!("core.signal.longTurn"),
+        ClaudeAsking => t!(&said("core.notify.asking")),
+        ClaudePermission if signal.detail.is_some() => t!(&said("core.signal.permission"), tool = detail),
+        ClaudePermission => t!(&said("core.notify.permission")),
+        ClaudeFinished => t!(&said("core.notify.finished")),
+        ClaudeLongTurn => t!(&said("core.signal.longTurn")),
         ServerCrashed => t!("core.signal.serverCrashed"),
         CommandDone => t!("core.signal.commandDone", name = detail),
         CommandFailed => t!("core.signal.commandFailed", name = detail),
@@ -260,15 +285,17 @@ fn banner(signal: &Signal) -> Option<Banner> {
     Some(Banner { id: banner_id(signal), title: signal.name.clone(), body })
 }
 
-/// A banner Claude's mark doesn't belong on: a server's, a command's, the Garage's.
+/// A banner Claude's mark doesn't belong on: a server's, a command's, the Garage's, and another
+/// agent's (its turns, its fuel alert).
 pub fn plain_banner(id: &str) -> bool {
-    id.starts_with(BANNER)
+    id.starts_with(BANNER) || id.starts_with(AGENT_BANNER) || id == crate::fuel::CODEX_NOTIFICATION_ID
 }
 
-/// Puts `entry` first on the list: one per project and kind, of Claude's waiting turns one per
-/// project, the newest `MISSED_MAX` in all.
+/// Puts `entry` first on the list: one per project and kind (the fuel alert one per agent), of
+/// Claude's waiting turns one per project, the newest `MISSED_MAX` in all.
 fn miss(list: &mut Vec<Missed>, entry: Missed) {
-    list.retain(|known| !(same_path(&known.path, &entry.path) && (known.kind == entry.kind || (known.kind.waits() && entry.kind.waits()))));
+    let same = |known: &Missed| known.kind == entry.kind && (known.kind != SignalKind::FuelHigh || known.agent == entry.agent);
+    list.retain(|known| !(same_path(&known.path, &entry.path) && (same(known) || (known.kind.waits() && entry.kind.waits()))));
     list.insert(0, entry);
     list.truncate(MISSED_MAX);
 }
@@ -276,7 +303,7 @@ fn miss(list: &mut Vec<Missed>, entry: Missed) {
 fn missed(signal: &Signal, banner: Option<&Banner>, at: u64) -> Missed {
     // The fuel alert has no detail of its own: its line is the banner's.
     let line = banner.filter(|_| signal.kind == SignalKind::FuelHigh).map(|banner| banner.title.clone());
-    Missed { kind: signal.kind, path: signal.path.clone(), name: signal.name.clone(), detail: signal.detail.clone().or(line), at }
+    Missed { kind: signal.kind, path: signal.path.clone(), name: signal.name.clone(), detail: signal.detail.clone().or(line), at, agent: signal.agent }
 }
 
 /// The list as the snapshot gives it: a line goes with a project that left the list, and bears
@@ -371,7 +398,8 @@ pub(super) fn name_of(inner: &Inner, path: &str) -> String {
 /// for that turn. Only the hook tells when a turn began (a prompt sent, a question answered); a
 /// session known from its log alone is never told of. The first scan after launch only takes
 /// note, as it does of waiting turns.
-pub(super) fn long_turns(inner: &mut Inner, sessions: &[SessionState], first: bool) -> Vec<Signal> {
+/// So does the first scan of an agent that just came on (`fresh`).
+pub(super) fn long_turns(inner: &mut Inner, sessions: &[SessionState], first: bool, fresh: &[Agent]) -> Vec<Signal> {
     let now = now_ms();
     let working = |session: &&SessionState| session.hooked && session.phase == SessionPhase::Working && !session.path.is_empty();
     let long: Vec<(&SessionState, u64)> =
@@ -392,10 +420,10 @@ pub(super) fn long_turns(inner: &mut Inner, sessions: &[SessionState], first: bo
             continue;
         }
         inner.long_turns.insert(session.id.clone(), since);
-        if first {
+        if first || fresh.contains(&session.agent) {
             continue;
         }
-        found.push(Signal { kind: SignalKind::ClaudeLongTurn, path: session.path.clone(), name: name_of(inner, &session.path), detail: None });
+        found.push(Signal { kind: SignalKind::ClaudeLongTurn, path: session.path.clone(), name: name_of(inner, &session.path), detail: None, agent: session.agent });
     }
     found
 }
@@ -430,7 +458,12 @@ impl Core {
     /// alert was off, so the phone isn't asked a second time. True when the user was told of it,
     /// by its banner or on the list.
     pub fn fuel_high(&self, id: &str, title: String, body: String, again: bool) -> bool {
-        let signal = Signal { kind: SignalKind::FuelHigh, path: String::new(), name: String::new(), detail: None };
+        self.fuel_high_for(Agent::Claude, id, title, body, again)
+    }
+
+    /// `fuel_high` of `agent`'s usage (the Fuel page's alert for each agent, `fuel.rs`).
+    pub fn fuel_high_for(&self, agent: Agent, id: &str, title: String, body: String, again: bool) -> bool {
+        let signal = Signal { kind: SignalKind::FuelHigh, path: String::new(), name: String::new(), detail: None, agent };
         let told = self.tell(vec![(Some(Banner { id: id.to_string(), title, body }), signal)], !again);
         told.iter().any(|verdict| verdict.banner || verdict.missed)
     }
@@ -558,7 +591,7 @@ impl Core {
                     note(("migrate", read.tool), !read.pending.is_empty());
                 }
                 if fresh {
-                    found.push(Signal { kind: SignalKind::DepsWaiting, path: report.path.clone(), name: name_of(inner, &report.path), detail: None });
+                    found.push(Signal { kind: SignalKind::DepsWaiting, path: report.path.clone(), name: name_of(inner, &report.path), detail: None, agent: Agent::Claude });
                 }
             }
             found
@@ -667,17 +700,18 @@ impl Core {
     /* ---------- what was missed, and what a click opens ---------- */
 
     /// A line of the list is opened: what a click on its banner would bring up, and the line goes.
-    pub fn missed_open(self: &Arc<Self>, path: &str, kind: SignalKind) {
+    /// `agent`: whose line it is (the fuel alert has one per agent).
+    pub fn missed_open(self: &Arc<Self>, path: &str, kind: SignalKind, agent: Agent) {
         let entry = {
             let mut inner = self.lock();
-            let at = inner.missed.iter().position(|entry| entry.kind == kind && entry.path == path);
+            let at = inner.missed.iter().position(|entry| entry.kind == kind && entry.path == path && entry.agent == agent);
             at.map(|at| inner.missed.remove(at))
         };
         let Some(entry) = entry else {
             return;
         };
         self.notify();
-        self.open_signal(entry.kind, &entry.path, entry.detail.as_deref());
+        self.open_signal(entry.kind, &entry.path, entry.detail.as_deref(), entry.agent);
     }
 
     pub fn missed_clear(&self) {
@@ -686,31 +720,40 @@ impl Core {
     }
 
     /// A click on a banner, by its identifier: Claude's are their project's path (its waiting
-    /// session comes up where it runs: `open_claude`), the others say what they are about.
+    /// session comes up where it runs: `open_claude`), another agent's that path after whose it
+    /// is, the others say what they are about.
     pub fn open_banner(self: &Arc<Self>, id: &str) {
+        if let Some(rest) = id.strip_prefix(AGENT_BANNER) {
+            if let Some((agent, path)) = rest.split_once(':') {
+                self.open_waiting(path, Some(Agent::parse(agent).unwrap_or(Agent::Claude)));
+            }
+            return;
+        }
         let about = id.strip_prefix(BANNER).and_then(|rest| rest.split_once(':')).and_then(|(kind, rest)| Some((SignalKind::parse(kind)?, rest)));
+        // Claude's own: its waiting session, never another agent's in the same project.
         let Some((kind, rest)) = about else {
-            return self.open_claude(id);
+            return self.open_waiting(id, Some(Agent::Claude));
         };
         let (path, detail) = match rest.split_once(DETAIL) {
             Some((path, detail)) => (path, Some(detail)),
             None => (rest, None),
         };
-        self.open_signal(kind, path, detail);
+        self.open_signal(kind, path, detail, Agent::Claude);
     }
 
     /// What a signal brings up: Claude's, the session where it runs; a server's or a command's,
     /// the project in Pitwall's window (the command's output with it); the rest, their page.
-    fn open_signal(self: &Arc<Self>, kind: SignalKind, path: &str, detail: Option<&str>) {
+    /// `agent`: whose session it is about (an agent's signals); the others are Claude's.
+    fn open_signal(self: &Arc<Self>, kind: SignalKind, path: &str, detail: Option<&str>, agent: Agent) {
         use SignalKind::*;
 
         match kind {
-            ClaudeAsking | ClaudePermission | ClaudeFinished => self.open_claude(path),
+            ClaudeAsking | ClaudePermission | ClaudeFinished => self.open_waiting(path, Some(agent)),
             ClaudeLongTurn => {
-                let working = self.lock().claude_sessions.get(path).and_then(|sessions| sessions.iter().find(|session| session.phase == SessionPhase::Working).map(|session| session.id.clone()));
+                let working = self.lock().claude_sessions.get(path).and_then(|sessions| sessions.iter().find(|session| session.phase == SessionPhase::Working && session.agent == agent).map(|session| session.id.clone()));
                 match working {
                     Some(session) => self.reveal_claude(path, &session),
-                    None => self.open_claude(path),
+                    None => self.open_waiting(path, Some(agent)),
                 }
             }
             ServerCrashed => self.emit(CoreEvent::RevealProject { path: path.to_string(), job: None }),
@@ -719,7 +762,8 @@ impl Core {
                 self.emit(CoreEvent::RevealProject { path: path.to_string(), job });
             }
             DepsWaiting => self.emit(CoreEvent::RevealPage("deps")),
-            FuelHigh => self.emit(CoreEvent::RevealPage("fuel")),
+            // On the page's part of the agent whose fuel it is.
+            FuelHigh => self.emit(CoreEvent::RevealFuel(agent)),
             CardReview => self.emit(CoreEvent::RevealPage("board")),
         }
     }
@@ -743,7 +787,7 @@ mod tests {
     ];
 
     fn about(kind: SignalKind, path: &str) -> Signal {
-        Signal { kind, path: path.into(), name: "paddock".into(), detail: None }
+        Signal { kind, path: path.into(), name: "paddock".into(), detail: None, agent: Agent::Claude }
     }
 
     /// The door's decision, case by case. What a muted project and a quiet period hold never
@@ -813,6 +857,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.join("registry"),
                 claude_dir: tmp.join("claude").join("projects"),
+                codex_home: tmp.join("codex"),
                 settings_file: tmp.join("config").join("settings.json"),
                 claude_settings: tmp.join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),

@@ -64,7 +64,8 @@ const CLAUDE_SESSION_VARS: &[&str] = &[
 /// among the running sessions, so a card given to it has nothing to follow. Called once, before
 /// the app starts a thread.
 pub fn leave_claude_session() {
-    for name in CLAUDE_SESSION_VARS {
+    // A Codex session's too (`CODEX_SESSION_VARS`): a dev run from a shell Codex opened.
+    for name in CLAUDE_SESSION_VARS.iter().chain(&CODEX_SESSION_VARS) {
         std::env::remove_var(name);
     }
 }
@@ -73,6 +74,26 @@ pub fn leave_claude_session() {
 /// left out): it was started from inside a Claude Code session.
 pub fn in_claude_session(mut names: impl Iterator<Item = String>) -> bool {
     names.any(|name| CLAUDE_SESSION_VARS.contains(&name.as_str()))
+}
+
+/// What Codex sets in the commands it runs for a session (`CODEX_THREAD_ID`, and the older
+/// `CODEX_SESSION_ID`): the command line refuses to act from inside one, as from inside Claude's.
+const CODEX_SESSION_VARS: [&str; 2] = ["CODEX_THREAD_ID", "CODEX_SESSION_ID"];
+
+/// One of those is among `names` (the variables a process was started with, the empty ones
+/// left out): it was started from inside a Codex session.
+pub fn in_codex_session(mut names: impl Iterator<Item = String>) -> bool {
+    names.any(|name| CODEX_SESSION_VARS.contains(&name.as_str()))
+}
+
+/// A Codex process, by its name or its program's (`codex`, `codex.exe`, in any case): only
+/// tested, its command line never kept.
+pub fn is_codex(process: &ProcessInfo) -> bool {
+    let named = |name: &str| {
+        let name = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        name.eq_ignore_ascii_case("codex") || name.eq_ignore_ascii_case("codex.exe")
+    };
+    named(&process.name) || named(&process.program)
 }
 
 /// The user's login shell: `$SHELL`, else the system's own (zsh on macOS, sh elsewhere).

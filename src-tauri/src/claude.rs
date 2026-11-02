@@ -20,6 +20,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::agent::{Agent, AgentWatch};
 use crate::registry::{base36, now_ms, path_key, same_path, write_atomic};
 
 const ASKING_TOOLS: [&str; 2] = ["AskUserQuestion", "ExitPlanMode"];
@@ -67,8 +68,10 @@ pub enum SessionPhase {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionState {
-    /// The session log's file name, without `.jsonl`.
+    /// The session log's file name, without `.jsonl` (Codex: its thread's id).
     pub id: String,
+    /// The agent it is a session of: Claude for every one this file reads.
+    pub agent: Agent,
     /// The listed project it belongs to; empty for a session elsewhere (`ScanResult::others`).
     pub path: String,
     /// The folder it runs in, as its log or the hook says.
@@ -103,7 +106,7 @@ pub struct SeenBook {
 impl SeenBook {
     /// When the project was last looked at, under whichever spelling of its path (on Windows
     /// the extension writes `c:\…`, the app `C:\…`); the latest look counts.
-    fn seen(&self, folder_path: &str) -> Option<u64> {
+    pub(crate) fn seen(&self, folder_path: &str) -> Option<u64> {
         self.paths.iter().filter(|(path, _)| same_path(path, folder_path)).map(|(_, at)| *at).max()
     }
 }
@@ -124,8 +127,31 @@ pub fn merge_seen(disk: Option<SeenBook>, mine: SeenBook) -> SeenBook {
     merged
 }
 
+/// Every "I looked" of the legacy books into `book`, the latest look winning.
+fn add_legacy_seen(book: &mut SeenBook, legacy: &[PathBuf]) {
+    for file in legacy {
+        let Some(legacy) = fs::read_to_string(file).ok().and_then(|raw| serde_json::from_str::<SeenBook>(&raw).ok()) else {
+            continue;
+        };
+
+        for (path, at) in legacy.paths {
+            let slot = book.paths.entry(path).or_insert(0);
+            *slot = (*slot).max(at);
+        }
+    }
+}
+
+/// The shared seen book at `file` with the legacy books' looks, as `ClaudeWatch` reads it, for a
+/// reader that never writes it (another agent's watch: a look clears every agent's turns); none
+/// before the book is made.
+pub(crate) fn read_seen_books(file: &Path, legacy: &[PathBuf]) -> Option<SeenBook> {
+    let mut book: SeenBook = serde_json::from_str(&fs::read_to_string(file).ok()?).ok()?;
+    add_legacy_seen(&mut book, legacy);
+    Some(book)
+}
+
 /// Milliseconds since the epoch for `2026-09-24T17:33:19.947Z`.
-fn parse_iso_ms(value: &str) -> Option<u64> {
+pub(crate) fn parse_iso_ms(value: &str) -> Option<u64> {
     let (date, time) = value.trim_end_matches('Z').split_once('T')?;
     let mut d = date.split('-').map(|part| part.parse::<i64>());
     let (year, month, day) = (d.next()?.ok()?, d.next()?.ok()?, d.next()?.ok()?);
@@ -300,7 +326,7 @@ fn path_hash(folder_path: &str) -> u64 {
 
 /// Reads from the end of the file, growing the window until `read` finds what it looks for. A
 /// single tool output line can be hundreds of KB, so a fixed tail is not enough.
-fn scan_tail<T>(file: &Path, size: u64, read: impl Fn(&[&str]) -> Option<T>) -> Option<T> {
+pub(crate) fn scan_tail<T>(file: &Path, size: u64, read: impl Fn(&[&str]) -> Option<T>) -> Option<T> {
     let mut handle = File::open(file).ok()?;
     let mut span = TAIL_START;
 
@@ -374,11 +400,11 @@ struct Log {
 /// for as long as Claude Code itself calls it busy.
 pub(crate) const WORKING_WINDOW_MS: u64 = 5 * 60 * 1000;
 /// Hook events, and sessions known only from them, are dropped after a day.
-const EVENT_MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
+pub(crate) const EVENT_MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
 /// Claude Code reports a permission prompt only once it has been open this long.
 const PROMPT_NOTICE_MS: u64 = 6_000;
 /// Log writes this soon after a prompt was reported are the turn catching up, not an answer.
-const ANSWER_SLACK_MS: u64 = 1_500;
+pub(crate) const ANSWER_SLACK_MS: u64 = 1_500;
 /// A look stops this long before a prompt still open (`mark_seen`): the VS Code extension dates
 /// the same prompt from Claude Code's own status, written a moment apart from the hook's event,
 /// and a prompt only Claude Code's notification told of is dated `PROMPT_NOTICE_MS` back.
@@ -394,6 +420,28 @@ pub struct ScanResult {
     pub sessions: Vec<SessionState>,
     /// Sessions the hook reported in folders that aren't listed (`path` empty).
     pub others: Vec<SessionState>,
+}
+
+impl ScanResult {
+    /// Another agent's result into this one, as if one agent had both: a project waits with the
+    /// newest turn any agent waits with, and works only while none waits there. Sessions keep
+    /// each agent's order, this one's first, so an unchanged state never looks changed.
+    pub fn merge(&mut self, other: ScanResult) {
+        for (path, turn) in other.waiting {
+            match self.waiting.get(&path) {
+                Some(have) if have.at >= turn.at => {}
+                _ => {
+                    self.waiting.insert(path, turn);
+                }
+            }
+        }
+        self.working.extend(other.working);
+        let waiting = &self.waiting;
+        self.working.retain(|path| !waiting.contains_key(path));
+        self.sessions.extend(other.sessions);
+        self.others.extend(other.others);
+        self.others.sort_by(|a, b| a.id.cmp(&b.id));
+    }
 }
 
 /// One event from the hook script (see hooks.rs). Only these fields are ever written; never
@@ -474,7 +522,7 @@ impl HookEvent {
 
 /// A tool's name as Claude Code gives it (`Bash`, `mcp__github__create_issue`); anything else is
 /// dropped, so nothing but a name ever reaches the screen.
-fn is_tool_name(name: &str) -> bool {
+pub(crate) fn is_tool_name(name: &str) -> bool {
     name.len() <= 128 && name.chars().all(|c| c.is_ascii_alphanumeric() || "_-.:".contains(c))
 }
 
@@ -686,7 +734,7 @@ impl HookSession {
     }
 }
 
-fn system_ms(time: SystemTime) -> u64 {
+pub(crate) fn system_ms(time: SystemTime) -> u64 {
     time.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
@@ -705,7 +753,7 @@ pub(crate) fn inside(cwd: &str, folder_path: &str) -> bool {
 /// The listed project a session in `cwd` belongs to: of those that hold the folder, the
 /// innermost. With two listed one inside the other, a session of the inner one is that one's
 /// alone: one session is one wait, told once.
-fn owner<'a>(listed: &'a [String], cwd: &str) -> Option<&'a String> {
+pub(crate) fn owner<'a>(listed: &'a [String], cwd: &str) -> Option<&'a String> {
     listed.iter().filter(|folder| inside(cwd, folder)).max_by_key(|folder| folder.len())
 }
 
@@ -893,19 +941,13 @@ impl ClaudeWatch {
     /// time stays the shared one, so older legacy books can't bring back ancient turns.
     fn read_seen_everywhere(&self) -> SeenBook {
         let mut book = self.read_seen();
-
-        for file in &self.legacy_seen {
-            let Some(legacy) = fs::read_to_string(file).ok().and_then(|raw| serde_json::from_str::<SeenBook>(&raw).ok()) else {
-                continue;
-            };
-
-            for (path, at) in legacy.paths {
-                let slot = book.paths.entry(path).or_insert(0);
-                *slot = (*slot).max(at);
-            }
-        }
-
+        add_legacy_seen(&mut book, &self.legacy_seen);
         book
+    }
+
+    /// The seen books of older extension versions, read beside the shared one.
+    pub fn legacy_seen(&self) -> &[PathBuf] {
+        &self.legacy_seen
     }
 
     fn read_seen_file(&self) -> Option<SeenBook> {
@@ -941,9 +983,17 @@ impl ClaudeWatch {
     /// sessions Claude Code lists as running (`~/.claude/sessions`); a prompt of one that is gone
     /// waits for nothing and is seen with the rest, as every prompt is when that can't be told.
     /// Returns the moment written.
+    #[cfg(test)]
     pub fn mark_seen(&mut self, folder_path: &str, running: Option<&HashSet<String>>) -> u64 {
+        self.mark_seen_before(folder_path, running, None)
+    }
+
+    /// `mark_seen`, held back also by a prompt another agent's session has open there since
+    /// `elsewhere` (Codex's permission request: `CodexWatch::open_prompt`).
+    pub fn mark_seen_before(&mut self, folder_path: &str, running: Option<&HashSet<String>>, elsewhere: Option<u64>) -> u64 {
         let now = now_ms();
         let open = running.and_then(|running| self.open_prompt(folder_path, running));
+        let open = open.into_iter().chain(elsewhere).min();
         let at = open.map_or(now, |opened| opened.saturating_sub(PROMPT_LEAD_MS).min(now));
         let mut paths = HashMap::new();
         paths.insert(folder_path.to_string(), at);
@@ -1305,6 +1355,7 @@ fn session_state(id: &str, path: &str, log: Option<&Log>, hook: Option<&HookSess
 
     SessionState {
         id: id.to_string(),
+        agent: Agent::Claude,
         path: path.to_string(),
         folder: verdict.and_then(|v| v.cwd.clone()).or_else(|| hook.and_then(|h| h.cwd.clone())),
         title: verdict.and_then(|v| v.title.clone()),
@@ -1320,6 +1371,28 @@ fn session_state(id: &str, path: &str, log: Option<&Log>, hook: Option<&HookSess
                 Some(hook) => hook.phase == HookPhase::Interrupted,
                 None => verdict.is_some_and(|verdict| cut_short(verdict, idle)),
             },
+    }
+}
+
+impl AgentWatch for ClaudeWatch {
+    fn agent(&self) -> Agent {
+        Agent::Claude
+    }
+
+    fn set_listed(&mut self, paths: &[String]) -> bool {
+        ClaudeWatch::set_listed(self, paths)
+    }
+
+    fn rescan(&mut self) {
+        ClaudeWatch::rescan(self)
+    }
+
+    fn ready(&self) -> bool {
+        ClaudeWatch::ready(self)
+    }
+
+    fn evaluate(&mut self) -> ScanResult {
+        ClaudeWatch::evaluate(self)
     }
 }
 

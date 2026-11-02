@@ -46,6 +46,7 @@ fn fixture(script: &str, files: &[(&str, &str)]) -> Fixture {
         CoreConfig {
             registry_dir: registry_dir.clone(),
             claude_dir: tmp.path().join("claude"),
+            codex_home: tmp.path().join("codex"),
             settings_file: tmp.path().join("settings.json"),
             claude_settings: tmp.path().join("claude-settings.json"),
             legacy_registries: Vec::new(),
@@ -651,6 +652,7 @@ fn an_added_project_stays_listed_without_its_star_until_it_is_removed() {
     let config = || CoreConfig {
         registry_dir: tmp.path().join("registry"),
         claude_dir: tmp.path().join("claude"),
+        codex_home: tmp.path().join("codex"),
         settings_file: tmp.path().join("settings.json"),
         claude_settings: tmp.path().join("claude-settings.json"),
         legacy_registries: Vec::new(),

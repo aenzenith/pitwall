@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import AgentMark from "../components/AgentMark.vue";
 import ClaudeDot from "../components/ClaudeDot.vue";
-import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
-import { accountLabel } from "../lib/accounts";
+import { agentOn } from "../lib/agents";
 import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import {
@@ -32,9 +32,9 @@ import {
   type SplitDir,
 } from "../lib/panes";
 import { SHELL_LABELS, shellIcon } from "../lib/shells";
-import { MODEL_LABELS, MODELS, projectChoice } from "../lib/start";
-import { attach, fitView, terminalTip } from "../lib/terminals";
-import type { Project, Shell, ShellChoice, StartChoice, TerminalView } from "../lib/types";
+import { CODEX_MODELS, MODEL_LABELS, MODELS, projectChoice, projectCodexChoice } from "../lib/start";
+import { attach, fitView, tabAccountLabel, terminalTip } from "../lib/terminals";
+import type { AgentStartChoice, Project, Shell, ShellChoice, TerminalView } from "../lib/types";
 
 /**
  * The terminal panel's panes (lib/panes): each with a head (the terminal's name, Claude's state,
@@ -68,7 +68,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   /** A new terminal, put there; `shell`, on Windows the shell of the list picked. */
-  open: [place: Place, claude: boolean, start: StartChoice | null, shell: ShellChoice | null];
+  open: [place: Place, claude: boolean, start: AgentStartChoice | null, shell: ShellChoice | null];
   close: [id: number];
   rename: [id: number];
   /** A pane picked: `keyboard`, the keyboard goes into its terminal. */
@@ -216,14 +216,14 @@ function splitTitle(key: string, dir: SplitDir): string {
   return `${t(dir === "row" ? "panes.splitRight" : "panes.splitDown")} (${dir === "row" ? PANE_KEYS.right : PANE_KEYS.down})`;
 }
 
-function split(key: string, dir: SplitDir, claude = false, start: StartChoice | null = null, shell: ShellChoice | null = null): void {
+function split(key: string, dir: SplitDir, claude = false, start: AgentStartChoice | null = null, shell: ShellChoice | null = null): void {
   if (!splits(key, dir, claude) || props.opening) return;
   emit("open", { kind: "split", key, dir }, claude, start, shell);
 }
 
 /** A split button's other choices, on its right-click as on "+": a shell (on Windows each shell
- * installed, Command Prompt the one the button opens), Claude as the project's settings say, or
- * Claude with a model or plan mode of its own. */
+ * installed, Command Prompt the one the button opens), each agent that is on as the project's
+ * settings say, or with a model (Claude: or plan mode) of its own. */
 function splitMenu(event: MouseEvent, key: string, dir: SplitDir): void {
   if (!splits(key, dir)) return;
   const { model, mode } = defaults.value;
@@ -233,19 +233,40 @@ function splitMenu(event: MouseEvent, key: string, dir: SplitDir): void {
   const shellLines: MenuEntry[] = props.shells?.length
     ? [...props.shells.map((shell) => ({ text: t(SHELL_LABELS[shell]), accelerator: shell === "cmd" ? accelerator : undefined, action: () => split(key, dir, false, null, { shell, elevated: false }) })), "separator"]
     : [{ text: t("panes.shell"), accelerator, action: () => split(key, dir) }];
+  const codex = projectCodexChoice(props.project);
+  const claudeOn = agentOn("claude");
+  const codexOn = agentOn("codex");
   void menu.popup(event, [
     ...shellLines,
-    { text: t("panes.claude"), enabled: claude, action: () => split(key, dir, true) },
+    ...(claudeOn ? [{ text: t("panes.claude"), enabled: claude, action: () => split(key, dir, true) }] : []),
+    ...(codexOn ? [{ text: t("panes.codex"), enabled: claude, action: () => split(key, dir, true, codex) }] : []),
     "separator",
-    {
-      text: t("terminal.claudeWith"),
-      enabled: claude,
-      items: [
-        ...MODELS.map((each) => ({ text: t(MODEL_LABELS[each]), checked: model === each, action: () => split(key, dir, true, { model: each, mode }) })),
-        "separator",
-        { text: t("start.newClaudePlan"), checked: mode === "plan", action: () => split(key, dir, true, { model, mode: "plan" }) },
-      ],
-    },
+    ...(claudeOn
+      ? [
+          {
+            text: t("terminal.claudeWith"),
+            enabled: claude,
+            items: [
+              ...MODELS.map((each) => ({ text: t(MODEL_LABELS[each]), checked: model === each, action: () => split(key, dir, true, { model: each, mode }) })),
+              "separator" as const,
+              { text: t("start.newClaudePlan"), checked: mode === "plan", action: () => split(key, dir, true, { model, mode: "plan" }) },
+            ],
+          },
+        ]
+      : []),
+    ...(codexOn
+      ? [
+          {
+            text: t("terminal.codexWith"),
+            enabled: claude,
+            items: [
+              ...CODEX_MODELS.map((each) => ({ text: each, checked: codex.model === each, action: () => split(key, dir, true, { ...codex, model: each }) })),
+              "separator" as const,
+              { text: t("start.codexMode.readOnly"), checked: codex.mode === "readOnly", action: () => split(key, dir, true, { ...codex, mode: "readOnly" }) },
+            ],
+          },
+        ]
+      : []),
   ]);
 }
 
@@ -398,11 +419,12 @@ function stopMove(): void {
   window.removeEventListener("keydown", escMove, true);
 }
 
-/** The pane being moved holds a Claude session: its ghost says so. */
-const movingClaude = computed(() => {
+/** The pane being moved holds an agent's session: its ghost carries the agent's mark. */
+const movingAgent = computed(() => {
   const key = moving.value?.key;
   const terminal = key ? leaves(props.layout.tree).find((pane) => pane.key === key)?.terminal : null;
-  return terminal != null && views.value.get(terminal)?.kind === "claude";
+  const kind = terminal != null ? views.value.get(terminal)?.kind : undefined;
+  return kind && kind !== "shell" ? kind : null;
 });
 
 const DROP_LABELS: Record<Side, "panes.moveLeft" | "panes.moveRight" | "panes.moveUp" | "panes.moveDown"> = { left: "panes.moveLeft", right: "panes.moveRight", top: "panes.moveUp", bottom: "panes.moveDown" };
@@ -474,10 +496,10 @@ defineExpose({ placed, shown, rectOf, dropAt });
           @mouseup.middle="emit('close', pane.leaf.terminal)"
           @contextmenu.prevent="paneMenu($event, pane.leaf.key, pane.leaf.terminal)"
         >
-          <ClaudeLogo v-if="views.get(pane.leaf.terminal)?.kind === 'claude'" :size="11" />
+          <AgentMark v-if="views.get(pane.leaf.terminal) && views.get(pane.leaf.terminal)?.kind !== 'shell'" :agent="views.get(pane.leaf.terminal)!.kind as 'claude' | 'codex'" :size="11" />
           <Icon v-else :name="shellIcon(views.get(pane.leaf.terminal)?.shell)" :size="11" />
           <span class="name">{{ nameOf(pane.leaf.terminal) }}</span>
-          <span v-if="accountLabel(views.get(pane.leaf.terminal)?.account)" class="account">{{ accountLabel(views.get(pane.leaf.terminal)?.account) }}</span>
+          <span v-if="tabAccountLabel(views.get(pane.leaf.terminal))" class="account">{{ tabAccountLabel(views.get(pane.leaf.terminal)) }}</span>
           <span v-if="views.get(pane.leaf.terminal)?.elevated" class="admin" role="img" :aria-label="t('terminal.adminBadge')"><Icon name="shield" :size="10" /></span>
           <ClaudeDot v-if="live.has(pane.leaf.terminal)" :live="live.get(pane.leaf.terminal)" />
           <span v-if="live.get(pane.leaf.terminal)?.phase === 'waiting'" class="wait">{{ live.get(pane.leaf.terminal)?.text }}</span>
@@ -526,8 +548,11 @@ defineExpose({ placed, shown, rectOf, dropAt });
         <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, false, null, null)">
           <Icon name="terminal" :size="12" /> {{ t("terminal.newTab") }}
         </button>
-        <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, null, null)">
-          <ClaudeLogo :size="12" /> {{ t("terminal.newClaude") }}
+        <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, null, null)">
+          <AgentMark agent="claude" :size="12" /> {{ t("terminal.newClaude") }}
+        </button>
+        <button v-if="agentOn('codex')" type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, projectCodexChoice(project), null)">
+          <AgentMark agent="codex" :size="12" /> {{ t("terminal.newCodex") }}
         </button>
       </div>
       <div v-if="dropping?.key === pane.leaf.key" :class="['drop', dropping.side ?? 'swap']">
@@ -553,7 +578,7 @@ defineExpose({ placed, shown, rectOf, dropAt });
       ></div>
     </template>
     <div v-if="moving?.started" class="ghost" :style="{ left: `${moving.x + 12}px`, top: `${moving.y + 10}px` }" aria-hidden="true">
-      <ClaudeLogo v-if="movingClaude" :size="11" />
+      <AgentMark v-if="movingAgent" :agent="movingAgent" :size="11" />
       <Icon v-else name="terminal" :size="11" />
       {{ moving.name }}
     </div>

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, onUpdated, ref, watch, type ComponentPublicInstance } from "vue";
 
+import AgentMark from "../components/AgentMark.vue";
 import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
 import { accountInUse, accountName, severalAccounts } from "../lib/accounts";
+import { agentName, agentsOn, multiAgent } from "../lib/agents";
+import { codexFuel, fuelPicked as picked } from "../lib/codexFuel";
 import { duration } from "../lib/day";
 import { ago } from "../lib/format";
 import { clockText, cluster, errorKeys, isStale } from "../lib/fuel";
@@ -13,7 +16,7 @@ import { language, t } from "../lib/i18n";
 import { openInPanel } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { api, fuel, now, visible } from "../lib/store";
-import type { UsageWindow } from "../lib/types";
+import type { Agent, UsageWindow } from "../lib/types";
 import AccountNote from "./fuel/AccountNote.vue";
 import AccountPanel from "./fuel/AccountPanel.vue";
 import FuelBackdrop from "./fuel/FuelBackdrop.vue";
@@ -28,16 +31,45 @@ import TripComputer from "./fuel/TripComputer.vue";
 const props = defineProps<{ terminalProject: string | null }>();
 
 /** The gear at the bar's end opens Settings on its Claude tab; the account panel's "Manage
- * accounts" at its accounts (`part`), its "Add account" with the add dialog open. */
-const emit = defineEmits<{ "open-settings": [part?: "accounts" | "addAccount"] }>();
+ * accounts" at its accounts (`part`), its "Add account" with the add dialog open. With another
+ * agent picked, `agent` says whose (none: Claude's, as before). */
+const emit = defineEmits<{ "open-settings": [part?: "accounts" | "addAccount", agent?: Agent] }>();
 
 /** The least the refresh button spins, so a click the core answers at once still shows. */
 const MIN_SPIN_MS = 500;
 
-const limits = computed(() => fuel.value?.limits ?? null);
+/* ---------- the agent picked ---------- */
+
+/** The agents with a part on the page: Claude, and Codex while it is on and the core sends its. */
+const fuelAgents = computed<Agent[]>(() => agentsOn.value.filter((each) => each === "claude" || (each === "codex" && !!codexFuel(fuel.value))));
+/** More than one: the picker at the page's top, each with its accounts' chip. With Claude alone
+ * the page is as it was. */
+const multi = computed(() => multiAgent.value && fuelAgents.value.length > 1);
+const agent = computed<Agent>(() => (multi.value && fuelAgents.value.includes(picked.value) ? picked.value : "claude"));
+const isCodex = computed(() => agent.value === "codex");
+
+/** The picked agent's part of the payload: its limits, today's tokens. */
+const part = computed(() => (isCodex.value ? codexFuel(fuel.value) : fuel.value));
+
+const limits = computed(() => part.value?.limits ?? null);
 const usage = computed(() => limits.value?.usage ?? null);
 const status = computed(() => limits.value?.status ?? "loading");
-const today = computed(() => fuel.value?.today ?? null);
+const today = computed(() => part.value?.today ?? null);
+
+/** Codex's limits come from its own logs: none yet until it makes a request (signed in, nothing
+ * written down). */
+const unread = computed(() => isCodex.value && status.value === "ready" && !usage.value?.windows.length);
+/** Unread with no tokens today either: the message alone, no empty boxes under it. */
+const unreadOnly = computed(() => unread.value && !today.value?.tokens.total);
+
+function pick(each: Agent): void {
+  picked.value = each;
+}
+
+function openSettings(where?: "accounts" | "addAccount"): void {
+  if (isCodex.value) emit("open-settings", where, "codex");
+  else emit("open-settings", where);
+}
 
 /** A reading the core couldn't renew: shown dimmed, under a notice that says why. */
 const stale = computed(() => !!usage.value && !!limits.value && isStale(limits.value));
@@ -78,6 +110,10 @@ type Notice = { kind: "signedOut" | "expired" | "rateLimited" | "error" | "noLim
 const notice = computed<Notice | null>(() => {
   const state = limits.value;
   if (!state) return null;
+  // Codex's: signed out, or nothing to show yet (`unread`, drawn on its own); nothing else is asked.
+  if (isCodex.value) {
+    return state.status === "signedOut" ? { kind: "signedOut", tag: t("fuel.state.signedOut.tag"), title: t("fuel.state.signedOut.title.codex"), body: t("fuel.state.signedOut.body.codex") } : null;
+  }
   switch (state.status) {
     case "signedOut":
       return { kind: "signedOut", tag: t("fuel.state.signedOut.tag"), title: t("fuel.state.signedOut.title"), body: t("fuel.state.signedOut.body") };
@@ -181,14 +217,15 @@ onBeforeUnmount(() => shadeObserver.disconnect());
     <!-- Its heading and free space drag the window; the refresh button stays clickable. -->
     <header class="bar" :data-tauri-drag-region="dragRegion">
       <div class="heading">{{ t("fuel.title") }}</div>
-      <!-- With more than one account: the one in use, and the panel of them all. -->
-      <AccountPanel v-if="severalAccounts" @add="emit('open-settings', 'addAccount')" @manage="emit('open-settings', 'accounts')" />
+      <!-- With more than one account: the one in use, and the panel of them all. With more than one
+           agent it goes beside the agent picker. -->
+      <AccountPanel v-if="severalAccounts && !multi" @add="emit('open-settings', 'addAccount')" @manage="emit('open-settings', 'accounts')" />
       <span v-if="readAgo" class="ago">{{ readAgo }}</span>
       <button type="button" class="refresh" :aria-label="t('fuel.refresh')" :title="t('fuel.refresh')" :aria-busy="spinning" @click="refresh">
         <Spinner v-if="spinning" />
         <Icon v-else name="restart" :size="16" />
       </button>
-      <button type="button" class="options" :aria-label="t('fuel.options')" :title="t('fuel.options')" @click="emit('open-settings')">
+      <button type="button" class="options" :aria-label="t(isCodex ? 'fuel.options.codex' : 'fuel.options')" :title="t(isCodex ? 'fuel.options.codex' : 'fuel.options')" @click="openSettings()">
         <Icon name="settings" :size="16" />
       </button>
     </header>
@@ -205,7 +242,18 @@ onBeforeUnmount(() => shadeObserver.disconnect());
       <div ref="scroller" class="scroll" @scroll.passive="measureShade">
         <div class="content">
           <!-- The Claude plan, top left on the page's ground, behind Claude's mark. -->
-          <div v-if="limits?.plan" class="plan"><ClaudeLogo :size="32" />{{ t("fuel.plan", { plan: limits.plan }) }}</div>
+          <div v-if="!multi && limits?.plan" class="plan"><ClaudeLogo :size="32" />{{ t("fuel.plan", { plan: limits.plan }) }}</div>
+          <!-- With more than one agent: each by its mark and name, the picked one bright; beside
+               them the picked one's account in use with its plan, opening its accounts. -->
+          <div v-else-if="multi" class="agents">
+            <span class="picker" role="group" :aria-label="t('fuel.agents')">
+              <button v-for="each in fuelAgents" :key="each" type="button" :class="['pick', { on: each === agent }]" :aria-pressed="each === agent" @click="pick(each)">
+                <span class="pick-mark"><AgentMark :agent="each" :size="18" /></span>{{ agentName(each) }}
+              </button>
+            </span>
+            <span class="rule-v" aria-hidden="true"></span>
+            <AccountPanel :key="agent" :agent="agent" plan @add="openSettings('addAccount')" @manage="openSettings('accounts')" />
+          </div>
           <!-- Across from it, for a moment after a switch: what new sessions open with, and how its
                MCP servers went. Held over the page: nothing moves as it comes and goes. -->
           <AccountNote />
@@ -213,6 +261,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
           <FuelNotice v-if="notice" :tag="notice.tag" :title="notice.title">
             <Rich v-if="notice.kind === 'signedOut'" :text="notice.body">
               <template #claude><code>claude</code></template>
+              <template #codex><code>codex</code></template>
               <template #login><code>/login</code></template>
             </Rich>
             <template v-else>{{ notice.body }}</template>
@@ -224,11 +273,18 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 
           <div v-if="firstLoad" class="loading" role="status">
             <Spinner />
-            <span>{{ t("fuel.loading") }}</span>
+            <span>{{ t(isCodex ? "fuel.loading.codex" : "fuel.loading") }}</span>
+          </div>
+
+          <!-- Codex signed in, its limits not written down by it yet: they come with its next request. -->
+          <div v-if="unread" class="unread" role="status">
+            <Icon name="fuel" :size="26" />
+            <span class="unread-title">{{ t("fuel.unread.title.codex") }}</span>
+            <span class="unread-body">{{ t("fuel.unread.body.codex") }}</span>
           </div>
 
           <!-- The instrument cluster: the dials on one line, the trip computer's boxes under them. -->
-          <section v-if="windows.length || today" :class="['cluster', { stale }]" :aria-label="t('fuel.cluster')">
+          <section v-if="(windows.length || today) && !unreadOnly" :class="['cluster', { stale }]" :aria-label="t('fuel.cluster')">
             <div v-if="dials.length" class="dials">
               <FuelGauge v-for="dial in dials" :key="dial.key" :size="dial.size" :left="dial.left" :name="dial.name" :caption="dial.caption" :until="dial.until" :stale="stale" />
             </div>
@@ -236,7 +292,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
                  computer and the session's pace, parted by a line, the foot under them. -->
             <div class="lower">
               <TripComputer ref="trip" :window="lead" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
-              <SessionPace v-if="session" ref="pace" :window="session" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" />
+              <SessionPace v-if="session" ref="pace" :window="session" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" :agent="isCodex ? agent : undefined" />
             </div>
           </section>
         </div>
@@ -245,7 +301,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
       <!-- Held at the bottom, on the same ground: it never scrolls away. The backdrop reads where
            it stands (`data-foot`). -->
       <FuelFooter
-        v-if="windows.length || today"
+        v-if="(windows.length || today) && !unreadOnly"
         class="footer"
         data-foot
         :rest="rest"
@@ -254,6 +310,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
         :today="today"
         :limits="windows.length > 0"
         :stale="stale"
+        :last-read="isCodex && limits?.fetchedAt ? { at: limits.fetchedAt, now } : null"
       />
     </div>
   </div>
@@ -367,6 +424,85 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   flex-direction: column;
   gap: 16px;
   padding: 20px 20px 0;
+}
+
+/* The agents, then the picked one's account: one line, top left, where the plan is with one. */
+.agents {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.pick:hover {
+  color: var(--text-muted);
+}
+
+.pick.on {
+  color: var(--text-strong);
+}
+
+/* The others' marks faint with their names; the picked one's in its own colours. */
+.pick-mark {
+  display: inline-flex;
+  opacity: 0.4;
+}
+
+.pick.on .pick-mark {
+  opacity: 1;
+}
+
+.rule-v {
+  width: 1px;
+  height: 18px;
+  flex-shrink: 0;
+  background: var(--line-strong);
+}
+
+/* Codex's limits not written down yet: in the middle of the page, as the dials would be. */
+.unread {
+  margin-block: auto;
+  align-self: center;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.unread-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.unread-body {
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .plan {

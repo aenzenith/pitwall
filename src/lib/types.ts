@@ -50,6 +50,12 @@ export type ProjectSettings = {
   claudeModel?: ClaudeModel;
   /** The mode such a session starts in; unset: normal. */
   claudeMode?: ClaudeMode;
+  /** The agent a session started here goes to when none is picked; unset: Claude. */
+  agent?: Agent;
+  /** The model a Codex session started here takes; unset: the one Codex picks itself. */
+  codexModel?: CodexModel;
+  /** The mode such a session starts in; unset: normal. */
+  codexMode?: CodexMode;
   /** The three letters the Track page and the mini tower write for it; unset: told from its name. */
   code?: string;
   /** Where it opens from each place, in place of Pitwall's choice (`Settings.open`); a place
@@ -69,7 +75,7 @@ export type JobResult = { ok: boolean; code: number | null; stopped: boolean; fi
 
 /** Who started a server whose command marked "ask first" didn't run with it: `user` (a click)
  * waits for the go-ahead; the others skipped it, each saying when. */
-export type HeldBy = "user" | "launch" | "restore" | "link" | "claude" | "crash" | "noTerminal";
+export type HeldBy = "user" | "launch" | "restore" | "link" | "claude" | "codex" | "crash" | "noTerminal";
 
 export type CommandView = CustomCommand & {
   status: "running" | "busy" | "ok" | "failed" | "idle";
@@ -119,7 +125,7 @@ export type Project = {
   claudeWorking: boolean;
   /** Its Claude sessions that are working, or wait on you (notifications not read yet). `since`:
    * when a working one began, as the hook told it; `tool`: the tool a permission wait is for. */
-  claudeSessions: Array<{ id: string; phase: "working" | "waiting"; turn: Turn | null; since?: number; tool?: string }>;
+  claudeSessions: Array<{ id: string; agent: Agent; phase: "working" | "waiting"; turn: Turn | null; since?: number; tool?: string }>;
   git: GitInfo | null;
   script: string;
   /** The exact command the dev server runs: `npm run dev`, `pnpm dev`, `bun run dev`… */
@@ -214,6 +220,8 @@ export type Settings = {
   cli?: CliSettings;
   /** Where a project opens from each place, unless it chose its own. Read leniently (lib/open). */
   open?: Partial<OpenSettings>;
+  /** The coding agents, this Mac's own; changed through their own commands only. */
+  agents?: AgentsSettings;
 };
 
 /** The chequered flag: a quit from Pitwall's own menus shows what is still open first. */
@@ -242,7 +250,7 @@ export type TerminalView = {
   id: number;
   path: string;
   name: string;
-  kind: "shell" | "claude";
+  kind: "shell" | Agent;
   /** The shell of the list a shell tab runs on Windows; null elsewhere and for a Claude tab. */
   shell: Shell | null;
   /** An administrator's shell (Windows, through sudo): no record puts it back. */
@@ -314,6 +322,10 @@ export type Snapshot = {
   missed: Missed[];
   /** How many calls came over the team radio: when it moves, a session's calls are asked for again. */
   radioCalls?: number;
+  /** Every agent, whether on or not, in the core's order (lib/agents). */
+  agents: AgentInfo[];
+  /** When the latest event of Codex's hook came, to the minute: Settings' "Last event". */
+  codexHeard?: number;
 };
 
 /* ---------- First run and the projects folder (discover_projects, add_projects) ---------- */
@@ -382,7 +394,7 @@ export type MissingProject = { path: string; name: string; commands: number; lin
 export type DaySpan = { start: number; end: number; session?: string };
 
 /** A Claude session's part in the day: when, how long it worked and waited on you, its turns. */
-export type DaySession = { id: string; title: string | null; start: number; end: number; work: number; wait: number; turns: number };
+export type DaySession = { id: string; agent: Agent; title: string | null; start: number; end: number; work: number; wait: number; turns: number };
 
 export type DayCommit = { at: number; subject: string };
 
@@ -407,11 +419,13 @@ export type DayProject = {
   commands: DayCommand[];
   /** Null when nothing is known of its tokens that day. */
   spend: ProjectSpend | null;
+  /** Codex's, the same way; absent for a day Codex wasn't counted. */
+  codexSpend?: ProjectSpend;
 };
 
 /** One day: what Pitwall wrote down while it ran, and the commits made; its tokens, null for a day
  * before they were written down. */
-export type DaySummary = { date: string; start: number; end: number; today: boolean; now: number; projects: DayProject[]; spend: DaySpend | null };
+export type DaySummary = { date: string; start: number; end: number; today: boolean; now: number; projects: DayProject[]; spend: DaySpend | null; codexSpend?: DaySpend };
 
 /* ---------- Fuel: Claude's plan limits (src-tauri/src/usage.rs) and today's spend (spend.rs) ---------- */
 
@@ -641,6 +655,8 @@ export type SessionSpan = { start: number; end: number; kind: "work" | "wait" };
 export type SessionRow = {
   /** The session id (its log's name, a UUID). */
   id: string;
+  /** The agent it is a session of. */
+  agent: Agent;
   /** The listed project it runs in; null for a folder outside the listed projects. */
   path: string | null;
   /** The folder it runs in. */
@@ -678,7 +694,7 @@ export type SessionRow = {
 export type SessionsView = { now: number; hook: boolean; sessions: SessionRow[]; unlisted: number };
 
 /** A session in the terminal's history (`claude_past`): its name and when it was last heard of. */
-export type PastSession = { id: string; title: string | null; at: number | null };
+export type PastSession = { id: string; agent: Agent; title: string | null; at: number | null };
 
 /** What a click on a session in the terminal's history did (`resume_claude`): its tab shown, brought
  * up where it runs, opened again in a new tab; no log of it in the project's folder, or no telling
@@ -712,6 +728,9 @@ export type Card = {
   start?: ClaudeStart | null;
   /** Up next and told to wait: the core gives it at its moment. */
   schedule?: CardSchedule | null;
+  /** Given to Codex, its session not found yet while Codex still runs in its tab (up to ten
+   * minutes): starting, however long past the minute a session is otherwise looked for. */
+  starting?: boolean;
 };
 
 /** An image a card holds: its number in the note, and what its file is. */
@@ -751,11 +770,13 @@ export type RestartPlan = {
    *  reopened, the turn is lost). `shell`: a command running in a shell tab. `admin`: an
    *  administrator's tab (Windows), which never comes back. `command`: a running one-off custom
    *  command. `name` is the tab's or the command's name. */
-  cut: Array<{ kind: "claude" | "shell" | "admin" | "command"; project: string; name: string }>;
+  cut: Array<{ kind: "claude" | "codex" | "shell" | "admin" | "command"; project: string; name: string }>;
   /** Project names whose dev server is started again. */
   servers: string[];
   /** Project names of the Claude sessions opened again, one entry per session. */
   claude: string[];
+  /** The same of Codex's sessions; absent with Claude alone. */
+  codex?: string[];
   /** Tabs opened again, and in how many projects. */
   terminals: number;
   terminalProjects: number;
@@ -816,7 +837,7 @@ export type SignalKind =
 /** Something the user wasn't told while it was quiet. `path` and `name` are empty for what is
  * about no project (the fuel alert); `detail`: a permission's tool, a command's name, the fuel
  * alert's line. */
-export type Missed = { kind: SignalKind; path: string; name: string; detail: string | null; at: number };
+export type Missed = { kind: SignalKind; path: string; name: string; detail: string | null; at: number; agent: Agent };
 
 /** Quiet now: until when (ms; null: until it is switched off), and whether the quiet hours made it so. */
 export type Quiet = { until: number | null; hours: boolean };
@@ -870,7 +891,7 @@ export type FlagGit = { path: string; name: string; branch: string; count: numbe
 
 /** A Claude session that waits on you: with what (`tool`: a permission prompt's tool, by name
  * alone), and since when (ms). */
-export type FlagWait = { path: string; name: string; session: string; kind: Turn["kind"]; tool: string | null; since: number };
+export type FlagWait = { path: string; name: string; session: string; agent: Agent; kind: Turn["kind"]; tool: string | null; since: number };
 
 /** A project's cards in "To review". */
 export type FlagReview = { path: string; name: string; cards: number };
@@ -904,15 +925,107 @@ export type ClaudeModel = "fable" | "opus" | "sonnet" | "haiku";
 /** The mode a Claude session starts in: Claude Code's own, plan first, or edits made without asking. */
 export type ClaudeMode = "normal" | "plan" | "acceptEdits";
 
-/** How a Claude session starts, as the core keeps it: no model is Claude Code's own choice, no
- * mode is normal. */
-export type ClaudeStart = { model?: ClaudeModel; mode?: ClaudeMode };
+/** How a session starts, as the core keeps it: no agent is Claude, no model is the agent's own
+ * choice, no mode is normal. `model`/`mode` are Claude's, `codex` Codex's. */
+export type ClaudeStart = { agent?: Agent; model?: ClaudeModel; mode?: ClaudeMode; codex?: CodexStart };
 
 /** How a Claude session is to start, as the window says it to the core (the core keeps only
  * values of its two lists): `model` null is Claude Code's own choice. */
-export type StartChoice = { model: ClaudeModel | null; mode: ClaudeMode };
+export type StartChoice = { agent?: "claude"; model: ClaudeModel | null; mode: ClaudeMode };
+
+/** A Codex model, by the id Codex's `-m` takes (src-tauri/src/start.rs). */
+export type CodexModel = "gpt-6.1-sol" | "gpt-6.1-terra" | "gpt-6-astra" | "gpt-6-luna";
+
+/** The mode a Codex session starts in: Codex's own, or read-only. */
+export type CodexMode = "normal" | "readOnly";
+
+/** Codex's part of a start, as the core keeps it. */
+export type CodexStart = { model?: CodexModel; mode?: CodexMode };
+
+/** How a Codex session is to start, as the window says it to the core: `model` null is Codex's own
+ * choice. */
+export type CodexChoice = { agent: "codex"; model: CodexModel | null; mode: CodexMode };
+
+/** A start of either agent, as the window says it. */
+export type AgentStartChoice = StartChoice | CodexChoice;
 
 /** A card told to wait: when it is given (ms), whether that moment is the 5-hour session's
  * refill (it then follows the reading), and what was chosen for it. `line`: its refill came while
  * a card before it was given or still with Claude, and it waits its turn (`at` is no moment then). */
 export type CardSchedule = { at: number; refill: boolean; start: ClaudeStart; line?: boolean };
+
+/* ---------- The coding agents (src-tauri/src/agent.rs) ---------- */
+
+/** A coding agent, by the core's word for it. Its name is a brand, never translated (lib/agents). */
+export type Agent = "claude" | "codex";
+
+/** What Pitwall can do with an agent: a capability it lacks shows nothing for it. */
+export type AgentCaps = {
+  hook: boolean;
+  permission: boolean;
+  start: boolean;
+  resume: boolean;
+  models: boolean;
+  modes: boolean;
+  fuel: boolean;
+  tokens: boolean;
+  accounts: boolean;
+  radio: boolean;
+  vscode: boolean;
+};
+
+/** Pitwall's hook in an agent: not installed; installed but not run yet (Codex runs it once the
+ * user trusted it in `/hooks`); at work. */
+export type HookState = "missing" | "waiting" | "working";
+
+/** One agent as the snapshot carries it. `found`: installed on this Mac, as far as its home folder
+ * tells; `undecided`: on because it was found, the user not told yet. */
+export type AgentInfo = {
+  id: Agent;
+  name: string;
+  on: boolean;
+  found: boolean;
+  undecided: boolean;
+  caps: AgentCaps;
+  hook: HookState;
+  hookOutdated: boolean;
+};
+
+/** One agent's settings: `on` unset is never said (Claude on, another on once found). */
+export type AgentSettings = {
+  on?: boolean;
+  told?: boolean;
+  /** Its team radio (Codex's: Pitwall among its MCP servers); Claude's is `Settings.radio`. */
+  radio?: boolean;
+};
+
+export type AgentsSettings = { claude?: AgentSettings; codex?: AgentSettings };
+
+/** Another agent's part of the Fuel page, beside Claude's (`Fuel` with `codex` while Codex is
+ * on): its account in use's limits (Codex's read from its own logs: `fetchedAt` is when Codex
+ * last wrote them, at its last request), today's tokens, its accounts, the main one first. */
+export type AgentFuel = { limits: UsageState; today: SpendToday | null; accounts: ClaudeAccount[] };
+
+/** The Fuel payload with the other agents' parts: none while they are off. */
+export type AgentsFuel = Fuel & { codex?: AgentFuel };
+
+/** One MCP server of a Codex account's sync: Claude's states, and `cantCopy` for one Codex's
+ * `codex mcp add` can't say as it is set (headers, a working folder, tools picked…), named and
+ * left alone. */
+export type AgentSyncServer = { name: string; state: SyncServer["state"] | "cantCopy" };
+export type AgentSyncReport = { servers: AgentSyncServer[] };
+
+/** An account being added (`account-login`, Codex's `codex-account-login`): Codex's also sends
+ * the lines its sign-in prints, for "Show the terminal". */
+export type AgentAccountLogin =
+  | Exclude<AccountLogin, { state: "done" }>
+  | (Omit<Extract<AccountLogin, { state: "done" }>, "mcp"> & { mcp: AgentSyncReport | null })
+  | { state: "line"; line: string };
+
+/** A sync as `account-sync` (Codex's `codex-account-sync`) tells it. */
+export type AgentAccountSync = { id: string; state: "syncing" } | { id: string; state: "done" | "failed" | "differs"; report: AgentSyncReport };
+
+/** One agent's line under its name in Settings › Agents (`agent_details`): its CLI's version, as
+ * `--version` said it (null while it is off, not found or silent), and its home folder, `~` for
+ * the home folder. */
+export type AgentDetail = { id: Agent; version: string | null; home: string };

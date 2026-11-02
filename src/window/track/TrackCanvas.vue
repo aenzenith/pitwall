@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 
-import ClaudeLogo from "../../components/ClaudeLogo.vue";
+import AgentMark from "../../components/AgentMark.vue";
 import { LIGHTS, SLIDE_MS, startCircuit, type Inset, type Light, type Look, type Renderer } from "../../lib/circuit";
-import { phase as phaseText } from "../../lib/format";
+import { AGENT_ORDER, phase as phaseText } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { visible } from "../../lib/store";
 import { resolvedTheme } from "../../lib/theme";
 import { dash, dashTime, grid, gridPlace, laneOffsets, leaveTime, PIT_LANE, sessionsIn, smooth, type Circuit, type Mover, type Stander, type TrackSettings } from "../../lib/track";
-import type { Project, Turn } from "../../lib/types";
+import type { Agent, Project, Turn } from "../../lib/types";
 
 /**
  * The circuit and what runs on it: the lights are drawn on a canvas (lib/circuit), their tags and
@@ -176,6 +176,17 @@ const name = (path: string): string => byPath.value.get(path)?.name ?? "";
  * the server or with Claude: Claude's colour and logo, and with more than one, how many
  * (`PIT (2)`). A server alone keeps the plain tag. */
 const atWork = (path: string): number => (byPath.value.get(path)?.claudeSessions ?? []).filter((session) => session.phase === "working").length;
+/** Whose marks a tag on the lap shows: each agent with a session at work there and how many it has
+ * at work, Claude's alone as before; Claude's for a light whose session isn't listed. With more
+ * agents than one, a mark has its own count beside it, only when that agent has more than one
+ * (D8); the tag's count is for one agent alone. */
+const workers = (path: string): Array<{ agent: Agent; count: number }> => {
+  const working = (byPath.value.get(path)?.claudeSessions ?? []).filter((session) => session.phase === "working");
+  const listed = AGENT_ORDER.map((agent) => ({ agent, count: working.filter((session) => session.agent === agent).length })).filter((entry) => entry.count > 0);
+  return listed.length ? listed : [{ agent: "claude", count: 0 }];
+};
+/** The agent of a session that waits at the wall: its mark on the tag. */
+const waiter = (path: string, session: string | null): Agent => byPath.value.get(path)?.claudeSessions.find((entry) => entry.id === session)?.agent ?? "claude";
 
 const TURN = { finished: "claude.finished", asking: "claude.asking", permission: "claude.permission" } as const;
 const turnText = (turn: Turn | null): string => (turn ? t(TURN[turn.kind]) : "");
@@ -765,8 +776,8 @@ watch([scene, () => props.selected, () => props.hot, () => props.settings.glow, 
           data-dblopen
           data-picks-project
         >
-          <ClaudeLogo v-if="mover.kind === 'claude' || atWork(mover.path) > 0" :size="10" />
-          {{ tag(mover.path) }}<template v-if="atWork(mover.path) > 1"> ({{ atWork(mover.path) }})</template>
+          <template v-if="mover.kind === 'claude' || atWork(mover.path) > 0"><template v-for="worker in workers(mover.path)" :key="worker.agent"><span v-if="worker.count > 1 && workers(mover.path).length > 1" class="worker"><AgentMark :agent="worker.agent" :size="10" />({{ worker.count }})</span><AgentMark v-else :agent="worker.agent" :size="10" /></template></template>
+          {{ tag(mover.path) }}<template v-if="atWork(mover.path) > 1 && workers(mover.path).length === 1"> ({{ atWork(mover.path) }})</template>
         </button>
       </div>
 
@@ -796,7 +807,7 @@ watch([scene, () => props.selected, () => props.hot, () => props.settings.glow, 
             data-dblopen
             data-picks-project
           >
-            <ClaudeLogo v-if="spot.kind === 'waiting'" :size="10" />
+            <AgentMark v-if="spot.kind === 'waiting'" :agent="waiter(spot.path, spot.session)" :size="10" />
             {{ spot.text }}
           </button>
         </div>
@@ -884,6 +895,13 @@ canvas {
 /* A lap turning into another: the tags that ride come back with their lights. */
 .tag.rides {
   transition: opacity 0.3s;
+}
+
+/* An agent's mark with how many of its sessions are at work, beside another agent's. */
+.worker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .over.turning .tag.rides {

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import AgentMark from "../../components/AgentMark.vue";
+import { namesAgent } from "../../lib/format";
 import { language, t } from "../../lib/i18n";
 import { keys, primary } from "../../lib/platform";
 import { rowKeys } from "../../lib/rows";
@@ -13,7 +15,8 @@ import OriginLabel from "./OriginLabel.vue";
  * brings the session up, Space marks its project seen, ⌘↵ (Ctrl+Enter) opens the project, ⌘C
  * (Ctrl+C) copies the command that resumes it. `hold` says when the pointer or the keyboard is on
  * the list, so the page keeps its order still meanwhile. `plain`: the rows without their tokens
- * (today's alone, so left out when the page looks back).
+ * (today's alone, so left out when the page looks back). While more than one agent is on, each
+ * row's project starts with its agent's mark.
  */
 const props = defineProps<{ layout: Layout; rows: Map<string, SessionRow>; selected: string | null; now: number; label: string; plain?: boolean }>();
 const emit = defineEmits<{
@@ -130,11 +133,12 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
           <span class="names" role="gridcell">
             <span :class="['title', { untitled: !item.row.title }]">{{ item.title }}</span>
             <span class="meta">
+              <AgentMark v-if="namesAgent" :agent="item.row.agent" :size="12" />
               <span class="project">{{ item.row.project }}</span>
               <!-- Where an ended one ran, when that is known: of an earlier day's it isn't. -->
               <template v-if="item.row.phase !== 'ended' || item.row.origin.kind !== 'unknown'">
                 <span aria-hidden="true">·</span>
-                <OriginLabel :origin="item.row.origin" :project="item.row.project" />
+                <OriginLabel :origin="item.row.origin" :project="item.row.project" :agent="item.row.agent" />
               </template>
             </span>
           </span>

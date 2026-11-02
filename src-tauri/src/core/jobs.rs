@@ -133,7 +133,7 @@ impl Core {
             // Told of, and heard, as Settings says (`signals.rs`).
             if state != "stopped" {
                 let kind = if state == "ok" { SignalKind::CommandDone } else { SignalKind::CommandFailed };
-                self.signal(Signal { kind, path: path.to_string(), name: self.project_name(path), detail: Some(command.name) });
+                self.signal(Signal { kind, path: path.to_string(), name: self.project_name(path), detail: Some(command.name), agent: Agent::Claude });
             }
         }
         self.record_pids();

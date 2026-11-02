@@ -3,11 +3,11 @@
 // reads the language (`t`, `clock`, `duration`) follows it.
 
 import { clock, duration } from "./day";
-import { ago } from "./format";
+import { ago, type AgentKey } from "./format";
 import { language, t, type Key } from "./i18n";
 import { inPeriod, type Period } from "./period";
 import { WAIT_RANK } from "./sessions";
-import type { BoardColumn, Card, Project, SessionRow, Turn } from "./types";
+import type { Agent, BoardColumn, Card, Project, SessionRow, Turn } from "./types";
 
 export const COLUMNS: BoardColumn[] = ["queued", "claude", "review", "done"];
 
@@ -18,12 +18,27 @@ export const COLUMN_LABELS: Record<BoardColumn, Key> = {
   done: "board.column.done",
 };
 
-/** The mark at a column's head, before its name; Claude's column has Claude's own (ClaudeLogo). */
+/** The mark at a column's head, before its name; Claude's column has its agent's own (AgentMark),
+ * or the sparkles while more than one agent is on. */
 export const COLUMN_ICONS = { queued: "clock", review: "eye", done: "check" } as const;
+
+/** A column's name, as the agents that are on (`on`, lib/agents' `agentsOn`) have it: Claude's
+ * column is today's "With Claude" with Claude alone, Codex's with Codex alone, "With agents" while
+ * more than one is on. */
+export function columnLabel(column: BoardColumn, on: Agent[]): Key {
+  if (column !== "claude" || on.length === 0 || (on.length === 1 && on[0] === "claude")) return COLUMN_LABELS[column];
+  return on.length > 1 ? "board.column.agents" : "board.column.claude.codex";
+}
+
+/** The agent a card was given to (its last new session's, or that of the session it was linked
+ * to); Claude for one never given. */
+export function cardAgent(card: Card): Agent {
+  return card.start?.agent === "codex" ? "codex" : "claude";
+}
 
 /** A project in the board picker's list while Claude waits on you on its board: its name, and on
  * what. */
-export const WAIT_LABELS: Record<Turn["kind"], Key> = {
+export const WAIT_LABELS: Record<Turn["kind"], AgentKey> = {
   finished: "board.picker.finished",
   asking: "board.picker.asking",
   permission: "board.picker.permission",
@@ -228,8 +243,9 @@ export function cardStatus(card: Card, row: SessionRow | undefined, listed: bool
   if (!card.session) {
     // Given, its session not linked yet: starting, unless its terminal has closed meanwhile. Past
     // the grace no session of its own will come, though its tab may still be open (Claude never
-    // started in it): it can be given again.
-    const gone = now - given > LINK_GRACE_MS || (terminalOpen === false && now - given > TERMINAL_GRACE_MS) || (card.terminal === null && card.givenAt === null);
+    // started in it): it can be given again. A Codex card the core still calls starting (Codex
+    // runs in its tab, its session not found yet) is starting.
+    const gone = (now - given > LINK_GRACE_MS && !card.starting) || (terminalOpen === false && now - given > TERMINAL_GRACE_MS) || (card.terminal === null && card.givenAt === null);
     return gone ? closed(null) : starting();
   }
   if (!row) return listed && now - given > LINK_GRACE_MS ? closed(null) : starting();

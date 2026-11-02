@@ -140,6 +140,8 @@ impl Core {
                 cli: kept.cli,
                 // Claude's accounts: by their own commands (`core/accounts.rs`).
                 accounts: kept.accounts,
+                // The agents: by their own commands (`agents.rs`).
+                agents: kept.agents,
                 ..form
             };
             unnamed

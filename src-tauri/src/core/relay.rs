@@ -2,9 +2,10 @@
 //! through ntfy, a Telegram bot or a webhook of their own.
 //!
 //! Nothing else in Pitwall sends anything about the user's work anywhere, so what leaves is
-//! made in one place (`Message`): the project's name, what happened in the UI's words and, for
-//! a permission, the tool's name. Never the project's path, a command or its name, a card's
-//! title, a session's name, or anything Claude or the user wrote.
+//! made in one place (`Message`): the project's name, what happened in the UI's words (which
+//! name the agent: Claude's as they always were, Codex's its own) and, for a permission, the
+//! tool's name. Never the project's path, a command or its name, a card's title, a session's
+//! name, or anything an agent or the user wrote.
 //!
 //! The channel and its address are kept in `phone.json` beside the settings, readable by the
 //! user alone and part of no backup; the Telegram token never goes to the UI. Nothing is sent
@@ -19,7 +20,7 @@ use serde_json::{json, Value};
 use ureq::http::{HeaderValue, Uri};
 
 use super::restore::write_private;
-use super::signals::{Signal, SignalKind};
+use super::signals::{agent_key, Signal, SignalKind};
 use super::*;
 use crate::presence::{self, Presence};
 
@@ -109,13 +110,16 @@ impl Default for Events {
 /// One of the events offered: what a webhook is told it is, the key of its text, and whether
 /// its box is ticked.
 struct Offer {
-    event: &'static str,
-    text: &'static str,
+    event: String,
+    text: String,
     ticked: bool,
 }
 
-/// A kind of signal that isn't named here has no box and never leaves.
-fn offer(kind: SignalKind, events: &Events) -> Option<Offer> {
+/// A kind of signal that isn't named here has no box and never leaves. An agent's turn or limit
+/// says whose: Claude's events and words are as they always were, another agent's are its own
+/// (`codex-permission`, `phone.event.permission.codex`), under the same box.
+fn offer(signal: &Signal, events: &Events) -> Option<Offer> {
+    let kind = signal.kind;
     let (event, text, ticked) = match kind {
         SignalKind::ClaudeAsking => ("claude-asking", "phone.event.asked", events.asked),
         SignalKind::ClaudePermission => ("claude-permission", "phone.event.permission", events.permission),
@@ -124,6 +128,11 @@ fn offer(kind: SignalKind, events: &Events) -> Option<Offer> {
         SignalKind::FuelHigh => ("fuel-high", "phone.event.fuel", events.fuel),
         SignalKind::CardReview => ("card-review", "phone.event.card", events.card),
         _ => return None,
+    };
+    let agents = matches!(kind, SignalKind::ClaudeAsking | SignalKind::ClaudePermission | SignalKind::ClaudeFinished | SignalKind::FuelHigh);
+    let (event, text) = match signal.agent {
+        agent if agents && !agent.is_claude() => (format!("{}-{}", agent.id(), event.strip_prefix("claude-").unwrap_or(event)), agent_key(agent, text)),
+        _ => (event.to_string(), text.to_string()),
     };
     Some(Offer { event, text, ticked })
 }
@@ -260,7 +269,7 @@ struct Message {
     /// The project's name; none when it is about no project (the fuel, a test).
     project: Option<String>,
     /// What happened, as a webhook is told.
-    event: &'static str,
+    event: String,
     /// A permission's tool.
     tool: Option<String>,
     /// What happened in the UI's language, the tool in brackets.
@@ -275,16 +284,16 @@ impl Message {
     fn of(signal: &Signal, offer: &Offer, app: &str) -> Self {
         let tool = signal.detail.as_deref().filter(|_| signal.kind == SignalKind::ClaudePermission).map(plain).filter(|tool| !tool.is_empty());
         let what = match &tool {
-            Some(tool) => format!("{} ({tool})", t!(offer.text)),
-            None => t!(offer.text),
+            Some(tool) => format!("{} ({tool})", t!(&offer.text)),
+            None => t!(&offer.text),
         };
         let project = Some(plain(&signal.name)).filter(|name| !name.is_empty());
-        Self { project, event: offer.event, tool, what, app: app.to_string() }
+        Self { project, event: offer.event.clone(), tool, what, app: app.to_string() }
     }
 
     /// "Send a test" in Settings.
     fn test(app: &str) -> Self {
-        Self { project: None, event: "test", tool: None, what: t!("core.phone.test"), app: app.to_string() }
+        Self { project: None, event: "test".into(), tool: None, what: t!("core.phone.test"), app: app.to_string() }
     }
 
     /// Whose it is: the project's name, or the app's.
@@ -427,8 +436,8 @@ struct State {
     config: PhoneConfig,
     /// Telegram's address. A test puts its own listener's here.
     telegram: String,
-    /// When each project's event last went to the channel.
-    sent: HashMap<(String, SignalKind), Instant>,
+    /// When each project's event of each agent last went to the channel.
+    sent: HashMap<(String, SignalKind, Agent), Instant>,
     /// Why the last message didn't arrive; none once one did.
     failure: Option<Failure>,
 }
@@ -469,10 +478,10 @@ impl Core {
     fn relay_seen(&self, signal: &Signal, look: impl FnOnce() -> Presence) -> bool {
         let handed = self.with_phone(|phone| {
             let config = &phone.config;
-            let offer = offer(signal.kind, &config.events).filter(|offer| config.on && offer.ticked)?;
+            let offer = offer(signal, &config.events).filter(|offer| config.on && offer.ticked)?;
 
             let now = Instant::now();
-            let key = (signal.path.clone(), signal.kind);
+            let key = (signal.path.clone(), signal.kind, signal.agent);
             if phone.sent.get(&key).is_some_and(|last| now.duration_since(*last) < REST) || !config.when.is_now(look) {
                 return None;
             }
@@ -505,11 +514,11 @@ impl Core {
     /// The channel as Settings shows it.
     pub fn phone_view(&self) -> PhoneView {
         let name = self.snapshot().projects.into_iter().next().map(|project| project.name).unwrap_or_default();
-        let waits = Signal { kind: SignalKind::ClaudePermission, path: String::new(), name, detail: Some("Bash".into()) };
+        let waits = Signal { kind: SignalKind::ClaudePermission, path: String::new(), name, detail: Some("Bash".into()), agent: Agent::Claude };
 
         self.with_phone(|phone| {
             let config = &phone.config;
-            let sample = offer(waits.kind, &config.events).map(|offer| Message::of(&waits, &offer, &self.cfg.title).text()).unwrap_or_default();
+            let sample = offer(&waits, &config.events).map(|offer| Message::of(&waits, &offer, &self.cfg.title).text()).unwrap_or_default();
             PhoneView {
                 on: config.on,
                 channel: config.channel,
@@ -592,6 +601,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.join("registry"),
                 claude_dir: tmp.join("claude"),
+                codex_home: tmp.join("codex"),
                 settings_file: tmp.join("config").join("settings.json"),
                 claude_settings: tmp.join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -646,7 +656,8 @@ mod tests {
     /// The promise: of a signal, only its project's name, what happened and a permission's tool
     /// leave the Mac, each as one plain line whatever it holds. Its path and another kind's
     /// `detail` (a command's name) stay, on every channel, and Telegram's token is in the address
-    /// it belongs to and nowhere else.
+    /// it belongs to and nowhere else. Codex's turn goes the same way, in its own words: Claude's
+    /// are never put on it.
     #[test]
     fn only_the_name_the_event_and_a_permissions_tool_leave() {
         let tmp = tempfile::tempdir().unwrap();
@@ -655,10 +666,10 @@ mod tests {
         let path = tmp.path().join("clients").join("paddock").to_string_lossy().into_owned();
         core.with_phone(|phone| phone.telegram = address.clone());
 
-        let permission = Signal { kind: SignalKind::ClaudePermission, path: path.clone(), name: "paddock".into(), detail: Some("Bash".into()) };
+        let permission = Signal { kind: SignalKind::ClaudePermission, path: path.clone(), name: "paddock".into(), detail: Some("Bash".into()), agent: Agent::Claude };
         // A kind whose `detail` is no tool: were it sent, a command's name would be out. Its
         // name isn't ASCII, which a header can't carry as it is.
-        let crashed = Signal { kind: SignalKind::ServerCrashed, path: path.clone(), name: "şehir-rehberi".into(), detail: Some("deploy:production".into()) };
+        let crashed = Signal { kind: SignalKind::ServerCrashed, path: path.clone(), name: "şehir-rehberi".into(), detail: Some("deploy:production".into()), agent: Agent::Claude };
         // A name and a tool's name that try to be more than names: a line's end and a header of
         // their own, a line separator, a direction turned round. Its project is another one.
         let other = tmp.path().join("clients").join("other").to_string_lossy().into_owned();
@@ -667,9 +678,13 @@ mod tests {
             path: other,
             name: "pad\r\nX-Injected: yes\u{2028}\u{202e}\0\u{7f}dock".into(),
             detail: Some("Bash\r\nX-Tool: 1\u{2028}\u{202e}".into()),
+            agent: Agent::Claude,
         };
-        let (asks, fell) = (t!("phone.event.permission"), t!("phone.event.crashed"));
-        assert!(!asks.contains("phone.") && !fell.contains("phone."), "the texts are in the catalog");
+        // Codex's permission in the same project, the same minute: its own event, its own words.
+        let codex = Signal { agent: Agent::Codex, detail: Some("apply_patch".into()), ..permission.clone() };
+        let (asks, fell, codex_asks) = (t!("phone.event.permission"), t!("phone.event.crashed"), t!("phone.event.permission.codex"));
+        assert!(![&asks, &fell, &codex_asks].iter().any(|text| text.contains("phone.")), "the texts are in the catalog");
+        assert!(codex_asks.contains("Codex") && !codex_asks.contains("Claude"), "{codex_asks}");
 
         for channel in [Channel::Ntfy, Channel::Telegram, Channel::Webhook] {
             let config = PhoneConfig {
@@ -693,6 +708,8 @@ mod tests {
             let second = requests.recv_timeout(WAIT).expect("the crash goes out");
             assert!(core.relay_seen(&hostile, Presence::default), "{channel:?}");
             let third = requests.recv_timeout(WAIT).expect("the hostile one goes out");
+            assert!(core.relay_seen(&codex, Presence::default), "{channel:?}");
+            let fourth = requests.recv_timeout(WAIT).expect("Codex's permission goes out");
 
             // The hostile names arrive as plain words in the places of the plain ones: no line
             // more in the head, nothing left that ends a line or turns it round.
@@ -700,12 +717,14 @@ mod tests {
             assert!(third.contains("padX-Injected: yesdock") && third.contains("(BashX-Tool: 1)"), "{channel:?}: {third:?}");
             assert!(!third.contains(['\u{2028}', '\u{202e}', '\0', '\u{7f}']) && !parts(&third).2.contains(['\r', '\n']), "{channel:?}: {third:?}");
 
-            for request in [&first, &second, &third] {
+            for request in [&first, &second, &third, &fourth] {
                 assert!(!request.contains(&path) && !request.contains("clients"), "{channel:?} sent the path: {request}");
                 assert!(!request.contains("deploy"), "{channel:?} sent a command's name: {request}");
                 assert_eq!(request.matches(TOKEN).count(), usize::from(channel == Channel::Telegram), "{channel:?}: {request}");
             }
             assert!(!second.contains("Bash"), "{channel:?}: a tool goes with a permission only");
+            let codex_line = format!("{codex_asks} (apply_patch)");
+            assert!(fourth.contains(&codex_line) && !fourth.contains(&asks), "{channel:?}: {fourth}");
 
             let (line, head, body) = parts(&first);
             let (line_2, head_2, body_2) = parts(&second);
@@ -732,6 +751,9 @@ mod tests {
                     let sent: Value = serde_json::from_str(&body_2).unwrap();
                     assert_eq!((&sent["project"], &sent["event"], &sent["tool"]), (&json!("şehir-rehberi"), &json!("server-crashed"), &Value::Null));
                     let _ = line_2;
+                    let sent: Value = serde_json::from_str(&parts(&fourth).2).unwrap();
+                    let at = sent["at"].as_str().expect("a time");
+                    assert_eq!(sent, json!({ "project": "paddock", "event": "codex-permission", "tool": "apply_patch", "text": format!("paddock — {codex_line}"), "at": at }));
                 }
             }
         }
@@ -752,7 +774,7 @@ mod tests {
             let config = PhoneConfig { on, channel: Channel::Webhook, webhook_url: address.clone(), when, events, ..PhoneConfig::default() };
             core.with_phone(|phone| phone.config = config);
         };
-        let signal = |kind: SignalKind| Signal { kind, path: "/work/paddock".into(), name: "paddock".into(), detail: Some("Bash".into()) };
+        let signal = |kind: SignalKind| Signal { kind, path: "/work/paddock".into(), name: "paddock".into(), detail: Some("Bash".into()), agent: Agent::Claude };
         let here = || Presence { locked: Some(false), idle: Some(Duration::from_secs(20)) };
         let away = || Presence { locked: Some(true), idle: Some(AWAY) };
 

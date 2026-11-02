@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import AgentMark from "../../components/AgentMark.vue";
 import ClaudeSpark from "../../components/ClaudeSpark.vue";
 import Icon from "../../components/Icon.vue";
 import Markdown from "../../components/Markdown.vue";
+import { agentName } from "../../lib/agents";
 import { clock, duration } from "../../lib/day";
-import { ago, editorName } from "../../lib/format";
+import { agentsKey, ago, editorName, namesAgent } from "../../lib/format";
 import type { Shot } from "../../lib/cardImages";
 import { compactText, moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
@@ -33,6 +35,7 @@ import SessionNotice from "./SessionNotice.vue";
  * a board card's note, shown once its work is over, with `images`, the images it names;
  * `lastMessage`: what Claude last said in it (Markdown); `period`: the days the page shows (left
  * out: today), whose hours its day is, and looking back its tokens, today's alone, are left out.
+ * A Codex session's reads the same, under Codex's name and mark, in Codex's words.
  */
 const props = defineProps<{
   row: SessionRow;
@@ -68,8 +71,28 @@ const unknown = computed(() => props.row.origin.kind === "unknown" && props.row.
 
 const spark = computed(() => (waiting.value ? "waiting" : props.row.phase === "working" ? "working" : "quiet"));
 
+const codex = computed(() => props.row.agent === "codex");
+/** Its agent's section: Claude's as it always was, Codex's by its name. */
+const section = computed(() => (codex.value ? agentName("codex") : t("window.col.claude")));
+
 const cardTitle = computed(() => {
   const row = props.row;
+  if (codex.value) {
+    switch (row.phase) {
+      case "waiting": {
+        const kind = row.turn?.kind;
+        if (kind === "permission") return row.tool ? t("sessions.card.permissionTool.codex", { tool: row.tool }) : t("sessions.card.permission.codex");
+        if (kind === "asking") return t("sessions.card.asking.codex");
+        return kind === "finished" ? t("sessions.card.finished.codex") : t("sessions.status.waiting");
+      }
+      case "working":
+        return t("sessions.card.working.codex");
+      case "idle":
+        return t("sessions.card.idle");
+      case "ended":
+        return t("sessions.card.ended");
+    }
+  }
   switch (row.phase) {
     case "waiting": {
       const kind = row.turn?.kind;
@@ -117,9 +140,11 @@ const cardSub = computed(() => {
 const seeable = computed(() => finishedWaits(props.row, props.rows));
 const seenHint = computed(() => (seeable.value && props.others > 0 ? t("sessions.seenOthers", { count: props.others, project: props.row.project }) : ""));
 
-/** Why it can't be brought up: an editor window without the extension, or another app. */
+/** Why it can't be brought up: an editor window without the extension, or another app (Codex's
+ * never by its name: where it runs is known only in Pitwall's own tabs). */
 const elsewhereNotice = computed(() => {
   const origin = props.row.origin;
+  if (codex.value) return { tag: t("sessions.elsewhere.tag"), title: t("sessions.elsewhere.titleUnnamed"), body: t("sessions.elsewhere.body") };
   if (unlinkedEditor(origin)) {
     return { tag: t("sessions.unlinked.tag"), title: t("sessions.unlinked.title", { editor: editorName(snapshot.value?.settings.editor) }), body: t("sessions.unlinked.body") };
   }
@@ -141,7 +166,9 @@ const fuel = computed(() => {
   return {
     models: modelsText(s) || "—",
     total: s.costUsd > 0 || s.priced ? t("sessions.fuel.total", { tokens: count(s.tokens.total), cost: moneyText(s.costUsd, "USD", lang) }) : t("sessions.fuel.tokens", { value: count(s.tokens.total) }),
-    breakdown: t("sessions.fuel.breakdown", { input: count(s.tokens.input), output: count(s.tokens.output), write: count(s.tokens.cacheWrite), read: count(s.tokens.cacheRead) }),
+    breakdown: codex.value
+      ? t("sessions.fuel.breakdown.codex", { input: count(s.tokens.input), output: count(s.tokens.output), read: count(s.tokens.cacheRead) })
+      : t("sessions.fuel.breakdown", { input: count(s.tokens.input), output: count(s.tokens.output), write: count(s.tokens.cacheWrite), read: count(s.tokens.cacheRead) }),
   };
 });
 </script>
@@ -156,16 +183,20 @@ const fuel = computed(() => {
         <span class="project">{{ row.project }}</span>
         <span v-if="!row.path" class="outside">{{ t("sessions.outside") }}</span>
         <span class="dot" aria-hidden="true">·</span>
-        <OriginLabel :origin="row.origin" :project="row.project" long />
+        <template v-if="namesAgent">
+          <span class="agent"><AgentMark :agent="row.agent" :size="12" />{{ agentName(row.agent) }}</span>
+          <span class="dot" aria-hidden="true">·</span>
+        </template>
+        <OriginLabel :origin="row.origin" :project="row.project" :agent="row.agent" long />
       </div>
       <div class="path" :title="row.folder">{{ row.folder }}</div>
     </header>
 
     <div class="body">
-      <section class="block" :aria-label="t('window.col.claude')">
-        <div class="section-label">{{ t("window.col.claude") }}</div>
+      <section class="block" :aria-label="section">
+        <div class="section-label">{{ section }}</div>
         <div :class="['card', { hot: waiting }]">
-          <ClaudeSpark :state="spark" :lock="permission" />
+          <ClaudeSpark :agent="row.agent" :state="spark" :lock="permission" />
           <div class="card-text">
             <span class="card-title">{{ cardTitle }}</span>
             <span v-if="cardSub" class="card-sub">{{ cardSub }}</span>
@@ -174,7 +205,7 @@ const fuel = computed(() => {
             v-if="seeable"
             type="button"
             class="seen"
-            :title="t('sessions.seenTitle', { project: row.project })"
+            :title="t(agentsKey('sessions.seenTitle'), { project: row.project })"
             :aria-describedby="seenHint ? 'session-seen-hint' : undefined"
             @click="emit('markSeen')"
           >
@@ -204,11 +235,11 @@ const fuel = computed(() => {
         <div class="section-label">{{ t("fuel.title") }}</div>
         <template v-if="fuel">
           <div class="fuel-line">
-            <span class="models" :title="fuel.models">{{ fuel.models }}</span>
+            <span :class="['models', { ids: codex }]" :title="fuel.models">{{ fuel.models }}</span>
             <span class="mono">{{ fuel.total }}</span>
           </div>
           <span class="note">{{ fuel.breakdown }}</span>
-          <span class="note">{{ t("sessions.fuel.api") }}</span>
+          <span class="note">{{ t(codex ? "sessions.fuel.api.codex" : "sessions.fuel.api") }}</span>
           <span v-if="spend && !spend.priced" class="note">{{ t("sessions.fuel.unpriced") }}</span>
         </template>
         <span v-else class="note">{{ t("sessions.fuel.none") }}</span>
@@ -222,7 +253,7 @@ const fuel = computed(() => {
         <div class="section-label">{{ t("sessions.lastMessage") }}</div>
         <Markdown :text="lastMessage" />
       </section>
-      <p v-if="!ownTerminal" class="privacy"><Icon name="lock" :size="12" />{{ t("sessions.privacy") }}</p>
+      <p v-if="!ownTerminal" class="privacy"><Icon name="lock" :size="12" />{{ t(codex ? "sessions.privacy.codex" : "sessions.privacy") }}</p>
     </div>
   </section>
 </template>
@@ -242,6 +273,14 @@ const fuel = computed(() => {
 
 .where .origin {
   overflow: hidden;
+}
+
+/* Its agent, while more than one is on. */
+.agent {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 /* ---------- Claude's state ---------- */
@@ -319,6 +358,12 @@ const fuel = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Codex's models, by their ids. */
+.models.ids {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
 .mono {

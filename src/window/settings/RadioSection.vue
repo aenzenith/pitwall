@@ -1,17 +1,18 @@
 <script lang="ts">
 import { ref } from "vue";
 
-import type { RadioState, RadioTool } from "../../lib/types";
+import type { Agent, RadioState, RadioTool } from "../../lib/types";
 
 /** The tools there are, as the core lists them: they wait for nothing, so they are asked for
  * once, when the section is first made, and kept while the app runs. */
 const tools = ref<RadioTool[]>([]);
-/** What the core said when last asked: kept while the app runs, so the section opens as it was. */
-const asked = ref<RadioState | null>(null);
-/** The ask under way: one at a time, however often the section comes into view. */
-let flying: Promise<void> | null = null;
+/** What the core said when last asked, of each agent's radio: kept while the app runs, so the
+ * section opens as it was. */
+const asked = ref<Record<Agent, RadioState | null>>({ claude: null, codex: null });
+/** The ask under way, of each: one at a time, however often the section comes into view. */
+const flying: Record<Agent, Promise<void> | null> = { claude: null, codex: null };
 /** Counted up as a turn on or off begins and ends: an answer asked for before then is not taken. */
-let turns = 0;
+const turns: Record<Agent, number> = { claude: 0, codex: 0 };
 </script>
 
 <script setup lang="ts">
@@ -23,7 +24,9 @@ import { api, snapshot } from "../../lib/store";
 
 /**
  * Settings › Claude's team radio: on or off (Pitwall among Claude Code's MCP servers), and what
- * Claude may do over it, a switch per tool. Everything here is the radio's own: each change
+ * Claude may do over it, a switch per tool. With `agent` Codex, Codex's radio in its part of
+ * Settings › Agents: its own on or off (Pitwall among Codex's MCP servers, `codex_radio_*`), the
+ * tools' switches the same ones as Claude's. Everything here is the radio's own: each change
  * goes to the core by its own command, never with the form (`@change.stop`).
  *
  * On or off and each tool's switch are the snapshot's, and the tools there are the core's own
@@ -44,8 +47,14 @@ const TEXT: Record<string, Key> = {
   board_note: "radio.tool.board_note",
 };
 
+/** `stacked`: in Settings › Agents' narrower part, what the radio is goes under its name, not
+ * beside it. */
+const props = withDefaults(defineProps<{ agent?: Agent; stacked?: boolean }>(), { agent: "claude", stacked: false });
+const codex = computed(() => props.agent === "codex");
+
 const radio = computed(() => snapshot.value?.settings.radio);
-const on = computed(() => !!radio.value?.on);
+const on = computed(() => (codex.value ? !!snapshot.value?.settings.agents?.codex?.radio : !!radio.value?.on));
+const mine = computed(() => asked.value[props.agent]);
 /** A tool's switch as it is stored. */
 const allowed = (name: string): boolean => !!radio.value?.tools[name];
 /** Being turned on or off: Claude Code's CLI is at work. */
@@ -62,39 +71,41 @@ if (!tools.value.length) {
 
 const badge = computed(() => {
   if (!on.value) return t("radio.off");
-  return asked.value?.status === "on" ? t("radio.onSessions", { count: asked.value.sessions }) : t("radio.on");
+  return mine.value?.status === "on" ? t("radio.onSessions", { count: mine.value.sessions }) : t("radio.on");
 });
 
 function ask(): Promise<void> {
-  flying ??= (async () => {
-    const mine = turns;
+  const agent = props.agent;
+  flying[agent] ??= (async () => {
+    const before = turns[agent];
     try {
-      const state = await api.radioState();
+      const state = await (agent === "codex" ? api.codexRadioState() : api.radioState());
       // A turn on or off meanwhile knows better.
-      if (mine === turns) asked.value = state;
+      if (before === turns[agent]) asked.value[agent] = state;
     } catch {
       // Kept as it was: the snapshot still says on or off.
     }
-  })().finally(() => (flying = null));
-  return flying;
+  })().finally(() => (flying[agent] = null));
+  return flying[agent];
 }
 
 async function turn(next: boolean): Promise<void> {
   if (busy.value) return;
+  const agent = props.agent;
   busy.value = true;
   error.value = "";
-  turns++;
+  turns[agent]++;
   try {
-    asked.value = await api.radioSet(next);
+    asked.value[agent] = await (agent === "codex" ? api.codexRadioSet(next) : api.radioSet(next));
   } catch (reason) {
     error.value = String(reason);
   } finally {
-    turns++;
+    turns[agent]++;
     busy.value = false;
   }
   if (!error.value) return;
   // How it stands now is asked, once an ask from before the turn is out of the way.
-  await flying;
+  await flying[agent];
   void ask();
 }
 
@@ -131,12 +142,15 @@ onBeforeUnmount(() => watcher?.disconnect());
   <div ref="root" class="section radio" @change.stop>
     <div class="hook">
       <div class="hook-text">
-        <span class="hook-title">
+        <!-- Stacked: how it stands stays beside its name, under it when the line is short, and
+             what it is goes under both. -->
+        <span :class="['hook-title', { wraps: stacked }]">
           {{ t("radio.title") }}
-          <span class="kind">{{ t("radio.kind") }}</span>
+          <span v-if="!stacked" class="kind">{{ t(codex ? "radio.kind.codex" : "radio.kind") }}</span>
           <span :class="['badge', { on }]">{{ badge }}</span>
         </span>
-        <small>{{ t("radio.hint") }}</small>
+        <small v-if="stacked" class="kind">{{ t(codex ? "radio.kind.codex" : "radio.kind") }}</small>
+        <small>{{ t(codex ? "radio.hint.codex" : "radio.hint") }}</small>
       </div>
       <button type="button" class="control" :disabled="busy" :aria-busy="busy" @click="turn(!on)">
         <!-- Both labels keep their room, one over the other: the button is one width on or off,
@@ -150,12 +164,12 @@ onBeforeUnmount(() => watcher?.disconnect());
     </div>
     <!-- One line at most: what just went wrong, else what stands in the way. -->
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-else-if="asked?.missing" class="note">{{ t("radio.missing") }}</p>
+    <p v-else-if="mine?.missing" class="note">{{ t(codex ? "radio.missing.codex" : "radio.missing") }}</p>
 
-    <div v-if="tools.length" class="part" role="group" aria-labelledby="radio-tools">
+    <div v-if="tools.length" class="part" role="group" :aria-labelledby="`radio-tools-${agent}`">
       <div class="tools-head">
-        <span id="radio-tools">{{ t("radio.tools") }}</span>
-        <small>{{ t("radio.scope") }}</small>
+        <span :id="`radio-tools-${agent}`">{{ t(codex ? "radio.tools.codex" : "radio.tools") }}</span>
+        <small>{{ t(codex ? "radio.scope.codex" : "radio.scope") }}</small>
       </div>
       <!-- The whole row is the switch's. -->
       <div class="rows">
@@ -184,6 +198,16 @@ onBeforeUnmount(() => watcher?.disconnect());
   font-size: 12px;
   color: var(--text-subtle);
   white-space: nowrap;
+}
+
+/* Under its name, in Settings › Agents. */
+small.kind {
+  white-space: normal;
+}
+
+.hook-title.wraps {
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 
 .labels {

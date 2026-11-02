@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 
 import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
+import OpenAILogo from "../components/OpenAILogo.vue";
 import Spinner from "../components/Spinner.vue";
 import { useBackdropClose } from "../lib/dialog";
 import { openUnfocused, useReturnFocus } from "../lib/dialogFocus";
@@ -48,7 +49,7 @@ onMounted(() => {
   if (!manual) void api.updatePlan().then((answer) => (plan.value = answer), () => undefined);
 });
 
-type Row = { mark: "claude" | "terminal" | "server"; working?: boolean; name: string; sub: string; outcome: string };
+type Row = { mark: "claude" | "codex" | "terminal" | "server"; working?: boolean; name: string; sub: string; outcome: string };
 
 /** Cut off for good: a Claude turn at work, a command running in a shell tab or on its own, an
  * administrator's tab (Windows). */
@@ -56,6 +57,7 @@ const cut = computed<Row[]>(() =>
   (plan.value?.cut ?? []).map((entry) => {
     const name = `${entry.project} · ${entry.name}`;
     if (entry.kind === "claude") return { mark: "claude", working: true, name, sub: t("update.cut.claude"), outcome: t("update.cut.claudeOutcome") };
+    if (entry.kind === "codex") return { mark: "codex", working: true, name, sub: t("update.cut.claude.codex"), outcome: t("update.cut.claudeOutcome") };
     if (entry.kind === "admin") return { mark: "terminal", name, sub: t("update.cut.admin"), outcome: t("update.cut.adminOutcome") };
     return { mark: "terminal", name, sub: t("update.cut.command"), outcome: t("update.cut.commandOutcome") };
   }),
@@ -65,10 +67,11 @@ const cut = computed<Row[]>(() =>
 const back = computed<Row[]>(() => {
   const rows: Row[] = [];
   if (!plan.value) return rows;
-  const { servers, claude, terminals, terminalProjects } = plan.value;
+  const { servers, claude, codex = [], terminals, terminalProjects } = plan.value;
   if (servers.length) rows.push({ mark: "server", name: t("update.back.servers", { count: servers.length }), sub: servers.join(", "), outcome: t("update.back.serversOutcome", { count: servers.length }) });
   // One entry a session: a project with two of them is named once.
   if (claude.length) rows.push({ mark: "claude", name: t("update.back.claude", { count: claude.length }), sub: [...new Set(claude)].join(", "), outcome: t("update.back.claudeOutcome", { count: claude.length }) });
+  if (codex.length) rows.push({ mark: "codex", name: t("update.back.claude.codex", { count: codex.length }), sub: [...new Set(codex)].join(", "), outcome: t("update.back.claudeOutcome", { count: codex.length }) });
   if (terminals) rows.push({ mark: "terminal", name: t("update.back.terminals", { count: terminals }), sub: t("update.back.terminalsIn", { count: terminalProjects }), outcome: t("update.back.terminalsOutcome", { count: terminals }) });
   return rows;
 });
@@ -125,6 +128,7 @@ function onBackdrop(event: MouseEvent): void {
         <div v-for="(row, index) in group.rows" :key="index" class="row">
           <span class="mark">
             <ClaudeLogo v-if="row.mark === 'claude'" :size="14" :color="row.working ? 'var(--claude)' : 'currentColor'" />
+            <OpenAILogo v-else-if="row.mark === 'codex'" :size="14" :color="row.working ? 'var(--claude)' : 'currentColor'" />
             <Icon v-else :name="row.mark" />
           </span>
           <span class="what">

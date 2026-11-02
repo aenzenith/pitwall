@@ -2,8 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
-import { lane, timeRange, type Live } from "../lib/day";
-import { claudeLine } from "../lib/format";
+import { lane, namesAgents, timeRange, type Live } from "../lib/day";
+import { claudeLine, namesAgent } from "../lib/format";
 import { t } from "../lib/i18n";
 import { pickRequest } from "../lib/open";
 import { api, now, snapshot, visible } from "../lib/store";
@@ -50,7 +50,11 @@ const projects = computed(() => day.value?.projects ?? []);
 /** Whole hours around what happened (and now, today), at least eight of them. */
 const range = computed(() => timeRange(day.value));
 
+/** The day's tokens, each agent's apart (D8): Claude's, with the week's share, and Codex's. */
 const spend = computed(() => day.value?.spend ?? null);
+const codexSpend = computed(() => day.value?.codexSpend ?? null);
+/** The day names its agents: Claude isn't the only one on, or another was at work or used tokens that day. */
+const agents = computed(() => namesAgents(projects.value, namesAgent.value) || !!codexSpend.value?.tokens);
 
 const lanes = computed(() => projects.value.map((project) => lane(project, range.value, spend.value)));
 
@@ -104,19 +108,19 @@ onBeforeUnmount(() => window.clearInterval(timer));
 
       <div class="board">
         <template v-if="day && projects.length">
-          <DayTotals :projects="projects" :spend="spend" :lanes="lanes" :selected="selected?.path ?? null" @select="selectedPath = $event" />
+          <DayTotals :projects="projects" :spend="spend" :codex-spend="codexSpend" :agents="agents" :lanes="lanes" :selected="selected?.path ?? null" @select="selectedPath = $event" />
           <DayTimeline :day="day" :lanes="lanes" :range="range" :selected="selected?.path ?? null" :live="liveProjects" @select="selectedPath = $event" />
-          <DayLegend />
+          <DayLegend :agents="agents" />
         </template>
 
         <section v-else-if="day" class="empty">
           <Icon name="calendar" :size="28" />
-          <p>{{ t("day.empty") }}<br />{{ t("day.emptyHint") }}</p>
+          <p>{{ t("day.empty") }}<br />{{ t(agents ? "day.emptyHint.agents" : "day.emptyHint") }}</p>
         </section>
       </div>
     </div>
 
-    <DaySide :selected="selected" :spend="spend" />
+    <DaySide :selected="selected" :spend="spend" :codex-spend="codexSpend" :agents="agents" />
 
     <span id="lane-keys" class="sr-only">{{ t("day.laneKeys") }}</span>
     <div class="sr-only" aria-live="polite">{{ announced }}</div>

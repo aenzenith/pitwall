@@ -1,5 +1,5 @@
 //! The chequered flag: what is still open before the user leaves. Listed projects with changes to
-//! commit or commits to push, Claude sessions that wait on them, the board's cards to review and
+//! commit or commits to push, the agents' sessions (Claude's, Codex's) that wait on them, the board's cards to review and
 //! those told to wait for their moment (the core gives them only while Pitwall runs), and what
 //! still runs. There is one answer (`Core::flag`) for both who ask: the dialog shows it, and
 //! a quit asked for from one of Pitwall's own menus or buttons is held by it (`quit_asked`), so
@@ -31,13 +31,15 @@ pub struct FlagGit {
     pub count: u32,
 }
 
-/// A Claude session that waits on the user.
+/// An agent's session that waits on the user.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlagWait {
     pub path: String,
     pub name: String,
     pub session: String,
+    /// Whose session it is: the dialog counts each agent's apart.
+    pub agent: Agent,
     /// What it waits with: a turn that ended, a question, a permission prompt.
     pub kind: TurnKind,
     /// For a permission prompt: the tool's name, when the hook told it. Never its input.
@@ -153,6 +155,7 @@ pub(super) fn gather(projects: &[ProjectView], sessions: &[SessionState], cards:
                 path: session.path.clone(),
                 name: name(&session.path),
                 session: session.id.clone(),
+                agent: session.agent,
                 kind: turn.kind,
                 tool: session.tool.clone().filter(|_| turn.kind == TurnKind::Permission),
                 since: session.since.unwrap_or(turn.at),
@@ -364,6 +367,7 @@ mod tests {
             CoreConfig {
                 registry_dir: dir.join("registry"),
                 claude_dir: dir.join("claude"),
+                codex_home: dir.join("codex"),
                 settings_file: dir.join("settings.json"),
                 claude_settings: dir.join("claude-settings.json"),
                 legacy_registries: Vec::new(),
@@ -379,6 +383,7 @@ mod tests {
     fn waiting(path: &str, kind: TurnKind, tool: Option<&str>) -> SessionState {
         SessionState {
             id: "0f3c1a52-7d7e-4a44-9d0b-4c1b9c7f2a10".into(),
+            agent: crate::agent::Agent::Claude,
             path: path.into(),
             folder: Some(path.into()),
             title: None,
@@ -411,6 +416,7 @@ mod tests {
             images: Vec::new(),
             start: None,
             schedule: None,
+            starting: false,
         }
     }
 

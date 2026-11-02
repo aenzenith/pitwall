@@ -48,7 +48,8 @@ impl Core {
             return HashMap::new();
         };
         let shells = self.terminal_shells();
-        let tabs: HashMap<u64, Option<String>> = self.lock().terminal_list.iter().map(|view| (view.id, view.account.clone())).collect();
+        // A Codex tab's account is a Codex account: a Claude run in it is the main account's.
+        let tabs: HashMap<u64, Option<String>> = self.lock().terminal_list.iter().filter(|view| view.kind != Agent::Codex.tab_kind()).map(|view| (view.id, view.account.clone())).collect();
 
         let mut counts: HashMap<String, usize> = HashMap::new();
         for run in running.values() {
@@ -118,6 +119,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.path().join("registry"),
                 claude_dir: tmp.path().join("claude").join("projects"),
+                codex_home: tmp.path().join("codex"),
                 settings_file: tmp.path().join("config").join("settings.json"),
                 claude_settings: tmp.path().join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),

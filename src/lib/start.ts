@@ -3,10 +3,11 @@
 // src-tauri/src/start.rs), a project's own start, and what the Fuel reading says of a model's
 // week and of the session's refill. Pure but for the language (`t`).
 
+import { agentOf, agentOn, agentsOn } from "./agents";
 import { clockText, current, left, LOW_LEFT, percentText } from "./fuel";
 import { t, type Key } from "./i18n";
 import { projectSettings } from "./projectSettings";
-import type { ClaudeMode, ClaudeModel, ClaudeStart, Fuel, Project, StartChoice, UsageWindow } from "./types";
+import type { Agent, AgentStartChoice, ClaudeMode, ClaudeModel, ClaudeStart, CodexChoice, CodexMode, CodexModel, Fuel, Project, StartChoice, UsageWindow } from "./types";
 
 /** The models offered, by the alias Claude Code's `--model` takes. */
 export const MODELS: ClaudeModel[] = ["fable", "opus", "sonnet", "haiku"];
@@ -33,6 +34,29 @@ export function modelLabel(model: ClaudeModel | null): string {
   return t(model ? MODEL_LABELS[model] : "start.model.auto");
 }
 
+/** Codex's models, by the id its `-m` takes, in the order offered; shown as the ids themselves. */
+export const CODEX_MODELS: CodexModel[] = ["gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-6-luna"];
+
+export const CODEX_MODES: CodexMode[] = ["normal", "readOnly"];
+
+export const CODEX_MODE_LABELS: Record<CodexMode, Key> = {
+  normal: "start.mode.normal",
+  readOnly: "start.codexMode.readOnly",
+};
+
+/** A Codex model as shown: its id; Codex's own choice for none. */
+export function codexModelLabel(model: CodexModel | null): string {
+  return model ?? t("start.codexModel.auto");
+}
+
+/** Codex's part of a start as the core keeps it, with every part said: a model that isn't one of
+ * the list is Codex's own choice, a mode that isn't is normal. */
+export function codexChoiceOf(start: ClaudeStart | null | undefined): CodexChoice {
+  const model = start?.codex?.model && CODEX_MODELS.includes(start.codex.model) ? start.codex.model : null;
+  const mode = start?.codex?.mode && CODEX_MODES.includes(start.codex.mode) ? start.codex.mode : "normal";
+  return { agent: "codex", model, mode };
+}
+
 /** A start as the core keeps it (a card's, a project's), with every part said: a model that
  * isn't one of the list is Claude Code's own choice, a mode that isn't is normal. */
 export function choiceOf(start: ClaudeStart | null | undefined): StartChoice {
@@ -45,6 +69,31 @@ export function choiceOf(start: ClaudeStart | null | undefined): StartChoice {
 export function projectChoice(project: Project | null | undefined): StartChoice {
   const settings = project ? projectSettings(project) : null;
   return choiceOf({ model: settings?.claudeModel, mode: settings?.claudeMode });
+}
+
+/** How a Codex session of `project` starts when nothing else is chosen: its own settings'. */
+export function projectCodexChoice(project: Project | null | undefined): CodexChoice {
+  const settings = project ? projectSettings(project) : null;
+  return codexChoiceOf({ codex: { model: settings?.codexModel, mode: settings?.codexMode } });
+}
+
+/** The agent a session of `project` goes to when none is picked: its own settings' while that
+ * agent is on, else the first one on (Claude, while it is). The core picks the same
+ * (`give_start` in src-tauri/src/core/board.rs). */
+export function projectAgent(project: Project | null | undefined): Agent {
+  const chosen = agentOf(project ? projectSettings(project).agent : undefined);
+  return agentOn(chosen) ? chosen : (agentsOn.value[0] ?? "claude");
+}
+
+/** How a session of `project` starts when nothing else is chosen: its agent's, as its settings
+ * say. */
+export function projectAgentChoice(project: Project | null | undefined): AgentStartChoice {
+  return projectAgent(project) === "codex" ? projectCodexChoice(project) : projectChoice(project);
+}
+
+/** A start as the core keeps it (a card's), for the agent it names, with every part said. */
+export function agentChoiceOf(start: ClaudeStart | null | undefined): AgentStartChoice {
+  return agentOf(start?.agent) === "codex" ? codexChoiceOf(start) : choiceOf(start);
 }
 
 /** The model's own week in the reading, as it stands at `now`: the limit named after it
@@ -92,4 +141,11 @@ function turkishAt(hour: number, minute: number): string {
 export function timeParams(at: number, lang: string): { time: string; at: string; las: string } {
   const date = new Date(at);
   return { time: clockText(at, lang), at: turkishAt(date.getHours(), date.getMinutes()), las: date.getHours() === 1 ? "la" : "las" };
+}
+
+/** The day a Codex moment falls on (`Thu`, `Per`), when it isn't today: its week's refill can be
+ * days away. None for Claude's, a few hours away, read by the time alone. */
+export function momentDay(at: number, agent: Agent | null | undefined, lang: string, now = Date.now()): string | null {
+  if (agentOf(agent) !== "codex" || new Date(at).toDateString() === new Date(now).toDateString()) return null;
+  return new Date(at).toLocaleDateString(lang, { weekday: "short" });
 }

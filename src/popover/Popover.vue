@@ -9,7 +9,7 @@ import Marquee from "../components/Marquee.vue";
 import MutedMark from "../components/MutedMark.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
-import { claudeLine, gitLine, meta, shortcutLabel } from "../lib/format";
+import { agentKey, claudeLine, gitLine, meta, rowAgent, shortcutLabel } from "../lib/format";
 import { rowKey, useGroupReorder } from "../lib/groupReorder";
 import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
@@ -44,6 +44,12 @@ const projects = computed(() => (snapshot.value?.settings.barProjects === "all" 
 /** A turn held while it was quiet is listed under what was missed, not here a second time. */
 const held = computed(() => new Set(missed.value.filter((entry) => waits(entry.kind)).map((entry) => entry.path)));
 const waiting = computed(() => projects.value.filter((p) => p.claude && !held.value.has(p.path)));
+/** The card's head says who waits: Claude, as it always did, another agent by its name when it
+ * alone waits, the agents together when more than one does. Its look stays as it is. */
+const waitingLabel = computed(() => {
+  const who = [...new Set(waiting.value.map((project) => rowAgent(project) ?? "claude"))];
+  return who.length > 1 ? t("popover.claudeWaiting.agents") : t(agentKey("popover.claudeWaiting", who[0] ?? "claude"));
+});
 const summary = computed(() => {
   const s = snapshot.value;
   if (!s || s.projects.length === 0) return t("popover.noProjects");
@@ -237,8 +243,8 @@ onBeforeUnmount(() => {
          the snapshot, which fits the window again. -->
     <ResumeBanner v-if="snapshot?.resume" />
 
-    <section v-if="waiting.length" class="claude" data-scrolls :aria-label="t('popover.claudeWaiting')">
-      <div class="claude-label"><span class="claude-dot" aria-hidden="true"></span>{{ t("popover.claudeWaiting") }}</div>
+    <section v-if="waiting.length" class="claude" data-scrolls :aria-label="waitingLabel">
+      <div class="claude-label"><span class="claude-dot" aria-hidden="true"></span>{{ waitingLabel }}</div>
       <button v-for="project in waiting" :key="project.path" type="button" class="claude-row" @click="api.openClaude(project.path)">
         <span class="claude-text">
           <span class="claude-name">{{ project.name }}</span>

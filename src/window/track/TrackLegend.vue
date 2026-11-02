@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
+import { namesAgent } from "../../lib/format";
 import { t, type Key } from "../../lib/i18n";
 
-/** What the lights mean, along the bottom of the Track page. */
-const LEGEND: Array<{ mark: string; text: Key }> = [
+/** What the lights mean, along the bottom of the Track page: Claude's, or any agent's while more
+ * than one is on (the lights are the same colour for each). */
+const LEGEND = computed<Array<{ mark: string; text: Key }>>(() => [
   { mark: "server", text: "track.legend.server" },
-  { mark: "claude", text: "track.legend.claude" },
-  { mark: "waiting", text: "track.legend.waiting" },
+  { mark: "claude", text: namesAgent.value ? "track.legend.claude.agents" : "track.legend.claude" },
+  { mark: "waiting", text: namesAgent.value ? "track.legend.waiting.agents" : "track.legend.waiting" },
   { mark: "crashed", text: "track.legend.crashed" },
-];
+]);
 </script>
 
 <template>

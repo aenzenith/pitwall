@@ -1,9 +1,11 @@
 // The day's timeline as numbers and text: spans, the hours shown, the blocks on each lane and
 // their tooltips. No component state; what reads the language (`clock`, `duration`, `t`) follows it.
 
+import { agentOf } from "./agents";
+import { AGENT_ORDER, agentKey } from "./format";
 import { compactText, percentText } from "./fuel";
 import { language, t } from "./i18n";
-import type { DayProject, DaySession, DaySpan, DaySpend, DaySummary } from "./types";
+import type { Agent, DayProject, DaySession, DaySpan, DaySpend, DaySummary, ProjectSpend } from "./types";
 
 export const HOUR = 3_600_000;
 /** The timeline shows at least this many hours. */
@@ -16,8 +18,9 @@ export type Block = { key: string; kind: "server" | "work" | "wait" | "commit" |
 export type TimeRange = { from: number; to: number; hours: number };
 /** An hour on the axis; only the major ones that aren't under the now marker have a label. */
 export type Tick = { at: number; left: string; label: string; major: boolean };
-/** A project's lane: how long it was busy (overlaps once), that as text, what happened on it. */
-export type Lane = { project: DayProject; time: number; total: string; tokens: string; week: string; blocks: Block[] };
+/** A project's lane: how long it was busy (overlaps once), that as text, what happened on it.
+ * `tokens` Claude's, beside its week share; `codexTokens` Codex's, apart (empty without any). */
+export type Lane = { project: DayProject; time: number; total: string; tokens: string; week: string; codexTokens: string; blocks: Block[] };
 /** Claude, live: waiting on you (a notification not read yet) or working; `text` says which. */
 export type Live = { phase: "waiting" | "working"; text: string };
 /** A project's part of the bar of where the time went. */
@@ -158,6 +161,35 @@ function sessionTitle(project: DayProject, id: string | undefined): string {
   return project.sessions.find((s) => s.id === id)?.title ?? "";
 }
 
+/** The agent of a span's session: Claude's for one with no session, as a day written before there
+ * were agents has them. */
+function spanAgent(project: DayProject, id: string | undefined): Agent {
+  return project.sessions.find((s) => s.id === id)?.agent ?? "claude";
+}
+
+/** Whether the day names its agents: Claude isn't the only one on (`many`: lib/format namesAgent),
+ * or another worked or waited that day. A day of Claude's alone, with Claude alone on, reads as it
+ * always did. */
+export function namesAgents(projects: DayProject[], many: boolean): boolean {
+  return many || projects.some((p) => p.sessions.some((s) => agentOf(s.agent) !== "claude"));
+}
+
+/** How long each agent worked (`which` "wait": waited on you) in some projects, in the count's
+ * order: Claude's always, another's when it did at all. */
+function workedBy(projects: DayProject[], which: "work" | "wait" = "work"): Array<{ agent: Agent; ms: number; any: boolean }> {
+  return AGENT_ORDER.flatMap((agent) => {
+    const spans = projects.flatMap((p) => p[which].filter((span) => spanAgent(p, span.session) === agent));
+    return agent === "claude" || spans.length ? [{ agent, ms: sum(spans), any: spans.length > 0 }] : [];
+  });
+}
+
+/** An agent's tokens in a project that day, when it used any: each agent's apart (D8); the share
+ * of the week's limit is Claude's, the one limit there is a reading of. */
+export function tokensOf(p: DayProject, agent: Agent): ProjectSpend | null {
+  const spend = agent === "claude" ? p.spend : (p.codexSpend ?? null);
+  return spend?.tokens ? spend : null;
+}
+
 /** What happened on a project's lane, each with its place and tooltip. */
 export function blocks(project: DayProject, r: TimeRange | null): Block[] {
   const list: Block[] = [];
@@ -179,7 +211,7 @@ export function blocks(project: DayProject, r: TimeRange | null): Block[] {
       at: span.start,
       style: place(span.start, span.end, r),
       text,
-      tip: { title: t("day.tip.work", { duration: duration(span.end - span.start) }), detail: title ? `${range(span)} · ${title}` : range(span), tone: "claude" },
+      tip: { title: t(agentKey("day.tip.work", spanAgent(project, span.session)), { duration: duration(span.end - span.start) }), detail: title ? `${range(span)} · ${title}` : range(span), tone: "claude" },
     });
   });
 
@@ -192,7 +224,7 @@ export function blocks(project: DayProject, r: TimeRange | null): Block[] {
       at: span.start,
       style: place(span.start, span.end, r),
       text: minutes >= 1 ? t("time.durationMinutes", { minutes }) : "",
-      tip: { title: t("day.tip.wait", { duration: duration(span.end - span.start) }), detail: title ? `${range(span)} · ${title}` : range(span), tone: "claude" },
+      tip: { title: t(agentKey("day.tip.wait", spanAgent(project, span.session)), { duration: duration(span.end - span.start) }), detail: title ? `${range(span)} · ${title}` : range(span), tone: "claude" },
     });
   });
 
@@ -209,14 +241,16 @@ export function blocks(project: DayProject, r: TimeRange | null): Block[] {
 
 export function lane(project: DayProject, r: TimeRange | null, spend: DaySpend | null = null): Lane {
   const time = covered(spansOf(project));
-  const tokens = project.spend?.tokens ? project.spend : null;
+  const tokens = tokensOf(project, "claude");
+  const codex = tokensOf(project, "codex");
   return {
     project,
     time,
-    // A project with Claude's tokens alone that day has nothing else to count.
-    total: time ? duration(time) : project.commits.length || !tokens ? t("day.commitCount", { count: project.commits.length }) : "",
+    // A project with an agent's tokens alone that day has nothing else to count.
+    total: time ? duration(time) : project.commits.length || !(tokens || codex) ? t("day.commitCount", { count: project.commits.length }) : "",
     tokens: tokens ? tokenText(tokens.tokens) : "",
     week: tokens ? weekText(tokens.week, spend?.estimated ?? false) : "",
+    codexTokens: codex ? tokenText(codex.tokens) : "",
     blocks: blocks(project, r),
   };
 }
@@ -237,41 +271,56 @@ export function weekText(value: number | null, estimated: boolean): string {
   return estimated ? t("day.estimated", { value: text }) : text;
 }
 
-/** Whether the day has Claude's tokens to show. */
+/** Whether the day has an agent's tokens to show. */
 function spent(spend: DaySpend | null): spend is DaySpend {
   return !!spend && spend.tokens > 0;
 }
 
-/** The day's figures, over every project; Claude's tokens when it used any. `claude`: in
-    Claude's colour. */
-export function dayTotals(projects: DayProject[], spend: DaySpend | null = null): Array<{ label: string; value: string; claude?: boolean }> {
+/** The day's figures, over every project; Claude's tokens when it used any, its week's share
+    beside them, `codex`'s apart. `claude`: in Claude's colour. Each agent that worked that day has
+    its own line of how long; while the day names its agents (`agents`), each that waited on you its
+    own line of that and the tokens their agent's name (D8). */
+export function dayTotals(projects: DayProject[], spend: DaySpend | null = null, codex: DaySpend | null = null, agents = false): Array<{ label: string; value: string; claude?: boolean }> {
+  const waited = agents
+    ? workedBy(projects, "wait").map(({ agent, ms }) => ({ label: t(agentKey("day.claudeWaited", agent)), value: duration(ms) }))
+    : [{ label: t("day.waitedOnYou"), value: duration(sum(projects.flatMap((p) => p.wait))) }];
   const totals: Array<{ label: string; value: string; claude?: boolean }> = [
     { label: t("day.active"), value: duration(covered(projects.flatMap(spansOf))) },
-    { label: t("day.claudeWorked"), value: duration(sum(projects.flatMap((p) => p.work))) },
-    { label: t("day.waitedOnYou"), value: duration(sum(projects.flatMap((p) => p.wait))) },
+    ...workedBy(projects).map(({ agent, ms }) => ({ label: t(agentKey("day.claudeWorked", agent)), value: duration(ms) })),
+    ...waited,
     { label: t("day.commits"), value: String(projects.reduce((n, p) => n + p.commits.length, 0)) },
   ];
   if (spent(spend)) {
-    totals.push({ label: t("day.tokens"), value: tokenText(spend.tokens) });
+    totals.push({ label: t(agents ? "day.claudeTokens" : "day.tokens"), value: tokenText(spend.tokens) });
     totals.push({ label: t("day.weekShare"), value: weekText(spend.week, spend.estimated) || "—", claude: spend.week !== null });
   }
+  if (agents && spent(codex)) totals.push({ label: t(agentKey("day.claudeTokens", "codex")), value: tokenText(codex.tokens) });
   return totals;
 }
 
 /** One project's figures; an empty `value` is shown as a dash. Claude's tokens when the day has
-    any, the project's or not. */
-export function projectTiles(p: DayProject, spend: DaySpend | null = null): Array<{ label: string; value: string; note: string; claude?: boolean }> {
+    any, the project's or not, its week's share beside them; `codex`'s apart the same way. Each agent
+    that worked there that day has its own tile of how long; while the day names its agents
+    (`agents`), each that waited on you there its own tile of that and the tokens their agent's name. */
+export function projectTiles(p: DayProject, spend: DaySpend | null = null, codex: DaySpend | null = null, agents = false): Array<{ label: string; value: string; note: string; claude?: boolean }> {
   const server = covered(p.server);
+  const waited = agents
+    ? workedBy([p], "wait").map(({ agent, ms, any }) => ({ label: t(agentKey("day.claudeWaited", agent)), value: any ? duration(ms) : "", note: "" }))
+    : [{ label: t("day.waitedOnYou"), value: p.wait.length ? duration(sum(p.wait)) : "", note: "" }];
   const tiles: Array<{ label: string; value: string; note: string; claude?: boolean }> = [
-    { label: t("day.claudeWorked"), value: p.work.length ? duration(sum(p.work)) : "", note: "" },
-    { label: t("day.waitedOnYou"), value: p.wait.length ? duration(sum(p.wait)) : "", note: "" },
+    ...workedBy([p]).map(({ agent, ms, any }) => ({ label: t(agentKey("day.claudeWorked", agent)), value: any ? duration(ms) : "", note: "" })),
+    ...waited,
     { label: t("day.serverUp"), value: server ? duration(server) : "", note: p.crashes.length ? t("day.crashCount", { count: p.crashes.length }) : "" },
     { label: t("day.commits"), value: p.commits.length ? String(p.commits.length) : "", note: "" },
   ];
   if (spent(spend)) {
-    const own = p.spend?.tokens ? p.spend : null;
-    tiles.push({ label: t("day.tokens"), value: own ? tokenText(own.tokens) : "", note: "" });
+    const own = tokensOf(p, "claude");
+    tiles.push({ label: t(agents ? "day.claudeTokens" : "day.tokens"), value: own ? tokenText(own.tokens) : "", note: "" });
     tiles.push({ label: t("day.weekShare"), value: own ? weekText(own.week, spend.estimated) : "", note: "", claude: true });
+  }
+  if (agents && spent(codex)) {
+    const own = tokensOf(p, "codex");
+    tiles.push({ label: t(agentKey("day.claudeTokens", "codex")), value: own ? tokenText(own.tokens) : "", note: "" });
   }
   return tiles;
 }

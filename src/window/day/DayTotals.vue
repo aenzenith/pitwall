@@ -6,15 +6,16 @@ import { language, t } from "../../lib/i18n";
 import { useTooltip } from "../../lib/tooltip";
 import type { DayProject, DaySpend } from "../../lib/types";
 
-/** `selected`: the path of the project the side panel shows; `spend`: Claude's tokens that day. */
-const props = defineProps<{ projects: DayProject[]; spend: DaySpend | null; lanes: Lane[]; selected: string | null }>();
+/** `selected`: the path of the project the side panel shows; `spend`: Claude's tokens that day,
+ * `codexSpend` Codex's, apart; `agents`: the day names its agents (lib/day: namesAgents). */
+const props = defineProps<{ projects: DayProject[]; spend: DaySpend | null; codexSpend?: DaySpend | null; agents?: boolean; lanes: Lane[]; selected: string | null }>();
 const emit = defineEmits<{ select: [path: string] }>();
 
 const tooltip = useTooltip();
 /** The bar of where the time went; its parts anchor the legend's tooltips. */
 const splitEl = ref<HTMLElement | null>(null);
 
-const totals = computed(() => dayTotals(props.projects, props.spend));
+const totals = computed(() => dayTotals(props.projects, props.spend, props.codexSpend ?? null, props.agents));
 const colors = computed(() => projectColors(props.projects.map((p) => p.path)));
 const percent = computed(() => new Intl.NumberFormat(language.value, { style: "percent", maximumFractionDigits: 0 }));
 const split = computed(() => timeSplit(props.lanes, colors.value, percent.value));
@@ -29,7 +30,7 @@ function focusPart(event: FocusEvent, part: SplitPart): void {
 
 <template>
   <div class="summary">
-    <div class="totals">
+    <div :class="['totals', { agents }]">
       <div v-for="total in totals" :key="total.label" class="total">
         <span class="section-label">{{ total.label }}</span>
         <span :class="['total-value', { claude: total.claude }]">{{ total.value }}</span>
@@ -83,6 +84,11 @@ function focusPart(event: FocusEvent, part: SplitPart): void {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 26px;
+}
+
+/* Each agent with its own figures: closer, so a day of two keeps them on one line where it can. */
+.totals.agents {
+  column-gap: 20px;
 }
 
 /* Square like the timeline's blocks; slivers stay visible. */

@@ -10,7 +10,7 @@ import {
   cardMatches,
   cardStatus,
   cardText,
-  COLUMN_LABELS,
+  columnLabel,
   COLUMNS,
   columnCards,
   folderName,
@@ -29,9 +29,11 @@ import { ALL as EVERY_DAY, type Period } from "../lib/period";
 import { dragRegion, keys, primary } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { finishedWaits, originView, othersWaiting, sessionTerminal } from "../lib/sessions";
-import { choiceOf, projectChoice } from "../lib/start";
+import { agentName, agentOf, agentOn, agentsOn, multiAgent } from "../lib/agents";
+import { projectSettings, updateProjectSettings } from "../lib/projectSettings";
+import { agentChoiceOf, projectAgent, projectChoice, projectCodexChoice } from "../lib/start";
 import { api, board, now, sessions, snapshot } from "../lib/store";
-import type { BoardColumn, Card, SessionRow, StartChoice, TerminalView } from "../lib/types";
+import type { Agent, AgentStartChoice, BoardColumn, Card, CodexChoice, SessionRow, StartChoice, TerminalView } from "../lib/types";
 import BoardCard from "./board/BoardCard.vue";
 import BoardColumns from "./board/BoardColumns.vue";
 import BoardLanes from "./board/BoardLanes.vue";
@@ -77,6 +79,9 @@ function lastScope(): string | null {
 /** The project shown; null for every project's board. */
 const scope = ref<string | null>(lastScope());
 const project = computed(() => (scope.value ? (projects.value.find((p) => p.path === scope.value) ?? null) : null));
+/** The agent the board's cards go to, as its texts name it: the project's; on every project's,
+ * the one agent on, or null while more than one is. */
+const boardAgent = computed<Agent | null>(() => (project.value ? projectAgent(project.value) : multiAgent.value ? null : (agentsOn.value[0] ?? "claude")));
 
 /**
  * A board picked by hand: the page opens on it next time too. What Claude finished counts as seen
@@ -223,7 +228,8 @@ const noMatch = computed(
 /** Claude Code's hook is missing or older than the current set: the board moves on from the logs. */
 const hook = computed(() => {
   const state = snapshot.value;
-  if (!state) return null;
+  // Claude's hook, said only while Claude is on.
+  if (!state || !agentOn("claude")) return null;
   return !state.claudeHook ? "missing" : state.claudeHookOutdated ? "outdated" : null;
 });
 
@@ -407,19 +413,20 @@ function terminalSize(): { cols: number; rows: number } | null {
   return panelMeasure.size();
 }
 
-/** A new Claude session in one of the project's Pitwall terminals, with the card's text; the card
- * goes to Claude's column, and the board stays on screen. `start`: the model and the mode chosen
- * for it; without a choice, its project's own. A card that waits for its moment is given now,
- * with what was chosen when it was told to wait. */
-function give(id: string, mode: "new" | "plan", start: StartChoice | null = null): void {
+/** A new session of its agent in one of the project's Pitwall terminals, with the card's text; the
+ * card goes to Claude's column, and the board stays on screen. `start`: the agent, the model and
+ * the mode chosen for it; without a choice, its project's own. A card that waits for its moment is
+ * given now, with what was chosen when it was told to wait. */
+function give(id: string, mode: "new" | "plan", start: AgentStartChoice | null = null): void {
   if (byId.value.get(id)?.schedule) return giveNow(id);
   void run(id, "give", () => api.boardGive(id, mode, terminalSize(), start));
 }
 
-/** Given again once its session closed: as it was started last. */
+/** Given again once its session closed: as it was started last, to the same agent; as its
+ * project starts its sessions once that agent is off. */
 function giveAgain(id: string): void {
   const kept = byId.value.get(id)?.start;
-  give(id, "new", kept ? choiceOf(kept) : null);
+  give(id, "new", kept && agentOn(agentOf(kept.agent)) ? agentChoiceOf(kept) : null);
 }
 
 /** A card that waits: given now. The core gives it only while it still waits, so a press that
@@ -428,8 +435,8 @@ function giveNow(id: string): void {
   void run(id, "give", () => api.boardGiveNow(id, terminalSize()));
 }
 
-/** Told to wait until the session refills: it stays up next and says so. */
-function schedule(id: string, start: StartChoice): void {
+/** Told to wait until its agent's limit refills: it stays up next and says so. */
+function schedule(id: string, start: AgentStartChoice): void {
   void run(id, "move", () => api.boardSchedule(id, start));
 }
 
@@ -605,7 +612,7 @@ function cardMenu(at: MenuPoint, id: string): void {
   const columns = COLUMNS.filter((column) => column !== card.column && (column !== "claude" || listed.value.has(card.path)));
   void menu.popup(at, [
     { text: t("common.edit"), action: () => edit(id) },
-    { text: t("board.move"), enabled: !busy.value[id], items: columns.map((column) => ({ text: t(COLUMN_LABELS[column]), action: () => moveToEnd(id, column) })) },
+    { text: t("board.move"), enabled: !busy.value[id], items: columns.map((column) => ({ text: t(columnLabel(column, agentsOn.value)), action: () => moveToEnd(id, column) })) },
     // Its text, to paste into a session by hand: the card stays where it is.
     { text: t("board.copyText"), action: () => void api.copyText(cardText(card)) },
     "separator",
@@ -626,7 +633,12 @@ function rehomeMenu(at: MenuPoint, from: string): void {
 
 /** The panel of ways to give a card (board/GivePanel): the card it is open for, the button it
  * hangs under, and what a plain click on that button would start the card with. */
-const givePanel = ref<{ id: string; anchor: { left: number; top: number; bottom: number }; initial: StartChoice; linkable: boolean } | null>(null);
+const givePanel = ref<{
+  id: string;
+  anchor: { left: number; top: number; bottom: number };
+  initial: { agent: Agent; claude: StartChoice; codex: CodexChoice };
+  linkable: boolean;
+} | null>(null);
 
 /** The card's own arrow button, where the panel hangs and the keyboard goes back to. */
 function giveArrow(id: string): HTMLElement | null {
@@ -649,7 +661,8 @@ function giveMenu(at: MenuPoint, id: string): void {
   }
   const box = giveArrow(id)?.closest<HTMLElement>(".bsplit")?.getBoundingClientRect();
   const anchor = box ? { left: box.left, top: box.top, bottom: box.bottom } : { left: at.clientX, top: at.clientY, bottom: at.clientY };
-  givePanel.value = { id, anchor, initial: projectChoice(projects.value.find((p) => p.path === card.path)), linkable: openSessions(card).length > 0 };
+  const p = projects.value.find((listed) => listed.path === card.path);
+  givePanel.value = { id, anchor, initial: { agent: projectAgent(p), claude: projectChoice(p), codex: projectCodexChoice(p) }, linkable: openSessions(card).length > 0 };
 }
 
 /** `keyed`: closed from the keyboard, which goes back to the arrow it was opened from. */
@@ -667,6 +680,25 @@ function fromPanel(act: (id: string) => void, keyed: boolean): void {
   if (id) act(id);
 }
 
+/** The agent picked in the panel (with Codex, its model and mode) stays its project's choice for
+ * the next give, while there are agents to pick from. Claude is written as no agent. */
+function remember(id: string, start: AgentStartChoice): void {
+  const path = byId.value.get(id)?.path;
+  const p = projects.value.find((listed) => listed.path === path);
+  if (!path || !p || !multiAgent.value) return;
+  const kept = projectSettings(p);
+  const codex = start.agent === "codex";
+  if (agentOf(kept.agent) === (codex ? "codex" : "claude") && (!codex || ((kept.codexModel ?? null) === start.model && (kept.codexMode ?? "normal") === start.mode))) return;
+  void updateProjectSettings(path, (settings) => {
+    const next = { ...settings };
+    delete next.agent;
+    if (start.agent !== "codex") return next;
+    delete next.codexModel;
+    delete next.codexMode;
+    return { ...next, agent: "codex", ...(start.model ? { codexModel: start.model } : {}), ...(start.mode !== "normal" ? { codexMode: start.mode } : {}) };
+  });
+}
+
 /** The sessions open in the card's project, in a menu: the one picked takes the card. */
 function linkMenu(at: MenuPoint, id: string): void {
   const card = byId.value.get(id);
@@ -674,7 +706,10 @@ function linkMenu(at: MenuPoint, id: string): void {
   const editor = snapshot.value?.settings.editor;
   void menu.popup(
     at,
-    openSessions(card).map((row) => ({ text: `${row.title || t("board.untitledSession")} · ${originView(row.origin, row.project, editor).short}`, action: () => link(id, row.id) })),
+    openSessions(card).map((row) => {
+      const text = `${row.title || t("board.untitledSession")} · ${originView(row.origin, row.project, editor, row.agent).short}`;
+      return { text: multiAgent.value ? `${agentName(row.agent)} · ${text}` : text, action: () => link(id, row.id) };
+    }),
   );
 }
 
@@ -698,6 +733,7 @@ const actions: BoardActions = {
   edit,
   menu: cardMenu,
   give,
+  agentFor: (id) => projectAgent(projects.value.find((p) => p.path === byId.value.get(id)?.path)),
   giveAgain,
   giveMenu,
   panelFor: () => givePanel.value?.id ?? null,
@@ -915,7 +951,7 @@ const ghostStyle = computed(() =>
 
       <div v-else-if="empty" class="board-empty">
         <SessionNotice icon="board" :tag="t('board.empty.tag')" :title="t(project ? 'board.empty.title' : 'board.empty.titleAll')">
-          {{ t("board.empty.body") }}
+          {{ t(boardAgent === null ? "board.empty.body.agents" : boardAgent === "codex" ? "board.empty.body.codex" : "board.empty.body") }}
           <template #action>
             <button type="button" class="board-control" @click="openAdd">
               {{ t("board.addCard") }}<span class="board-keys" aria-hidden="true">{{ keys("mod+KeyN") }}</span>
@@ -927,7 +963,9 @@ const ghostStyle = computed(() =>
       <p v-else-if="noMatch" class="board-none">{{ t("board.none.search") }}</p>
 
       <div v-else ref="boardBody" class="board-body" role="region" :aria-label="t('board.title')" aria-describedby="board-keys" @keydown="onBoardKey">
-        <span id="board-keys" class="sr-only">{{ t("board.cardKeys", { give: keys("mod+Enter") }) }}</span>
+        <span id="board-keys" class="sr-only">{{
+          t(boardAgent === null ? "board.cardKeys.agents" : boardAgent === "codex" ? "board.cardKeys.codex" : "board.cardKeys", { give: keys("mod+Enter") })
+        }}</span>
         <BoardColumns
           v-if="project"
           :class="layout === 'list' ? 'board-list' : 'board-wide'"
@@ -1013,8 +1051,8 @@ const ghostStyle = computed(() =>
       :initial="givePanel.initial"
       :linkable="givePanel.linkable"
       :card="givePanel.id"
-      @give="(start, keyed) => fromPanel((id) => give(id, 'new', start), keyed)"
-      @schedule="(start, keyed) => fromPanel((id) => schedule(id, start), keyed)"
+      @give="(start, keyed) => fromPanel((id) => (remember(id, start), give(id, 'new', start)), keyed)"
+      @schedule="(start, keyed) => fromPanel((id) => (remember(id, start), schedule(id, start)), keyed)"
       @link="(at, keyed) => fromPanel((id) => linkMenu(at, id), keyed)"
       @close="closeGivePanel"
     />

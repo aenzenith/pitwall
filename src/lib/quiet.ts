@@ -5,6 +5,7 @@
 import { computed } from "vue";
 
 import { clock, dayName } from "./day";
+import { agentKey, type AgentKey } from "./format";
 import { language, t, type Key } from "./i18n";
 import { snapshot } from "./store";
 import type { Missed, NotificationSettings, Quiet, SignalKind } from "./types";
@@ -76,7 +77,7 @@ export function quietLine(state: Quiet, now: number): string {
   return t(dayName(state.until) === dayName(now) ? "quiet.until" : "quiet.untilTomorrow", params);
 }
 
-const LINES: Record<SignalKind, Key> = {
+const LINES: Record<SignalKind, Key | AgentKey> = {
   "claude-asking": "missed.claudeAsking",
   "claude-permission": "missed.claudePermission",
   "claude-finished": "missed.claudeFinished",
@@ -89,12 +90,23 @@ const LINES: Record<SignalKind, Key> = {
   "card-review": "missed.cardReview",
 };
 
-/** What happened, in a line: `Command failed: migrate`. */
+/** The kinds whose line names the agent it is about: its waits, its long turn, its fuel. */
+const AGENTS: Partial<Record<SignalKind, AgentKey>> = {
+  "claude-asking": "missed.claudeAsking",
+  "claude-permission": "missed.claudePermission",
+  "claude-finished": "missed.claudeFinished",
+  "claude-long-turn": "missed.claudeLongTurn",
+  "fuel-high": "missed.fuelHigh",
+};
+
+/** What happened, in a line: `Command failed: migrate`; an agent's turn in its own words. */
 export function missedLine(entry: Missed): string {
-  if (entry.kind === "claude-permission" && entry.detail) return t("missed.claudePermissionTool", { tool: entry.detail });
+  const agent = entry.agent ?? "claude";
+  if (entry.kind === "claude-permission" && entry.detail) return t(agentKey("missed.claudePermissionTool", agent), { tool: entry.detail });
   // The fuel alert's own line says how much.
   if (entry.kind === "fuel-high" && entry.detail) return entry.detail;
-  return t(LINES[entry.kind], { name: entry.detail ?? "" });
+  const named = AGENTS[entry.kind];
+  return t(named ? agentKey(named, agent) : LINES[entry.kind], { name: entry.detail ?? "" });
 }
 
 /** Whose it is: its project, or the page it is about when it is no project's. */

@@ -19,6 +19,7 @@ import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
+import { AGENT_ORDER, agentKey } from "../lib/format";
 import { isStale, leadWindow, left, LOW_LEFT, percentText } from "../lib/fuel";
 import { language, t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
@@ -45,6 +46,13 @@ const letters = computed(() => codes(projects.value));
 /** The counts as the menu bar writes them: the servers that run, the Claude sessions at work. */
 const running = computed(() => snapshot.value?.running ?? 0);
 const working = computed(() => projects.value.reduce((sum, project) => sum + project.claudeSessions.filter((session) => session.phase === "working").length, 0));
+/** The count said aloud, each agent's sessions at work in its own words: Claude's alone as before. */
+const workingLabel = computed(() =>
+  AGENT_ORDER.map((agent) => [agent, projects.value.reduce((sum, project) => sum + project.claudeSessions.filter((session) => session.phase === "working" && session.agent === agent).length, 0)] as const)
+    .filter(([, count]) => count > 0)
+    .map(([agent, count]) => t(agentKey("core.tray.working", agent), { count }))
+    .join(", "),
+);
 
 /** The session's fuel left (the week's on a reading without one), when there is a reading of it;
  * `label` says which. */
@@ -314,7 +322,7 @@ onBeforeUnmount(() => {
       <header class="head" @mousedown="drag">
         <span class="glyph"><PitwallGlyph :size="15" lamps="var(--run)" /></span>
         <span v-if="running" class="count run" role="img" :aria-label="t('popover.running', { count: running })">{{ running }}</span>
-        <span v-if="working" class="count claude" role="img" :aria-label="t('core.tray.working', { count: working })">{{ working }}</span>
+        <span v-if="working" class="count claude" role="img" :aria-label="workingLabel">{{ working }}</span>
         <span class="grow"></span>
         <span v-if="share" :class="['share', { low: share.low, stale: share.stale }]" role="img" :aria-label="share.label">{{ share.text }}</span>
         <button

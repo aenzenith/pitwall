@@ -7,13 +7,14 @@ import { useBackdropClose } from "../../lib/dialog";
 import { openUnfocused, useReturnFocus } from "../../lib/dialogFocus";
 import { t, type Key } from "../../lib/i18n";
 import { api } from "../../lib/store";
-import type { SyncReport, SyncServer } from "../../lib/types";
+import type { Agent, AgentSyncReport, AgentSyncServer } from "../../lib/types";
 
 /**
  * An account's MCP servers beside the main account's, by their names only: what a sync would
  * bring over (`account_sync_plan`, asked as it opens; until then the report the strip had).
+ * `agent`: whose account (none: Claude's).
  */
-const props = defineProps<{ id: string; name: string; report: SyncReport | null }>();
+const props = defineProps<{ id: string; agent?: Agent; name: string; report: AgentSyncReport | null }>();
 const emit = defineEmits<{ close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
@@ -21,24 +22,25 @@ const backdrop = useBackdropClose(dialog);
 useReturnFocus();
 const closeButton = ref<HTMLButtonElement | null>(null);
 
-const plan = ref<SyncReport | null>(props.report);
+const plan = ref<AgentSyncReport | null>(props.report);
 const asking = ref(true);
+const codex = props.agent === "codex";
 
-const LABELS: Record<SyncServer["state"], Key> = {
+const LABELS: Record<AgentSyncServer["state"], Key> = {
   synced: "accounts.server.synced",
   same: "accounts.server.same",
   missing: "accounts.server.missing",
-  login: "accounts.server.login",
+  login: codex ? "accounts.server.login.codex" : "accounts.server.login",
   onlyHere: "accounts.server.onlyHere",
   failed: "accounts.server.failed",
+  cantCopy: "accounts.server.cantCopy",
 };
 
 const servers = computed(() => plan.value?.servers ?? []);
 
 onMounted(() => {
   openUnfocused(dialog.value, () => closeButton.value);
-  api
-    .accountSyncPlan(props.id)
+  (codex ? api.agentAccountSyncPlan("codex", props.id) : api.accountSyncPlan(props.id))
     .then((report) => (plan.value = report))
     .catch(() => undefined)
     .finally(() => (asking.value = false));
@@ -151,7 +153,8 @@ onMounted(() => {
 
 /* What waits on the user: Claude's colour. */
 .tag.missing,
-.tag.login {
+.tag.login,
+.tag.cantCopy {
   background: var(--claude-bg);
   color: var(--claude-text);
 }

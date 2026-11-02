@@ -3,8 +3,12 @@
 //! where Claude Code keeps it (the account's Keychain item). Pitwall sees nothing of it but how it
 //! ended and the page's address Claude prints in case the browser didn't open, which goes to the
 //! window and is never kept or logged. One sign-in at a time.
+//!
+//! A Codex account's sign-in is Codex's own the same way (`codex login`, run with the account's
+//! `CODEX_HOME`), which opens the browser at OpenAI's; what it prints goes to the window as it
+//! comes, for "Show the terminal", and is never kept or logged either.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -56,21 +60,48 @@ pub fn cancelled() -> bool {
     running().as_ref().is_some_and(|running| running.cancelled.load(Ordering::Relaxed))
 }
 
+/// A sign-in's CLI: its program, its words, the variable that names the account's folder, and
+/// how to tell it is signed in afterwards.
+struct Cli {
+    program: Option<PathBuf>,
+    args: &'static [&'static str],
+    env: &'static str,
+    signed_in: fn(&str) -> bool,
+}
+
+/// What a line of the sign-in goes to, as it comes (Codex's, for "Show the terminal").
+type OnLine = Arc<dyn Fn(String) + Send + Sync>;
+/// What the sign-in page's address goes to, once.
+type OnUrl = Arc<Mutex<Option<Box<dyn FnOnce(String) + Send>>>>;
+
 /// Starts the sign-in of the account whose folder is `dir`. `on_url` gets the sign-in page's
 /// address once Claude printed it; `on_end`, on a thread of its own, how it ended.
 pub fn start(dir: &str, on_url: impl Fn(String) + Send + 'static, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
+    let cli = Cli { program: super::sync::claude_program(), args: &["auth", "login", "--claudeai"], env: super::ENV, signed_in };
+    run(cli, dir, on_url, None, on_end)
+}
+
+/// Starts the sign-in of the Codex account whose home is `dir`, as `start` does Claude's: `on_url`
+/// gets the sign-in page's address, `on_line` every line Codex prints (escape sequences taken
+/// out), `on_end` how it ended.
+pub fn start_codex(dir: &str, on_url: impl Fn(String) + Send + 'static, on_line: impl Fn(String) + Send + Sync + 'static, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
+    let cli = Cli { program: super::codex_sync::codex_program(), args: &["login"], env: super::codex::ENV, signed_in: |dir| crate::codex_usage::signed_in(Path::new(dir)) };
+    run(cli, dir, on_url, Some(Arc::new(on_line)), on_end)
+}
+
+fn run(cli: Cli, dir: &str, on_url: impl Fn(String) + Send + 'static, on_line: Option<OnLine>, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
     let mut slot = running();
     if slot.is_some() {
         return Err(t!("core.accounts.loginBusy"));
     }
-    let Some(claude) = super::sync::claude_program() else {
+    let Some(program) = cli.program else {
         drop(slot);
         thread::spawn(move || on_end(Ended::Missing));
         return Ok(());
     };
     let home = dirs::home_dir().unwrap_or_default();
-    let mut command = crate::process::terminal_command(&claude, &[(super::ENV, dir)]);
-    command.args(["auth", "login", "--claudeai"]).current_dir(&home).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut command = crate::process::terminal_command(&program, &[(cli.env, dir)]);
+    command.args(cli.args).current_dir(&home).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
     let mut child = match command.spawn() {
@@ -88,20 +119,36 @@ pub fn start(dir: &str, on_url: impl Fn(String) + Send + 'static, on_end: impl F
     drop(slot);
 
     let said: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    // Claude prints the page's address on its output; Codex on either.
+    let on_url: OnUrl = Arc::new(Mutex::new(Some(Box::new(on_url))));
+    let tell_url = move |line: &str| {
+        if let Some(url) = sign_in_url(line) {
+            let first = on_url.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
+            if let Some(on_url) = first {
+                on_url(url);
+            }
+        }
+    };
     if let Some(stdout) = child.stdout.take() {
-        let told = AtomicBool::new(false);
+        let (tell_url, on_line) = (tell_url.clone(), on_line.clone());
         crate::process::read_lines(stdout, move |line| {
-            if let Some(url) = sign_in_url(&line) {
-                if !told.swap(true, Ordering::Relaxed) {
-                    on_url(url);
-                }
+            tell_url(&line);
+            if let Some(on_line) = &on_line {
+                on_line(plain(&line));
             }
         });
     }
     if let Some(stderr) = child.stderr.take() {
         let said = Arc::clone(&said);
+        let lines = on_line.is_some();
         crate::process::read_lines(stderr, move |line| {
+            if lines {
+                tell_url(&line);
+            }
             let line = plain(&line);
+            if let Some(on_line) = &on_line {
+                on_line(line.clone());
+            }
             if !line.is_empty() {
                 *said.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(line);
             }
@@ -109,8 +156,9 @@ pub fn start(dir: &str, on_url: impl Fn(String) + Send + 'static, on_end: impl F
     }
 
     let dir = dir.to_string();
+    let signed_in = cli.signed_in;
     thread::spawn(move || {
-        let ended = wait(&mut child, &cancelled, &dir, &said);
+        let ended = wait(&mut child, &cancelled, &dir, &said, signed_in);
         exited.store(true, Ordering::Relaxed);
         // Busy until the account is added or let go: a second sign-in waits for it, and a
         // cancel still reaches it (`cancelled`).
@@ -132,7 +180,7 @@ pub fn cancel() {
     }
 }
 
-fn wait(child: &mut Child, cancelled: &AtomicBool, dir: &str, said: &Mutex<Option<String>>) -> Ended {
+fn wait(child: &mut Child, cancelled: &AtomicBool, dir: &str, said: &Mutex<Option<String>>, signed_in: fn(&str) -> bool) -> Ended {
     let started = Instant::now();
     let status = loop {
         match child.try_wait() {

@@ -2,19 +2,25 @@
 import { ref } from "vue";
 
 import type { Filter } from "../lib/sessions";
+import type { Agent } from "../lib/types";
 
-/** The filter tab and the project picked (null: every project, as the app opens on): kept while
- * the app runs, never stored. */
+/** The filter tab, the project picked (null: every project, as the app opens on) and the agent
+ * picked (null: every agent): kept while the app runs, never stored. */
 const filter = ref<Filter>("all");
 const scope = ref<string | null>(null);
+const agentScope = ref<Agent | null>(null);
 </script>
 
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue";
 
+import AgentMark from "../components/AgentMark.vue";
+import Icon from "../components/Icon.vue";
 import PeriodPicker from "../components/PeriodPicker.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
 import Spinner from "../components/Spinner.vue";
+import { agentName, agentOn, agentsOn, multiAgent } from "../lib/agents";
+import { agentsTab } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
 import { useNativeMenu } from "../lib/nativeMenu";
 import { openInPanel, panelTyping, usePanelFollow } from "../lib/panel";
@@ -29,8 +35,9 @@ import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionList from "./sessions/SessionList.vue";
 import SessionNotice from "./sessions/SessionNotice.vue";
 
-/** Every Claude Code session today, live; or, looking back, those of an earlier day or of every
- * day there is something kept of. `claudeProject`: where "Open a Claude terminal" would open one
+/** Every Claude Code session today, live (and every Codex session, while Codex is on: counts and
+ * sections hold both, an agent picked beside the project narrows them); or, looking back, those of
+ * an earlier day or of every day there is something kept of. `claudeProject`: where "Open a Claude terminal" would open one
  * (the project list's selection), if anywhere. */
 defineProps<{ claudeProject: string | null }>();
 const emit = defineEmits<{ openProject: [path: string]; openSettings: []; openClaude: [] }>();
@@ -125,11 +132,27 @@ watch(
  * seen: that stays the row's to do. */
 const waits = computed(() => sessionWaits(all.value));
 
+/** The agent picked, while there are agents to pick from (more than one on, the one picked among
+ * them). */
+const agentShown = computed<Agent | null>(() => (multiAgent.value && agentScope.value && agentsOn.value.includes(agentScope.value) ? agentScope.value : null));
+
+/** The agent filter's menu, under its button: every agent, then each one that is on. */
+function agentMenu(event: MouseEvent): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  void menu.popup({ clientX: box.left, clientY: box.bottom + 4 }, [
+    { text: t("sessions.filter.allAgents"), checked: agentShown.value === null, action: () => (agentScope.value = null) },
+    "separator",
+    ...agentsOn.value.map((agent) => ({ text: agentName(agent), checked: agentShown.value === agent, action: () => (agentScope.value = agent) })),
+  ]);
+}
+
 const query = ref("");
 const q = computed(() => query.value.trim().toLowerCase());
-/** The sessions the project picked and the search leave, the listed projects' alone (a folder
- * outside them has none here); the tabs pick from these. */
-const pool = computed(() => all.value.filter((row) => (scope.value ? row.path === scope.value : row.path !== null) && matches(row, q.value)));
+/** The sessions the project and the agent picked and the search leave, the listed projects' alone
+ * (a folder outside them has none here); the tabs pick from these. */
+const pool = computed(() =>
+  all.value.filter((row) => (scope.value ? row.path === scope.value : row.path !== null) && (!agentShown.value || row.agent === agentShown.value) && matches(row, q.value)),
+);
 
 const counts = computed(() => {
   const found: Record<Filter, number> = { all: pool.value.length, waiting: 0, working: 0, ended: 0 };
@@ -163,8 +186,8 @@ function hold(by: keyof typeof held, on: boolean): void {
   frozen.value = holding.value ? (frozen.value ?? fresh.value) : null;
 }
 
-// A new filter, project or search is a new list: its order is taken as it stands.
-watch([filter, q, scope], () => {
+// A new filter, project, agent or search is a new list: its order is taken as it stands.
+watch([filter, q, scope, agentShown], () => {
   if (holding.value) frozen.value = fresh.value;
 });
 
@@ -258,14 +281,36 @@ function rowMenu(event: MouseEvent, id: string): void {
 /** The project picked, while it is listed. */
 const project = computed(() => (scope.value ? (projects.value.find((p) => p.path === scope.value) ?? null) : null));
 
+/** Whose sessions the page holds: Claude's alone, as it always did; Codex's alone; or more than
+ * one agent's. */
+const whose = computed<"claude" | "codex" | "agents">(() => {
+  const on = agentsOn.value;
+  return on.length > 1 ? "agents" : on[0] === "codex" ? "codex" : "claude";
+});
+
+/** A text of the page in the words for whose sessions it holds: `key` for Claude's, its `.codex`
+ * and `.agents` variants for the others. */
+function whoseKey(key: "sessions.loading" | "sessions.empty.title" | "sessions.empty.titlePast" | "sessions.empty.titleAll" | "sessions.empty.body" | "sessions.empty.bodyPast"): Key {
+  return whose.value === "claude" ? key : `${key}.${whose.value}`;
+}
+
 const subtitle = computed(() => {
   const where = project.value?.name ?? t("sessions.everyProject");
-  if (period.value !== null) return t("sessions.subtitleOn", { scope: where, when: period.value === ALL ? t("period.all") : dayLong(period.value) });
-  return t(view.value && !view.value.hook ? "sessions.subtitleLogs" : "sessions.subtitle", { scope: where });
+  const on = period.value === null ? null : period.value === ALL ? t("period.all") : dayLong(period.value);
+  // Read from the logs: Claude's state, without its hook.
+  const logs = view.value && !view.value.hook && agentOn("claude");
+  if (whose.value === "claude") {
+    if (on !== null) return t("sessions.subtitleOn", { scope: where, when: on });
+    return t(logs ? "sessions.subtitleLogs" : "sessions.subtitle", { scope: where });
+  }
+  // The agents by their names, the one picked alone.
+  const agents = (agentShown.value ? [agentShown.value] : agentsOn.value).map(agentName).join(", ");
+  if (on !== null) return t("sessions.subtitleOnAgents", { agents, scope: where, when: on });
+  return t(logs ? "sessions.subtitleLogsAgents" : "sessions.subtitleAgents", { agents, scope: where });
 });
 
 /** No session at all in the days shown. */
-const emptyTitle = computed<Key>(() => (period.value === null ? "sessions.empty.title" : period.value === ALL ? "sessions.empty.titleAll" : "sessions.empty.titlePast"));
+const emptyTitle = computed<Key>(() => whoseKey(period.value === null ? "sessions.empty.title" : period.value === ALL ? "sessions.empty.titleAll" : "sessions.empty.titlePast"));
 
 const noneText = computed(() => {
   if (q.value) return t("sessions.none.search");
@@ -346,7 +391,7 @@ onMounted(() => {
       </header>
 
       <!-- The list's filters, level with the details' header line (56 + 44 = 100px). -->
-      <div class="filters">
+      <div :class="['filters', { paired: multiAgent }]">
         <div role="tablist" class="tabs" :aria-label="t('sessions.filters')">
           <button
             v-for="(f, i) in FILTERS"
@@ -365,14 +410,21 @@ onMounted(() => {
             <span v-if="view" :class="['tab-count', { hot: f.id === 'waiting' && counts.waiting > 0, total: f.id === 'all' }]">{{ counts[f.id] }}</span>
           </button>
         </div>
-        <ProjectPicker class="picker" :projects="projects" :scope="scope" :waits="waits" label="sessions.pickerLabel" @pick="scope = $event" />
+        <!-- Beside the projects: whose sessions, while more than one agent is on. -->
+        <button v-if="multiAgent" type="button" class="agent-pick" aria-haspopup="menu" :aria-label="t('sessions.filter.agentLabel')" :title="t('sessions.filter.agentLabel')" @click="agentMenu">
+          <AgentMark v-if="agentShown" :agent="agentShown" :size="12" />
+          <span v-else class="agent-pick-every"><AgentMark v-for="each in agentsOn" :key="each" :agent="each" :size="12" /></span>
+          <span class="agent-pick-text">{{ agentShown ? agentName(agentShown) : t("sessions.filter.allAgents") }}</span>
+          <Icon name="chevron-down" :size="11" class="agent-pick-more" />
+        </button>
+        <ProjectPicker :class="['picker', { paired: multiAgent }]" :projects="projects" :scope="scope" :waits="waits" label="sessions.pickerLabel" @pick="scope = $event" />
       </div>
 
       <!-- Only the list scrolls, never the window. -->
       <div class="scroll">
         <div class="content">
-          <SessionNotice v-if="view && !view.hook" :tag="t('sessions.noHook.tag')" :title="t('sessions.noHook.title')">
-            {{ t("sessions.noHook.body") }}
+          <SessionNotice v-if="view && !view.hook && agentOn('claude')" :tag="t('sessions.noHook.tag')" :title="t('sessions.noHook.title')">
+            {{ t(agentsTab ? "sessions.noHook.body.agents" : "sessions.noHook.body") }}
             <template #action>
               <button type="button" class="control" @click="emit('openSettings')">{{ t("settings.addHook") }}</button>
             </template>
@@ -380,11 +432,11 @@ onMounted(() => {
 
           <div v-if="!view" class="loading" role="status">
             <Spinner />
-            <span>{{ t("sessions.loading") }}</span>
+            <span>{{ t(whoseKey("sessions.loading")) }}</span>
           </div>
 
           <SessionNotice v-else-if="!all.length" :tag="t('sessions.empty.tag')" :title="t(emptyTitle)">
-            {{ t(period === null ? "sessions.empty.body" : "sessions.empty.bodyPast") }}
+            {{ t(whoseKey(period === null ? "sessions.empty.body" : "sessions.empty.bodyPast")) }}
             <template v-if="(panelName || claudeProject) && period === null" #action>
               <button type="button" class="control" :title="t('sessions.empty.openClaudeTitle', { project: panelName ?? claudeProject ?? '' })" @click="openClaude">
                 {{ t("sessions.empty.openClaude") }}
@@ -642,6 +694,89 @@ input[type="search"]::placeholder {
   flex-shrink: 100000;
 }
 
+/* The agent filter, as the project picker's button looks, the two side by side; its name gives
+   way as the picker's does. */
+.agent-pick {
+  flex-shrink: 100000;
+  min-width: 60px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-size: 12px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.agent-pick:hover {
+  background: var(--bg-control-on);
+}
+
+.agent-pick svg {
+  flex-shrink: 0;
+}
+
+.agent-pick-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Every agent's mark: only where the filter shows without its name. */
+.agent-pick-every {
+  display: none;
+  gap: 3px;
+}
+
+/* With the agent filter beside it the row runs out of room sooner: the agent filter is its mark
+   alone first (every agent's while it shows them all), then the picker its icon, so that the tabs
+   keep their names as long as they do with one agent. */
+@container (max-width: 700px) {
+  .agent-pick-text,
+  .agent-pick-more {
+    display: none;
+  }
+
+  .agent-pick-every {
+    display: inline-flex;
+  }
+
+  .agent-pick {
+    flex-shrink: 0;
+    min-width: 0;
+    padding: 0 8px;
+  }
+}
+
+@container (max-width: 620px) {
+  .filters > .picker.paired {
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .filters > .picker.paired :deep(.ppick-text),
+  .filters > .picker.paired :deep(.ppick-more) {
+    display: none;
+  }
+
+  .filters > .picker.paired :deep(.ppick-every) {
+    display: block;
+  }
+
+  .filters > .picker.paired :deep(.ppick-button) {
+    padding: 0 8px;
+  }
+}
+
+.filters > .picker.paired {
+  margin-left: -4px;
+}
+
 /* Narrower: the picker is its icon alone (its name stays as its tooltip, and read out), so the
    tabs keep their room. */
 @container (max-width: 388px) {
@@ -678,6 +813,51 @@ input[type="search"]::placeholder {
 
   .tab-count.total {
     display: none;
+  }
+}
+
+/* The same, that much sooner, with the agent filter beside the tabs. */
+@container (max-width: 410px) {
+  .filters.paired .tabs {
+    gap: 2px;
+  }
+
+  .filters.paired .tabs button {
+    padding: 0 6px;
+    gap: 4px;
+  }
+
+  .filters.paired .tab-count.total {
+    display: none;
+  }
+}
+
+/* At the window's narrowest, with the agent filter too: the row closes up a little more, so that
+   "All" keeps its name as it does with one agent. */
+@container (max-width: 300px) {
+  .filters.paired .tabs {
+    gap: 1px;
+    margin-right: -6px;
+  }
+
+  .filters.paired .tabs button {
+    padding: 0 4px;
+  }
+
+  .agent-pick {
+    padding: 0 6px;
+  }
+
+  .agent-pick-every {
+    gap: 2px;
+  }
+
+  .filters > .picker.paired {
+    margin-left: -8px;
+  }
+
+  .filters > .picker.paired :deep(.ppick-button) {
+    padding: 0 6px;
   }
 }
 

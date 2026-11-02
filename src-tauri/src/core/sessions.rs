@@ -155,6 +155,8 @@ pub struct SessionToday {
 #[serde(rename_all = "camelCase")]
 pub struct SessionRow {
     pub id: String,
+    /// The agent it is a session of.
+    pub agent: Agent,
     /// The listed project it belongs to; `None` for a folder that isn't listed.
     pub path: Option<String>,
     /// The folder it runs in.
@@ -209,6 +211,11 @@ pub(super) struct SessionsCache {
     pub(super) briefs: HashMap<String, super::history::Brief>,
     /// The tab each session that had stopped was opened again in (`reveal.rs`: `reopen`).
     pub(super) reopened: HashMap<String, u64>,
+    /// Codex's running sessions as last read (`Core::codex_running`; `None`: can't be told), when,
+    /// and whether the hook told of one starting or ending since.
+    pub(super) codex: Option<HashMap<String, Running>>,
+    pub(super) codex_at: Option<Instant>,
+    pub(super) codex_stale: bool,
 }
 
 /// The process and its parents, nearest first.
@@ -244,7 +251,7 @@ fn app_of(process: &ProcessInfo) -> Option<&'static str> {
 }
 
 /// The nearest of the session's parents that is a known terminal app.
-fn terminal_app(table: &HashMap<u32, ProcessInfo>, lineage: &[u32]) -> Option<&'static str> {
+pub(super) fn terminal_app(table: &HashMap<u32, ProcessInfo>, lineage: &[u32]) -> Option<&'static str> {
     lineage.iter().skip(1).filter_map(|pid| table.get(pid)).find_map(app_of)
 }
 
@@ -301,11 +308,11 @@ fn origin_of(running: &Running, pitwall: &[(u32, u64)], peers: &[WindowRecord]) 
     }
 
     match running.entrypoint.as_deref() {
-        Some("claude-vscode") => peers
+        Some(entry @ ("claude-vscode" | "codex-vscode")) => peers
             .iter()
             .find(|peer| peer.pid().is_some_and(|host| running.lineage.contains(&host)))
             .map(|peer| SessionOrigin::VscodeTab { window: peer.title.clone() })
-            .unwrap_or(SessionOrigin::Other { entrypoint: Some("claude-vscode".into()) }),
+            .unwrap_or(SessionOrigin::Other { entrypoint: Some(entry.into()) }),
         None | Some("cli") => SessionOrigin::Terminal { app: running.app.map(str::to_string) },
         Some(other) => SessionOrigin::Other { entrypoint: Some(other.to_string()) },
     }
@@ -342,6 +349,8 @@ struct Draft {
     scanned: Option<SessionState>,
     running: Option<Running>,
     day: Option<SessionDay>,
+    /// A Codex session (`running` from `codex_running`).
+    codex: bool,
 }
 
 /// The draft of session `id`, new ones in the order met.
@@ -364,8 +373,15 @@ impl Core {
         if !is_session_id(session) {
             return None;
         }
-        let (log, _) = self.session_log(session)?;
-        crate::claude::last_message(&log)
+        // A Codex session's from its rollout (`codex::last_message`), while Codex is on.
+        let codex = self.lock().scanned.iter().any(|state| state.id == session && state.agent == Agent::Codex);
+        if codex {
+            return self.codex_last_message(session);
+        }
+        match self.session_log(session) {
+            Some((log, _)) => crate::claude::last_message(&log),
+            None => self.codex_last_message(session),
+        }
     }
 
     /// `~/.claude/sessions`, beside the projects folder.
@@ -441,6 +457,7 @@ impl Core {
         let pitwall: Vec<(u32, u64)> = self.terminal_shells().into_iter().map(|(shell, id, _)| (shell, id)).collect();
         let sightings: HashMap<String, Sighting> = self.sightings();
         let running = self.running_cached();
+        let codex_running = self.codex_running();
         let days = {
             let mut cache = self.sessions_cache();
             self.day_sessions(&mut cache.day)
@@ -451,13 +468,22 @@ impl Core {
         let mut drafts: HashMap<String, Draft> = HashMap::new();
         for state in scanned {
             let id = state.id.clone();
-            draft(&mut order, &mut drafts, &id).scanned = Some(state);
+            let draft = draft(&mut order, &mut drafts, &id);
+            draft.codex = state.agent == Agent::Codex;
+            draft.scanned = Some(state);
         }
         for (id, run) in running.iter().flatten() {
             draft(&mut order, &mut drafts, id).running = Some(run.clone());
         }
+        for (id, run) in codex_running.iter().flatten() {
+            let draft = draft(&mut order, &mut drafts, id);
+            draft.codex = true;
+            draft.running = Some(run.clone());
+        }
         for (id, day) in days {
-            draft(&mut order, &mut drafts, &id).day = Some(day);
+            let draft = draft(&mut order, &mut drafts, &id);
+            draft.codex |= day.agent == Agent::Codex;
+            draft.day = Some(day);
         }
 
         let listed_for = |folder: &str| -> Option<&(String, String)> {
@@ -483,14 +509,20 @@ impl Core {
                 (id.clone(), path, folder)
             })
             .collect();
-        let peeks: HashMap<String, Peek> = match self.claude.lock() {
+        let mut peeks: HashMap<String, Peek> = match self.claude.lock() {
             Ok(mut watch) => located
                 .iter()
-                .filter(|(id, _, folder)| is_session_id(id) && !folder.is_empty())
+                .filter(|(id, _, folder)| is_session_id(id) && !folder.is_empty() && !drafts[id].codex)
                 .filter_map(|(id, _, folder)| Some((id.clone(), watch.peek(id, folder)?)))
                 .collect(),
             Err(_) => HashMap::new(),
         };
+        // Codex's: its rollout's last write and its name, from what its watch read.
+        if located.iter().any(|(id, _, _)| drafts[id].codex) {
+            if let Ok(mut watch) = self.codex.lock() {
+                peeks.extend(located.iter().filter(|(id, _, _)| drafts[id].codex).filter_map(|(id, _, _)| Some((id.clone(), watch.peek(id)?))));
+            }
+        }
 
         let mut cache = self.sessions_cache();
         let mut rows: Vec<SessionRow> = Vec::new();
@@ -514,6 +546,8 @@ impl Core {
             let last = peek.map(|p| p.modified).or(draft.day.as_ref().map(|d| d.end)).unwrap_or(0);
             let running_now = match (&draft.running, &running) {
                 (Some(_), _) => Some(true),
+                // Codex's sessions without the hook can't be told; those it told of end by it.
+                (None, _) if draft.codex => None,
                 (None, None) => None,
                 (None, Some(_)) if now.saturating_sub(last) > WORKING_WINDOW_MS => Some(false),
                 (None, Some(_)) => None,
@@ -591,6 +625,7 @@ impl Core {
             };
             rows.push(SessionRow {
                 id: id.clone(),
+                agent: draft.scanned.as_ref().map_or(if draft.codex { Agent::Codex } else { Agent::Claude }, |s| s.agent),
                 path,
                 folder,
                 project,
@@ -683,6 +718,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.path().join("registry"),
                 claude_dir: claude.join("projects"),
+                codex_home: claude.with_file_name("codex"),
                 settings_file: tmp.path().join("config").join("settings.json"),
                 claude_settings: claude.join("settings.json"),
                 legacy_registries: Vec::new(),

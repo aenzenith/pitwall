@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import AgentMark from "../../components/AgentMark.vue";
 import ClaudeDot from "../../components/ClaudeDot.vue";
 import { bounds, clock, clockRange, duration, projectTiles, sessionShare, type Live } from "../../lib/day";
 import { turnLine } from "../../lib/format";
@@ -9,8 +10,9 @@ import { dragRegion } from "../../lib/platform";
 import { api, now, snapshot } from "../../lib/store";
 import type { DayProject, DaySpend } from "../../lib/types";
 
-/** `selected`: the project shown; `spend`: Claude's tokens that day, in all projects. */
-const props = defineProps<{ selected: DayProject | null; spend: DaySpend | null }>();
+/** `selected`: the project shown; `spend`: Claude's tokens that day, in all projects, `codexSpend`
+ * Codex's, apart; `agents`: the day names its agents (lib/day: namesAgents), each session with its mark. */
+const props = defineProps<{ selected: DayProject | null; spend: DaySpend | null; codexSpend?: DaySpend | null; agents?: boolean }>();
 
 /** Claude, live, per session, whatever day is shown: waiting on you or working. */
 const liveSessions = computed(() => {
@@ -28,7 +30,7 @@ const selectedSpan = computed(() => {
   return span ? clockRange(span[0], span[1]) : "";
 });
 
-const tiles = computed(() => (props.selected ? projectTiles(props.selected, props.spend) : []));
+const tiles = computed(() => (props.selected ? projectTiles(props.selected, props.spend, props.codexSpend ?? null, props.agents) : []));
 
 const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
 </script>
@@ -55,7 +57,7 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
         </div>
 
         <section v-if="selected.sessions.length" class="group">
-          <span class="section-label group-title">{{ t("day.sessions") }}</span>
+          <span class="section-label group-title">{{ t(agents ? "day.sessions.agents" : "day.sessions") }}</span>
           <div
             v-for="session in selected.sessions"
             :key="session.id"
@@ -70,6 +72,7 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
             <span class="mark"><ClaudeDot :live="liveSessions.get(session.id)" /></span>
             <div class="session-body">
               <div class="session-top">
+                <AgentMark v-if="agents" class="session-agent" :agent="session.agent" :size="11" />
                 <span :class="['session-name', { untitled: !session.title }]" :title="session.title ?? ''">{{ session.title || t("day.untitled") }}</span>
                 <span v-if="session.turns" class="session-turns">{{ t("day.turns", { count: session.turns }) }}</span>
               </div>
@@ -258,6 +261,10 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.session-agent {
+  flex-shrink: 0;
 }
 
 .session-name {

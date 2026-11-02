@@ -11,6 +11,9 @@
 //! main account's folder, and only Pitwall's own links are ever taken out of another's (`unlink`).
 
 pub mod app;
+pub mod codex;
+pub mod codex_app;
+pub mod codex_sync;
 pub mod login;
 pub mod sync;
 
@@ -139,12 +142,24 @@ fn real(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
+/// The folders of an agent's accounts, its main one's first: what `check_dir` keeps the other
+/// agent's accounts apart from, two agents in one folder mixing their files.
+pub fn folders_of(main: PathBuf, accounts: &AccountSettings) -> Vec<PathBuf> {
+    std::iter::once(main).chain(accounts.others.iter().map(|account| PathBuf::from(&account.dir))).collect()
+}
+
+/// Whether the folder `real_dir` (links followed) is one of `apart`, inside one or holding one.
+fn overlaps(real_dir: &Path, apart: &[PathBuf]) -> bool {
+    apart.iter().map(|other| real(other)).any(|other| real_dir == other || real_dir.starts_with(&other) || other.starts_with(real_dir))
+}
+
 /// Whether `dir` can be the folder of an account (not `except`): absolute and written in plain
 /// ASCII (Claude Code names the Keychain item from the normalized characters, which only plain
 /// ASCII leaves as they are), neither the main account's folder, inside it, nor holding it (the
-/// home folder would make the main account's `~/.claude.json` this one's), and no other account's.
-/// `exists`: it must be there already (a folder picked), else only its parent must.
-pub fn check_dir(home: &Path, dir: &str, accounts: &AccountSettings, except: Option<&str>, exists: bool) -> Result<(), String> {
+/// home folder would make the main account's `~/.claude.json` this one's), and no other account's,
+/// nor one of `apart` (Codex's, `Core::codex_folders`), inside or holding one. `exists`: it must
+/// be there already (a folder picked), else only its parent must.
+pub fn check_dir(home: &Path, dir: &str, accounts: &AccountSettings, except: Option<&str>, exists: bool, apart: &[PathBuf]) -> Result<(), String> {
     let path = Path::new(dir);
     if !path.is_absolute() || dir.ends_with('/') || dir.ends_with('\\') {
         return Err(t!("core.accounts.folderMissing", folder = dir));
@@ -160,6 +175,9 @@ pub fn check_dir(home: &Path, dir: &str, accounts: &AccountSettings, except: Opt
     }
     if real_dir.starts_with(&main) || main.starts_with(&real_dir) {
         return Err(t!("core.accounts.folderInside"));
+    }
+    if overlaps(&real_dir, apart) {
+        return Err(t!("core.accounts.folderOther.codex"));
     }
     if let Some(other) = accounts.others.iter().find(|account| Some(account.id.as_str()) != except && same_folder(Path::new(&account.dir), path)) {
         return Err(t!("core.accounts.folderTaken", name = other.name));
@@ -389,7 +407,7 @@ mod tests {
     /// An account's folder given as the home folder makes Claude Code write the main account's
     /// own `~/.claude.json` (sign-in and MCP servers); one inside `~/.claude` mixes it with the
     /// main one's files. Both are refused, as is a folder Claude would name another Keychain item
-    /// for than Pitwall reads.
+    /// for than Pitwall reads, and one of Codex's (its links would go into `~/.codex`).
     #[test]
     fn a_folder_that_would_mix_with_the_main_accounts_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
@@ -398,14 +416,16 @@ mod tests {
         fs::create_dir_all(home.join("work")).unwrap();
         let mine = accounts(&[("a", "Work", &home.join("work").to_string_lossy())]);
         let s = |p: &Path| p.to_string_lossy().into_owned();
+        let codex = [home.join(".codex"), home.join("codex-work")];
+        fs::create_dir_all(home.join("codex-work/inner")).unwrap();
 
-        for refused in [s(&home), s(&home.join(".claude")), s(&home.join(".claude/inner")), s(tmp.path()), s(&home.join("work")), "relative/dir".into(), format!("{}/", s(&home.join("other")))] {
-            assert!(check_dir(&home, &refused, &mine, None, false).is_err(), "{refused}");
+        for refused in [s(&home), s(&home.join(".claude")), s(&home.join(".claude/inner")), s(tmp.path()), s(&home.join("work")), "relative/dir".into(), format!("{}/", s(&home.join("other"))), s(&home.join(".codex")), s(&home.join("codex-work/inner"))] {
+            assert!(check_dir(&home, &refused, &mine, None, false, &codex).is_err(), "{refused}");
         }
-        assert_eq!(check_dir(&home, &s(&home.join("işler")), &mine, None, false).is_err(), cfg!(target_os = "macos"), "Keychain item named from the letters");
-        assert!(check_dir(&home, &s(&home.join(".claude-new")), &mine, None, false).is_ok());
-        assert!(check_dir(&home, &s(&home.join(".claude-new")), &mine, None, true).is_err(), "picked, it must be there");
-        assert!(check_dir(&home, &s(&home.join("work")), &mine, Some("a"), true).is_ok(), "its own folder");
+        assert_eq!(check_dir(&home, &s(&home.join("işler")), &mine, None, false, &[]).is_err(), cfg!(target_os = "macos"), "Keychain item named from the letters");
+        assert!(check_dir(&home, &s(&home.join(".claude-new")), &mine, None, false, &codex).is_ok());
+        assert!(check_dir(&home, &s(&home.join(".claude-new")), &mine, None, true, &[]).is_err(), "picked, it must be there");
+        assert!(check_dir(&home, &s(&home.join("work")), &mine, Some("a"), true, &[]).is_ok(), "its own folder");
     }
 
     /// Setting a folder up writes only into it, never into the main account's; what is there is

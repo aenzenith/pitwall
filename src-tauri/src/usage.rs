@@ -620,7 +620,7 @@ fn percent_of(used: f64, limit: Option<f64>) -> Option<f64> {
 }
 
 /// `2026-09-05T12:59:59.966454+00:00` or `2025-01-15T10:00:00Z`, in ms.
-fn parse_rfc3339(text: &str) -> Option<i64> {
+pub(crate) fn parse_rfc3339(text: &str) -> Option<i64> {
     let b = text.trim().as_bytes();
     if b.len() < 20 || b[4] != b'-' || b[7] != b'-' || !matches!(b[10], b'T' | b't' | b' ') || b[13] != b':' || b[16] != b':' {
         return None;

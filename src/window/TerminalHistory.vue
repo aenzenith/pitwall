@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
+import AgentMark from "../components/AgentMark.vue";
 import ClaudeDot from "../components/ClaudeDot.vue";
-import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Highlight from "../components/Highlight.vue";
 import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
+import { agentOn, agentsOn, multiAgent } from "../lib/agents";
 import { clock, dayName } from "../lib/day";
 import { fuzzy } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
 import { periodLabel } from "../lib/period";
 import { originView, statusLine } from "../lib/sessions";
 import { api, now, sessions, snapshot, today } from "../lib/store";
-import type { PastSession, Project, Resumed, SessionRow } from "../lib/types";
+import type { Agent, PastSession, Project, Resumed, SessionRow } from "../lib/types";
 
 /**
- * The terminals' history (window/TerminalPanel): the project's Claude sessions that open again in
- * its terminals, the last heard of first, by day. A click brings one up where it runs, or opens it
- * again in a new tab once it has ended (`resume_claude`). Dragged onto the terminal, it opens where
+ * The terminals' history (window/TerminalPanel): the project's sessions of each agent that is on
+ * that open again in its terminals, the last heard of first, by day, each with its agent's mark.
+ * A click brings one up where it runs, or opens it again in a new tab once it has ended
+ * (`resume_claude`, `resume_codex`). Codex's are read from Codex's own files as the column opens
+ * and dropped with it: Pitwall keeps no history of its own. Dragged onto the terminal, it opens where
  * it is let go (the panel works out where: `drag`, `drop`). `overlay`: a narrow panel's, over the
  * terminal's right side, gone once a session is picked.
  */
@@ -26,7 +29,7 @@ const emit = defineEmits<{
   close: [];
   leave: [];
   /** A row dragged: its session and where the pointer is; none once the drag is called off. */
-  drag: [drag: { id: string; name: string; x: number; y: number } | null];
+  drag: [drag: { id: string; name: string; agent: Agent; x: number; y: number } | null];
   /** A dragged row let go: the panel opens its session where it was let go. */
   drop: [id: string];
 }>();
@@ -59,7 +62,12 @@ async function load(): Promise<void> {
   const path = props.project.path;
   const ask = ++asked;
   try {
-    const found = await api.claudePast(path);
+    // Each agent that is on, Codex's never failing Claude's; the last heard of first.
+    const [claude, codex] = await Promise.all([
+      agentOn("claude") ? api.claudePast(path) : Promise.resolve([]),
+      agentOn("codex") ? api.codexPast(path).catch(() => [] as PastSession[]) : Promise.resolve([]),
+    ]);
+    const found = codex.length ? [...claude, ...codex].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)) : claude;
     if (ask !== asked) return;
     kept.set(path, found);
     list.value = found;
@@ -82,8 +90,9 @@ watch(
 );
 
 // A session that starts or ends is read again with the rest: one that ended has its log by then.
+// So is an agent turned on or off.
 watch(
-  () => [...live.value.keys()].sort().join(" "),
+  () => [...live.value.keys()].sort().join(" ") + "|" + agentsOn.value.join(" "),
   (ids, was) => {
     if (ids !== was) void load();
   },
@@ -99,7 +108,7 @@ const shown = computed<PastSession[] | null>(() => {
   const read = new Set(list.value.map((session) => session.id));
   const fresh = [...live.value.values()]
     .filter((row) => !read.has(row.id) && row.folder === props.project.path)
-    .map((row) => ({ id: row.id, title: row.title, at: row.since ?? now.value }))
+    .map((row) => ({ id: row.id, agent: row.agent, title: row.title, at: row.since ?? now.value }))
     .sort((a, b) => b.at - a.at);
   return [...fresh, ...list.value];
 });
@@ -149,12 +158,17 @@ function where(row: SessionRow): string {
   return row.origin.kind === "pitwall" ? t("terminal.historyInTab") : originView(row.origin, props.project.name, snapshot.value?.settings.editor).short;
 }
 
+/** Whose a session of the list is. */
+function agentOf(id: string): Agent {
+  return shown.value?.find((session) => session.id === id)?.agent ?? live.value.get(id)?.agent ?? "claude";
+}
+
 async function open(id: string): Promise<Resumed | null> {
   if (opening.value) return null;
   picked.value = id;
   opening.value = id;
   try {
-    const result = await api.resumeClaude(props.project.path, id);
+    const result = agentOf(id) === "codex" ? await api.resumeCodex(props.project.path, id) : await api.resumeClaude(props.project.path, id);
     if (result === "missing" || result === "unsure") failed.value = { ...failed.value, [id]: result };
     else if (props.overlay) emit("close");
     return result;
@@ -171,7 +185,7 @@ async function open(id: string): Promise<Resumed | null> {
 
 /** How far the pointer goes before a press on a row becomes a drag. */
 const DRAG_FROM = 5;
-let press: { id: string; name: string; x: number; y: number; started: boolean } | null = null;
+let press: { id: string; name: string; agent: Agent; x: number; y: number; started: boolean } | null = null;
 /** A drag just ended: the click that may follow it opens nothing. */
 let dragged = false;
 
@@ -179,7 +193,7 @@ function startDrag(event: PointerEvent, item: Item): void {
   if (event.button !== 0 || opening.value) return;
   const row = live.value.get(item.session.id);
   if (row && row.origin.kind !== "pitwall") return;
-  press = { id: item.session.id, name: item.name, x: event.clientX, y: event.clientY, started: false };
+  press = { id: item.session.id, name: item.name, agent: item.session.agent, x: event.clientX, y: event.clientY, started: false };
   window.addEventListener("pointermove", dragMove);
   window.addEventListener("pointerup", dragEnd);
   window.addEventListener("pointercancel", dragCancel);
@@ -193,7 +207,7 @@ function dragMove(event: PointerEvent): void {
     press.started = true;
     document.body.classList.add("grabbing");
   }
-  emit("drag", { id: press.id, name: press.name, x: event.clientX, y: event.clientY });
+  emit("drag", { id: press.id, name: press.name, agent: press.agent, x: event.clientX, y: event.clientY });
 }
 
 function dragEnd(): void {
@@ -279,11 +293,21 @@ function focus(): void {
   field.value?.focus({ preventScroll: true });
 }
 
+/** What a session that can't be brought up says: Codex's in its own words. */
+function failure(session: PastSession): string {
+  if (failed.value[session.id] !== "missing") return t("terminal.historyUnsure");
+  return t(session.agent === "codex" ? "terminal.historyMissing.codex" : "terminal.historyMissing");
+}
+
+/** The column's name: Claude's as today with Claude alone, else for every agent's (or Codex's
+ * alone). */
+const title = computed(() => (multiAgent.value ? t("terminal.historyTitle.all") : agentOn("codex") && !agentOn("claude") ? t("terminal.historyTitle.codex") : t("terminal.historyTitle")));
+
 defineExpose({ focus, open });
 </script>
 
 <template>
-  <div :class="['history', { overlay }]" :role="overlay ? 'dialog' : undefined" :aria-label="t('terminal.historyTitle')">
+  <div :class="['history', { overlay }]" :role="overlay ? 'dialog' : undefined" :aria-label="title">
     <label class="search">
       <Icon name="search" :size="13" />
       <input
@@ -302,7 +326,7 @@ defineExpose({ focus, open });
         @keydown="onKey"
       />
     </label>
-    <div :id="`past-${project.path}`" ref="listbox" class="rows" role="listbox" :aria-label="t('terminal.historyTitle')">
+    <div :id="`past-${project.path}`" ref="listbox" class="rows" role="listbox" :aria-label="title">
       <div v-if="shown === null" class="note"><Spinner :size="13" /></div>
       <div v-else-if="!shown.length" class="note">{{ t("terminal.historyEmpty") }}</div>
       <div v-else-if="!items.length" class="note">{{ t("terminal.historyNoMatch", { query: query.trim() }) }}</div>
@@ -319,10 +343,10 @@ defineExpose({ focus, open });
           @pointerdown="startDrag($event, item)"
           @click="clickRow(item.session.id)"
         >
-          <ClaudeLogo :size="11" :class="{ dim: !live.has(item.session.id) }" />
+          <AgentMark :agent="item.session.agent" :size="11" :class="{ dim: !live.has(item.session.id) }" />
           <span class="name"><Highlight v-if="item.hits" :text="item.name" :hits="item.hits" /><template v-else>{{ item.name }}</template></span>
           <Spinner v-if="opening === item.session.id" :size="12" />
-          <span v-else-if="failed[item.session.id]" class="error">{{ t(failed[item.session.id] === "missing" ? "terminal.historyMissing" : "terminal.historyUnsure") }}</span>
+          <span v-else-if="failed[item.session.id]" class="error">{{ failure(item.session) }}</span>
           <span v-else-if="live.get(item.session.id)" class="where">
             <span class="where-text">{{ where(live.get(item.session.id)!) }}</span>
             <ClaudeDot :live="liveDot(live.get(item.session.id)!)" />

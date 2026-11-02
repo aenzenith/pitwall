@@ -42,11 +42,16 @@ const ANSWER_LIMIT: Duration = Duration::from_secs(60);
 const INSTRUCTIONS: &str = "Pitwall runs the dev servers of the projects the user lists in it, and keeps their boards. In such a project, ask it \
      for the server's state and output, and start or restart the server through it instead of running the dev script yourself.";
 pub(crate) const RADIO_OFF: &str = "Pitwall's team radio is off. The user can turn it on in Pitwall: Settings › Claude.";
+/// `RADIO_OFF` to a Codex session: its radio is its own, in its own part of Settings.
+pub(crate) const CODEX_RADIO_OFF: &str = "Pitwall's team radio is off for Codex. The user can turn it on in Pitwall: Settings › Agents › Codex.";
 const NOT_RUNNING: &str = "Pitwall isn't running. Ask the user to open Pitwall, then try again.";
 const WENT_QUIET: &str = "Pitwall stopped answering before this call was done. Check what happened before trying it again.";
 const TOO_LONG: &str = "Pitwall's answer was too long to pass on. Ask for less at once.";
 pub(crate) const OTHER_VERSION: &str =
     "Pitwall and this session's line to it are of different versions: the app was updated since the session began. Ask the user to start a new Claude Code session.";
+/// `OTHER_VERSION` to a Codex session.
+pub(crate) const CODEX_OTHER_VERSION: &str =
+    "Pitwall and this session's line to it are of different versions: the app was updated since the session began. Ask the user to start a new Codex session.";
 
 /// One thing Claude can ask of Pitwall.
 pub struct Tool {
@@ -342,13 +347,20 @@ fn ask(endpoint: &Endpoint, tool: &str, args: Value) -> Result<Reply, Lost> {
     }
 }
 
-/// A call's answer for Claude: the app's, or why there is none.
+/// Whether this server's session is Codex's (Codex started it): the words of a refusal name
+/// where its radio is. Its parent's name only is tested.
+fn for_codex() -> bool {
+    let parent = parent_pid();
+    parent != 0 && crate::process::process_table().and_then(|table| table.get(&parent).map(crate::process::is_codex)).unwrap_or(false)
+}
+
+/// A call's answer for Claude (or Codex): the app's, or why there is none.
 fn call(file: Option<&Path>, tool: &str, args: Value) -> Reply {
     let Some(endpoint) = file.and_then(Endpoint::read) else {
-        return Reply::refused(RADIO_OFF);
+        return Reply::refused(if for_codex() { CODEX_RADIO_OFF } else { RADIO_OFF });
     };
     if endpoint.v != ENDPOINT_VERSION {
-        return Reply::refused(OTHER_VERSION);
+        return Reply::refused(if for_codex() { CODEX_OTHER_VERSION } else { OTHER_VERSION });
     }
 
     match ask(&endpoint, tool, args) {
@@ -469,4 +481,26 @@ pub fn mcp_mode(mut args: impl Iterator<Item = OsString>) -> bool {
     let file = dirs::home_dir().map(|home| endpoint_file(&home.join(".pitwall")));
     serve(std::io::stdin().lock(), std::io::stdout().lock(), file.as_deref());
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// From protocol version `2026-07-28` on, Codex pools one server across its chats: one
+    /// server would then be many sessions', and the radio's rule of one server, one session,
+    /// one project would go without a word. This server never offers that version or a later
+    /// one, whatever a client asks for.
+    #[test]
+    fn no_protocol_from_the_pooled_one_on_is_offered() {
+        const POOLED: &str = "2026-07-28";
+        assert!(PROTOCOLS.iter().all(|version| *version < POOLED), "{PROTOCOLS:?}");
+
+        for asked in [POOLED, "2027-01-01", "2025-11-25", "2024-11-05", "bogus"] {
+            let message = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": asked } });
+            let answer = answer(None, &message, &mut None).unwrap();
+            let given = answer.pointer("/result/protocolVersion").and_then(Value::as_str).unwrap();
+            assert!(given < POOLED && PROTOCOLS.contains(&given), "{asked}: {given}");
+        }
+    }
 }

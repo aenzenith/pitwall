@@ -4,8 +4,9 @@ import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import ClaudeDot from "./ClaudeDot.vue";
 import Icon from "./Icon.vue";
 import { WAIT_LABELS } from "../lib/board";
+import { agentKey, namesAgent, rowAgent } from "../lib/format";
 import { language, t, type Key } from "../lib/i18n";
-import type { Project, Turn } from "../lib/types";
+import type { Agent, Project, Turn } from "../lib/types";
 
 /**
  * The project picker of the Board and Sessions pages: the project shown (or every project) and,
@@ -50,14 +51,18 @@ const TYPED_MS = 700;
 
 type Option = { path: string | null; name: string; label: string; phase: "waiting" | "working" | null };
 
+/** Whose state a project's line reads out: Claude's alone as it always was; once the places name
+ * agents, the agent's whose state its row shows. */
+const whoseIn = (p: Project): Agent => (namesAgent.value ? (rowAgent(p) ?? "claude") : "claude");
+
 /** Every project, then each one: with Claude's dot, what it waits on you with too. The one shown
  * has none; with `working`, a ring where Claude works and doesn't wait. */
 const options = computed<Option[]>(() => [
   ...(props.every ? [{ path: null, name: t("board.allProjects"), label: t("board.allProjects"), phase: null }] : []),
   ...props.projects.map((p) => {
     const wait = p.path === props.scope ? undefined : props.waits.get(p.path);
-    if (wait) return { path: p.path, name: p.name, label: t(WAIT_LABELS[wait], { name: p.name }), phase: "waiting" as const };
-    if (props.working && p.claudeWorking) return { path: p.path, name: p.name, label: t("board.picker.working", { name: p.name }), phase: "working" as const };
+    if (wait) return { path: p.path, name: p.name, label: t(agentKey(WAIT_LABELS[wait], whoseIn(p)), { name: p.name }), phase: "waiting" as const };
+    if (props.working && p.claudeWorking) return { path: p.path, name: p.name, label: t(agentKey("board.picker.working", whoseIn(p)), { name: p.name }), phase: "working" as const };
     return { path: p.path, name: p.name, label: p.name, phase: null };
   }),
 ]);
@@ -72,7 +77,10 @@ const elsewhere = computed(() => (shown.value ? props.projects.filter((p) => p.p
 const label = computed(() => {
   const text = t(props.label, { name: name.value });
   const names = elsewhere.value.map((p) => p.name).join(", ");
-  return names ? `${text} · ${t("board.picker.waiting", { projects: names })}` : text;
+  // One agent waits in them all: that one's words; several: the agents'.
+  const whose = new Set(elsewhere.value.map(whoseIn));
+  const waiting: Key = whose.size > 1 ? "board.picker.waiting.agents" : agentKey("board.picker.waiting", [...whose][0] ?? "claude");
+  return names ? `${text} · ${t(waiting, { projects: names })}` : text;
 });
 
 /* ---------- the list ---------- */

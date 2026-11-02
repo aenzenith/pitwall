@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { agentKey, namesAgent, rowAgent } from "../lib/format";
 import { t } from "../lib/i18n";
 import type { Project } from "../lib/types";
 
@@ -14,11 +15,13 @@ const kind = computed(() => {
   return "idle";
 });
 
-/** What VoiceOver reads: the server's state, and Claude's when its corner dot shows. */
+/** What VoiceOver reads: the server's state, and Claude's when its corner dot shows (the agent's
+ * whose state it is, once the places name agents). */
 const label = computed(() => {
   const status = t(`status.${props.project.status}`);
-  if (props.project.claude) return t("status.claudeWaiting", { status });
-  if (props.project.claudeWorking) return t("status.claudeWorking", { status });
+  const agent = namesAgent.value ? (rowAgent(props.project) ?? "claude") : "claude";
+  if (props.project.claude) return t(agentKey("status.claudeWaiting", agent), { status });
+  if (props.project.claudeWorking) return t(agentKey("status.claudeWorking", agent), { status });
   return status;
 });
 </script>

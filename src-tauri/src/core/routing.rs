@@ -54,6 +54,8 @@ pub enum Origin {
     Link,
     /// Claude, over the team radio.
     Claude,
+    /// Codex, over its team radio.
+    Codex,
     /// The supervisor, after a crash or a hang.
     Crash,
     /// `pitwall start | restart` at a terminal, which asks there itself (`cli.rs`).

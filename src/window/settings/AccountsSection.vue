@@ -2,12 +2,12 @@
 import { computed, onMounted, ref } from "vue";
 
 import Icon from "../../components/Icon.vue";
-import { accountName, accounts, switchAccount } from "../../lib/accounts";
+import { accountName, accountsOf, switchAccount } from "../../lib/accounts";
 import { t } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
 import { isMac, isWindows } from "../../lib/platform";
 import { api } from "../../lib/store";
-import type { ClaudeAccount } from "../../lib/types";
+import type { Agent, ClaudeAccount } from "../../lib/types";
 import RenameDialog from "../RenameDialog.vue";
 import AccountAddDialog from "./AccountAddDialog.vue";
 import AccountRemoveDialog from "./AccountRemoveDialog.vue";
@@ -20,8 +20,14 @@ import AccountRemoveDialog from "./AccountRemoveDialog.vue";
  * never with the form (`@change.stop`, `@submit.stop`: the dialogs' own forms).
  *
  * `startAdd`: the Fuel page's "Add account" opened Settings: the add dialog comes up at once.
+ * `agent`: whose accounts (none: Claude's, as before); Codex's in Settings › Codex, each a home
+ * of its own (`CODEX_HOME`).
  */
-const props = defineProps<{ startAdd?: boolean }>();
+const props = defineProps<{ startAdd?: boolean; agent?: Agent }>();
+
+const agent: Agent = props.agent ?? "claude";
+const other = agent !== "claude";
+const accounts = computed(() => accountsOf(agent));
 
 const error = ref("");
 const adding = ref(false);
@@ -45,7 +51,7 @@ function rowMenu(event: MouseEvent, account: ClaudeAccount): void {
   void menu.popup(event, [
     { text: t("accounts.menu.use"), enabled: !account.inUse && !account.missing, action: () => void use(account) },
     { text: t("accounts.menu.rename"), action: () => (renaming.value = account) },
-    { text: revealLabel.value, enabled: !account.missing, action: () => void act(() => api.accountReveal(account.id)) },
+    { text: revealLabel.value, enabled: !account.missing, action: () => void act(() => (other ? api.agentAccountReveal(agent, account.id) : api.accountReveal(account.id))) },
     // The main account is never removed: no line for it.
     ...(account.main ? [] : ["separator" as const, { text: t("accounts.menu.remove"), action: () => (removing.value = account) }]),
   ]);
@@ -62,18 +68,18 @@ async function act(run: () => Promise<unknown>): Promise<void> {
 }
 
 function use(account: ClaudeAccount): Promise<void> {
-  return act(() => switchAccount(account.id));
+  return act(() => switchAccount(account.id, agent));
 }
 
 function rename(account: ClaudeAccount, name: string): void {
-  void act(() => api.accountRename(account.id, name));
+  void act(() => (other ? api.agentAccountRename(agent, account.id, name) : api.accountRename(account.id, name)));
 }
 
 async function setSync(account: ClaudeAccount, event: Event): Promise<void> {
   const box = event.target as HTMLInputElement;
   error.value = "";
   try {
-    await api.accountSetSync(account.id, box.checked);
+    await (other ? api.agentAccountSetSync(agent, account.id, box.checked) : api.accountSetSync(account.id, box.checked));
   } catch (reason) {
     // Not taken: the switch shows what is stored again.
     box.checked = account.sync;
@@ -92,8 +98,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="section accounts" role="group" aria-labelledby="accounts-section" @change.stop @submit.stop>
-    <div id="accounts-section" class="section-label">{{ t("accounts.title") }}</div>
+  <div class="section accounts" role="group" :aria-labelledby="other ? `accounts-section-${agent}` : 'accounts-section'" @change.stop @submit.stop>
+    <div :id="other ? `accounts-section-${agent}` : 'accounts-section'" class="section-label">{{ t("accounts.title") }}</div>
     <!-- The main account is there all the same with none added; nothing before the core says. -->
     <div v-if="accounts.length" class="list">
       <div v-for="account in accounts" :key="account.id" :class="['account', { missing: account.missing }]" @contextmenu.prevent="rowMenu($event, account)">
@@ -116,7 +122,7 @@ onMounted(() => {
     <button type="button" class="control add" @click="openAdd"><Icon name="plus" :size="13" />{{ t("accounts.addMenu") }}</button>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <AccountAddDialog v-if="adding" @close="adding = false" />
+    <AccountAddDialog v-if="adding" :agent="other ? agent : undefined" @close="adding = false" />
     <RenameDialog
       v-if="renaming"
       :name="accountName(renaming)"
@@ -125,7 +131,7 @@ onMounted(() => {
       @save="(name) => renaming && rename(renaming, name)"
       @close="renaming = null"
     />
-    <AccountRemoveDialog v-if="removing" :account="removing" @close="removing = null" />
+    <AccountRemoveDialog v-if="removing" :account="removing" :agent="other ? agent : undefined" @close="removing = null" />
   </div>
 </template>
 

@@ -2,9 +2,9 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 
 import Spinner from "../../components/Spinner.vue";
-import { accountById, accountName, accountNote, dismissNote, syncAccount } from "../../lib/accounts";
+import { accountByIdOf, accountName, accountNote, dismissNote, syncAccount } from "../../lib/accounts";
 import { t } from "../../lib/i18n";
-import type { SyncReport, SyncServer } from "../../lib/types";
+import type { Agent, AgentSyncReport, AgentSyncServer } from "../../lib/types";
 import SyncDetails from "./SyncDetails.vue";
 
 /**
@@ -15,17 +15,18 @@ import SyncDetails from "./SyncDetails.vue";
  * is left (lib/accounts). It takes no room: nothing on the page moves as it comes and goes.
  */
 
-function named(report: SyncReport | null, state: SyncServer["state"]): string[] {
+function named(report: AgentSyncReport | null, state: AgentSyncServer["state"]): string[] {
   return (report?.servers ?? []).filter((server) => server.state === state).map((server) => server.name);
 }
 
 const shown = computed(() => {
   const note = accountNote.value;
   if (!note || note.state === "switching") return null;
-  const account = accountById(note.id);
+  const agent: Agent = note.agent ?? "claude";
+  const account = accountByIdOf(agent, note.id);
   if (!account) return null;
   const name = accountName(account);
-  const first = note.switched ? t("accounts.note.switched", { name }) : null;
+  const first = note.switched ? t(agent === "codex" ? "accounts.note.switched.codex" : "accounts.note.switched", { name }) : null;
   let rest: string | null = null;
   switch (note.state) {
     case "syncing":
@@ -33,7 +34,10 @@ const shown = computed(() => {
       break;
     case "done": {
       const synced = named(note.report, "synced").length;
-      rest = synced ? t("accounts.note.synced", { count: synced }) : first ? null : t("accounts.note.same");
+      // Codex's: servers its CLI can't add are named, never said to match.
+      const cantCopy = named(note.report, "cantCopy");
+      const left = cantCopy.length ? t("accounts.note.cantCopy", { names: cantCopy.join(", ") }) : null;
+      rest = [synced ? t("accounts.note.synced", { count: synced }) : first || left ? null : t("accounts.note.same"), left].filter(Boolean).join(" ") || null;
       break;
     }
     case "failed": {
@@ -46,14 +50,14 @@ const shown = computed(() => {
       break;
   }
   if (!first && !rest) return null;
-  return { id: note.id, name, state: note.state, text: [first, rest].filter(Boolean).join(" "), report: note.report };
+  return { id: note.id, agent, name, state: note.state, text: [first, rest].filter(Boolean).join(" "), report: note.report };
 });
 
 /** The details of a differing account's servers. */
-const details = ref<{ id: string; name: string; report: SyncReport | null } | null>(null);
+const details = ref<{ id: string; agent: Agent; name: string; report: AgentSyncReport | null } | null>(null);
 
-function sync(id: string): void {
-  void syncAccount(id);
+function sync(id: string, agent: Agent): void {
+  void syncAccount(id, agent);
 }
 
 // Seen here: what waits on the user goes with the page.
@@ -66,13 +70,13 @@ onBeforeUnmount(dismissNote);
       <Spinner v-if="shown.state === 'syncing'" :size="12" />
       <span class="text">{{ shown.text }}</span>
       <template v-if="shown.state === 'differs'">
-        <button type="button" class="link" @click="details = { id: shown.id, name: shown.name, report: shown.report }">{{ t("accounts.note.details") }}</button>
-        <button type="button" class="link" @click="sync(shown.id)">{{ t("accounts.note.sync") }}</button>
+        <button type="button" class="link" @click="details = { id: shown.id, agent: shown.agent, name: shown.name, report: shown.report }">{{ t("accounts.note.details") }}</button>
+        <button type="button" class="link" @click="sync(shown.id, shown.agent)">{{ t("accounts.note.sync") }}</button>
       </template>
-      <button v-else-if="shown.state === 'failed'" type="button" class="link" @click="sync(shown.id)">{{ t("accounts.retry") }}</button>
+      <button v-else-if="shown.state === 'failed'" type="button" class="link" @click="sync(shown.id, shown.agent)">{{ t("accounts.retry") }}</button>
     </div>
   </Transition>
-  <SyncDetails v-if="details" :id="details.id" :name="details.name" :report="details.report" @close="details = null" />
+  <SyncDetails v-if="details" :id="details.id" :agent="details.agent" :name="details.name" :report="details.report" @close="details = null" />
 </template>
 
 <style scoped>

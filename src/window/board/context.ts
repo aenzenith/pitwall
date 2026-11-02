@@ -1,6 +1,7 @@
 import { inject, type InjectionKey } from "vue";
 
 import type { MenuPoint } from "../../lib/nativeMenu";
+import type { Agent } from "../../lib/types";
 
 /** What a card can ask the Board page to do; the page provides it, its cards inject it. */
 export type BoardActions = {
@@ -10,6 +11,8 @@ export type BoardActions = {
   edit: (id: string) => void;
   menu: (at: MenuPoint, id: string) => void;
   give: (id: string, mode: "new" | "plan") => void;
+  /** The agent a plain give sends it to: its project's (lib/start `projectAgent`). */
+  agentFor: (id: string) => Agent;
   /** Given again, with the model and in the mode it was started with last. */
   giveAgain: (id: string) => void;
   /** The panel of ways to give it (the model, the mode, when), under its button; a second ask

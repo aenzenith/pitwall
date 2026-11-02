@@ -3,14 +3,14 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { watch } from "vue";
+import { computed, watch } from "vue";
 
-import { accountLabel } from "./accounts";
+import { accountLabel, accountName, codexAccounts } from "./accounts";
 import { t } from "./i18n";
 import { isLinux, isMac, isWindows, keys, primary, terminalChord } from "./platform";
 import { api } from "./store";
 import { resolvedTheme, themeAt, type ResolvedTheme } from "./theme";
-import type { TerminalView } from "./types";
+import type { ClaudeAccount, TerminalView } from "./types";
 
 /**
  * The window's terminal views. Each open project terminal gets one xterm, made the first time
@@ -317,10 +317,33 @@ export function dispose(id: number): void {
   views.delete(id);
 }
 
+/* ---------- Codex's accounts, for its tabs ---------- */
+
+/** Codex's accounts (lib/accounts `codexAccounts`: the Fuel payload's, as the core sends them while
+ * Codex is on), the main one first, then each added in the order added, the one new Codex
+ * sessions use marked; none sent yet is the main account alone. */
+export { codexAccounts };
+
+/** More than Codex's main account: "+"'s Codex account section and a Codex tab's badge show only
+ * then. */
+export const severalCodexAccounts = computed(() => codexAccounts.value.length > 1);
+
+export function codexAccountName(account: ClaudeAccount): string {
+  return accountName(account);
+}
+
+/** The name a tab shows beside its own: the account its agent runs with (a Codex tab's a Codex
+ * account, any other's a Claude account), when it is another than the main one and still listed. */
+export function tabAccountLabel(view: TerminalView | undefined): string | null {
+  if (view?.kind !== "codex") return accountLabel(view?.account);
+  const account = view.account ? codexAccounts.value.find((each) => each.id === view.account) : null;
+  return account && !account.main ? codexAccountName(account) : null;
+}
+
 /** A terminal's tooltip, on its tab and its pane's head: what they show short said whole (the
  * account it runs with, an administrator's shield), then how to rename it. */
 export function terminalTip(view: TerminalView | undefined): string {
-  const account = accountLabel(view?.account);
+  const account = tabAccountLabel(view);
   return [account && t("terminal.accountTip", { name: account }), view?.elevated && t("terminal.adminTip"), t("terminal.renameHint")]
     .filter(Boolean)
     .join("\n");

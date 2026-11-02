@@ -73,6 +73,7 @@ fn paddock() -> Paddock {
         CoreConfig {
             registry_dir: tmp.path().join("registry"),
             claude_dir: tmp.path().join("claude").join("projects"),
+            codex_home: tmp.path().join("codex"),
             settings_file: tmp.path().join("config").join("settings.json"),
             claude_settings: tmp.path().join("claude").join("settings.json"),
             legacy_registries: Vec::new(),

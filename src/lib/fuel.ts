@@ -276,3 +276,9 @@ export function moneyText(amount: number, currency: string | null, lang: string)
 export function compactText(count: number, lang: string): string {
   return new Intl.NumberFormat(lang, { notation: "compact", maximumFractionDigits: 1 }).format(count);
 }
+
+/** When a reading was made, as "Last read" says it: the time alone today, the day and time before
+ * (Codex's limits are as old as its last request). */
+export function readClock(at: number, now: number, lang: string): string {
+  return new Date(at).toDateString() === new Date(now).toDateString() ? clockText(at, lang) : dayClockText(at, lang);
+}

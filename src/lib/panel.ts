@@ -1,5 +1,7 @@
 import { ref, watch, type Ref } from "vue";
 
+import type { Agent } from "./types";
+
 /**
  * The panel along the window's bottom (window/TerminalPanel), under every page: one project's
  * outputs (the dev server, its commands) and terminals as tabs, with one height and one collapsed
@@ -170,13 +172,14 @@ export function revealTab(path: string, id: number): void {
 
 /** A new tab asked for from a page (the Sessions page's "Open a Claude terminal", the Fuel page's
  * "Open Claude with <account>"): the panel's project becomes `path` and opens it as its "+" would;
- * `account`, with that Claude account. Whoever opens it clears it. */
-export const openRequest = ref<{ path: string; claude: boolean; account: string | null; at: number } | null>(null);
+ * `account`, with that account of the agent's; `agent`, the agent's tab it opens (none: Claude's).
+ * Whoever opens it clears it. */
+export const openRequest = ref<{ path: string; claude: boolean; account: string | null; agent?: Agent; at: number } | null>(null);
 
-export function openInPanel(path: string, claude: boolean, account: string | null = null): void {
+export function openInPanel(path: string, claude: boolean, account: string | null = null, agent: Agent = "claude"): void {
   panelAsks.value++;
   panelPath.value = path;
-  openRequest.value = { path, claude, account, at: Date.now() };
+  openRequest.value = { path, claude, account, agent, at: Date.now() };
 }
 
 /** The size a new tab gets in the panel, measured by the panel (`register`): the Board page gives

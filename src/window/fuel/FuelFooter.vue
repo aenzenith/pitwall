@@ -8,7 +8,7 @@ const shown = ref(false);
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { modelName, moneyText, percentText } from "../../lib/fuel";
+import { modelName, moneyText, percentText, readClock } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import type { SpendToday, UsageExtra, UsageWindow } from "../../lib/types";
 import AlertChip from "./AlertChip.vue";
@@ -18,9 +18,10 @@ import LimitList from "./LimitList.vue";
  * Under the cluster, on the page's lower ground below a line, one muted line: Extra Usage, the used
  * limits without a dial (with a button that lists them), today's top model; and the 90 %
  * notification chip across from them. `rest`: the used limits
- * without a dial; `extraOnGauge`: Extra Usage has one.
+ * without a dial; `extraOnGauge`: Extra Usage has one. `lastRead`: Codex's (whose limits are as
+ * fresh as its last request), first on the line in place of Extra Usage: when they were read.
  */
-const props = defineProps<{ rest: UsageWindow[]; extra: UsageExtra | null; extraOnGauge: boolean; today: SpendToday | null; limits: boolean; stale: boolean }>();
+const props = defineProps<{ rest: UsageWindow[]; extra: UsageExtra | null; extraOnGauge: boolean; today: SpendToday | null; limits: boolean; stale: boolean; lastRead?: { at: number; now: number } | null }>();
 
 const LIST_ID = "fuel-limits";
 
@@ -57,12 +58,15 @@ const unpriced = computed(() => {
 });
 
 const canList = computed(() => props.rest.length > 0 || !!listedExtra.value);
+
+const lastReadText = computed(() => (props.lastRead ? t("fuel.foot.lastRead.codex", { time: readClock(props.lastRead.at, props.lastRead.now, language.value) }) : ""));
 </script>
 
 <template>
   <div class="foot">
     <div class="line">
       <p class="facts">
+        <span v-if="lastReadText" class="fact">{{ lastReadText }}</span>
         <span v-if="extraText" class="fact">{{ extraText }}</span>
         <span v-if="rest.length" class="fact">{{ t("fuel.foot.more", { count: rest.length }) }}</span>
         <button v-if="canList" type="button" class="toggle" :aria-expanded="shown" :aria-controls="LIST_ID" @click="shown = !shown">

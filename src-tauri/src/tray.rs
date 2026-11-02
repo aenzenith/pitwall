@@ -9,8 +9,9 @@ use tauri::{
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
+use crate::agent::Agent;
 use crate::claude::SessionPhase;
-use crate::core::Snapshot;
+use crate::core::{agent_key, Snapshot};
 use crate::fuel::BarFuel;
 use crate::i18n::t;
 use crate::{windows, AppState, MAIN, POPOVER, SWITCHER};
@@ -533,8 +534,8 @@ pub fn set_dock_visible<R: Runtime>(app: &AppHandle<R>, visible: bool) {
 static ICON: Mutex<Option<(bool, bool, bool)>> = Mutex::new(None);
 
 /// The text beside the icon, each part there only while Settings shows it and there is something
-/// to count: the running dev servers, the Claude sessions at work, and Claude's fuel with its
-/// share as written (`74%`).
+/// to count: the running dev servers, the agents' sessions at work (every agent that is on, in one
+/// count), and Claude's fuel with its share as written (`74%`).
 #[derive(Clone, PartialEq, Eq)]
 struct Title {
     servers: Option<String>,
@@ -594,8 +595,12 @@ fn draw<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
         Some((_, left)) => t!("core.tray.tooltipFuel", running = snapshot.running, waiting = snapshot.waiting, left = left),
         None => t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting),
     };
-    if working > 0 {
-        tooltip = format!("{tooltip} · {}", t!("core.tray.working", count = working));
+    // Each agent's sessions at work, named: the count beside the icon is theirs together.
+    for agent in Agent::ALL {
+        let at_work = snapshot.projects.iter().flat_map(|project| &project.claude_sessions).filter(|session| session.agent == agent && matches!(session.phase, SessionPhase::Working)).count();
+        if at_work > 0 {
+            tooltip = format!("{tooltip} · {}", t!(&agent_key(agent, "core.tray.working"), count = at_work));
+        }
     }
     // After the title: setting the tooltip also fits the icon's click area to the item's new width.
     let _ = tray.set_tooltip(Some(tooltip));

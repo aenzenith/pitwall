@@ -22,7 +22,7 @@ use std::sync::mpsc;
 use super::radio::{last_lines, saved, secret, Stranger, Strangers, HELLO_LIMIT};
 use super::routing::{start_done, to_stop};
 use super::*;
-use crate::claude::{SessionState, TurnKind};
+use crate::claude::{SessionPhase, SessionState, Turn, TurnKind};
 use crate::cli::{line_file, Agreed, Ask, Call, ClaudeAt, Companion, LineFile, Row, Said, Tone, LINE_VERSION, SUPPORTED};
 use crate::mcp::{receive, same_secret, send, Hello, Timed, Welcome};
 
@@ -256,25 +256,56 @@ fn server_text(project: &ProjectView, now: u64) -> String {
 }
 
 /// What Claude is at in a project, and the same in the app's words. A turn that waits on the
-/// user comes before one that works; a permission names its tool and nothing else of it.
+/// user comes before one that works; a permission names its tool and nothing else of it. With
+/// Claude's sessions alone in it, as the list has it; beside another agent's, from Claude's own.
 fn claude_at(project: &ProjectView, sessions: &[SessionState], now: u64) -> Option<(ClaudeAt, String)> {
-    let Some(turn) = project.claude else {
-        let working = ClaudeAt { state: "working".into(), tool: None, since: None };
-        return project.claude_working.then(|| (working, t!("core.cli.claude.working")));
+    if !sessions.iter().any(|session| session.path == project.path && session.agent != Agent::Claude) {
+        return agent_at(Agent::Claude, project.claude, project.claude_working, project, sessions, now);
+    }
+    let (turn, working) = turns_of(Agent::Claude, project, sessions);
+    agent_at(Agent::Claude, turn, working, project, sessions, now)
+}
+
+/// The same of Codex, from its own sessions in the project; none while it has none there.
+fn codex_at(project: &ProjectView, sessions: &[SessionState], now: u64) -> Option<(ClaudeAt, String)> {
+    let (turn, working) = turns_of(Agent::Codex, project, sessions);
+    agent_at(Agent::Codex, turn, working, project, sessions, now)
+}
+
+/// `agent`'s turn in the project that waits on the user (the newest, of several), and whether one
+/// of its sessions there works: as the list tells them, of that agent's sessions only.
+fn turns_of(agent: Agent, project: &ProjectView, sessions: &[SessionState]) -> (Option<Turn>, bool) {
+    let own = || sessions.iter().filter(|session| session.path == project.path && session.agent == agent);
+    let turn = own().filter(|session| session.phase == SessionPhase::Waiting).filter_map(|session| session.turn).max_by_key(|turn| turn.at);
+    (turn, own().any(|session| session.phase == SessionPhase::Working))
+}
+
+/// What `agent` is at, from its turn that waits (`turn`) or its working (`working`), in words
+/// that name it.
+fn agent_at(agent: Agent, turn: Option<Turn>, working: bool, project: &ProjectView, sessions: &[SessionState], now: u64) -> Option<(ClaudeAt, String)> {
+    let codex = agent == Agent::Codex;
+    let Some(turn) = turn else {
+        let working_text = t!(if codex { "core.cli.claude.working.codex" } else { "core.cli.claude.working" });
+        let at = ClaudeAt { state: "working".into(), tool: None, since: None };
+        return working.then_some((at, working_text));
     };
 
     let waited = span(now.saturating_sub(turn.at));
     let (state, tool, said) = match turn.kind {
         TurnKind::Permission => {
-            let tool = sessions.iter().find(|session| session.path == project.path && session.turn == Some(turn)).and_then(|session| session.tool.clone());
+            let tool = sessions
+                .iter()
+                .find(|session| session.path == project.path && session.agent == agent && session.turn == Some(turn))
+                .and_then(|session| session.tool.clone());
+            let permission = t!(if codex { "core.cli.claude.permission.codex" } else { "core.cli.claude.permission" });
             let said = match &tool {
-                Some(tool) => format!("{} · {tool}", t!("core.cli.claude.permission")),
-                None => t!("core.cli.claude.permission"),
+                Some(tool) => format!("{permission} · {tool}"),
+                None => permission,
             };
             ("permission", tool, said)
         }
-        TurnKind::Asking => ("asking", None, format!("{} · {waited}", t!("core.cli.claude.asking"))),
-        TurnKind::Finished => ("finished", None, format!("{} · {waited}", t!("core.cli.claude.finished"))),
+        TurnKind::Asking => ("asking", None, format!("{} · {waited}", t!(if codex { "core.cli.claude.asking.codex" } else { "core.cli.claude.asking" }))),
+        TurnKind::Finished => ("finished", None, format!("{} · {waited}", t!(if codex { "core.cli.claude.finished.codex" } else { "core.cli.claude.finished" }))),
     };
     Some((ClaudeAt { state: state.into(), tool, since: Some(turn.at) }, said))
 }
@@ -594,6 +625,7 @@ impl Core {
             .iter()
             .map(|project| {
                 let (claude, claude_text) = claude_at(project, &sessions, now).unzip();
+                let (codex, codex_text) = codex_at(project, &sessions, now).unzip();
                 Row {
                     name: project.name.clone(),
                     status: project.status.to_string(),
@@ -604,6 +636,8 @@ impl Core {
                     claude,
                     server_text: server_text(project, now),
                     claude_text: claude_text.unwrap_or_default(),
+                    codex,
+                    codex_text: codex_text.unwrap_or_default(),
                 }
             })
             .collect();

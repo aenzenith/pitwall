@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import ClaudeLogo from "../../components/ClaudeLogo.vue";
+import AgentMark from "../../components/AgentMark.vue";
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
 import StatusIcon from "../../components/StatusIcon.vue";
-import { COLUMN_ICONS, COLUMN_LABELS, LANE_LIMIT, laneDrawn, type CardStatus, type Lane } from "../../lib/board";
+import { agentsOn, multiAgent } from "../../lib/agents";
+import { COLUMN_ICONS, COLUMN_LABELS, columnLabel, LANE_LIMIT, laneDrawn, type CardStatus, type Lane } from "../../lib/board";
+import { projectAgent } from "../../lib/start";
 import { gitLine, phase } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import type { MenuPoint } from "../../lib/nativeMenu";
@@ -79,10 +81,13 @@ function rehome(event: MouseEvent, path: string): void {
       <span>{{ t("window.col.project") }}</span>
       <span v-for="cell in CELLS" :key="cell" class="blanes-col">
         <span class="blanes-mark">
-          <ClaudeLogo v-if="cell === 'claude'" :size="11" />
+          <template v-if="cell === 'claude'">
+            <Icon v-if="multiAgent" name="sparkles" :size="13" />
+            <AgentMark v-else :agent="agentsOn[0] ?? 'claude'" :size="11" />
+          </template>
           <Icon v-else :name="COLUMN_ICONS[cell]" :size="13" />
         </span>
-        <span class="blanes-name">{{ t(COLUMN_LABELS[cell]) }}</span>
+        <span class="blanes-name">{{ t(columnLabel(cell, agentsOn)) }}</span>
       </span>
       <span class="blanes-col blanes-done">
         <span class="blanes-mark"><Icon :name="COLUMN_ICONS.done" :size="13" /></span>
@@ -123,7 +128,7 @@ function rehome(event: MouseEvent, path: string): void {
           </div>
 
           <div v-for="(cell, x) in CELLS" :key="cell" class="blane-cell" :data-colx="x">
-            <div v-if="lane[cell].length" class="blane-list" role="list" :aria-label="`${lane.name} · ${t(COLUMN_LABELS[cell])}`">
+            <div v-if="lane[cell].length" class="blane-list" role="list" :aria-label="`${lane.name} · ${t(columnLabel(cell, agentsOn))}`">
               <BoardCard
                 v-for="card in laneDrawn(lane, cell)"
                 :key="card.id"
@@ -148,12 +153,12 @@ function rehome(event: MouseEvent, path: string): void {
                 v-if="lane.next"
                 type="button"
                 class="blane-give"
-                :title="t('board.giveNextTitle', { title: lane.next.title })"
+                :title="t(projectAgent(lane.project) === 'codex' ? 'board.giveNextTitle.codex' : 'board.giveNextTitle', { title: lane.next.title })"
                 :disabled="busy[lane.next.id] === 'give'"
                 @click="emit('giveNext', lane.next.id)"
               >
                 <Spinner v-if="busy[lane.next.id] === 'give'" :size="10" />
-                <ClaudeLogo v-else :size="11" />
+                <AgentMark v-else :agent="projectAgent(lane.project)" :size="11" />
                 <span class="blane-give-text">{{ t("board.giveNext") }}</span>
               </button>
             </div>

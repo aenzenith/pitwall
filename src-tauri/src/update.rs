@@ -346,6 +346,10 @@ pub fn restored(app: &AppHandle, restored: &Restored) {
     }
 
     let title = t!("update.restored.title", version = restored.version);
-    let body = t!("update.restored.body", servers = restored.servers, terminals = restored.terminals, sessions = restored.sessions);
+    let body = if restored.codex == 0 {
+        t!("update.restored.body", servers = restored.servers, terminals = restored.terminals, sessions = restored.sessions)
+    } else {
+        t!("update.restored.body.codex", servers = restored.servers, terminals = restored.terminals, sessions = restored.sessions, codex = restored.codex)
+    };
     crate::notify::post(NOTIFICATION_ID.to_string(), title, body, None);
 }

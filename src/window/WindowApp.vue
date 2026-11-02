@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import AgentMark from "../components/AgentMark.vue";
 import ClaudeDot from "../components/ClaudeDot.vue";
 import Icon from "../components/Icon.vue";
 import Marquee from "../components/Marquee.vue";
@@ -11,7 +12,9 @@ import Spinner from "../components/Spinner.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { connectAccounts } from "../lib/accounts";
-import { claudeState, gitLine, meta } from "../lib/format";
+import { agentOf } from "../lib/agents";
+import { fuelPicked } from "../lib/codexFuel";
+import { claudeState, gitLine, meta, namesAgent, rowAgent } from "../lib/format";
 import { isLow, isStale, leadWindow, left, percentText } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
@@ -28,7 +31,7 @@ import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
 import { applyDrop, claudeNotes, createTeam, deleteTeam, leaveTeam, looseProjects, membersOf, moveToTeam, nudgeTeam, orderTeams, renameTeam, startTeam, stopTeam, teamAsk, teamOf, teams, teamState } from "../lib/teams";
-import type { Card, Project, Team } from "../lib/types";
+import type { Agent, Card, Project, Team } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
 import DepsView from "./DepsView.vue";
@@ -50,6 +53,7 @@ import TeamDeleteDialog from "./team/TeamDeleteDialog.vue";
 import TeamHead from "./team/TeamHead.vue";
 import TeamNameDialog from "./team/TeamNameDialog.vue";
 import TitleBar from "./TitleBar.vue";
+import AgentFound from "./settings/AgentFound.vue";
 
 const filter = ref<Filter>("all");
 /** The project list, the track they run on, the day's timeline, Claude's sessions, the board of
@@ -154,10 +158,13 @@ const settingsOpen = ref(false);
 const settingsTab = ref<"claude" | "track" | "notifications" | undefined>(undefined);
 type SettingsPart = "phone" | "accounts" | "addAccount";
 const settingsPart = ref<SettingsPart | undefined>(undefined);
+/** With the tab Agents, whose part it opens on: the Fuel page asks for Codex's with Codex picked. */
+const settingsAgent = ref<Agent | undefined>(undefined);
 
-function openSettings(tab?: "claude" | "track" | "notifications", part?: SettingsPart): void {
+function openSettings(tab?: "claude" | "track" | "notifications", part?: SettingsPart, agent?: Agent): void {
   settingsTab.value = tab;
   settingsPart.value = part;
+  settingsAgent.value = agent;
   settingsOpen.value = true;
 }
 
@@ -797,6 +804,12 @@ async function revealTerminal(path: string, id: number): Promise<void> {
 
 /** The Sessions page's "Open a Claude terminal" with no project of its own: one, in the terminal
  * panel, for the project selected in the list. */
+/** Whenever the window comes back, the agents' home folders are looked for again (one look at a
+ * folder each): Codex may have been installed meanwhile, and the found notice tells of it. */
+function lookForAgents(): void {
+  void api.lookForAgents().catch(() => undefined);
+}
+
 function openClaudeTerminal(): void {
   const project = selected.value ?? panelProject.value;
   if (project) openInPanel(project.path, true);
@@ -804,12 +817,17 @@ function openClaudeTerminal(): void {
 
 onMounted(async () => {
   window.addEventListener("keydown", onKey);
+  window.addEventListener("focus", lookForAgents);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
   unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
   // Opened from the popover, the switcher or the mini tower where Settings › Projects says Files.
   unlistenFiles = await listen<{ path: string }>("reveal-files", (event) => revealFiles(event.payload.path));
   // A click on the 90 % notification: the Fuel page.
-  unlistenFuelReveal = await listen("reveal-fuel", () => (view.value = "fuel"));
+  // Codex's alert opens it on Codex.
+  unlistenFuelReveal = await listen<{ agent?: Agent } | null>("reveal-fuel", (event) => {
+    fuelPicked.value = agentOf(event.payload?.agent);
+    view.value = "fuel";
+  });
   // Bringing up a Claude session that runs in one of Pitwall's terminals: that terminal.
   unlistenTerminal = await listen<{ path: string; id: number }>("reveal-terminal", (event) => void revealTerminal(event.payload.path, event.payload.id));
   // Opened from outside the window where Settings › Projects says its terminal (lib/open).
@@ -819,7 +837,11 @@ onMounted(async () => {
     pickOnPage(event.payload.path);
   });
   // `/` in the switcher: one of the sidebar's pages.
-  unlistenPage = await listen<{ page: Page; tab?: "notifications" }>("reveal-page", (event) => revealPage(event.payload.page, event.payload.tab));
+  // A fuel alert's line in the list of what was missed opens the Fuel page on its agent.
+  unlistenPage = await listen<{ page: Page; tab?: "notifications"; agent?: Agent }>("reveal-page", (event) => {
+    if (event.payload.agent) fuelPicked.value = agentOf(event.payload.agent);
+    revealPage(event.payload.page, event.payload.tab);
+  });
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
   void api.windowReady();
   const win = getCurrentWindow();
@@ -832,6 +854,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
+  window.removeEventListener("focus", lookForAgents);
   unlistenReveal?.();
   unlistenProject?.();
   unlistenFiles?.();
@@ -999,7 +1022,7 @@ function server(project: Project): string {
     <div class="page" :style="{ marginBottom: panelShown ? `${COLLAPSED_HEIGHT}px` : undefined, '--panel-over': `${panelOver}px` }">
     <DayView v-if="view === 'day'" />
     <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
-    <FuelView v-else-if="view === 'fuel'" :terminal-project="panelShown ? (panelProject?.path ?? null) : null" @open-settings="(part) => openSettings('claude', part)" />
+    <FuelView v-else-if="view === 'fuel'" :terminal-project="panelShown ? (panelProject?.path ?? null) : null" @open-settings="(part, agent) => openSettings('claude', part, agent)" />
     <SessionsView
       v-else-if="view === 'sessions'"
       :claude-project="selected?.name ?? null"
@@ -1028,6 +1051,9 @@ function server(project: Project): string {
           </label>
         </div>
 
+        <!-- An agent found on this Mac and on: told once, under the page's head (settings/AgentFound). -->
+        <AgentFound :hidden="setupOpen" />
+
         <span id="rows-keys" class="sr-only">
           {{ t("common.rowKeys") }}
           <template v-if="grouped">{{ t("team.headKeys", { up: keys("Alt+ArrowUp"), down: keys("Alt+ArrowDown") }) }}</template>
@@ -1039,7 +1065,8 @@ function server(project: Project): string {
             <span role="columnheader">{{ t("window.col.project") }}</span>
             <span role="columnheader">{{ t("window.col.branch") }}</span>
             <span role="columnheader">{{ t("window.col.server") }}</span>
-            <span role="columnheader">{{ t("window.col.claude") }}</span>
+            <!-- Claude's column while it is the only agent on, as it always was; the agents' with more. -->
+            <span role="columnheader">{{ t(namesAgent ? "window.col.agent" : "window.col.claude") }}</span>
             <span role="columnheader" :aria-label="t('window.col.actions')"></span>
           </div>
           <!-- Heads, rows and the line of an empty team are all the list's own children, one under
@@ -1117,7 +1144,11 @@ function server(project: Project): string {
                 </span>
                 <span :class="['cell-git', { dirty: project.git?.changes }]" role="gridcell">{{ gitLine(project.git) || "—" }}</span>
                 <span :class="['cell-server', { bad: project.status === 'crashed', on: project.status === 'running' }]" role="gridcell"><Marquee :text="server(project)" /></span>
-                <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking }]" role="gridcell"><Marquee :text="claudeState(project, now) || '—'" /></span>
+                <!-- With more than one agent on, whose state it is: the mark of the session it speaks of. -->
+                <span :class="['cell-claude', { hot: project.claude, live: !project.claude && project.claudeWorking, marked: namesAgent && rowAgent(project) }]" role="gridcell">
+                  <AgentMark v-if="namesAgent && rowAgent(project)" :agent="rowAgent(project) ?? 'claude'" :size="12" />
+                  <Marquee :text="claudeState(project, now) || '—'" />
+                </span>
                 <span class="cell-actions" role="gridcell" data-no-drag @click.stop @dblclick.stop>
                   <button
                     type="button"
@@ -1208,7 +1239,7 @@ function server(project: Project): string {
     <!-- The selected project's files, floating over whatever page is up (⇧⌘E, the details' button). -->
     <FilesWindows />
 
-    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" :start-part="settingsPart" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" @open-whats-new="whatsNewOpen = true" />
+    <SettingsView v-if="settingsOpen" :start-tab="settingsTab" :start-part="settingsPart" :start-agent="settingsAgent" @close="settingsOpen = false" @open-update="updateOpen = true" @open-setup="openSetup" @open-whats-new="whatsNewOpen = true" />
     <!-- Opened from Settings › About too: the later dialog comes up over that one. -->
     <UpdateDialog v-if="updateOpen && update" :update="update" @close="updateOpen = false" />
     <!-- What was open at the last quit, asked once; then this version's notes, which Settings
@@ -2195,6 +2226,13 @@ function server(project: Project): string {
 
 .cell-claude.live {
   color: var(--text-muted);
+}
+
+/* The agent's mark before its state, the words giving way. */
+.cell-claude.marked {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .cell-git {

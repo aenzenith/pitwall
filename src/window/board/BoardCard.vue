@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import ClaudeLogo from "../../components/ClaudeLogo.vue";
+import AgentMark from "../../components/AgentMark.vue";
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
+import { agentName } from "../../lib/agents";
 import { clock } from "../../lib/day";
-import type { CardStatus } from "../../lib/board";
+import { namesAgent } from "../../lib/format";
+import { cardAgent, type CardStatus } from "../../lib/board";
 import { moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { places, waitText } from "../../lib/line";
 import { stamp } from "../../lib/period";
 import { keys } from "../../lib/platform";
 import { useGrow } from "../../lib/slide";
-import { choiceOf, MODE_LABELS, MODEL_LABELS } from "../../lib/start";
-import type { Card, SessionRow } from "../../lib/types";
+import { agentChoiceOf, CODEX_MODE_LABELS, MODE_LABELS, MODEL_LABELS } from "../../lib/start";
+import type { Agent, Card, SessionRow } from "../../lib/types";
 import OriginLabel from "../sessions/OriginLabel.vue";
 import { useBoardActions, type CardBusy } from "./context";
 
@@ -30,8 +32,10 @@ import { useBoardActions, type CardBusy } from "./context";
  * A card up next that was told to wait (`card.schedule`) says so wherever it is drawn: a tag with
  * its moment and, behind the first of the refill's line, its place there (once its refill came
  * and a card before it went to Claude, that it waits its turn, and where: lib/line), and one each
- * for a model and a mode chosen for it. Selected, it offers to be given now or to
- * wait no longer, in place of the buttons that give it.
+ * for a model and a mode chosen for it (and its agent, while more than one is on). Selected, it
+ * offers to be given now or to wait no longer, in place of the buttons that give it. Its button
+ * names its project's agent ("Give to Codex"), and while more than one agent is on its session's
+ * state starts with its agent's mark.
  */
 const props = withDefaults(
   defineProps<{
@@ -72,13 +76,27 @@ const giveKeys = computed(() => keys("mod+Enter"));
 /** The panel of ways to give it opens from the keyboard too. */
 const moreKeys = computed(() => keys("mod+shift+Enter"));
 
+/** The agent a plain give sends it to, which its button names. */
+const giveAgent = computed(() => actions.agentFor(props.card.id));
+
 /** Told to wait: when it is given (`when`: its moment and its place in the refill's line, or its
- * turn once the refill came), and what was chosen for it. */
+ * turn once the refill came), and what was chosen for it: the agent (named while more than one is
+ * on), the model (Codex's by its id) and the mode, each when not the agent's own. */
 const waiting = computed(() => {
   const schedule = props.card.column === "queued" && props.variant !== "done" ? props.card.schedule : null;
   if (!schedule) return null;
-  return { when: waitText(schedule, places.value.get(props.card.id) ?? null, language.value), ...choiceOf(schedule.start) };
+  const when = waitText(schedule, places.value.get(props.card.id) ?? null, language.value);
+  const choice = agentChoiceOf(schedule.start);
+  const agent: Agent = choice.agent === "codex" ? "codex" : "claude";
+  const shared = { when, agent, named: namesAgent.value };
+  if (choice.agent === "codex") {
+    return { ...shared, model: choice.model, mono: true, mode: choice.mode === "normal" ? null : t(CODEX_MODE_LABELS[choice.mode]) };
+  }
+  return { ...shared, model: choice.model ? t(MODEL_LABELS[choice.model]) : null, mono: false, mode: choice.mode === "normal" ? null : t(MODE_LABELS[choice.mode]) };
 });
+
+/** Its session's agent, at the head of its state while more than one agent is on. */
+const statusAgent = computed(() => (namesAgent.value ? cardAgent(props.card) : null));
 
 /** The buttons it shows: giving when selected and queued (a card that waits: giving it now, or
  * calling the wait off); ending a closed session's card; a finished card's look and close when
@@ -163,8 +181,9 @@ function giveMenu(event: Event): void {
            chosen for it. -->
       <div v-if="waiting" class="bcard-tags">
         <span class="btag clock"><Icon name="clock" :size="11" /><span class="btag-text">{{ waiting.when }}</span></span>
-        <span v-if="waiting.model" class="btag">{{ t(MODEL_LABELS[waiting.model]) }}</span>
-        <span v-if="waiting.mode !== 'normal'" class="btag">{{ t(MODE_LABELS[waiting.mode]) }}</span>
+        <span v-if="waiting.named" class="btag"><AgentMark :agent="waiting.agent" :size="10" /><span class="btag-text">{{ agentName(waiting.agent) }}</span></span>
+        <span v-if="waiting.model" :class="['btag', { mono: waiting.mono }]">{{ waiting.model }}</span>
+        <span v-if="waiting.mode" class="btag">{{ waiting.mode }}</span>
       </div>
 
       <!-- Its session's state; a click brings the session up where it runs. -->
@@ -179,6 +198,7 @@ function giveMenu(event: Event): void {
         @dblclick="onStatus"
         data-dblopen
       >
+        <AgentMark v-if="statusAgent" :agent="statusAgent" :size="11" />
         <span v-if="status.mark" :class="['bmark', status.mark]" aria-hidden="true"></span>
         <span class="bcard-status-text">{{ status.text }}</span>
       </component>
@@ -187,7 +207,7 @@ function giveMenu(event: Event): void {
            up: where it runs and what it cost today, or its buttons. -->
       <div v-if="located || buttons || (variant === 'row' && status)" class="bcard-end">
         <span v-if="located && row" class="bcard-where">
-          <OriginLabel :origin="row.origin" :project="row.project" />
+          <OriginLabel :origin="row.origin" :project="row.project" :agent="row.agent" />
           <span v-if="cost" class="bcard-cost" :title="t('board.costTitle')">{{ cost }}</span>
         </span>
 
@@ -198,8 +218,8 @@ function giveMenu(event: Event): void {
             <span class="bsplit">
               <button type="button" class="bbtn claude" :disabled="busy === 'give'" :title="giveKeys" @click.stop="actions.give(card.id, 'new')">
                 <Spinner v-if="busy === 'give'" :size="11" />
-                <ClaudeLogo v-else :size="12" />
-                <span class="bbtn-text">{{ t("board.give") }}</span>
+                <AgentMark v-else :agent="giveAgent" :size="12" />
+                <span class="bbtn-text">{{ t(giveAgent === "codex" ? "board.give.codex" : "board.give") }}</span>
               </button>
               <button
                 type="button"
@@ -207,8 +227,8 @@ function giveMenu(event: Event): void {
                 data-give-more
                 aria-haspopup="dialog"
                 :aria-expanded="actions.panelFor() === card.id"
-                :aria-label="t('board.giveOptions')"
-                :title="actions.panelFor() === card.id ? undefined : `${t('board.giveOptions')} (${moreKeys})`"
+                :aria-label="t(giveAgent === 'codex' ? 'board.giveOptions.codex' : 'board.giveOptions')"
+                :title="actions.panelFor() === card.id ? undefined : `${t(giveAgent === 'codex' ? 'board.giveOptions.codex' : 'board.giveOptions')} (${moreKeys})`"
                 :disabled="busy === 'give'"
                 @click.stop="giveMenu"
                 @keydown.down.prevent.stop="actions.panelFor() === card.id || giveMenu($event)"
@@ -393,6 +413,12 @@ function giveMenu(event: Event): void {
 
 .btag svg {
   flex-shrink: 0;
+}
+
+/* A Codex model, by its id. */
+.btag.mono {
+  font-family: var(--font-mono);
+  font-weight: 400;
 }
 
 .btag-text {

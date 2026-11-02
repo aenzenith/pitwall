@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import AgentMark from "../../components/AgentMark.vue";
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
-import { accountById, accountName, listenLogin, switchAccount } from "../../lib/accounts";
+import { accountByIdOf, accountName, listenLogin, switchAccount } from "../../lib/accounts";
 import { useBackdropClose } from "../../lib/dialog";
 import { useReturnFocus } from "../../lib/dialogFocus";
 import { t } from "../../lib/i18n";
 import { isMac } from "../../lib/platform";
 import { api } from "../../lib/store";
-import type { AccountLogin } from "../../lib/types";
+import type { Agent, AgentAccountLogin } from "../../lib/types";
 
 /**
  * Adding a Claude account, in three steps. Its name and folder (a new one named after it, shown
@@ -18,11 +19,19 @@ import type { AccountLogin } from "../../lib/types";
  * events); then what Pitwall set up for it, with whether it syncs by itself when switched to and
  * whether to switch to it now (applied by OK). A sign-in that didn't complete adds nothing and can
  * be tried again. Esc or Cancel while it waits stops the sign-in (`account_login_cancel`).
+ *
+ * `agent`: whose account (none: Claude's, as before). A Codex account is a home of its own
+ * (`~/.codex-<name>`) and signs in with `codex login` in it; what Codex prints meanwhile can be
+ * shown ("Show the terminal"), held by the dialog alone.
  */
+const props = defineProps<{ agent?: Agent }>();
 const emit = defineEmits<{ close: [] }>();
 
-type Done = Extract<AccountLogin, { state: "done" }>;
-type Failed = Extract<AccountLogin, { state: "failed" }>;
+const agent: Agent = props.agent ?? "claude";
+const codex = agent === "codex";
+
+type Done = Extract<AgentAccountLogin, { state: "done" }>;
+type Failed = Extract<AgentAccountLogin, { state: "failed" }>;
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const backdrop = useBackdropClose(dialog);
@@ -60,7 +69,7 @@ watch(name, (value) => {
     return;
   }
   folderTimer = window.setTimeout(() => {
-    api.accountFolder(typed).then(
+    (codex ? api.agentAccountFolder(agent, typed) : api.accountFolder(typed)).then(
       (folder) => mine === folderAsk && (suggested.value = folder),
       () => mine === folderAsk && (suggested.value = null),
     );
@@ -72,7 +81,7 @@ async function pickFolder(): Promise<void> {
   picking.value = true;
   error.value = "";
   try {
-    const chosen = await api.accountPickFolder();
+    const chosen = await (codex ? api.agentAccountPickFolder(agent) : api.accountPickFolder());
     // Cancelled: as it was.
     if (chosen) {
       picked.value = chosen;
@@ -91,6 +100,10 @@ async function pickFolder(): Promise<void> {
 const started = ref("");
 /** The sign-in page, once Claude printed it: "Open in browser". */
 const url = ref<string | null>(null);
+/** What Codex's sign-in printed so far, for "Show the terminal": the dialog's alone. */
+const lines = ref<string[]>([]);
+const terminal = ref(false);
+const MOST_LINES = 200;
 /** A sign-in of ours is under way: its events are heard, and closing stops it. */
 let asked = false;
 /** Events heard so far: the answer to `account_login` knows whether one came before it. */
@@ -104,10 +117,13 @@ const autoSync = ref(false);
 const switchNow = ref(true);
 const applying = ref(false);
 
-function onLogin(event: AccountLogin): void {
+function onLogin(event: AgentAccountLogin): void {
   if (!asked) return;
   heard++;
   switch (event.state) {
+    case "line":
+      if (event.line) lines.value = [...lines.value, event.line].slice(-MOST_LINES);
+      break;
     case "waiting":
       if (event.url) url.value = event.url;
       show("waiting");
@@ -116,7 +132,7 @@ function onLogin(event: AccountLogin): void {
       asked = false;
       added.value = event;
       // The core may send the new account's fuel a moment later: until then, what was asked for.
-      syncWas = accountById(event.id)?.sync ?? true;
+      syncWas = accountByIdOf(agent, event.id)?.sync ?? true;
       autoSync.value = syncWas;
       switchNow.value = true;
       show("done");
@@ -130,7 +146,7 @@ function onLogin(event: AccountLogin): void {
 }
 
 // Listening before the first sign-in can start: none of its events is missed.
-const listening = listenLogin(onLogin);
+const listening = listenLogin(onLogin, agent);
 let gone = false;
 
 /** Another step: the keyboard rests on the dialog (Return gives the step's answer, `onKey`). */
@@ -146,6 +162,8 @@ async function login(): Promise<void> {
   busy.value = true;
   error.value = "";
   url.value = null;
+  lines.value = [];
+  terminal.value = false;
   await listening.catch(() => undefined);
   if (gone) return;
   started.value = typed;
@@ -154,7 +172,8 @@ async function login(): Promise<void> {
   try {
     // Its servers are brought level when it is switched to unless the user turns that off at
     // the end, whether or not it shares the main account's settings (servers aren't settings).
-    await api.accountLogin(typed, folderMode.value === "pick" ? (picked.value?.path ?? null) : null, shared.value, true);
+    const dir = folderMode.value === "pick" ? (picked.value?.path ?? null) : null;
+    await (codex ? api.agentAccountLogin(agent, typed, dir, shared.value, true) : api.accountLogin(typed, dir, shared.value, true));
     if (asked && heard === before) show("waiting");
   } catch (reason) {
     const ours = asked;
@@ -188,7 +207,7 @@ function openBrowser(): void {
 
 /* ---------- step 3: added ---------- */
 
-const addedAccount = computed(() => accountById(added.value?.id));
+const addedAccount = computed(() => accountByIdOf(agent, added.value?.id));
 const addedName = computed(() => (addedAccount.value ? accountName(addedAccount.value) : started.value));
 const plan = computed(() => addedAccount.value?.limits.plan ?? null);
 
@@ -200,7 +219,8 @@ const checks = computed<Check[]>(() => {
   if (!done) return [];
   const list: Check[] = [];
   if (done.hooks === "shared") list.push({ kind: "ok", text: t("accounts.add.hooksShared") });
-  else if (done.hooks === "installed") list.push({ kind: "ok", text: t("accounts.add.hooksInstalled") });
+  // Codex runs a new hook only once it is trusted, in that account's own `/hooks`.
+  else if (done.hooks === "installed") list.push(codex ? { kind: "todo", text: t("accounts.add.hooksTrust.codex") } : { kind: "ok", text: t("accounts.add.hooksInstalled") });
   else if (done.hooks === "failed") list.push({ kind: "failed", text: t("accounts.add.hooksFailed") });
   // The MCP servers as they stand: nothing is copied at the adding, a switch to it syncs them.
   if (done.mcp) {
@@ -209,9 +229,11 @@ const checks = computed<Check[]>(() => {
     const level = named("synced", "same");
     const login = named("login");
     const missing = named("missing");
+    const cantCopy = named("cantCopy");
     if (level) list.push({ kind: "ok", text: t("accounts.add.mcpSynced", { names: level }) });
-    if (login) list.push({ kind: "todo", text: t("accounts.add.mcpLogin", { names: login }) });
+    if (login) list.push({ kind: "todo", text: t(codex ? "accounts.add.mcpLogin.codex" : "accounts.add.mcpLogin", { names: login }) });
     if (missing && autoSync.value) list.push({ kind: "todo", text: t("accounts.add.mcpOnSwitch", { names: missing }) });
+    if (cantCopy) list.push({ kind: "todo", text: t("accounts.add.mcpCantCopy", { names: cantCopy }) });
   }
   if (done.radio === "added") list.push({ kind: "ok", text: t("radio.title") });
   else if (done.radio === "failed") list.push({ kind: "failed", text: t("accounts.add.radioFailed") });
@@ -228,10 +250,10 @@ async function finish(): Promise<void> {
   error.value = "";
   try {
     if (autoSync.value !== syncWas) {
-      await api.accountSetSync(done.id, autoSync.value);
+      await (codex ? api.agentAccountSetSync(agent, done.id, autoSync.value) : api.accountSetSync(done.id, autoSync.value));
       syncWas = autoSync.value;
     }
-    if (switchNow.value) await switchAccount(done.id);
+    if (switchNow.value) await switchAccount(done.id, agent);
     dialog.value?.close();
   } catch (reason) {
     error.value = String(reason);
@@ -246,7 +268,7 @@ const failText = computed(() => {
     case "closed":
       return t("accounts.add.failedClosed", { name });
     case "cli":
-      return t("accounts.add.failedCli", { name });
+      return t(codex ? "accounts.add.failedCli.codex" : "accounts.add.failedCli", { name });
     default:
       return t("accounts.add.failedError", { name });
   }
@@ -303,10 +325,10 @@ function onKey(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <dialog ref="dialog" class="add-dialog" :aria-label="t('accounts.add')" @cancel="onCancel" @close="emit('close')" @pointerdown="backdrop.down" @click="onBackdrop" @keydown="onKey">
+  <dialog ref="dialog" class="add-dialog" :aria-label="t(codex ? 'accounts.add.codex' : 'accounts.add')" @cancel="onCancel" @close="emit('close')" @pointerdown="backdrop.down" @click="onBackdrop" @keydown="onKey">
     <!-- 1 · Name and folder -->
     <form v-if="step === 'form'" class="body" @submit.prevent="login">
-      <div class="title">{{ t("accounts.add") }}</div>
+      <div :class="['title', { marked: codex }]"><AgentMark v-if="codex" agent="codex" :size="16" />{{ t(codex ? "accounts.add.codex" : "accounts.add") }}</div>
       <label class="field">
         {{ t("accounts.add.name") }}
         <input ref="input" v-model="name" maxlength="60" spellcheck="false" autocomplete="off" :disabled="busy" />
@@ -328,14 +350,14 @@ function onKey(event: KeyboardEvent): void {
       <label class="switch-row ruled">
         <span class="switch-text">
           <span>{{ t("accounts.add.shared") }}</span>
-          <small>{{ t("accounts.add.sharedHint") }}</small>
+          <small>{{ t(codex ? "accounts.add.sharedHint.codex" : "accounts.add.sharedHint") }}</small>
         </span>
         <input v-model="shared" type="checkbox" role="switch" :disabled="busy" />
       </label>
       <!-- Whatever the switch says: the core links the main account's session logs (and the
            projects' memory) into every account's folder, Pitwall follows sessions through them. -->
-      <p class="note always">{{ t("accounts.add.sharedAlways") }}</p>
-      <p class="note">{{ t(isMac ? "accounts.add.keepsMac" : "accounts.add.keepsFolder") }}</p>
+      <p class="note always">{{ t(codex ? "accounts.add.sharedAlways.codex" : "accounts.add.sharedAlways") }}</p>
+      <p class="note">{{ t(codex ? "accounts.add.keeps.codex" : isMac ? "accounts.add.keepsMac" : "accounts.add.keepsFolder") }}</p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="actions">
         <button type="button" class="control" @click="cancelLogin">{{ t("common.cancel") }}</button>
@@ -349,10 +371,13 @@ function onKey(event: KeyboardEvent): void {
     <!-- 2 · The sign-in in the browser -->
     <div v-else-if="step === 'waiting'" class="body">
       <div class="title">{{ t("accounts.add.signingIn", { name: started }) }}</div>
-      <div class="waiting" role="status"><Spinner :size="16" />{{ t("accounts.add.waiting") }}</div>
-      <p class="note">{{ t("accounts.add.waitingHint") }}</p>
+      <div class="waiting" role="status"><Spinner :size="16" />{{ t(codex ? "accounts.add.waiting.codex" : "accounts.add.waiting") }}</div>
+      <p class="note">{{ t(codex ? "accounts.add.waitingHint.codex" : "accounts.add.waitingHint") }}</p>
+      <!-- What Codex's sign-in printed, as it would in a terminal. -->
+      <pre v-if="codex && terminal" class="lines" aria-live="polite">{{ lines.join("\n") }}</pre>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="actions">
+        <button v-if="codex" type="button" class="link" :aria-expanded="terminal" @click="terminal = !terminal">{{ t(terminal ? "accounts.add.hideTerminal" : "accounts.add.showTerminal") }}</button>
         <button v-if="url" type="button" class="link" @click="openBrowser">{{ t("accounts.add.openBrowser") }}</button>
         <span class="grow"></span>
         <button type="button" class="control" @click="cancelLogin">{{ t("common.cancel") }}</button>
@@ -445,6 +470,11 @@ function onKey(event: KeyboardEvent): void {
   font-size: 15px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+/* Behind the agent's mark (Codex's dialog). */
+.title.marked {
+  align-items: center;
 }
 
 .plan {
@@ -591,6 +621,25 @@ function onKey(event: KeyboardEvent): void {
   gap: 12px;
   padding: 14px 0 2px;
   font-size: 14px;
+}
+
+/* Codex's sign-in as a terminal shows it: its own lines, selectable, scrolled within. */
+.lines {
+  max-height: 160px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--bg-input);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .waiting > .spinner {

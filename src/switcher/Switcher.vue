@@ -17,6 +17,7 @@ import { t } from "../lib/i18n";
 import { generalOpen, openFolderFromOutside, openFromOutside, openTarget } from "../lib/open";
 import { pages, type Page, type PageEntry } from "../lib/pages";
 import { keys, primary } from "../lib/platform";
+import { projectAgent } from "../lib/start";
 import { api, now, snapshot } from "../lib/store";
 import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
 import { useCapture } from "./capture";
@@ -250,6 +251,8 @@ const index = computed(() => {
   return at >= 0 ? at : Math.max(0, Math.min(lastIndex, count.value - 1));
 });
 const current = computed<Item | null>(() => items.value[index.value] ?? null);
+/** "Add and give" names the agent the card's project gives its cards to. */
+const addGive = computed(() => (current.value?.kind === "card" && projectAgent(current.value.project) === "codex" ? t("board.addGive.codex") : t("capture.addGive")));
 
 /** Highlights the row at `at` (↑/↓, the pointer, a new query). */
 function select(at: number): void {
@@ -687,7 +690,7 @@ onBeforeUnmount(() => {
     <!-- A card's keys: in its note, and in its title over the projects. -->
     <footer v-if="noting" class="foot foot-note">
       <span><kbd>{{ keys("Shift+Enter") }}</kbd> {{ t("capture.add") }}</span>
-      <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("capture.addGive") }}</span>
+      <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ addGive }}</span>
       <span><kbd>{{ keys("mod+V") }}</kbd> {{ t("capture.pasteImage") }}</span>
       <span class="grow"></span>
       <span><kbd>{{ keys("Escape") }}</kbd> {{ t("common.back") }}</span>
@@ -695,7 +698,7 @@ onBeforeUnmount(() => {
     <footer v-else-if="capturing" class="foot">
       <template v-if="current">
         <span><kbd>{{ keys("Enter") }}</kbd> {{ t("capture.add") }}</span>
-        <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ t("capture.addGive") }}</span>
+        <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ addGive }}</span>
         <span><kbd>{{ keys("Tab") }}</kbd> {{ t("capture.note") }}</span>
       </template>
       <span class="grow"></span>

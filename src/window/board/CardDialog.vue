@@ -7,7 +7,8 @@ import { useBackdropClose } from "../../lib/dialog";
 import { useReturnFocus } from "../../lib/dialogFocus";
 import { t } from "../../lib/i18n";
 import { keys, primary } from "../../lib/platform";
-import { api } from "../../lib/store";
+import { projectAgent } from "../../lib/start";
+import { api, snapshot } from "../../lib/store";
 import type { Card } from "../../lib/types";
 import CardImages from "./CardImages.vue";
 
@@ -37,6 +38,8 @@ const saving = ref(false);
 
 const heading = computed(() => t(props.card ? "board.dialog.editTitle" : "board.dialog.newTitle"));
 const projectName = computed(() => props.projects.find((p) => p.path === draft.value.path)?.name ?? draft.value.path);
+/** The agent the card will go to, as its project gives its cards: the hints name it. */
+const codex = computed(() => projectAgent(snapshot.value?.projects.find((p) => p.path === draft.value.path)) === "codex");
 /** A new card on every project's board picks its project; one project's board knows it. */
 const picksProject = computed(() => !props.card && props.path === null && props.projects.length > 1);
 
@@ -146,10 +149,17 @@ function cancel(): void {
       <div class="cd-note">
         <label class="cd-field">
           {{ t("board.dialog.note") }}
-          <textarea ref="noteInput" v-model="draft.note" rows="5" maxlength="8000" :placeholder="t('board.dialog.notePlaceholder')" @paste="onPaste"></textarea>
+          <textarea
+            ref="noteInput"
+            v-model="draft.note"
+            rows="5"
+            maxlength="8000"
+            :placeholder="t(codex ? 'board.dialog.notePlaceholder.codex' : 'board.dialog.notePlaceholder')"
+            @paste="onPaste"
+          ></textarea>
         </label>
         <CardImages v-if="shots.length" :images="shots" removable @remove="removeImage" />
-        <p v-else class="cd-hint">{{ t("board.dialog.imageHint", { keys: pasteKeys }) }}</p>
+        <p v-else class="cd-hint">{{ t(codex ? "board.dialog.imageHint.codex" : "board.dialog.imageHint", { keys: pasteKeys }) }}</p>
       </div>
       <p v-if="error" class="cd-error" role="alert">{{ error }}</p>
       <div class="cd-actions">

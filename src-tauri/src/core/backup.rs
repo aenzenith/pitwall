@@ -161,6 +161,8 @@ impl General {
             tower: _, cli: _, panes_height: _,
             // This Mac's own: Claude's accounts are folders and Keychain items here.
             accounts: _,
+            // This Mac's own: which agents are installed and followed here, and their accounts.
+            agents: _,
         } = settings.clone();
 
         Self {
@@ -440,10 +442,17 @@ fn move_project(settings: &mut Settings, from: &str, to: &str) {
         ours.port = ours.port.or(theirs.port);
         ours.url = ours.url.or(theirs.url);
         ours.claude_model = ours.claude_model.or(theirs.claude_model);
+        ours.codex_model = ours.codex_model.or(theirs.codex_model);
         ours.code = ours.code.or(theirs.code);
         ours.open = ours.open.or(theirs.open);
         if ours.claude_mode.is_normal() {
             ours.claude_mode = theirs.claude_mode;
+        }
+        if ours.codex_mode.is_normal() {
+            ours.codex_mode = theirs.codex_mode;
+        }
+        if ours.agent.is_claude() {
+            ours.agent = theirs.agent;
         }
 
         for mut command in theirs.commands {
@@ -997,6 +1006,7 @@ mod tests {
             CoreConfig {
                 registry_dir: tmp.join("registry"),
                 claude_dir: tmp.join("claude").join("projects"),
+                codex_home: tmp.join("codex"),
                 settings_file: tmp.join("config").join("settings.json"),
                 claude_settings: tmp.join("claude").join("settings.json"),
                 legacy_registries: Vec::new(),
@@ -1165,6 +1175,8 @@ mod tests {
         core.set_favourite(here, true);
         core.set_settings(Settings { script: "serve".into(), onboarded: true, order: vec![here.into()], teams: vec![team("t1", &[here, shared])], ..core.settings() });
         core.set_project_settings(here, ProjectSettings { commands: vec![command("c1", "worker")], ..Default::default() });
+        // Codex turned off here, by the user's word: no file turns it on again.
+        core.agent_set_on(Agent::Codex, false).unwrap();
         let kept = core.board_add(here, "Kept", "see [Image #1]", &[pasted(1, 1)]).unwrap();
         let replaced = core.board_add(here, "As it was", "see [Image #1]", &[pasted(1, 2)]).unwrap();
         fs::create_dir_all(config.join("activity")).unwrap();
@@ -1173,12 +1185,13 @@ mod tests {
 
         let file = tmp.path().join("backup.json");
         let parts = json!({
-            "settings": { "script": "dev", "launchAtLogin": true, "onboarded": false, "seenVersion": "0.0.1", "notify": false, "fuelAlert": false },
+            "settings": { "script": "dev", "launchAtLogin": true, "onboarded": false, "seenVersion": "0.0.1", "notify": false, "fuelAlert": false,
+                "agents": { "codex": { "on": true, "told": true, "radio": true } } },
             "projects": {
                 "favourites": [{ "path": theirs, "name": "theirs" }],
                 "added": [theirs, unstarred],
                 "order": [theirs],
-                "settings": { (theirs): { "commands": [command("c2", "tests")] } },
+                "settings": { (theirs): { "commands": [command("c2", "tests")], "agent": "codex", "codexModel": "gpt-6.1-sol", "codexMode": "readOnly" } },
                 "teams": [team("t2", &[theirs, shared])],
             },
             "board": { "cards": [card(&replaced.id, here, "From the file", ""), card("b9-1", theirs, "New", "")] },
@@ -1195,6 +1208,10 @@ mod tests {
         assert_eq!((settings.script.as_str(), settings.launch_at_login, settings.onboarded, &settings.seen_version), ("dev", false, true, &seen));
         // What is told is this Mac's own too, Claude waiting and the fuel alert as every other event.
         assert_eq!((settings.notify, settings.fuel_alert), (true, true));
+        // So are the agents: Codex stays off, its radio too. A project's agent travels with it.
+        assert_eq!((settings.agents.codex.on, settings.agents.codex.radio), (Some(false), false));
+        let codex_project = settings.project(theirs);
+        assert_eq!((codex_project.agent, codex_project.codex_model, codex_project.codex_mode), (Agent::Codex, Some(crate::start::CodexModel::Sol), crate::start::CodexMode::ReadOnly));
         // Projects, their settings and teams: the file's beside those that were here, and the
         // project both teams named is in the file's alone.
         assert_eq!(listed(&core), [here, theirs]);
@@ -1290,7 +1307,7 @@ mod tests {
 
         let from = core_in(a.path());
         from.add_project(&project).unwrap();
-        let chosen = Start { model: Some(Model::Sonnet), mode: Mode::Plan };
+        let chosen = Start { model: Some(Model::Sonnet), mode: Mode::Plan, ..Start::default() };
         let waits = from.board_add(&project, "Waits", "", &[]).unwrap();
         from.board_schedule(&waits.id, crate::registry::now_ms() + 3_600_000, true, chosen).unwrap();
         let started = from.board_add(&project, "Started before", "", &[]).unwrap();
@@ -1339,6 +1356,9 @@ mod tests {
             links: vec![link("staging")],
             claude_model: Some(crate::start::Model::Sonnet),
             claude_mode: crate::start::Mode::Plan,
+            agent: crate::agent::Agent::Claude,
+            codex_model: None,
+            codex_mode: crate::start::CodexMode::Normal,
             code: Some("PDK".into()),
             open: crate::settings::ProjectOpen { list: Some("editor".into()), outside: Some("list".into()), pages: None },
             double_click: None,

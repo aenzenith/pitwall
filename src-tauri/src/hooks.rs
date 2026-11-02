@@ -136,7 +136,7 @@ impl Runner {
 /// The installed app's binary, which Claude Code runs on Windows and Linux; none from a dev
 /// build (`is_bundled`). An AppImage runs from a new mount each launch: the image file itself is
 /// the one to run.
-fn installed_app() -> Option<PathBuf> {
+pub(crate) fn installed_app() -> Option<PathBuf> {
     if !crate::is_bundled() {
         return None;
     }
@@ -207,7 +207,7 @@ impl HookInput {
 
 /// A string, or a number or boolean written out (as `plutil -extract … raw` does); anything
 /// else is left out.
-fn scalar<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+pub(crate) fn scalar<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
     Ok(match Value::deserialize(deserializer)? {
         Value::String(text) => Some(text),
         Value::Number(number) => Some(number.to_string()),
@@ -249,7 +249,7 @@ fn note_event(dir: &Path, event: &str, input: impl Read) -> Option<PathBuf> {
 }
 
 /// `<pid>-<random>.tmp`, renamed to `.event`: the app never reads half a file.
-fn write_event(dir: &Path, text: &str) -> std::io::Result<PathBuf> {
+pub(crate) fn write_event(dir: &Path, text: &str) -> std::io::Result<PathBuf> {
     fs::create_dir_all(dir)?;
 
     let name = format!("{}-{}", std::process::id(), RandomState::new().hash_one(SystemTime::now()) as u32);
@@ -289,13 +289,13 @@ pub struct ClaudeHook {
     cached: Mutex<Option<(Stamp, HookStatus)>>,
 }
 
-fn stamp(file: &Path) -> Option<(SystemTime, u64)> {
+pub(crate) fn stamp(file: &Path) -> Option<(SystemTime, u64)> {
     let meta = fs::metadata(file).ok()?;
     Some((meta.modified().ok()?, meta.len()))
 }
 
 /// Single quotes for the shell, when the path needs them.
-fn shell_quote(path: &str) -> String {
+pub(crate) fn shell_quote(path: &str) -> String {
     if path.chars().all(|c| c.is_ascii_alphanumeric() || "/._-".contains(c)) {
         path.to_string()
     } else {
@@ -555,13 +555,13 @@ impl ClaudeHook {
 }
 
 #[cfg(unix)]
-fn make_executable(file: &Path) -> Result<(), String> {
+pub(crate) fn make_executable(file: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(file, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())
 }
 
 #[cfg(not(unix))]
-fn make_executable(_file: &Path) -> Result<(), String> {
+pub(crate) fn make_executable(_file: &Path) -> Result<(), String> {
     Ok(())
 }
 

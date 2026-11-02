@@ -234,9 +234,9 @@ pub async fn claude_last_message(app: AppHandle, session: String) -> Option<Stri
 
 /* ---------- project terminals ---------- */
 
-/// `start`: for a Claude tab, the model and the mode chosen from "New Claude"'s list; without
-/// it, the project's own. `account`: for a Claude tab, the Claude account it runs with ("Start
-/// with account ›"); without it, the one in use. `shell`: on Windows, the shell of the list a shell tab runs, by its
+/// `start`: for an agent's tab, the agent and its model and mode chosen from the "+" menu (a
+/// Codex start opens a Codex tab); without it, Claude with the project's own. `account`: for an
+/// agent's tab, that agent's account it runs with; without it, the one in use. `shell`: on Windows, the shell of the list a shell tab runs, by its
 /// word (`Shell::parse`; any other is none, Command Prompt), never a path or a command line;
 /// `elevated`, an administrator's, which waits for Windows' permission: off the main thread.
 #[tauri::command]
@@ -255,8 +255,11 @@ pub async fn open_terminal(
     use crate::core::TerminalOpened;
 
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
-    tauri::async_runtime::spawn_blocking(move || match (claude.unwrap_or(false), start) {
-        (true, start) => core.open_claude_terminal_with(&path, start.as_ref().map(StartChoice::gated), cols.zip(rows), account.as_deref()).map(|view| TerminalOpened::Tab { view }),
+    tauri::async_runtime::spawn_blocking(move || match (claude.unwrap_or(false), start.as_ref().map(StartChoice::gated)) {
+        (true, Some(start)) if start.agent == crate::agent::Agent::Codex => {
+            core.open_codex_terminal_with(&path, Some(start), cols.zip(rows), account.as_deref()).map(|view| TerminalOpened::Tab { view })
+        }
+        (true, start) => core.open_claude_terminal_with(&path, start, cols.zip(rows), account.as_deref()).map(|view| TerminalOpened::Tab { view }),
         (false, _) => core.open_shell(&path, shell.as_deref().and_then(crate::core::Shell::parse), elevated.unwrap_or(false), cols.zip(rows)),
     })
     .await
@@ -606,53 +609,84 @@ pub fn refresh_fuel(app: AppHandle, state: State<'_, AppState>, force: bool) {
     state.fuel.refresh(&app, force, state.core.settings().fuel_every_ms());
 }
 
-/* ---------- Claude's accounts ---------- */
+/* ---------- Claude's and Codex's accounts ---------- */
 
-/// The account the Claude sessions Pitwall starts use from now on (`accounts::MAIN` for the main
-/// one).
+// Each account command takes the agent whose account it is: none (or anything but `codex`) is
+// Claude's, as before.
+
+/// Whether an account command is about Codex's accounts.
+fn codex_accounts(agent: Option<&str>) -> bool {
+    agent.and_then(crate::agent::Agent::parse) == Some(crate::agent::Agent::Codex)
+}
+
+/// The account the sessions Pitwall starts use from now on (`accounts::MAIN` for the main one).
 #[tauri::command]
-pub fn account_use(app: AppHandle, id: String) -> Result<(), String> {
-    crate::accounts::app::use_account(&app, &id)
+pub fn account_use(app: AppHandle, id: String, agent: Option<String>) -> Result<(), String> {
+    match codex_accounts(agent.as_deref()) {
+        true => crate::accounts::codex_app::use_account(&app, &id),
+        false => crate::accounts::app::use_account(&app, &id),
+    }
 }
 
 #[tauri::command]
-pub fn account_rename(app: AppHandle, id: String, name: String) -> Result<(), String> {
-    crate::accounts::app::rename(&app, &id, &name)
+pub fn account_rename(app: AppHandle, id: String, name: String, agent: Option<String>) -> Result<(), String> {
+    match codex_accounts(agent.as_deref()) {
+        true => crate::accounts::codex_app::rename(&app, &id, &name),
+        false => crate::accounts::app::rename(&app, &id, &name),
+    }
 }
 
 /// Takes an account off the list; Claude Code's CLI takes the radio's entry out, so off the main
 /// thread.
 #[tauri::command]
-pub async fn account_remove(app: AppHandle, id: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::remove(&app, &id)).await.map_err(|error| error.to_string())?
+pub async fn account_remove(app: AppHandle, id: String, agent: Option<String>) -> Result<(), String> {
+    let codex = codex_accounts(agent.as_deref());
+    tauri::async_runtime::spawn_blocking(move || if codex { crate::accounts::codex_app::remove(&app, &id) } else { crate::accounts::app::remove(&app, &id) })
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
-pub fn account_set_sync(app: AppHandle, id: String, on: bool) -> Result<(), String> {
-    crate::accounts::app::set_sync(&app, &id, on)
+pub fn account_set_sync(app: AppHandle, id: String, on: bool, agent: Option<String>) -> Result<(), String> {
+    match codex_accounts(agent.as_deref()) {
+        true => crate::accounts::codex_app::set_sync(&app, &id, on),
+        false => crate::accounts::app::set_sync(&app, &id, on),
+    }
 }
 
 #[tauri::command]
-pub fn account_reveal(app: AppHandle, id: String) -> Result<(), String> {
-    crate::accounts::app::reveal(&app, &id)
+pub fn account_reveal(app: AppHandle, id: String, agent: Option<String>) -> Result<(), String> {
+    match codex_accounts(agent.as_deref()) {
+        true => crate::accounts::codex_app::reveal(&app, &id),
+        false => crate::accounts::app::reveal(&app, &id),
+    }
 }
 
 /// The folder a new account of this name gets.
 #[tauri::command]
-pub fn account_folder(app: AppHandle, name: String) -> Result<crate::accounts::app::NewFolder, String> {
-    crate::accounts::app::folder(&app, &name)
+pub fn account_folder(app: AppHandle, name: String, agent: Option<String>) -> Result<crate::accounts::app::NewFolder, String> {
+    match codex_accounts(agent.as_deref()) {
+        true => crate::accounts::codex_app::folder(&app, &name),
+        false => crate::accounts::app::folder(&app, &name),
+    }
 }
 
 /// A folder picked for an account: the system's dialog waits for the user, so off the main thread.
 #[tauri::command]
-pub async fn account_pick_folder(app: AppHandle) -> Result<Option<crate::accounts::app::PickedFolder>, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::pick_folder(&app)).await.map_err(|error| error.to_string())?
+pub async fn account_pick_folder(app: AppHandle, agent: Option<String>) -> Result<Option<crate::accounts::app::PickedFolder>, String> {
+    let codex = codex_accounts(agent.as_deref());
+    tauri::async_runtime::spawn_blocking(move || if codex { crate::accounts::codex_app::pick_folder(&app) } else { crate::accounts::app::pick_folder(&app) })
+        .await
+        .map_err(|error| error.to_string())?
 }
 
-/// Starts adding an account; `account-login` tells how it goes.
+/// Starts adding an account; `account-login` (Codex's: `codex-account-login`) tells how it goes.
 #[tauri::command]
-pub fn account_login(app: AppHandle, name: String, dir: Option<String>, shared: bool, sync: bool) -> Result<(), String> {
-    crate::accounts::app::login(&app, &name, dir, shared, sync)
+pub fn account_login(app: AppHandle, name: String, dir: Option<String>, shared: bool, sync: bool, agent: Option<String>) -> Result<(), String> {
+    match codex_accounts(agent.as_deref()) {
+        true => crate::accounts::codex_app::login(&app, &name, dir, shared, sync),
+        false => crate::accounts::app::login(&app, &name, dir, shared, sync),
+    }
 }
 
 #[tauri::command]
@@ -660,16 +694,22 @@ pub fn account_login_cancel() {
     crate::accounts::app::login_cancel();
 }
 
-/// An account's MCP servers brought level with the main account's now, through Claude Code's CLI.
+/// An account's MCP servers brought level with the main account's now, through its agent's CLI.
 #[tauri::command]
-pub async fn account_sync(app: AppHandle, id: String) -> Result<crate::accounts::sync::SyncReport, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::sync_now(&app, &id)).await.map_err(|error| error.to_string())?
+pub async fn account_sync(app: AppHandle, id: String, agent: Option<String>) -> Result<crate::accounts::sync::SyncReport, String> {
+    let codex = codex_accounts(agent.as_deref());
+    tauri::async_runtime::spawn_blocking(move || if codex { crate::accounts::codex_app::sync_now(&app, &id) } else { crate::accounts::app::sync_now(&app, &id) })
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 /// What a sync would do, writing nothing.
 #[tauri::command]
-pub async fn account_sync_plan(app: AppHandle, id: String) -> Result<crate::accounts::sync::SyncReport, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::accounts::app::sync_plan(&app, &id)).await.map_err(|error| error.to_string())?
+pub async fn account_sync_plan(app: AppHandle, id: String, agent: Option<String>) -> Result<crate::accounts::sync::SyncReport, String> {
+    let codex = codex_accounts(agent.as_deref());
+    tauri::async_runtime::spawn_blocking(move || if codex { crate::accounts::codex_app::sync_plan(&app, &id) } else { crate::accounts::app::sync_plan(&app, &id) })
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 /* ---------- dependencies ---------- */
@@ -1114,12 +1154,13 @@ pub fn mute_project(state: State<'_, AppState>, path: String, muted: bool) {
 /// A line of the popover's list of what was missed: what a click on its notification would
 /// bring up, and the line goes.
 #[tauri::command]
-pub fn missed_open(app: AppHandle, state: State<'_, AppState>, path: String, kind: crate::core::SignalKind) {
+pub fn missed_open(app: AppHandle, state: State<'_, AppState>, path: String, kind: crate::core::SignalKind, agent: Option<crate::agent::Agent>) {
     // Claude's come up where they run; the rest in Pitwall's window, which hides the popover.
     if kind.is_claudes() {
         step_aside(&app);
     }
-    state.core.missed_open(&path, kind);
+    // Whose line it is; none from an older page is Claude's.
+    state.core.missed_open(&path, kind, agent.unwrap_or_default());
 }
 
 #[tauri::command]
@@ -1410,31 +1451,34 @@ pub async fn last_looked(app: AppHandle) -> Option<String> {
     tauri::async_runtime::spawn_blocking(move || core.last_looked()).await.ok().flatten()
 }
 
-/// The model and the mode the window chose for a Claude session, as it names them. Neither is
-/// used as it comes: `gated` keeps only the values of the two fixed lists (`start.rs`).
+/// The agent, the model and the mode the window chose for a session, as it names them. None is
+/// used as it comes: `gated` keeps only the values of the fixed lists (`start.rs`, `agent.rs`);
+/// no agent, or one not known, is Claude.
 #[derive(serde::Deserialize)]
 pub struct StartChoice {
+    agent: Option<String>,
     model: Option<String>,
     mode: Option<String>,
 }
 
 impl StartChoice {
     fn gated(&self) -> crate::start::Start {
-        crate::start::Start::of(self.model.as_deref(), self.mode.as_deref())
+        crate::start::Start::chosen(self.agent.as_deref(), self.model.as_deref(), self.mode.as_deref())
     }
 }
 
-/// Tells a card up next to wait until the 5-hour session refills, as the last reading of
-/// Claude's limits says: the core gives it then, in its turn among the cards that wait for the
-/// refill too, with the model and in the mode of `start` (without it, the project's own). The
-/// moment is the core's own reading, never the window's.
+/// Tells a card up next to wait until its agent's limits refill, as the last reading of them
+/// says (Claude's 5-hour session; Codex's, `Fuel::refill_of`): the core gives it then, in its
+/// turn among the cards that wait for that agent's refill too, with the agent, the model and in
+/// the mode of `start` (without it, the project's own). The moment is the core's own reading,
+/// never the window's.
 #[tauri::command]
 pub fn board_schedule(state: State<'_, AppState>, id: String, start: Option<StartChoice>) -> Result<(), String> {
-    let at = state.fuel.refill().ok_or_else(|| t!("core.start.noRefill"))?;
     let start = match start {
         Some(start) => start.gated(),
         None => state.core.board_start(&id).ok_or_else(|| format!("no such card: {id}"))?,
     };
+    let at = state.fuel.refill_of(start.agent).ok_or_else(|| t!("core.start.noRefill"))?;
     state.core.board_schedule(&id, at, true, start)
 }
 
@@ -1450,4 +1494,75 @@ pub fn board_unschedule(state: State<'_, AppState>, id: String) {
 pub async fn board_give_now(app: AppHandle, id: String, cols: Option<u16>, rows: Option<u16>) -> Result<Option<crate::core::TerminalView>, String> {
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     tauri::async_runtime::spawn_blocking(move || core.board_give_now(&id, cols.zip(rows))).await.map_err(|error| error.to_string())?
+}
+
+/* ---------- Codex ---------- */
+
+/// Adds Pitwall's hook to Codex's `hooks.json` (Codex runs it once the user trusted it there).
+#[tauri::command]
+pub fn install_codex_hook(state: State<'_, AppState>) -> Result<(), String> {
+    state.core.install_codex_hook()
+}
+
+#[tauri::command]
+pub fn uninstall_codex_hook(state: State<'_, AppState>) -> Result<(), String> {
+    state.core.uninstall_codex_hook()
+}
+
+/// The terminal's history of Codex: the project's sessions `codex resume` finds from its folder.
+/// It goes through Codex's rollouts, so it runs off the main thread.
+#[tauri::command]
+pub async fn codex_past(app: AppHandle, path: String) -> Result<Vec<crate::core::PastSession>, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.codex_past(&path)).await.map_err(|error| error.to_string())
+}
+
+/// A Codex session of the terminal's history brought up where it runs, or opened again in a new
+/// tab of the project's terminals (`codex resume`) once it has ended, as `resume_claude` is.
+#[tauri::command]
+pub async fn resume_codex(app: AppHandle, path: String, session: String) -> Result<crate::core::Resumed, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.resume_codex(&path, &session)).await.map_err(|error| error.to_string())
+}
+
+/// Turns an agent on or off at the user's word (Settings › Agents, the found notice, the first
+/// run); a look finds it again for nothing after.
+#[tauri::command]
+pub fn agent_set_on(state: State<'_, AppState>, agent: crate::agent::Agent, on: bool) -> Result<(), String> {
+    state.core.agent_set_on(agent, on)
+}
+
+/// The user was told that an agent was found and turned on: the notice closes for good.
+#[tauri::command]
+pub fn agent_told(state: State<'_, AppState>, agent: crate::agent::Agent) {
+    state.core.agent_told(agent);
+}
+
+/// Looks for the agents' home folders again (the window came back); true when that changed what
+/// is found.
+#[tauri::command]
+pub fn look_for_agents(state: State<'_, AppState>) -> bool {
+    state.core.look_for_agents()
+}
+
+/// Each agent's version and home folder for Settings › Agents. It asks their CLIs, so it runs off
+/// the main thread.
+#[tauri::command]
+pub async fn agent_details(app: AppHandle) -> Result<Vec<crate::core::AgentDetail>, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.agent_details()).await.map_err(|error| error.to_string())
+}
+
+/// Codex's radio as Codex has it. It asks Codex's CLI, so it runs off the main thread.
+#[tauri::command]
+pub async fn codex_radio_state(app: AppHandle) -> Result<crate::core::RadioState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.codex_radio_state()).await.map_err(|error| error.to_string())
+}
+
+/// Turns Codex's radio on (Pitwall is added to Codex's MCP servers) or off (it is taken out).
+#[tauri::command]
+pub async fn codex_radio_set(app: AppHandle, on: bool) -> Result<crate::core::RadioState, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.codex_radio_set(on)).await.map_err(|error| error.to_string())?
 }

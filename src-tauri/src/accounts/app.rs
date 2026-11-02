@@ -20,6 +20,9 @@ use crate::{AppState, MAIN as MAIN_WINDOW};
 pub enum LoginEvent {
     /// The browser was asked to open; `url`, its page, once Claude printed it.
     Waiting { url: Option<String> },
+    /// A line the sign-in's CLI printed, for "Show the terminal" (Codex's only): to the window,
+    /// never kept or logged.
+    Line { line: String },
     /// Added, as `id`, with what was set up for it.
     Done {
         id: String,
@@ -36,32 +39,32 @@ pub enum LoginEvent {
 /// A sync, as the window hears of it.
 #[derive(Debug, Clone, Serialize)]
 pub struct SyncEvent {
-    id: String,
+    pub(super) id: String,
     /// `syncing` | `done` | `failed` | `differs`
-    state: &'static str,
+    pub(super) state: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    report: Option<SyncReport>,
+    pub(super) report: Option<SyncReport>,
 }
 
 /// The folder a new account gets, as the add dialog shows it.
 #[derive(Debug, Clone, Serialize)]
 pub struct NewFolder {
-    shown: String,
-    exists: bool,
+    pub(super) shown: String,
+    pub(super) exists: bool,
 }
 
 /// A folder picked for an account.
 #[derive(Debug, Clone, Serialize)]
 pub struct PickedFolder {
-    path: String,
-    shown: String,
+    pub(super) path: String,
+    pub(super) shown: String,
 }
 
-fn home() -> Result<PathBuf, String> {
+pub(super) fn home() -> Result<PathBuf, String> {
     dirs::home_dir().ok_or_else(|| t!("core.accounts.unknown"))
 }
 
-fn state(app: &AppHandle) -> tauri::State<'_, AppState> {
+pub(super) fn state(app: &AppHandle) -> tauri::State<'_, AppState> {
     app.state::<AppState>()
 }
 
@@ -241,7 +244,7 @@ pub fn pick_folder(app: &AppHandle) -> Result<Option<PickedFolder>, String> {
         return Ok(None);
     };
     let path = path.to_string_lossy().into_owned();
-    check_dir(&home, &path, &state(app).core.accounts(), None, true)?;
+    check_dir(&home, &path, &state(app).core.accounts(), None, true, &state(app).core.codex_folders())?;
     Ok(Some(PickedFolder { shown: shown(&home, &path), path }))
 }
 
@@ -250,16 +253,16 @@ pub fn pick_folder(app: &AppHandle) -> Result<Option<PickedFolder>, String> {
 /// that is done (`finish`), and the folder put back as it was if it isn't.
 pub fn login(app: &AppHandle, name: &str, dir: Option<String>, shared: bool, sync: bool) -> Result<(), String> {
     let home = home()?;
-    let accounts = state(app).core.accounts();
+    let (accounts, codex) = (state(app).core.accounts(), state(app).core.codex_folders());
     let name = check_name(name, &accounts, None)?;
     let dir = match dir {
         Some(dir) => {
-            check_dir(&home, &dir, &accounts, None, true)?;
+            check_dir(&home, &dir, &accounts, None, true, &codex)?;
             dir
         }
         None => {
             let dir = new_dir(&home, &name, &accounts).to_string_lossy().into_owned();
-            check_dir(&home, &dir, &accounts, None, false)?;
+            check_dir(&home, &dir, &accounts, None, false, &codex)?;
             dir
         }
     };
@@ -310,10 +313,11 @@ fn finish(app: &AppHandle, mut account: ClaudeAccount, prepared: &Prepared) {
     let home = home().unwrap_or_default();
     // Shared as made: a folder that had a settings file of its own keeps it, hook and all.
     account.shared = core.shares_main_settings(&account.dir);
+    let codex = core.codex_folders();
     let added = core.change_accounts(|accounts| {
         // Checked again: the list may have changed during the sign-in.
         account.name = check_name(&account.name, accounts, None)?;
-        check_dir(&home, &account.dir, accounts, None, true)?;
+        check_dir(&home, &account.dir, accounts, None, true, &codex)?;
         account.id = new_id(accounts);
         accounts.others.push(account.clone());
         Ok(())

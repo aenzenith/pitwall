@@ -17,7 +17,9 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+use crate::agent::{Agent, HookState};
 use crate::claude::{ClaudeWatch, SessionPhase, SessionState, Turn};
+use crate::codex::CodexWatch;
 use crate::git::GitInfo;
 use crate::hooks::ClaudeHook;
 use crate::i18n::{self, t};
@@ -66,6 +68,10 @@ mod tower;
 mod cli;
 pub use cli::CliState;
 mod capture;
+mod agents;
+mod codex_state;
+mod codex_past;
+mod codex_accounts;
 pub use activity::{DaySummary, WeekMark};
 pub use day_tokens::{DayFuel, DaySpend, ProjectSpend};
 pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
@@ -93,6 +99,8 @@ use routing::Pending;
 use servers::Run;
 use snapshot::{LiveSession, ProjectView};
 use supervise::{Supervisor, Unit};
+pub use signals::agent_key;
+pub use agents::AgentDetail;
 
 const RESTART_DELAY: Duration = Duration::from_secs(3);
 const MAX_RESTARTS: u32 = 3;
@@ -131,6 +139,8 @@ pub enum CoreEvent {
     RevealProject { path: String, job: Option<String> },
     /// Show this page of the main window (`deps`, `fuel`, `board`).
     RevealPage(&'static str),
+    /// Show the Fuel page on this agent's part (a fuel alert's line in the list of what was missed).
+    RevealFuel(Agent),
 }
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
@@ -140,7 +150,11 @@ type IssueText = Arc<dyn Fn() -> String + Send + Sync>;
 
 pub struct CoreConfig {
     pub registry_dir: PathBuf,
+    /// Claude Code's projects folder (`~/.claude/projects`).
     pub claude_dir: PathBuf,
+    /// Codex's home folder (`$CODEX_HOME`, else `~/.codex`; `Agent::home_in`): its sessions, its
+    /// `hooks.json`, its `session_index.jsonl`. Read only while Codex is on.
+    pub codex_home: PathBuf,
     pub settings_file: PathBuf,
     /// `~/.claude/settings.json`, where the Claude Code hook goes.
     pub claude_settings: PathBuf,
@@ -179,6 +193,11 @@ struct Inner {
     git: HashMap<String, GitInfo>,
     claude_hook: bool,
     claude_hook_outdated: bool,
+    /// The agents whose home folder was there at the last look (`agents.rs`); Claude always.
+    found: HashSet<Agent>,
+    /// Pitwall's hook in Codex (`codex_hooks.rs`), as `claude_hook` is in Claude Code.
+    codex_hook: HookState,
+    codex_hook_outdated: bool,
     /// The board isn't on disk as it is now (`board.rs`).
     board_unsaved: bool,
     claude_scanned: bool,
@@ -239,6 +258,14 @@ struct Inner {
     held: HashMap<String, Vec<(String, Origin)>>,
     /// A quit was held for the chequered flag's dialog and waits on its answer (`flag.rs`).
     flag_asked: bool,
+    /// When the latest event of Codex's hook came, to the minute (`CodexWatch::heard`): Settings'
+    /// "Last event". In memory only.
+    codex_heard: Option<u64>,
+    /// The agents besides Claude whose sessions the last scan merged (`merge_agents`): one merged
+    /// for the first time since it came on only takes note of what waits (`first_scans`).
+    agents_scanned: HashSet<Agent>,
+    /// Each agent's CLI version as it last said it, and when (`agents.rs`: `agent_details`).
+    agent_versions: HashMap<Agent, (Instant, Option<String>)>,
 }
 
 pub struct Core {
@@ -255,6 +282,9 @@ pub struct Core {
     sessions: Mutex<sessions::SessionsCache>,
     reservations: Mutex<Reservations>,
     claude: Mutex<ClaudeWatch>,
+    /// Codex's sessions (`codex.rs`). Locked after `claude` and before `inner`, never the other
+    /// way: `claude` → `codex` → `inner`.
+    codex: Mutex<CodexWatch>,
     hook: ClaudeHook,
     /// File-system events for Claude's logs, the hook's events and Git; started by the first
     /// poll.
@@ -281,6 +311,10 @@ pub struct Core {
     sink: Sink,
     /// The phone's channel (`relay.rs`); never held together with `inner`.
     phone: relay::Phone,
+    /// Pitwall's hook in Codex's own home (`codex_hooks.rs`), made at its first use.
+    codex_hook: std::sync::OnceLock<crate::codex_hooks::CodexHook>,
+    /// Codex's day tokens, as `day_tokens` holds Claude's.
+    codex_day_tokens: Mutex<day_tokens::DayTokens>,
 }
 
 fn folder_name(path: &str) -> String {
@@ -292,6 +326,8 @@ impl Core {
         let registry = Registry::new(cfg.registry_dir.clone(), &cfg.title).with_legacy(cfg.legacy_registries.clone());
         let legacy_seen = cfg.legacy_registries.iter().map(|dir| dir.join("claude-seen.json")).collect();
         let claude = ClaudeWatch::new(cfg.claude_dir.clone(), &cfg.registry_dir).with_legacy_seen(legacy_seen);
+        let codex = CodexWatch::new(cfg.codex_home.clone(), &cfg.registry_dir);
+        let found = agents::look(&cfg);
         let hook = ClaudeHook::new(cfg.claude_settings.clone(), &cfg.registry_dir);
         let hook_status = hook.status();
         let favourites = registry.read_favourites();
@@ -333,6 +369,7 @@ impl Core {
                 claude_hook_outdated: hook_status.outdated,
                 board_unsaved: board.read_only(),
                 whats_new,
+                found,
                 ..Inner::default()
             }),
             terminals: Mutex::new(HashMap::new()),
@@ -341,6 +378,7 @@ impl Core {
             sessions: Mutex::new(sessions::SessionsCache::default()),
             reservations: Mutex::new(Reservations::default()),
             claude: Mutex::new(claude),
+            codex: Mutex::new(codex),
             hook,
             watch: Mutex::new(None),
             git_busy: AtomicBool::new(false),
@@ -355,6 +393,8 @@ impl Core {
             discover_busy: AtomicBool::new(false),
             sink,
             phone: relay::Phone::default(),
+            codex_hook: std::sync::OnceLock::new(),
+            codex_day_tokens: Mutex::new(day_tokens::DayTokens::default()),
         })
     }
 

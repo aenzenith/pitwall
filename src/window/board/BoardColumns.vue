@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import ClaudeLogo from "../../components/ClaudeLogo.vue";
+import AgentMark from "../../components/AgentMark.vue";
 import Icon from "../../components/Icon.vue";
-import { COLUMN_ICONS, COLUMN_LABELS, COLUMNS, columnCards, type BoardLayout, type CardStatus } from "../../lib/board";
+import { agentsOn, multiAgent } from "../../lib/agents";
+import { COLUMN_ICONS, columnCards, columnLabel, COLUMNS, type BoardLayout, type CardStatus } from "../../lib/board";
 import type { DropTarget, Ghost } from "../../lib/cardDrag";
 import { language, t } from "../../lib/i18n";
 import { ALL, dayShort, shiftDay, type Period } from "../../lib/period";
@@ -73,7 +74,7 @@ const columns = computed(() =>
  * just `Done` for every day's. */
 function label(column: BoardColumn): string {
   const period = props.period;
-  if (column !== "done" || period === ALL) return t(COLUMN_LABELS[column]);
+  if (column !== "done" || period === ALL) return t(columnLabel(column, agentsOn.value));
   if (period === null) return t("board.doneToday");
   return t("board.doneOn", { when: period === shiftDay(today.value, -1) ? t("day.yesterday").toLocaleLowerCase(language.value) : dayShort(period) });
 }
@@ -108,7 +109,10 @@ useSlide(root, order);
       <div class="bcol-top">
         <h2 :id="`bcol-${col.column}`" class="bcol-head">
           <span class="bcol-mark">
-            <ClaudeLogo v-if="col.column === 'claude'" :size="12" />
+            <template v-if="col.column === 'claude'">
+              <Icon v-if="multiAgent" name="sparkles" :size="14" />
+              <AgentMark v-else :agent="agentsOn[0] ?? 'claude'" :size="12" />
+            </template>
             <Icon v-else :name="COLUMN_ICONS[col.column]" :size="14" />
           </span>
           <span class="bcol-name">{{ label(col.column) }}</span>

@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::registry::{now_ms, same_path, write_atomic};
-use crate::start::{Mode, Model, Start};
+use crate::agent::Agent;
+use crate::start::{CodexMode, CodexModel, CodexStart, Mode, Model, Start};
 
 /// A project's own command (queue worker, migrations, tests…), run from the detail panel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -61,6 +62,18 @@ pub struct ProjectSettings {
     /// The mode such a session starts in.
     #[serde(skip_serializing_if = "Mode::is_normal", deserialize_with = "crate::start::mode_or_normal")]
     pub claude_mode: Mode,
+    /// The agent a session started here goes to when none is picked (a board card given, the
+    /// terminal panel's `+` at a click); Claude when the file names none or one this version
+    /// doesn't know.
+    #[serde(skip_serializing_if = "Agent::is_claude")]
+    pub agent: Agent,
+    /// The model a Codex session started here takes; none: the one Codex picks itself. One of a
+    /// fixed list, whatever the file says (`start.rs`).
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "crate::start::codex_model_or_none")]
+    pub codex_model: Option<CodexModel>,
+    /// The mode such a session starts in.
+    #[serde(skip_serializing_if = "CodexMode::is_normal", deserialize_with = "crate::start::codex_mode_or_normal")]
+    pub codex_mode: CodexMode,
     /// The three letters the Track page and the mini tower write for the project, in place of
     /// those told from its name (`codes` in `src/lib/track.ts`).
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "code_or_none")]
@@ -161,9 +174,16 @@ fn editor_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<O
 }
 
 impl ProjectSettings {
-    /// How a Claude session of the project starts when nothing else was chosen.
+    /// How a session of the project starts when nothing else was chosen: its own agent, and
+    /// each agent's model and mode as its settings say.
     pub fn start(&self) -> Start {
-        Start { model: self.claude_model, mode: self.claude_mode }
+        Start { agent: self.agent, model: self.claude_model, mode: self.claude_mode, codex: CodexStart { model: self.codex_model, mode: self.codex_mode } }
+    }
+
+    /// `start` with another agent than the project's own: what the project's settings say for
+    /// that one.
+    pub fn start_with(&self, agent: Agent) -> Start {
+        Start { agent, ..self.start() }
     }
 
     /// Where the project at `path` runs its dev server and commands, and whose files are read
@@ -459,6 +479,67 @@ pub struct ClaudeAccount {
     pub sync: bool,
 }
 
+/// The coding agents Pitwall follows (`agent.rs`), each with its own part. This Mac's own (what is
+/// installed is this Mac's): in no backup, and changed through their own commands only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentsSettings {
+    pub claude: AgentSettings,
+    pub codex: AgentSettings,
+}
+
+impl AgentsSettings {
+    pub fn of(&self, agent: Agent) -> &AgentSettings {
+        match agent {
+            Agent::Claude => &self.claude,
+            Agent::Codex => &self.codex,
+        }
+    }
+
+    pub fn of_mut(&mut self, agent: Agent) -> &mut AgentSettings {
+        match agent {
+            Agent::Claude => &mut self.claude,
+            Agent::Codex => &mut self.codex,
+        }
+    }
+
+    /// Whether `agent` is followed, `found` telling whether its home folder is on this Mac: as the
+    /// user said; never said, Claude is on (every user before there were agents) and another
+    /// agent is on once it is found. Another agent that isn't found is off, whatever was said: the
+    /// user's word is kept for when it is back.
+    pub fn is_on(&self, agent: Agent, found: bool) -> bool {
+        if agent.is_claude() {
+            return self.of(agent).on.unwrap_or(true);
+        }
+        found && self.of(agent).on.unwrap_or(true)
+    }
+}
+
+/// One agent's part of `AgentsSettings`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentSettings {
+    /// The user turned it on or off; none: never said (`AgentsSettings::is_on`). Once off by the
+    /// user's word, Pitwall never turns it on again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    /// The user was told that it was found and turned on (the found notice), once.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub told: bool,
+    /// Its accounts besides the main one (Codex: a `CODEX_HOME` each); Claude's are
+    /// `Settings::accounts`, as before. Changed through their own commands only.
+    #[serde(skip_serializing_if = "is_no_accounts")]
+    pub accounts: AccountSettings,
+    /// Its team radio: Pitwall among its MCP servers (Codex: through `codex mcp`). Claude's is
+    /// `Settings::radio`, as before. Changed through its own command only.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub radio: bool,
+}
+
+fn is_no_accounts(accounts: &AccountSettings) -> bool {
+    *accounts == AccountSettings::default()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -574,6 +655,10 @@ pub struct Settings {
     /// Claude's accounts; changed through their own commands only.
     #[serde(default)]
     pub accounts: AccountSettings,
+    /// The coding agents followed, and each one's own part; changed through their own commands
+    /// only. This Mac's own.
+    #[serde(default)]
+    pub agents: AgentsSettings,
 }
 
 impl Default for Settings {
@@ -623,6 +708,7 @@ impl Default for Settings {
             cli: CliSettings::default(),
             open: OpenSettings::default(),
             accounts: AccountSettings::default(),
+            agents: AgentsSettings::default(),
         }
     }
 }
@@ -633,22 +719,34 @@ impl Settings {
     /// is in it. Of JSON that doesn't fit as a whole, every field that fits on its own is kept
     /// (each project, command and link separately) and written back at once.
     pub fn load(file: &Path) -> Self {
+        // Defaults, but for each agent what the copy beside the settings says: the next save
+        // would otherwise take the user's word on it away with the copy.
+        let defaults = || Self { agents: read_agents(file).and_then(|agents| serde_json::from_value(agents).ok()).unwrap_or_default(), ..Self::default() };
         let raw = match fs::read(file) {
             Ok(raw) => raw,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Self::default(),
+            Err(error) if error.kind() == ErrorKind::NotFound => return defaults(),
             Err(error) => {
                 set_aside(file, &error.to_string());
-                return Self::default();
+                return defaults();
             }
         };
 
-        let value = match serde_json::from_slice::<Value>(&raw) {
+        let mut value = match serde_json::from_slice::<Value>(&raw) {
             Ok(value) => value,
             Err(error) => {
                 set_aside(file, &error.to_string());
-                return Self::default();
+                return defaults();
             }
         };
+        // Written by an older Pitwall, which knows nothing of `agents`: the copy beside them has
+        // the user's word on each agent.
+        if let Value::Object(fields) = &mut value {
+            if !fields.contains_key("agents") {
+                if let Some(agents) = read_agents(file) {
+                    fields.insert("agents".into(), agents);
+                }
+            }
+        }
 
         match serde_json::from_value::<Self>(value.clone()) {
             Ok(settings) => settings.upgraded(),
@@ -670,6 +768,14 @@ impl Settings {
 
         if let Ok(json) = serde_json::to_string_pretty(self) {
             let _ = write_atomic(file, &json);
+        }
+        // `agents` again, in a file of its own that an older Pitwall leaves alone; none while
+        // nothing was said or set of any agent.
+        let copy = agents_file(file);
+        if self.agents == AgentsSettings::default() {
+            let _ = fs::remove_file(copy);
+        } else if let Ok(json) = serde_json::to_string_pretty(&self.agents) {
+            let _ = write_private(&copy, &json);
         }
     }
 
@@ -768,9 +874,42 @@ pub(crate) fn set_aside(file: &Path, reason: &str) -> bool {
     false
 }
 
+/// The copy of the settings' `agents` beside them (`agents.json`), readable by the user alone:
+/// what an older Pitwall writing the settings leaves out. This Mac's own, as `agents` is.
+fn agents_file(file: &Path) -> PathBuf {
+    file.with_file_name("agents.json")
+}
+
+/// The copy as JSON, when it is there and fits.
+fn read_agents(file: &Path) -> Option<Value> {
+    let raw = fs::read(agents_file(file)).ok()?;
+    serde_json::from_slice::<AgentsSettings>(&raw).ok().and_then(|agents| serde_json::to_value(agents).ok())
+}
+
+/// `json` into `file` for the user alone: written beside it first and moved over it whole
+/// (`core::restore::write_private`, which the phone's channel is kept with).
+fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let temp = file.with_extension(format!("{}.tmp", std::process::id()));
+    let _ = fs::remove_file(&temp);
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let written = options.open(&temp).and_then(|mut new| new.write_all(json.as_bytes())).and_then(|()| fs::rename(&temp, file));
+    if written.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    written
+}
+
 /// Settings out of JSON that doesn't fit as a whole: field by field, so a value of the wrong
-/// type costs only itself. Projects, their commands and links, and the sounds are each kept or
-/// trimmed on their own.
+/// type costs only itself. Projects, their commands and links, the sounds and each agent's part
+/// are each kept or trimmed on their own.
 fn salvage(mut value: Value) -> Settings {
     if let Some(Value::Object(projects)) = value.get_mut("projects") {
         for project in projects.values_mut() {
@@ -791,6 +930,12 @@ fn salvage(mut value: Value) -> Settings {
     }
     if let Some(sounds) = value.get_mut("sounds") {
         *sounds = fitting::<Sounds>(sounds.take());
+    }
+    // Each agent's part on its own: one that doesn't fit keeps the user's word on it.
+    if let Some(Value::Object(agents)) = value.get_mut("agents") {
+        for part in agents.values_mut() {
+            *part = fitting::<AgentSettings>(part.take());
+        }
     }
 
     serde_json::from_value(fitting::<Settings>(value)).unwrap_or_default()
@@ -931,5 +1076,62 @@ mod tests {
         assert_eq!(ProjectSettings::default().work_dir(&path), Some(root.clone()));
         assert_eq!(at("out"), None, "a link made after it was set, leading out");
         assert_eq!(at("nowhere"), None);
+    }
+
+    /// The user's word on an agent (D2) outlives an older Pitwall that wrote the settings without
+    /// it (a dev build shares the installed app's file): its copy beside them is read. A
+    /// Claude-only user, who said nothing, gets no such file.
+    #[test]
+    fn codex_turned_off_outlives_an_older_app_writing_the_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        let copy = dir.path().join("agents.json");
+
+        Settings::default().save(&file);
+        assert!(!copy.exists(), "nothing said, nothing kept");
+
+        let mut settings = Settings { script: "serve".into(), ..Settings::default() };
+        settings.agents.codex.on = Some(false);
+        settings.agents.codex.told = true;
+        settings.agents.codex.radio = true;
+        settings.save(&file);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&copy).unwrap().permissions().mode() & 0o777, 0o600, "the user's alone");
+        }
+
+        // An older app saves: the settings it knows, no `agents`.
+        let mut older: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        older.as_object_mut().unwrap().remove("agents");
+        fs::write(&file, older.to_string()).unwrap();
+
+        let loaded = Settings::load(&file);
+        assert_eq!(loaded.script, "serve");
+        assert_eq!(loaded.agents, settings.agents, "Codex stays off, told, its radio as it was");
+        assert!(!loaded.agents.is_on(Agent::Codex, true));
+
+        // A settings file that doesn't parse at all is set aside; the copy still has the word.
+        fs::write(&file, "{ not json").unwrap();
+        let loaded = Settings::load(&file);
+        assert_eq!(loaded.agents, settings.agents, "a broken file doesn't turn Codex back on");
+        loaded.save(&file);
+        assert!(copy.exists(), "and the next save keeps the copy");
+    }
+
+    /// A part of an agent's settings that doesn't parse costs only itself: the user's "off" stays.
+    #[test]
+    fn a_bad_part_of_an_agent_keeps_its_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        fs::write(&file, r#"{ "script": "serve", "agents": { "codex": { "on": false, "told": true, "accounts": { "others": [ { "id": 7 } ] } } } }"#).unwrap();
+
+        let settings = Settings::load(&file);
+        assert_eq!(settings.script, "serve", "the rest is kept");
+        assert_eq!(settings.agents.codex.on, Some(false));
+        assert!(settings.agents.codex.told);
+        assert!(settings.agents.codex.accounts.others.is_empty(), "the account that doesn't parse goes");
+        assert!(!settings.agents.is_on(Agent::Codex, true));
+        assert_eq!(Settings::load(&file), settings, "and is written back so");
     }
 }

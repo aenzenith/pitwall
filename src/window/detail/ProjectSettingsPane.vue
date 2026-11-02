@@ -5,10 +5,11 @@ import Icon from "../../components/Icon.vue";
 import { t, type Key } from "../../lib/i18n";
 import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../../lib/open";
 import { projectSettings, updateProjectSettings } from "../../lib/projectSettings";
-import { MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice } from "../../lib/start";
+import { agentName, agentOf, agentsOn, multiAgent } from "../../lib/agents";
+import { CODEX_MODE_LABELS, CODEX_MODELS, CODEX_MODES, codexModelLabel, MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice, projectCodexChoice } from "../../lib/start";
 import { api, snapshot } from "../../lib/store";
 import { codes } from "../../lib/track";
-import type { ClaudeMode, ClaudeModel, Project } from "../../lib/types";
+import type { Agent, ClaudeMode, ClaudeModel, CodexMode, CodexModel, Project } from "../../lib/types";
 
 const props = defineProps<{ project: Project }>();
 /** `edit`: the command dialog (`null` for a new command); `close`: saved, back to the details. */
@@ -85,6 +86,29 @@ function setModel(value: string): void {
 function setMode(value: string): void {
   const mode = MODES.find((known) => known === value && known !== "normal");
   void updateProjectSettings(props.project.path, (s) => ({ ...s, claudeMode: mode satisfies ClaudeMode | undefined }));
+}
+
+/** With more than one agent on, the project's own: which starts here unless another is picked (a
+ * board card given, the terminal panel's `+` at a click), and that one's model and mode. Claude,
+ * every project's before there were agents, is kept as no word at all. */
+const agent = computed<Agent>(() => agentOf(projectSettings(props.project).agent));
+const codex = computed(() => projectCodexChoice(props.project));
+
+function setAgent(value: string): void {
+  const picked = agentsOn.value.find((known) => known === value);
+  if (!picked) return;
+  void updateProjectSettings(props.project.path, (s) => ({ ...s, agent: picked === "claude" ? undefined : picked }));
+}
+
+/** Codex's own choice is no model, its normal mode none: as Claude's are. */
+function setCodexModel(value: string): void {
+  const model = CODEX_MODELS.find((known) => known === value);
+  void updateProjectSettings(props.project.path, (s) => ({ ...s, codexModel: model satisfies CodexModel | undefined }));
+}
+
+function setCodexMode(value: string): void {
+  const mode = CODEX_MODES.find((known) => known === value && known !== "normal");
+  void updateProjectSettings(props.project.path, (s) => ({ ...s, codexMode: mode satisfies CodexMode | undefined }));
 }
 
 /** The three letters the Track page and the mini tower write for the project when none is set:
@@ -176,7 +200,50 @@ function setOpen(from: OpenFrom, value: string): void {
       </div>
     </form>
 
-    <section class="group" :aria-label="t('settings.claude')">
+    <!-- More than one agent on: the agent this project starts, then its model and mode. -->
+    <section v-if="multiAgent" class="group" :aria-label="t('settings.agents.agent')">
+      <div class="section-label">{{ t("settings.agents.agent") }}</div>
+      <div class="picks">
+        <label class="pick">
+          <span class="pick-name">{{ t("settings.agents.agent") }}</span>
+          <select :value="agent" @change="setAgent(($event.target as HTMLSelectElement).value)">
+            <option v-for="known in agentsOn" :key="known" :value="known">{{ agentName(known) }}</option>
+          </select>
+        </label>
+        <template v-if="agent === 'codex'">
+          <label class="pick">
+            <span class="pick-name">{{ t("start.model") }}</span>
+            <select :value="codex.model ?? ''" @change="setCodexModel(($event.target as HTMLSelectElement).value)">
+              <option value="">{{ codexModelLabel(null) }}</option>
+              <option v-for="model in CODEX_MODELS" :key="model" :value="model">{{ codexModelLabel(model) }}</option>
+            </select>
+          </label>
+          <label class="pick">
+            <span class="pick-name">{{ t("start.mode") }}</span>
+            <select :value="codex.mode" @change="setCodexMode(($event.target as HTMLSelectElement).value)">
+              <option v-for="mode in CODEX_MODES" :key="mode" :value="mode">{{ t(CODEX_MODE_LABELS[mode]) }}</option>
+            </select>
+          </label>
+        </template>
+        <template v-else>
+          <label class="pick">
+            <span class="pick-name">{{ t("start.model") }}</span>
+            <select :value="claude.model ?? ''" @change="setModel(($event.target as HTMLSelectElement).value)">
+              <option value="">{{ t("start.model.auto") }}</option>
+              <option v-for="model in MODELS" :key="model" :value="model">{{ t(MODEL_LABELS[model]) }}</option>
+            </select>
+          </label>
+          <label class="pick">
+            <span class="pick-name">{{ t("start.mode") }}</span>
+            <select :value="claude.mode" @change="setMode(($event.target as HTMLSelectElement).value)">
+              <option v-for="mode in MODES" :key="mode" :value="mode">{{ t(MODE_LABELS[mode]) }}</option>
+            </select>
+          </label>
+        </template>
+      </div>
+    </section>
+
+    <section v-else class="group" :aria-label="t('settings.claude')">
       <div class="section-label">{{ t("settings.claude") }}</div>
       <div class="picks">
         <label class="pick">

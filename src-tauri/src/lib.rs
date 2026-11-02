@@ -37,6 +37,11 @@ mod tower;
 mod cli;
 mod start;
 mod files;
+mod agent;
+mod codex;
+mod codex_hooks;
+mod codex_usage;
+mod codex_spend;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -53,6 +58,7 @@ use crate::core::{Core, CoreConfig, CoreEvent};
 pub use crate::hooks::hook_mode;
 pub use crate::mcp::mcp_mode;
 pub use crate::cli::cli_mode;
+pub use crate::codex_hooks::codex_hook_mode;
 
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";
@@ -156,6 +162,11 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         CoreEvent::RevealPage(page) => {
             tray::show_main(app);
             let _ = app.emit("reveal-page", serde_json::json!({ "page": page }));
+        }
+        // The Fuel page, as a page is shown, on that agent's part.
+        CoreEvent::RevealFuel(agent) => {
+            tray::show_main(app);
+            let _ = app.emit("reveal-page", serde_json::json!({ "page": "fuel", "agent": agent }));
         }
     }
 }
@@ -280,9 +291,10 @@ pub fn run() {
             let clicks = app.handle().clone();
             notify::start(is_bundled(), move |path| {
                 // The Fuel page's notification opens that page.
-                if path == fuel::NOTIFICATION_ID {
+                if path == fuel::NOTIFICATION_ID || path == fuel::CODEX_NOTIFICATION_ID {
                     tray::show_main(&clicks);
-                    let _ = clicks.emit("reveal-fuel", ());
+                    let agent = if path == fuel::CODEX_NOTIFICATION_ID { agent::Agent::Codex } else { agent::Agent::Claude };
+                    let _ = clicks.emit("reveal-fuel", serde_json::json!({ "agent": agent }));
                 } else if path == update::NOTIFICATION_ID || path == core::TEST_BANNER {
                     tray::show_main(&clicks);
                 } else if let Some(state) = clicks.try_state::<AppState>() {
@@ -296,6 +308,7 @@ pub fn run() {
                 CoreConfig {
                     registry_dir,
                     claude_dir: home.join(".claude").join("projects"),
+                    codex_home: agent::Agent::Codex.home_in(&home),
                     settings_file: app.path().app_config_dir()?.join("settings.json"),
                     claude_settings: home.join(".claude").join("settings.json"),
                     legacy_registries: legacy,
@@ -306,7 +319,13 @@ pub fn run() {
 
             let fuel = fuel::Fuel::new(app.handle(), home.join(".claude").join("projects"));
             let update = update::Update::new(app.handle());
-            app.manage(AppState { core: Arc::clone(&core), fuel, sessions: sessions::Sessions::default(), update, backup: std::sync::Mutex::new(None) });
+            app.manage(AppState {
+                core: Arc::clone(&core),
+                fuel,
+                sessions: sessions::Sessions::default(),
+                update,
+                backup: std::sync::Mutex::new(None),
+            });
             fuel::Fuel::start(app.handle());
             sessions::Sessions::start(app.handle());
             update::Update::start(app.handle());
@@ -317,6 +336,8 @@ pub fn run() {
             core.radio_start();
             // The command line's line, when the `pitwall` command is installed.
             core.cli_start();
+            // The agents that are on but Claude: their watches start (`core/agents.rs`).
+            core.agents_changed();
             // After a restart for an update: the servers, tabs and Claude sessions it closed.
             let restored = core.restore();
             // After a quit: what was open, put back or offered as Settings says.
@@ -597,7 +618,17 @@ pub fn run() {
             commands::last_looked,
             commands::board_schedule,
             commands::board_unschedule,
-            commands::board_give_now
+            commands::board_give_now,
+            commands::install_codex_hook,
+            commands::uninstall_codex_hook,
+            commands::codex_past,
+            commands::resume_codex,
+            commands::agent_set_on,
+            commands::agent_told,
+            commands::look_for_agents,
+            commands::agent_details,
+            commands::codex_radio_state,
+            commands::codex_radio_set,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

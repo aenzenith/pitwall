@@ -7,6 +7,10 @@ fn main() {
     if pitwall_lib::hook_mode(std::env::args_os().skip(1)) {
         return;
     }
+    // Codex's hook there (`--codex-hook <Event>`), the same way (`codex_hooks.rs`).
+    if pitwall_lib::codex_hook_mode(std::env::args_os().skip(1)) {
+        return;
+    }
     // Claude Code's MCP server (`--mcp`), the team radio's other end: it answers Claude Code
     // until that closes it, and nothing of the app starts either.
     if pitwall_lib::mcp_mode(std::env::args_os().skip(1)) {

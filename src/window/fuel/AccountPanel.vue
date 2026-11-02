@@ -3,11 +3,11 @@ import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
-import { accountInUse, accountName, accounts, switchAccount } from "../../lib/accounts";
-import { clockText, cluster, isLow, isStale, left, percentText } from "../../lib/fuel";
+import { accountInUseOf, accountName, accountsOf, switchAccount } from "../../lib/accounts";
+import { clockText, cluster, isLow, isStale, left, percentText, readClock } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { now } from "../../lib/store";
-import type { ClaudeAccount, UsageState, UsageWindow } from "../../lib/types";
+import type { Agent, ClaudeAccount, UsageState, UsageWindow } from "../../lib/types";
 
 /**
  * The Fuel page's account chip, at the bar's end before "x min ago": the account in use by its
@@ -16,7 +16,14 @@ import type { ClaudeAccount, UsageState, UsageWindow } from "../../lib/types";
  * switches to it (`account_use`). "Add account" opens Settings › Claude with the add dialog,
  * "Manage accounts" Settings › Claude. Shown only with more than one account (FuelView).
  */
+/* `agent`: whose accounts (none: Claude's, as before). `plan`: the chip says the plan in use after
+ * the name, as beside the agent picker (FuelView with more than one agent on), its panel opening
+ * under it from its left edge. Codex's rows say when their limits were last read: Codex writes
+ * them at its requests, Pitwall asks nobody. */
+const props = defineProps<{ agent?: Agent; plan?: boolean }>();
 const emit = defineEmits<{ add: []; manage: [] }>();
+
+const agent = computed<Agent>(() => props.agent ?? "claude");
 
 const root = ref<HTMLElement | null>(null);
 const button = ref<HTMLButtonElement | null>(null);
@@ -71,10 +78,12 @@ type Row = {
   line: string | null;
   /** Its first reading is on its way. */
   reading: boolean;
+  /** Codex's: when its limits were last read. */
+  read: string | null;
 };
 
 const rows = computed<Row[]>(() =>
-  accounts.value.map((account) => {
+  accountsOf(agent.value).map((account) => {
     const limits = account.limits;
     const { session, week } = cluster(limits.usage, now.value, t, language.value);
     const stale = isStale(limits);
@@ -89,6 +98,7 @@ const rows = computed<Row[]>(() =>
       tag: account.missing ? t("accounts.missing") : stale ? stateTag(limits) : null,
       line: !account.missing && expired ? t("accounts.expiredLine") : null,
       reading: !account.missing && limits.status === "loading" && !limits.usage,
+      read: agent.value === "codex" && limits.fetchedAt ? t("fuel.lastRead", { time: readClock(limits.fetchedAt, now.value, language.value) }) : null,
     };
   }),
 );
@@ -96,8 +106,8 @@ const rows = computed<Row[]>(() =>
 /* ---------- the chip ---------- */
 
 const chip = computed(() => {
-  const account = accountInUse.value;
-  return account ? { name: accountName(account) } : null;
+  const account = accountInUseOf(agent.value);
+  return account ? { name: accountName(account), plan: props.plan ? account.limits.plan : null } : null;
 });
 
 /* ---------- open and close ---------- */
@@ -108,9 +118,16 @@ function show(): void {
   const box = button.value?.getBoundingClientRect();
   if (!box || open.value) return;
   error.value = "";
-  // Under the chip, its right edge on the chip's, never past the window's left edge.
-  const right = Math.min(window.innerWidth - box.right, Math.max(16, window.innerWidth - WIDTH - 16));
-  place.value = { top: `${box.bottom + 6}px`, right: `${Math.max(16, right)}px`, maxHeight: `${Math.max(160, window.innerHeight - box.bottom - 22)}px` };
+  const maxHeight = `${Math.max(160, window.innerHeight - box.bottom - 22)}px`;
+  if (props.plan) {
+    // Beside the agent picker: under the chip from its left edge, never past the window's right one.
+    const leftEdge = Math.max(16, Math.min(box.left, window.innerWidth - WIDTH - 16));
+    place.value = { top: `${box.bottom + 6}px`, left: `${leftEdge}px`, maxHeight };
+  } else {
+    // Under the chip, its right edge on the chip's, never past the window's left edge.
+    const right = Math.min(window.innerWidth - box.right, Math.max(16, window.innerWidth - WIDTH - 16));
+    place.value = { top: `${box.bottom + 6}px`, right: `${Math.max(16, right)}px`, maxHeight };
+  }
   open.value = true;
   window.addEventListener("pointerdown", onOutside, true);
   window.addEventListener("blur", hide);
@@ -176,7 +193,7 @@ async function pick(row: Row): Promise<void> {
   switching.value = row.account.id;
   error.value = "";
   try {
-    await switchAccount(row.account.id);
+    await switchAccount(row.account.id, agent.value);
     close();
   } catch (reason) {
     error.value = String(reason);
@@ -212,11 +229,12 @@ function manage(): void {
     >
       <Icon name="user" :size="14" />
       <span class="chip-name">{{ chip.name }}</span>
+      <span v-if="chip.plan" class="chip-plan">{{ chip.plan }}</span>
       <Icon name="chevron-down" :size="12" class="chip-chevron" />
     </button>
 
-    <div v-if="open" ref="panel" class="panel" role="dialog" :aria-label="t('accounts.title')" :style="place" @keydown="onKey" @focusout="onFocusOut">
-      <span class="panel-label section-label" aria-hidden="true">{{ t("accounts.title") }}</span>
+    <div v-if="open" ref="panel" class="panel" role="dialog" :aria-label="t(agent === 'codex' ? 'accounts.title.codex' : 'accounts.title')" :style="place" @keydown="onKey" @focusout="onFocusOut">
+      <span class="panel-label section-label" aria-hidden="true">{{ t(agent === "codex" ? "accounts.title.codex" : "accounts.title") }}</span>
       <button
         v-for="row in rows"
         :key="row.account.id"
@@ -235,6 +253,7 @@ function manage(): void {
             <span v-else-if="row.reading" class="row-reading"><Spinner :size="11" />{{ t("accounts.reading") }}</span>
             <span v-else-if="row.tag" :class="['tag', { expired: row.account.limits.status === 'expired' }]">{{ row.tag }}</span>
             <span v-else-if="row.account.inUse" class="tag">{{ t("accounts.inUse") }}</span>
+            <span v-else-if="row.read" class="row-read">{{ row.read }}</span>
           </span>
         </span>
         <span v-if="row.line" class="row-line">{{ row.line }}</span>
@@ -247,8 +266,15 @@ function manage(): void {
             <span class="bar-track"><span :class="['bar-fill', { low: each.low }]" :style="{ width: `${each.fill}%` }"></span></span>
           </span>
         </span>
-        <span v-if="row.account.running > 0 && !row.account.missing" class="row-running">
+        <span v-if="agent === 'claude' && row.account.running > 0 && !row.account.missing" class="row-running">
           <span class="dot" aria-hidden="true"></span>{{ t("accounts.running", { count: row.account.running }) }}
+        </span>
+        <!-- Codex's: its sessions running, and when the one in use was last read. -->
+        <span v-else-if="agent !== 'claude' && ((row.account.running > 0 && !row.account.missing) || (row.read && row.account.inUse))" class="row-foot">
+          <span v-if="row.account.running > 0 && !row.account.missing" class="row-running">
+            <span class="dot" aria-hidden="true"></span>{{ t("accounts.running.codex", { count: row.account.running }) }}
+          </span>
+          <span v-if="row.read && row.account.inUse" class="row-read">{{ row.read }}</span>
         </span>
       </button>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -299,6 +325,11 @@ function manage(): void {
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chip-plan {
+  flex-shrink: 0;
+  color: var(--text-subtle);
 }
 
 .chip-chevron {
@@ -479,6 +510,20 @@ function manage(): void {
 
 .row.stale .bar-fill {
   background: var(--idle-ring);
+}
+
+.row-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-read {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-subtle);
+  white-space: nowrap;
 }
 
 .row-running {

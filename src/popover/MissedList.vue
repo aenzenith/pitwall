@@ -20,15 +20,15 @@ import type { Missed } from "../lib/types";
  */
 const emit = defineEmits<{ leave: [] }>();
 
-/** A line by its kind and project: the list holds one of each. */
-const id = (entry: Missed): string => `${entry.kind}:${entry.path}`;
+/** A line by its kind and project: the list holds one of each (the fuel alert one per agent). */
+const id = (entry: Missed): string => `${entry.kind}:${entry.path}${entry.agent && entry.agent !== "claude" ? `:${entry.agent}` : ""}`;
 
 /** The line the keyboard is on: the list's one Tab stop (the first line until the arrows move it). */
 const focused = ref<string | null>(null);
 const tabStop = computed(() => (missed.value.some((entry) => id(entry) === focused.value) ? focused.value : missed.value[0] ? id(missed.value[0]) : null));
 
 function open(entry: Missed): void {
-  void api.missedOpen(entry.path, entry.kind);
+  void api.missedOpen(entry.path, entry.kind, entry.agent ?? "claude");
 }
 
 /** ↑/↓ move between lines; ↵ and Space open one, and the keyboard goes on to the line after it

@@ -7,10 +7,12 @@ import RoadSky from "../components/RoadSky.vue";
 import Spinner from "../components/Spinner.vue";
 import { shortcutLabel } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
+import { agentInfo } from "../lib/agents";
 import { dragRegion, isMac } from "../lib/platform";
 import { api, snapshot, visible } from "../lib/store";
 import type { ExtensionStatus } from "../lib/types";
 import StepAlerts from "./setup/StepAlerts.vue";
+import StepCodex from "./setup/StepCodex.vue";
 import StepExtension from "./setup/StepExtension.vue";
 import StepHook from "./setup/StepHook.vue";
 import StepProjects from "./setup/StepProjects.vue";
@@ -28,18 +30,30 @@ import StepStartup from "./setup/StepStartup.vue";
 const props = defineProps<{ fade: boolean; covered: boolean }>();
 const emit = defineEmits<{ done: []; openPhone: [] }>();
 
-type Step = "projects" | "hook" | "radio" | "extension" | "startup" | "alerts";
+type Step = "projects" | "hook" | "radio" | "codex" | "extension" | "startup" | "alerts";
 
-const steps: Array<{ id: Step; title: Key; hint: Key }> = [
+/** Codex's step, after the radio's, once Codex is found here and on (not when the user turned it
+ * off): kept for the run once it showed, so turning Codex off in it leaves it where it is. */
+const withCodex = ref(false);
+watch(
+  () => agentInfo("codex"),
+  (codex) => {
+    if (codex?.found && codex.on) withCodex.value = true;
+  },
+  { immediate: true },
+);
+
+const steps = computed<Array<{ id: Step; title: Key; hint: Key }>>(() => [
   { id: "projects", title: "setup.step.projects", hint: "setup.step.projectsHint" },
   { id: "hook", title: "setup.step.hook", hint: "setup.step.hookHint" },
   { id: "radio", title: "setup.step.radio", hint: "setup.step.radioHint" },
+  ...(withCodex.value ? [{ id: "codex" as const, title: "setup.step.hook.codex" as const, hint: "setup.step.hookHint.codex" as const }] : []),
   { id: "extension", title: "setup.step.extension", hint: "setup.step.extensionHint" },
   { id: "startup", title: "setup.step.startup", hint: "setup.step.startupHint" },
   // The pitwall command is macOS's alone so far: elsewhere its line says nothing of it.
   { id: "alerts", title: "setup.step.alerts", hint: isMac ? "setup.step.alertsHint" : "setup.step.alertsHintNoCli" },
-];
-const order = steps.map((item) => item.id);
+]);
+const order = computed(() => steps.value.map((item) => item.id));
 
 /* ---------- Pitwall for VS Code ---------- */
 
@@ -82,6 +96,8 @@ const done = computed<Record<Step, boolean>>(() => ({
   projects: !!snapshot.value?.projects.length,
   hook: !!snapshot.value?.claudeHook && !snapshot.value.claudeHookOutdated,
   radio: !!snapshot.value?.settings.radio?.on,
+  // Installed counts as done: the approval is given in Codex, not here. Turned off is done too.
+  codex: !agentInfo("codex")?.on || (agentInfo("codex")?.hook !== "missing" && !agentInfo("codex")?.hookOutdated),
   extension: !!extension.value?.version,
   startup: true,
   alerts: true,
@@ -89,11 +105,16 @@ const done = computed<Record<Step, boolean>>(() => ({
 
 const page = ref<"welcome" | Step>("welcome");
 
-const at = computed(() => (page.value === "welcome" ? -1 : order.indexOf(page.value)));
-const current = computed(() => steps[at.value] ?? null);
-const last = computed(() => at.value === order.length - 1);
+const at = computed(() => (page.value === "welcome" ? -1 : order.value.indexOf(page.value)));
+const current = computed(() => steps.value[at.value] ?? null);
+const last = computed(() => at.value === order.value.length - 1);
 
-function hint(item: (typeof steps)[number]): string {
+// Its step seen is the user told that Codex was found: the found notice doesn't come as well.
+watch(page, (shown) => {
+  if (shown === "codex") void api.agentTold("codex").catch(() => undefined);
+});
+
+function hint(item: (typeof steps.value)[number]): string {
   return t(item.hint, { keys: shortcutLabel(snapshot.value?.settings.shortcutKeys ?? "") });
 }
 
@@ -109,13 +130,13 @@ function go(to: "welcome" | Step): void {
 }
 
 function back(): void {
-  go(at.value > 0 ? order[at.value - 1] : "welcome");
+  go(at.value > 0 ? order.value[at.value - 1] : "welcome");
 }
 
 function next(): void {
-  if (page.value === "welcome") go(order[0]);
+  if (page.value === "welcome") go(order.value[0]);
   else if (last.value) void leave("finish");
-  else go(order[at.value + 1]);
+  else go(order.value[at.value + 1]);
 }
 
 /* ---------- the keyboard ---------- */
@@ -226,6 +247,7 @@ const roadRunning = computed(() => visible.value && !props.covered);
         <StepProjects v-show="page === 'projects'" id="setup-pane-projects" role="group" aria-labelledby="setup-title-projects" @added="go(order[1])" />
         <StepHook v-show="page === 'hook'" id="setup-pane-hook" role="group" aria-labelledby="setup-title-hook" />
         <StepRadio v-show="page === 'radio'" id="setup-pane-radio" role="group" aria-labelledby="setup-title-radio" />
+        <StepCodex v-if="withCodex" v-show="page === 'codex'" id="setup-pane-codex" role="group" aria-labelledby="setup-title-codex" />
         <StepExtension
           v-show="page === 'extension'"
           id="setup-pane-extension"

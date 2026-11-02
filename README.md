@@ -3,7 +3,7 @@
   <h1>Pitwall</h1>
   <p>
     <b>The pit wall for your dev machine.</b><br>
-    Your dev servers and Claude Code sessions, one glance away in the menu bar.
+    Your dev servers and your Claude Code and Codex sessions, one glance away in the menu bar.
   </p>
   <p>
     <a href="https://github.com/aenzenith/pitwall/releases/latest"><b>Download</b></a> ·
@@ -25,8 +25,8 @@ You hand work to Claude in five projects, switch to something else, and forget t
 Meanwhile every project wants its own `npm run dev`, ports collide, and a crashed server goes
 unnoticed.
 
-Pitwall runs every project's dev server and tells you the moment Claude Code is waiting on you. In
-any project, with or without an editor open.
+Pitwall runs every project's dev server and tells you the moment Claude Code or Codex is waiting on
+you. In any project, with or without an editor open.
 
 ## Features
 
@@ -45,7 +45,8 @@ marked "Ask before running" waits for your yes.
 
 Pitwall follows every Claude Code session, from the terminal or VS Code, and lights an orange dot
 when one finishes, asks a question or needs your permission. One click brings that session up
-where it was started: its editor tab, its terminal or its card on the board.
+where it was started: its editor tab, its terminal or its card on the board. Codex's sessions are
+followed beside them as soon as Pitwall finds Codex on your machine.
 
 The **mini tower** keeps all of it on a second screen. It stays above every other window and never
 takes the keyboard.
@@ -69,17 +70,19 @@ its terminal in Pitwall.
 
 ### The whole race in one window
 
-A board per project, whose cards you hand to Claude and get back to review. A track where projects
-lap a circuit and the ones that need you wait at the pit wall. The day's timeline, every session,
-what is left of Claude's limits and each project's dependencies are a click away.
+A board per project, whose cards you hand to Claude or Codex and get back to review. A track where
+projects lap a circuit and the ones that need you wait at the pit wall. The day's timeline, every
+session, what is left of Claude's and Codex's limits and each project's dependencies are a click
+away.
 
 <img src=".github/readme/board.png" alt="The Board page: a project's cards in Up next, With Claude, To review and Done, and the selected card's session">
 <img src=".github/readme/track.png" alt="The Track page: projects lapping a circuit, servers in green, Claude in orange, the ones that need you at the pit wall">
 
-### Claude and your shell can ask too
+### Claude, Codex and your shell can ask too
 
-- **Team radio.** Claude Code asks Pitwall about the dev server over MCP instead of starting one of
-  its own, and can restart it or add a card to the board. Each tool has its own switch.
+- **Team radio.** Claude Code and Codex ask Pitwall about the dev server over MCP instead of
+  starting one of their own, and can restart it or add a card to the board. Each tool has its own
+  switch.
 - **Command line.** `pitwall start`, `stop`, `logs -f` and `run` act on the project of the folder
   you are in. *macOS.*
 
@@ -96,9 +99,10 @@ editor, stop it from the menu bar. Source: [aenzenith/pitwall-vscode](https://gi
 
 ### Private by design
 
-No account and no analytics. Claude Code's logs are read on your machine, never your prompts, and a
-permission wait shows only the tool's name. Pitwall asks GitHub for its own updates and sends
-nothing of yours along.
+No account and no analytics. Claude Code's and Codex's logs are read on your machine, never your
+prompts, and a permission wait shows only the tool's name. Codex's limits come from its own logs,
+so nothing is asked of OpenAI. Pitwall asks GitHub for its own updates and sends nothing of yours
+along.
 
 <br>
 

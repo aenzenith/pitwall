@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref, watch } from "vue";
 
 import Spinner from "../../components/Spinner.vue";
+import { agentsKey } from "../../lib/format";
 import { language, t, type Key } from "../../lib/i18n";
 import { api } from "../../lib/store";
 import type { PhoneChannel, PhoneConfig, PhoneEvents, PhoneView, PhoneWhen } from "../../lib/types";
@@ -27,6 +28,13 @@ const EVENTS: Array<{ id: keyof PhoneEvents; label: Key }> = [
   { id: "fuel", label: "phone.event.fuel" },
   { id: "card", label: "phone.event.card" },
 ];
+
+/** An event's words: Claude's alone as they always were; once the places name agents, the events
+ * that are every agent's say so (the text that goes still names the agent it is about). */
+function labelOf(label: Key): Key {
+  return label === "phone.event.asked" || label === "phone.event.permission" || label === "phone.event.finished" ? agentsKey(label) : label;
+}
+
 /** The fields typed in (`data-phone`): the core's answer never writes over one in use. */
 const TEXTS = ["ntfyServer", "ntfyTopic", "telegramChat", "webhookUrl"] as const;
 /** Stands in the token's field for a token that is stored. */
@@ -216,7 +224,7 @@ watch(language, load);
           <div class="phone-events" role="group" aria-labelledby="phone-events">
             <label v-for="event in EVENTS" :key="event.id" class="row">
               <input type="checkbox" :checked="form.events[event.id]" @change="setEvent(event.id, ($event.target as HTMLInputElement).checked)" />
-              <span class="name">{{ t(event.label) }}</span>
+              <span class="name">{{ t(labelOf(event.label)) }}</span>
             </label>
           </div>
         </div>
