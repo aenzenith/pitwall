@@ -20,7 +20,7 @@ import { onBoard } from "../lib/board";
 import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
-import { cardRequest, COLLAPSED_HEIGHT, followProject, openInPanel, panelOver, panelPath, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
+import { cardRequest, COLLAPSED_HEIGHT, foldPanel, followProject, openInPanel, panelOver, panelPath, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
 import { closeChord, dragRegion, isMac, isWindows, keys, terminalChord } from "../lib/platform";
 import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
 import { focusTerminal, listRequest, openInWindow, openTarget, pickOnPage, pickRequest } from "../lib/open";
@@ -413,11 +413,22 @@ watch(teams, (list) => {
   if (!list.length) looseShown.value = false;
 });
 
+/**
+ * Another page taken from the sidebar or the switcher: the open terminal panel folds to its tab
+ * row, as a press on the page does (TerminalPanel), so the page comes up whole (the user's word,
+ * 2026-11-02); not while Settings › General keeps the panel open on a press outside it. The list's
+ * filters and teams are one page: going among them leaves the panel as it is.
+ */
+function turnTo(page: "projects" | View): void {
+  if (view.value !== page && snapshot.value?.settings.panelFoldOutside !== false) foldPanel();
+  view.value = page;
+}
+
 function pick(id: Filter): void {
   filter.value = id;
   teamFilter.value = null;
   looseShown.value = false;
-  view.value = "projects";
+  turnTo("projects");
   // The list itself, not the setup steps over it.
   setupOpen.value = false;
 }
@@ -427,7 +438,7 @@ function pickTeam(id: string): void {
   teamFilter.value = id;
   looseShown.value = false;
   query.value = "";
-  view.value = "projects";
+  turnTo("projects");
   setupOpen.value = false;
   selectedTeamId.value = id;
 }
@@ -437,7 +448,7 @@ function pickLoose(): void {
   teamFilter.value = null;
   looseShown.value = true;
   query.value = "";
-  view.value = "projects";
+  turnTo("projects");
   setupOpen.value = false;
   selectedTeamId.value = null;
 }
@@ -706,7 +717,7 @@ function revealPage(page: Page, tab?: "notifications"): void {
     // The first run's steps would cover it too: they are put off, not ended, and come up again.
     setupOpen.value = false;
     if (isFilter(page)) pick(page);
-    else view.value = page;
+    else turnTo(page);
   }
 }
 
@@ -940,19 +951,19 @@ function server(project: Project): string {
           </button>
         </nav>
         <div class="nav today">
-          <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="view = 'day'"><Icon name="calendar" /> {{ t("day.nav") }}</button>
-          <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="view = 'sessions'">
+          <button type="button" :class="{ on: view === 'day' }" :aria-current="view === 'day' ? 'page' : undefined" @click="turnTo('day')"><Icon name="calendar" /> {{ t("day.nav") }}</button>
+          <button type="button" :class="{ on: view === 'sessions' }" :aria-current="view === 'sessions' ? 'page' : undefined" @click="turnTo('sessions')">
             <Icon name="sparkles" /> <span class="nav-label">{{ t("sessions.nav") }}</span>
           </button>
-          <button type="button" :class="{ on: view === 'board' }" :aria-current="view === 'board' ? 'page' : undefined" @click="view = 'board'">
+          <button type="button" :class="{ on: view === 'board' }" :aria-current="view === 'board' ? 'page' : undefined" @click="turnTo('board')">
             <Icon name="board" /> <span class="nav-label">{{ t("board.nav") }}</span>
           </button>
-          <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="view = 'track'"><Icon name="flag" /> {{ t("track.nav") }}</button>
-          <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="view = 'fuel'">
+          <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="turnTo('track')"><Icon name="flag" /> {{ t("track.nav") }}</button>
+          <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="turnTo('fuel')">
             <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
             <span v-if="fuelBadge" :class="['fuel-badge', { low: fuelBadge.low, stale: fuelBadge.stale }]">{{ fuelBadge.text }}</span>
           </button>
-          <button type="button" :class="{ on: view === 'deps' }" :aria-current="view === 'deps' ? 'page' : undefined" @click="view = 'deps'">
+          <button type="button" :class="{ on: view === 'deps' }" :aria-current="view === 'deps' ? 'page' : undefined" @click="turnTo('deps')">
             <Icon name="tools" /> <span class="nav-label">{{ t("deps.nav") }}</span>
             <span v-if="depsBadge" class="deps-badge" :aria-label="t('deps.group.attention', { count: depsBadge })">{{ depsBadge }}</span>
           </button>

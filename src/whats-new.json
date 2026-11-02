@@ -21,6 +21,27 @@
         "ja": "ターミナルの上端のハンドルをダブルクリックすると、ページいっぱいに広がります。もう一度ダブルクリックすれば元の高さに戻ります。",
         "zh-Hans": "双击终端上方的把手，终端就会铺满整个页面；再双击一次，就回到原来的高度。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Terminals fold when you change pages",
+        "tr": "Sayfa değişince terminaller daralıyor",
+        "de": "Terminals klappen beim Seitenwechsel zu",
+        "es": "Las terminales se pliegan al cambiar de página",
+        "ru": "Терминалы сворачиваются при смене страницы",
+        "ja": "ページを移るとターミナルが折りたたまれます",
+        "zh-Hans": "切换页面时终端会自动收起"
+      },
+      "body": {
+        "en": "Open another page from the sidebar and the open terminals fold out of the way, so you see the new page whole.",
+        "tr": "Kenar çubuğundan başka bir sayfaya geçince açık terminaller kendiliğinden daralıyor, yeni sayfa bütünüyle görünüyor.",
+        "de": "Wechselst du in der Seitenleiste auf eine andere Seite, klappen offene Terminals zu und die neue Seite ist ganz zu sehen.",
+        "es": "Si abres otra página desde la barra lateral, las terminales abiertas se pliegan y ves la página nueva entera.",
+        "ru": "Перейдите на другую страницу через боковую панель, и открытые терминалы свернутся, чтобы новая страница была видна целиком.",
+        "ja": "サイドバーから別のページに移ると、開いていたターミナルが折りたたまれ、新しいページ全体が見えます。",
+        "zh-Hans": "从侧边栏打开另一个页面时，展开的终端会自动收起，新页面一览无余。"
+      }
     }
   ]
 }
