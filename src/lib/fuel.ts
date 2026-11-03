@@ -25,9 +25,14 @@ export function isLow(used: number): boolean {
   return left(used) <= LOW_LEFT;
 }
 
+/** A week's window: all models' or a model's own. */
+export function isWeek(window: UsageWindow): boolean {
+  return window.id.startsWith("seven_day");
+}
+
 /** How long a window lasts from its start to its reset: a week's 7 days, the session's 5 hours. */
 function span(window: UsageWindow): number {
-  return window.id.startsWith("seven_day") ? WEEK_MS : SESSION_MS;
+  return isWeek(window) ? WEEK_MS : SESSION_MS;
 }
 
 /**

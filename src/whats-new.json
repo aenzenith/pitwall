@@ -25,6 +25,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "The week gets its strip",
+        "tr": "Haftanın da şeridi var",
+        "de": "Auch die Woche hat ihren Streifen",
+        "es": "La semana también tiene su franja",
+        "ru": "У недели тоже есть полоса",
+        "ja": "週間にも帯が出ます",
+        "zh-Hans": "本周也有时间条了"
+      },
+      "body": {
+        "en": "When Claude sends no 5-hour session, the strip on the Fuel page now follows the week, day by day, and tells you if your fuel lasts until it refills.",
+        "tr": "Claude 5 saatlik oturumu göndermediğinde Yakıt sayfasındaki şerit artık haftayı gün gün gösteriyor; yakıtın dolana kadar yetip yetmeyeceğini de söylüyor.",
+        "de": "Schickt Claude keine 5-Stunden-Sitzung, zeigt der Streifen auf der Tank-Seite jetzt die Woche, Tag für Tag, und ob der Tank bis zum Auffüllen reicht.",
+        "es": "Cuando Claude no envía la sesión de 5 horas, la franja de la página Combustible sigue ahora la semana, día a día, y te dice si te alcanza hasta que se rellene.",
+        "ru": "Если Claude не присылает 5-часовую сессию, полоса на странице «Топливо» теперь показывает неделю по дням и подсказывает, хватит ли топлива до пополнения.",
+        "ja": "Claude が 5 時間セッションを送ってこないときは、燃料ページの帯が週間を 1 日ずつ表示し、回復まで燃料がもつかどうかも教えてくれます。",
+        "zh-Hans": "Claude 没有发来 5 小时会话时，燃料页面的时间条现在会按天显示本周，并告诉你燃料能否撑到恢复。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Terminals at full height",
         "tr": "Terminaller tam boy",
         "de": "Terminals auf voller Höhe",

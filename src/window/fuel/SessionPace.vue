@@ -2,23 +2,27 @@
 import { computed } from "vue";
 
 import Rich from "../../components/Rich.vue";
-import { clockText, pace, position } from "../../lib/fuel";
+import { clockText, dayClockText, isWeek, pace, position } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import type { Agent, UsageWindow } from "../../lib/types";
 
 /**
- * The session window as a strip from its start to its reset: the time gone by, now, what is still
- * ahead and, at the pace so far, when the fuel runs out. `readAt`: when `window` was read, the
- * moment the pace is measured to. `agent`: whose window (none: Claude's), named in what it says.
+ * The session window, or the week on a reading without one, as a strip from its start to its
+ * reset: the time gone by, now, what is still ahead and, at the pace so far, when the fuel runs
+ * out. `readAt`: when `window` was read, the moment the pace is measured to. `agent`: whose window
+ * (none: Claude's), named in what it says.
  */
 const props = defineProps<{ window: UsageWindow; readAt: number; now: number; stale: boolean; agent?: Agent }>();
 
 const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 
+const week = computed(() => isWeek(props.window));
 const state = computed(() => pace(props.window, props.readAt));
 
+/** A moment on the strip: the time in the session, the day and time in the week. */
 function clock(at: number): string {
-  return clockText(at, language.value);
+  return week.value ? dayClockText(at, language.value) : clockText(at, language.value);
 }
 
 function duration(ms: number): string {
@@ -38,7 +42,7 @@ const strip = computed(() => {
   if (s.kind === "idle") return null;
   const now = position(props.now, s.start, s.end);
   const hours: number[] = [];
-  for (let at = s.start; at <= s.end; at += HOUR) hours.push(at);
+  for (let at = s.start; at <= s.end; at += week.value ? DAY : HOUR) hours.push(at);
   return {
     range: `${clock(s.start)} – ${clock(s.end)}`,
     now,
@@ -50,15 +54,24 @@ const strip = computed(() => {
 const SENTENCES = { idle: "fuel.pace.idle", empty: "fuel.pace.empty", early: "fuel.pace.early", out: "fuel.pace.out", lasts: "fuel.pace.lasts" } as const;
 /** Codex's, where the sentence names the agent. */
 const CODEX_SENTENCES = { ...SENTENCES, idle: "fuel.pace.idle.codex", empty: "fuel.pace.empty.codex", out: "fuel.pace.out.codex" } as const;
+/** The week's, where the window is named a week and its moments have their day. */
+const WEEK_SENTENCES = { idle: "fuel.pace.week.idle", empty: "fuel.pace.week.empty", early: "fuel.pace.week.early", out: "fuel.pace.week.out", lasts: "fuel.pace.week.lasts" } as const;
+const CODEX_WEEK_SENTENCES = { ...WEEK_SENTENCES, idle: "fuel.pace.week.idle.codex", empty: "fuel.pace.week.empty.codex", out: "fuel.pace.week.out.codex" } as const;
+
+const title = computed(() => t(week.value ? "fuel.pace.week.title" : "fuel.pace.title"));
 
 /** What the strip means in words; all of it red once the fuel is out. */
-const sentence = computed(() => ({ key: (props.agent === "codex" ? CODEX_SENTENCES : SENTENCES)[state.value.kind], out: state.value.kind === "empty" }));
+const sentence = computed(() => {
+  const codex = props.agent === "codex";
+  const keys = week.value ? (codex ? CODEX_WEEK_SENTENCES : WEEK_SENTENCES) : codex ? CODEX_SENTENCES : SENTENCES;
+  return { key: keys[state.value.kind], out: state.value.kind === "empty" };
+});
 </script>
 
 <template>
-  <section :class="['pace', { stale }]" :aria-label="t('fuel.pace.title')">
+  <section :class="['pace', { stale }]" :aria-label="title">
     <div class="head">
-      <span class="card-title caps">{{ t("fuel.pace.title") }}</span>
+      <span class="card-title caps">{{ title }}</span>
       <p :class="['sentence', { out: sentence.out }]">
         <Rich :text="t(sentence.key)">
           <template #empty><strong v-if="state.kind === 'out'" class="hot">{{ clock(state.emptyAt) }}</strong></template>
@@ -217,7 +230,7 @@ const sentence = computed(() => ({ key: (props.agent === "codex" ? CODEX_SENTENC
   background: var(--idle-ring);
 }
 
-/* Every hour from the start to the refill, the first and last at the ends. */
+/* Every hour (every day in the week) from the start to the refill, the first and last at the ends. */
 .hours {
   display: flex;
   justify-content: space-between;

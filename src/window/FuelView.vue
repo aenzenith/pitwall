@@ -80,8 +80,8 @@ const stale = computed(() => !!usage.value && !!limits.value && isStale(limits.v
 const gauges = computed(() => cluster(usage.value, now.value, t, language.value));
 const windows = computed(() => gauges.value.windows);
 const session = computed(() => gauges.value.session);
-/** The big dial's limit: the session, or the week on a reading without one. The backdrop's glow
- * and the trip computer follow it; the pace strip is the session's alone. */
+/** The big dial's limit: the session, or the week on a reading without one. The backdrop's glow,
+ * the trip computer and the pace strip follow it. */
 const lead = computed(() => gauges.value.lead);
 const extra = computed(() => gauges.value.extra);
 const extraOnGauge = computed(() => gauges.value.extraOnGauge);
@@ -292,7 +292,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
                  computer and the session's pace, parted by a line, the foot under them. -->
             <div class="lower">
               <TripComputer ref="trip" :window="lead" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
-              <SessionPace v-if="session" ref="pace" :window="session" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" :agent="isCodex ? agent : undefined" />
+              <SessionPace v-if="lead" ref="pace" :window="lead" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" :agent="isCodex ? agent : undefined" />
             </div>
           </section>
         </div>
