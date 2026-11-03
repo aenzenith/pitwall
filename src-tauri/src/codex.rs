@@ -1487,6 +1487,12 @@ impl CodexWatch {
         Some(Peek { title: self.names().remove(id), modified })
     }
 
+    /// Whether thread `id` is one of Codex's TUI (its `source` is `cli`), as its rollout read says
+    /// (`core::reveal::codex_cli` reads it from the file).
+    pub fn is_cli(&self, id: &str) -> bool {
+        self.rollouts.values().any(|rollout| rollout.meta.as_ref().is_some_and(|meta| meta.id == id && matches!(&meta.source, Source::Named(name) if name == "cli")))
+    }
+
     /// The rollout of thread `id`, when it was read.
     pub fn rollout_of(&self, id: &str) -> Option<PathBuf> {
         self.rollouts.iter().filter(|(_, rollout)| rollout.meta.as_ref().is_some_and(|meta| meta.id == id)).max_by_key(|(_, rollout)| rollout.modified_ms).map(|(file, _)| file.clone())

@@ -612,6 +612,7 @@ impl Core {
         let pid = session.pid;
         let _ = session.killer.kill();
         drop(session);
+        self.tab_gone(pid);
 
         if let Some(pid) = pid {
             kill_tree(pid, false);
@@ -626,7 +627,9 @@ impl Core {
 
     /// The shell ended (`exit`, or closed): the tab goes away.
     fn forget_terminal(&self, id: u64) {
-        self.terminal_sessions().remove(&id);
+        if let Some(session) = self.terminal_sessions().remove(&id) {
+            self.tab_gone(session.pid);
+        }
 
         let removed = {
             let mut inner = self.lock();

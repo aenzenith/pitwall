@@ -72,18 +72,18 @@ const sentence = computed(() => {
   <section :class="['pace', { stale }]" :aria-label="title">
     <div class="head">
       <span class="card-title caps">{{ title }}</span>
-      <p :class="['sentence', { out: sentence.out }]">
+      <p :class="['sentence', { out: sentence.out }]" data-swap>
         <Rich :text="t(sentence.key)">
           <template #empty><strong v-if="state.kind === 'out'" class="hot">{{ clock(state.emptyAt) }}</strong></template>
           <template #reset><span v-if="state.kind !== 'idle'">{{ clock(state.end) }}</span></template>
           <template #wait><span v-if="state.kind === 'out'">{{ duration(state.end - state.emptyAt) }}</span></template>
         </Rich>
       </p>
-      <span v-if="strip" class="range">{{ strip.range }}</span>
+      <span v-if="strip" class="range" data-swap>{{ strip.range }}</span>
     </div>
 
     <!-- Drawn for the eye; the sentence above says the same. -->
-    <div v-if="strip" class="strip" aria-hidden="true">
+    <div v-if="strip" class="strip" aria-hidden="true" data-swap>
       <div class="track">
         <span class="tag" :style="label(strip.now)">{{ t("fuel.strip.now", { time: clock(now) }) }}</span>
         <span class="rail"></span>

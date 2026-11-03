@@ -997,6 +997,10 @@ export type AgentSettings = {
   told?: boolean;
   /** Its team radio (Codex's: Pitwall among its MCP servers); Claude's is `Settings.radio`. */
   radio?: boolean;
+  /** Its fuel in the menu bar and its dials in the popover's foot: on unless false. Claude's are
+   * `Settings.fuelInBar` and `Settings.fuelInPopover`. */
+  fuelInBar?: boolean;
+  fuelInPopover?: boolean;
 };
 
 export type AgentsSettings = { claude?: AgentSettings; codex?: AgentSettings };

@@ -13,13 +13,13 @@
         "zh-Hans": "Codex 与 Claude 并肩"
       },
       "body": {
-        "en": "Pitwall now follows Codex too: open it from the terminal's +, give it cards and keep an eye on its fuel. Settings › Agents turns it on or off.",
-        "tr": "Pitwall artık Codex'i de izliyor: terminalin +'sından açın, kart verin, yakıtına göz atın. Ayarlar › Ajanlar'dan açıp kapatabilirsiniz.",
-        "de": "Pitwall behält jetzt auch Codex im Blick: im Terminal über + starten, Karten geben, den Tank im Auge behalten. Ein- und ausschalten unter Einstellungen › Agenten.",
-        "es": "Pitwall ahora también sigue a Codex: ábrelo desde el + de la terminal, dale tarjetas y vigila su combustible. Lo activas o desactivas en Ajustes › Agentes.",
-        "ru": "Теперь Pitwall следит и за Codex: запускайте его через + в терминале, отдавайте ему карточки, смотрите на его топливо. Включается и выключается в Настройках › Агенты.",
-        "ja": "Pitwall が Codex も見守るようになりました。ターミナルの + から開き、カードを渡し、燃料も確認できます。オン・オフは 設定 › エージェント で。",
-        "zh-Hans": "Pitwall 现在也照看 Codex：从终端的 + 打开它，把卡片交给它，随时看它的燃料。在 设置 › 智能体 中开关。"
+        "en": "Pitwall now follows Codex too: open it from the terminal's +, give it cards and watch its fuel, right up in the menu bar. Settings › Agents turns it on or off.",
+        "tr": "Pitwall artık Codex'i de izliyor: terminalin +'sından açın, kart verin, yakıtını menü çubuğundan takip edin. Ayarlar › Ajanlar'dan açıp kapatabilirsiniz.",
+        "de": "Pitwall behält jetzt auch Codex im Blick: im Terminal über + starten, Karten geben, den Tank sogar in der Menüleiste sehen. Ein- und ausschalten unter Einstellungen › Agenten.",
+        "es": "Pitwall ahora también sigue a Codex: ábrelo desde el + de la terminal, dale tarjetas y vigila su combustible, también en la barra de menús. Lo activas o desactivas en Ajustes › Agentes.",
+        "ru": "Теперь Pitwall следит и за Codex: запускайте его через + в терминале, отдавайте ему карточки, следите за его топливом прямо в строке меню. Включается и выключается в Настройках › Агенты.",
+        "ja": "Pitwall が Codex も見守るようになりました。ターミナルの + から開き、カードを渡し、燃料はメニューバーでも確認できます。オン・オフは 設定 › エージェント で。",
+        "zh-Hans": "Pitwall 现在也照看 Codex：从终端的 + 打开它，把卡片交给它，在菜单栏里也能看它的燃料。在 设置 › 智能体 中开关。"
       }
     },
     {

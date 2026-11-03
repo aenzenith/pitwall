@@ -7,21 +7,19 @@ import RoadSky from "../components/RoadSky.vue";
 import Spinner from "../components/Spinner.vue";
 import { shortcutLabel } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
-import { agentInfo } from "../lib/agents";
+import { agents } from "../lib/agents";
 import { dragRegion, isMac } from "../lib/platform";
 import { api, snapshot, visible } from "../lib/store";
 import type { ExtensionStatus } from "../lib/types";
+import StepAgents from "./setup/StepAgents.vue";
 import StepAlerts from "./setup/StepAlerts.vue";
-import StepCodex from "./setup/StepCodex.vue";
 import StepExtension from "./setup/StepExtension.vue";
-import StepHook from "./setup/StepHook.vue";
 import StepProjects from "./setup/StepProjects.vue";
-import StepRadio from "./setup/StepRadio.vue";
 import StepStartup from "./setup/StepStartup.vue";
 
 /**
  * The first run: over the whole window, the road of the site's download section running behind
- * it. A welcome first, from Settings too, then the six steps one at a time on a card, Back and
+ * it. A welcome first, from Settings too, then the steps one at a time on a card, Back and
  * Next at its foot and Finish on the last. Next never waits for a step: each can be left as it
  * is. `fade`: it fades in (asked for again from Settings; the first run's is there at once).
  * `covered`: Settings stands over it. `done`: the steps are over, finished or put off;
@@ -30,24 +28,12 @@ import StepStartup from "./setup/StepStartup.vue";
 const props = defineProps<{ fade: boolean; covered: boolean }>();
 const emit = defineEmits<{ done: []; openPhone: [] }>();
 
-type Step = "projects" | "hook" | "radio" | "codex" | "extension" | "startup" | "alerts";
-
-/** Codex's step, after the radio's, once Codex is found here and on (not when the user turned it
- * off): kept for the run once it showed, so turning Codex off in it leaves it where it is. */
-const withCodex = ref(false);
-watch(
-  () => agentInfo("codex"),
-  (codex) => {
-    if (codex?.found && codex.on) withCodex.value = true;
-  },
-  { immediate: true },
-);
+type Step = "projects" | "agents" | "extension" | "startup" | "alerts";
 
 const steps = computed<Array<{ id: Step; title: Key; hint: Key }>>(() => [
   { id: "projects", title: "setup.step.projects", hint: "setup.step.projectsHint" },
-  { id: "hook", title: "setup.step.hook", hint: "setup.step.hookHint" },
-  { id: "radio", title: "setup.step.radio", hint: "setup.step.radioHint" },
-  ...(withCodex.value ? [{ id: "codex" as const, title: "setup.step.hook.codex" as const, hint: "setup.step.hookHint.codex" as const }] : []),
+  // Every agent in one step, in the same words however many are on (the user's word, 3 Nov).
+  { id: "agents", title: "setup.step.agents", hint: "setup.step.agentsHint" },
   { id: "extension", title: "setup.step.extension", hint: "setup.step.extensionHint" },
   { id: "startup", title: "setup.step.startup", hint: "setup.step.startupHint" },
   // The pitwall command is macOS's alone so far: elsewhere its line says nothing of it.
@@ -94,10 +80,9 @@ onBeforeUnmount(() => window.removeEventListener("focus", checkExtension));
  * they show green whether anything in them was touched or not. */
 const done = computed<Record<Step, boolean>>(() => ({
   projects: !!snapshot.value?.projects.length,
-  hook: !!snapshot.value?.claudeHook && !snapshot.value.claudeHookOutdated,
-  radio: !!snapshot.value?.settings.radio?.on,
-  // Installed counts as done: the approval is given in Codex, not here. Turned off is done too.
-  codex: !agentInfo("codex")?.on || (agentInfo("codex")?.hook !== "missing" && !agentInfo("codex")?.hookOutdated),
+  // Every agent that is on has this Pitwall's hook. Installed counts: Codex's approval is given in
+  // Codex, not here. The radios are the user's choice and hold nothing back.
+  agents: agents.value.every((info) => !info.on || !info.caps.hook || (info.hook !== "missing" && !info.hookOutdated)),
   extension: !!extension.value?.version,
   startup: true,
   alerts: true,
@@ -109,9 +94,11 @@ const at = computed(() => (page.value === "welcome" ? -1 : order.value.indexOf(p
 const current = computed(() => steps.value[at.value] ?? null);
 const last = computed(() => at.value === order.value.length - 1);
 
-// Its step seen is the user told that Codex was found: the found notice doesn't come as well.
+// The agents' step seen is the user told of each agent found and turned on by it: the found
+// notice doesn't come as well.
 watch(page, (shown) => {
-  if (shown === "codex") void api.agentTold("codex").catch(() => undefined);
+  if (shown !== "agents") return;
+  for (const info of agents.value) if (info.undecided) void api.agentTold(info.id).catch(() => undefined);
 });
 
 function hint(item: (typeof steps.value)[number]): string {
@@ -245,9 +232,7 @@ const roadRunning = computed(() => visible.value && !props.covered);
       <!-- Every pane stays alive under its step: what a step read or ticked is there on the way back. -->
       <div class="stage">
         <StepProjects v-show="page === 'projects'" id="setup-pane-projects" role="group" aria-labelledby="setup-title-projects" @added="go(order[1])" />
-        <StepHook v-show="page === 'hook'" id="setup-pane-hook" role="group" aria-labelledby="setup-title-hook" />
-        <StepRadio v-show="page === 'radio'" id="setup-pane-radio" role="group" aria-labelledby="setup-title-radio" />
-        <StepCodex v-if="withCodex" v-show="page === 'codex'" id="setup-pane-codex" role="group" aria-labelledby="setup-title-codex" />
+        <StepAgents v-show="page === 'agents'" id="setup-pane-agents" role="group" aria-labelledby="setup-title-agents" :shown="page === 'agents'" />
         <StepExtension
           v-show="page === 'extension'"
           id="setup-pane-extension"

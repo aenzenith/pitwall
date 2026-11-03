@@ -535,12 +535,13 @@ static ICON: Mutex<Option<(bool, bool, bool)>> = Mutex::new(None);
 
 /// The text beside the icon, each part there only while Settings shows it and there is something
 /// to count: the running dev servers, the agents' sessions at work (every agent that is on, in one
-/// count), and Claude's fuel with its share as written (`74%`).
+/// count), and Claude's fuel and Codex's, each with its share as written (`74%`).
 #[derive(Clone, PartialEq, Eq)]
 struct Title {
     servers: Option<String>,
     claudes: Option<String>,
     fuel: Option<(BarFuel, String)>,
+    codex: Option<(BarFuel, String)>,
 }
 
 /// The one in the bar now, so a refresh that changes none of it leaves it alone.
@@ -576,10 +577,11 @@ fn draw<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
     let settings = &snapshot.settings;
     let working = snapshot.projects.iter().flat_map(|project| &project.claude_sessions).filter(|session| matches!(session.phase, SessionPhase::Working)).count();
     let count = |shown: bool, count: usize| (shown && count > 0).then(|| count.to_string());
-    let fuel = app.try_state::<AppState>().and_then(|state| state.fuel.bar(settings));
-    let fuel = fuel.map(|fuel| (fuel, t!("core.tray.percent", value = fuel.left)));
+    let percent = |fuel: BarFuel| (fuel, t!("core.tray.percent", value = fuel.left));
+    let fuel = app.try_state::<AppState>().and_then(|state| state.fuel.bar(settings)).map(percent);
+    let codex = app.try_state::<AppState>().and_then(|state| state.fuel.codex_bar(settings)).map(percent);
 
-    let title = Title { servers: count(settings.servers_in_bar, snapshot.running), claudes: count(settings.claudes_in_bar, working), fuel };
+    let title = Title { servers: count(settings.servers_in_bar, snapshot.running), claudes: count(settings.claudes_in_bar, working), fuel, codex };
     if TITLE.lock().map_or(true, |mut shown| shown.replace(title.clone()).as_ref() != Some(&title)) {
         set_title(&tray, title.clone());
     }
@@ -590,11 +592,20 @@ fn draw<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
         set_icon(&tray, icon);
     }
 
-    let mut tooltip = match &title.fuel {
-        Some((fuel, left)) if fuel.week => t!("core.tray.tooltipFuelWeek", running = snapshot.running, waiting = snapshot.waiting, left = left),
-        Some((_, left)) => t!("core.tray.tooltipFuel", running = snapshot.running, waiting = snapshot.waiting, left = left),
-        None => t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting),
+    let mut tooltip = match (&title.fuel, &title.codex) {
+        (Some((fuel, left)), None) if fuel.week => t!("core.tray.tooltipFuelWeek", running = snapshot.running, waiting = snapshot.waiting, left = left),
+        (Some((_, left)), None) => t!("core.tray.tooltipFuel", running = snapshot.running, waiting = snapshot.waiting, left = left),
+        _ => t!("core.tray.tooltip", running = snapshot.running, waiting = snapshot.waiting),
     };
+    // With Codex's fuel shown, each agent's share named.
+    if title.codex.is_some() {
+        for (agent, shown) in [(Agent::Claude, &title.fuel), (Agent::Codex, &title.codex)] {
+            if let Some((fuel, left)) = shown {
+                let key = agent_key(agent, if fuel.week { "core.tray.fuelWeek" } else { "core.tray.fuel" });
+                tooltip = format!("{tooltip} · {}", t!(&key, left = left));
+            }
+        }
+    }
     // Each agent's sessions at work, named: the count beside the icon is theirs together.
     for agent in Agent::ALL {
         let at_work = snapshot.projects.iter().flat_map(|project| &project.claude_sessions).filter(|session| session.agent == agent && matches!(session.phase, SessionPhase::Working)).count();
@@ -612,7 +623,7 @@ fn draw<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
 /// Puts the text beside the icon. macOS colours the counts and draws the fuel's dial into the
 /// title; elsewhere the parts follow one another as plain text.
 fn set_title<R: Runtime>(tray: &TrayIcon<R>, title: Title) {
-    if title.servers.is_none() && title.claudes.is_none() && title.fuel.is_none() {
+    if title.servers.is_none() && title.claudes.is_none() && title.fuel.is_none() && title.codex.is_none() {
         let _ = tray.set_title(None::<String>);
         return;
     }
@@ -629,7 +640,10 @@ fn set_title<R: Runtime>(tray: &TrayIcon<R>, title: Title) {
 
     #[cfg(not(target_os = "macos"))]
     {
-        let parts: Vec<String> = [title.servers, title.claudes, title.fuel.map(|(_, percent)| percent)].into_iter().flatten().collect();
+        // With Codex's fuel, each share after its agent's name.
+        let named = title.codex.is_some();
+        let share = |agent: Agent, fuel: Option<(BarFuel, String)>| fuel.map(|(_, percent)| if named { format!("{} {percent}", agent.name()) } else { percent });
+        let parts: Vec<String> = [title.servers, title.claudes, share(Agent::Claude, title.fuel), share(Agent::Codex, title.codex)].into_iter().flatten().collect();
         let _ = tray.set_title(Some(parts.join(" · ")));
     }
 }
@@ -710,18 +724,20 @@ fn bar_is_dark<R: Runtime>(app: &AppHandle<R>) -> bool {
 /// picture): the running servers' count in green, the working Claude sessions' in orange, then a
 /// small dial and the session's share left. The dial is the Fuel page's, at the bar's size: a 240°
 /// arc from empty at the lower left to full at the lower right, lit as far as the share left, and
-/// a needle.
+/// a needle. With Codex's fuel too, each agent's mark and its share instead, Claude's first: the
+/// share red while little is left, dimmed for an older reading.
 #[cfg(target_os = "macos")]
 mod bar {
     use std::ptr::NonNull;
 
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, Bool};
-    use objc2::{class, msg_send};
+    use objc2::{class, msg_send, AnyThread};
     use objc2_app_kit::{NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage};
-    use objc2_foundation::{NSArray, NSAttributedString, NSMutableAttributedString, NSPoint, NSRange, NSRect, NSSize, NSString};
+    use objc2_foundation::{NSArray, NSAttributedString, NSData, NSMutableAttributedString, NSPoint, NSRange, NSRect, NSSize, NSString};
 
     use super::Title;
+    use crate::agent::Agent;
     use crate::fuel::BarFuel;
 
     /// The dial's box in points, and how far it sits under the text's baseline to stand level
@@ -741,6 +757,12 @@ mod bar {
     const ROUND: usize = 1;
     /// An older reading: the dial and its share at this strength.
     const DIMMED: f64 = 0.45;
+    /// An agent's mark: its box in points, and how far it sits under the baseline to stand level
+    /// with the digits.
+    const MARK: f64 = 13.0;
+    const MARK_DROP: f64 = -2.0;
+    /// `NSCompositingOperationSourceAtop`: what is drawn lands only where the picture is.
+    const SOURCE_ATOP: usize = 5;
     /// Pitwall's state colours (tokens.css: --run, --claude, --crash) as a dark bar takes them,
     /// and each a step darker for a light one.
     const RUN: [[f64; 3]; 2] = [[115.0, 201.0, 145.0], [31.0, 138.0, 76.0]];
@@ -760,14 +782,34 @@ mod bar {
             }
             append(&text, claudes, Some(&tint(CLAUDE)));
         }
-        if let Some((fuel, percent)) = &title.fuel {
+        if title.codex.is_none() {
+            if let Some((fuel, percent)) = &title.fuel {
+                if text.length() > 0 {
+                    append(&text, "  ", None);
+                }
+                text.appendAttributedString(&dial(*fuel));
+                // An older reading's share in the system's own dimmer ink, which follows the bar.
+                let dimmed = fuel.stale.then(NSColor::secondaryLabelColor);
+                append(&text, &format!(" {percent}"), dimmed.as_deref());
+            }
+        }
+        // With Codex's, each agent by its mark: no dial to go red, so the share does.
+        for (agent, shown) in [(Agent::Claude, &title.fuel), (Agent::Codex, &title.codex)] {
+            let (Some((fuel, percent)), Some(_)) = (shown, &title.codex) else {
+                continue;
+            };
             if text.length() > 0 {
                 append(&text, "  ", None);
             }
-            text.appendAttributedString(&dial(*fuel));
-            // An older reading's share in the system's own dimmer ink, which follows the bar.
-            let dimmed = fuel.stale.then(NSColor::secondaryLabelColor);
-            append(&text, &format!(" {percent}"), dimmed.as_deref());
+            if let Some(mark) = mark(agent) {
+                text.appendAttributedString(&mark);
+            }
+            let ink = if fuel.stale {
+                Some(NSColor::secondaryLabelColor())
+            } else {
+                fuel.low.then(|| tint(LOW))
+            };
+            append(&text, &format!(" {percent}"), ink.as_deref());
         }
 
         let font = NSFont::menuBarFontOfSize(0.0);
@@ -826,6 +868,40 @@ mod bar {
             let _: () = msg_send![&*attachment, setImage: &*image];
             let _: () = msg_send![&*attachment, setBounds: NSRect::new(NSPoint::new(0.0, DROP), NSSize::new(SIDE, SIDE))];
             msg_send![class!(NSAttributedString), attributedStringWithAttachment: &*attachment]
+        }
+    }
+
+    /// `agent`'s mark as a piece of text, drawn in the bar's ink each time it shows (its picture
+    /// is a shape only, filled over itself), as the dial is.
+    fn mark(agent: Agent) -> Option<Retained<NSAttributedString>> {
+        let bytes: &'static [u8] = match agent {
+            Agent::Claude => include_bytes!("../icons/tray-mark-claude.png"),
+            Agent::Codex => include_bytes!("../icons/tray-mark-codex.png"),
+        };
+        // SAFETY: AppKit's own classes, each message with the types it declares.
+        let shape: Option<Retained<NSImage>> = unsafe { msg_send![NSImage::alloc(), initWithData: &*NSData::with_bytes(bytes)] };
+        let shape = shape?;
+        let draw = block2::RcBlock::new(move |rect: NSRect| {
+            // SAFETY: as above, inside the picture's drawing handler, where AppKit has a context set.
+            unsafe {
+                let _: () = msg_send![&*shape, drawInRect: rect];
+                let context: Option<Retained<AnyObject>> = msg_send![class!(NSGraphicsContext), currentContext];
+                if let Some(context) = context {
+                    let _: () = msg_send![&*context, setCompositingOperation: SOURCE_ATOP];
+                }
+                NSColor::labelColor().setFill();
+                let _: () = msg_send![class!(NSBezierPath), fillRect: rect];
+            }
+            Bool::YES
+        });
+        let image = NSImage::imageWithSize_flipped_drawingHandler(NSSize::new(MARK, MARK), false, &draw);
+
+        // SAFETY: as in `dial`.
+        unsafe {
+            let attachment: Retained<AnyObject> = msg_send![class!(NSTextAttachment), new];
+            let _: () = msg_send![&*attachment, setImage: &*image];
+            let _: () = msg_send![&*attachment, setBounds: NSRect::new(NSPoint::new(0.0, MARK_DROP), NSSize::new(MARK, MARK))];
+            Some(msg_send![class!(NSAttributedString), attributedStringWithAttachment: &*attachment])
         }
     }
 

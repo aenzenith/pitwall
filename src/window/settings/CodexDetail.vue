@@ -28,6 +28,9 @@ const hook = computed(() => props.info.hook);
 const heard = computed(() => snapshot.value?.codexHeard ?? null);
 const hooksFile = computed(() => `${props.detail?.home ?? "~/.codex"}/hooks.json`);
 const radioOn = computed(() => !!snapshot.value?.settings.agents?.codex?.radio);
+/** Where its fuel shows: on until the user unticks it. */
+const fuelInBar = computed(() => snapshot.value?.settings.agents?.codex?.fuelInBar !== false);
+const fuelInPopover = computed(() => snapshot.value?.settings.agents?.codex?.fuelInPopover !== false);
 /** Turned off by the user: not found, it doesn't turn on by itself. */
 const saidOff = computed(() => snapshot.value?.settings.agents?.codex?.on === false);
 /** Off, the hook's state isn't read again: once "Remove hook" did its work there, it is gone. */
@@ -39,10 +42,13 @@ watch(
   },
 );
 
-const busy = ref<"hook" | "radio" | null>(null);
+const busy = ref<"hook" | "radio" | "check" | null>(null);
 const error = ref("");
+/** What the last "Check" found while Codex doesn't run every line yet; gone with a new check. */
+const notYet = ref<{ trusted: number; total: number } | null>(null);
+watch(hook, () => (notYet.value = null));
 
-async function run(what: "hook" | "radio", act: () => Promise<unknown>): Promise<void> {
+async function run(what: "hook" | "radio" | "check", act: () => Promise<unknown>): Promise<void> {
   if (busy.value) return;
   busy.value = what;
   error.value = "";
@@ -63,6 +69,18 @@ const removeOffHook = () =>
     hookTakenOut.value = true;
   });
 const removeRadio = () => run("radio", () => api.codexRadioSet(false));
+/** A box of its fuel ticked or not: at once, by its own command. */
+function setFuel(where: { bar?: boolean; popover?: boolean }): void {
+  error.value = "";
+  api.agentSetFuel("codex", where).catch((reason) => (error.value = String(reason)));
+}
+/** Asks Codex itself whether it approved Pitwall's lines: once it did, the card turns On. */
+const checkHook = () =>
+  run("check", async () => {
+    notYet.value = null;
+    const said = await api.checkCodexHook();
+    if (said.trusted < said.total) notYet.value = said;
+  });
 </script>
 
 <template>
@@ -103,76 +121,103 @@ const removeRadio = () => run("radio", () => api.codexRadioSet(false));
     </template>
 
     <template v-else>
-      <!-- The hook: Pitwall installs it, the user approves it in Codex. -->
-      <div :class="['card', { waits: hook === 'waiting' }]">
-        <div class="card-head">
-          <span class="hook-title">{{ t("settings.hookTitle") }}</span>
-          <span v-if="hook === 'missing'" class="badge">{{ t("settings.agents.hook.missing") }}</span>
-          <span v-else-if="hook === 'waiting'" class="badge waits">{{ t("settings.agents.hook.waiting.codex") }}</span>
-          <span v-else class="badge on">{{ t("settings.on") }}</span>
+      <!-- Its fuel, as Claude's part has it (the same rows, the same gaps); no interval: nothing is
+           asked for it. -->
+      <div class="fuel section">
+        <label class="box">
+          <input type="checkbox" :checked="fuelInBar" @change="setFuel({ bar: ($event.target as HTMLInputElement).checked })" />
+          <span>{{ t("settings.fuelInBar") }}</span>
+        </label>
+        <label class="box">
+          <input type="checkbox" :checked="fuelInPopover" @change="setFuel({ popover: ($event.target as HTMLInputElement).checked })" />
+          <span>{{ t("settings.fuelInPopover") }}</span>
+        </label>
+        <!-- Where Claude's has its interval: a title and what to know, with nothing to set. -->
+        <div class="hook">
+          <div class="hook-text">
+            <span>{{ t("settings.agents.fuelTitle") }}</span>
+            <small>{{ t("settings.agents.fuelText.codex") }}</small>
+          </div>
         </div>
+      </div>
 
-        <template v-if="hook === 'missing'">
-          <small>{{ t("settings.agents.hook.missingText.codex") }}</small>
-          <div class="card-foot">
+      <!-- The hook: Pitwall installs it, the user approves it in Codex. Not installed and at work,
+           a row as the radio's: its name and how it stands, what to know of it, and at the row's end
+           the one thing to do; waiting for the approval, the steps under its name. -->
+      <div v-if="hook !== 'waiting'" class="hook section">
+        <div class="hook-text">
+          <span class="hook-title wraps">
+            {{ t("settings.hookTitle") }}
+            <span v-if="hook === 'missing'" class="badge">{{ t("settings.agents.hook.missing") }}</span>
+            <span v-else class="badge on">{{ t("settings.on") }}</span>
+          </span>
+          <template v-if="hook === 'missing'">
+            <small>{{ t("settings.agents.hook.missingText.codex") }}</small>
             <small>{{ t("settings.agents.hook.trustOnce.codex") }}</small>
-            <button type="button" class="control primary" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="installHook">
-              <span :class="{ hidden: busy === 'hook' }">{{ t("settings.agents.hook.install") }}</span>
-              <Spinner v-if="busy === 'hook'" class="over" :size="12" />
-            </button>
-          </div>
-        </template>
-
-        <template v-else-if="hook === 'waiting'">
-          <small>{{ t("settings.agents.hook.waitingText.codex") }}</small>
-          <ol class="steps">
-            <li class="done">
-              <span class="step-mark"><Icon name="check" :size="11" /></span>
-              <span>
-                <Rich :text="t('settings.agents.hook.step1')">
-                  <template #file><code>{{ hooksFile }}</code></template>
-                </Rich>
-              </span>
-            </li>
-            <li class="now">
-              <span class="step-mark">2</span>
-              <span>
-                <Rich :text="t('settings.agents.hook.step2.codex')">
-                  <template #command><code class="command">/hooks</code></template>
-                </Rich>
-              </span>
-            </li>
-            <li>
-              <span class="step-mark">3</span>
-              <span>{{ t("settings.agents.hook.step3") }}</span>
-            </li>
-          </ol>
-          <div class="card-foot">
-            <small>{{ t("settings.agents.hook.afterApproval") }}</small>
-            <button type="button" class="control" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="removeHook">
-              <span :class="{ hidden: busy === 'hook' }">{{ t("settings.removeHook") }}</span>
-              <Spinner v-if="busy === 'hook'" class="over" :size="12" />
-            </button>
-          </div>
-        </template>
-
-        <template v-else>
+          </template>
+          <template v-else>
+            <small>
+              {{ t("settings.agents.hook.workingText.codex") }}
+              <template v-if="heard">{{ t("settings.agents.hook.lastEvent", { time: clock(heard) }) }}</template>
+            </small>
+            <small v-if="info.hookOutdated">{{ t("settings.agents.hook.outdated.codex") }}</small>
+          </template>
+        </div>
+        <button v-if="hook === 'missing'" type="button" class="control primary" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="installHook">
+          <span :class="{ hidden: busy === 'hook' }">{{ t("settings.agents.hook.install") }}</span>
+          <Spinner v-if="busy === 'hook'" class="over" :size="12" />
+        </button>
+        <button v-else-if="info.hookOutdated" type="button" class="control" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="installHook">
+          <span :class="{ hidden: busy === 'hook' }">{{ t("settings.updateHook") }}</span>
+          <Spinner v-if="busy === 'hook'" class="over" :size="12" />
+        </button>
+        <button v-else type="button" class="control" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="removeHook">
+          <span :class="{ hidden: busy === 'hook' }">{{ t("settings.removeHook") }}</span>
+          <Spinner v-if="busy === 'hook'" class="over" :size="12" />
+        </button>
+      </div>
+      <div v-else class="hook-card section">
+        <span class="hook-title wraps">
+          {{ t("settings.hookTitle") }}
+          <span class="badge waits">{{ t("settings.agents.hook.waiting.codex") }}</span>
+        </span>
+        <small>{{ t("settings.agents.hook.waitingText.codex") }}</small>
+        <ol class="steps">
+          <li class="done">
+            <span class="step-mark"><Icon name="check" :size="11" /></span>
+            <span>
+              <Rich :text="t('settings.agents.hook.step1')">
+                <template #file><code>{{ hooksFile }}</code></template>
+              </Rich>
+            </span>
+          </li>
+          <li class="now">
+            <span class="step-mark">2</span>
+            <span>
+              <Rich :text="t('settings.agents.hook.step2.codex')">
+                <template #command><code class="command">/hooks</code></template>
+              </Rich>
+            </span>
+          </li>
+          <li>
+            <span class="step-mark">3</span>
+            <span>{{ t("settings.agents.hook.step3") }}</span>
+          </li>
+        </ol>
+        <small v-if="notYet" class="not-yet" role="status">{{ t("settings.agents.hook.checkNot", { trusted: notYet.trusted, total: notYet.total }) }}</small>
+        <div class="hook-card-foot">
           <small>
-            {{ t("settings.agents.hook.workingText.codex") }}
-            <template v-if="heard">{{ t("settings.agents.hook.lastEvent", { time: clock(heard) }) }}</template>
+            {{ t("settings.agents.hook.afterApproval") }}&nbsp;
+            <button type="button" class="check" :disabled="!!busy" :aria-busy="busy === 'check'" @click="checkHook">
+              <span :class="{ hidden: busy === 'check' }">{{ t("settings.agents.hook.check") }}</span>
+              <Spinner v-if="busy === 'check'" class="over" :size="11" />
+            </button>
           </small>
-          <small v-if="info.hookOutdated">{{ t("settings.agents.hook.outdated.codex") }}</small>
-          <div class="card-foot end">
-            <button v-if="info.hookOutdated" type="button" class="control" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="installHook">
-              <span :class="{ hidden: busy === 'hook' }">{{ t("settings.updateHook") }}</span>
-              <Spinner v-if="busy === 'hook'" class="over" :size="12" />
-            </button>
-            <button v-else type="button" class="control" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="removeHook">
-              <span :class="{ hidden: busy === 'hook' }">{{ t("settings.removeHook") }}</span>
-              <Spinner v-if="busy === 'hook'" class="over" :size="12" />
-            </button>
-          </div>
-        </template>
+          <button type="button" class="control" :disabled="!!busy" :aria-busy="busy === 'hook'" @click="removeHook">
+            <span :class="{ hidden: busy === 'hook' }">{{ t("settings.removeHook") }}</span>
+            <Spinner v-if="busy === 'hook'" class="over" :size="12" />
+          </button>
+        </div>
       </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
@@ -216,37 +261,33 @@ const removeRadio = () => run("radio", () => api.codexRadioSet(false));
   gap: 8px;
 }
 
-/* The hook's card: its colour a wait's while it waits for the user's approval in Codex. */
-.card {
+/* Its fuel's boxes, as Claude's (SettingsView's `.check`, its fieldset's gap), and under them
+   where its limits come from. */
+.fuel {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg-card, transparent);
+  gap: 16px;
 }
 
-.card.waits {
-  border-color: var(--claude-line);
-}
-
-.card small {
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--text-subtle);
-}
-
-.card-head,
-.card-foot {
+.box {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  font-size: 13px;
 }
 
-.card-foot.end {
-  justify-content: flex-end;
+.box input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--run);
+}
+
+
+/* The hook is settings.css's row (`.hook`) as Claude's is, and while it waits for the user's
+   approval in Codex its card (`.hook-card`), its badge in a wait's colour. The row's button keeps
+   its label on one line; the words beside it give way. */
+.hook > .control {
+  white-space: nowrap;
 }
 
 .badge.waits {
@@ -297,6 +338,43 @@ const removeRadio = () => run("radio", () => api.codexRadioSet(false));
 }
 
 .command {
+  color: var(--claude-text);
+}
+
+/* "Check" after the line that the card turns On by itself (two spaces from it, one of them
+   unbreakable: a wrap never starts its line indented): plain, underlined, no ground of its own,
+   in that line's words' size. */
+.check {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: default;
+}
+
+.check:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.check:disabled {
+  opacity: 0.6;
+}
+
+.check .hidden {
+  visibility: hidden;
+}
+
+.check .over {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+.hook-card small.not-yet {
   color: var(--claude-text);
 }
 

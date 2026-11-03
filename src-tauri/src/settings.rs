@@ -534,6 +534,25 @@ pub struct AgentSettings {
     /// `Settings::radio`, as before. Changed through its own command only.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub radio: bool,
+    /// Its fuel left in the menu bar, beside Claude's; none: as the user never said, on
+    /// (`AgentSettings::fuel_in_bar`). Claude's is `Settings::fuel_in_bar`, as before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fuel_in_bar: Option<bool>,
+    /// Its dials in the popover's foot, beside Claude's; as `fuel_in_bar`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fuel_in_popover: Option<bool>,
+}
+
+impl AgentSettings {
+    /// Whether its fuel shows in the menu bar: on until the user turns it off.
+    pub fn fuel_in_bar(&self) -> bool {
+        self.fuel_in_bar.unwrap_or(true)
+    }
+
+    /// Whether its dials show in the popover's foot: on until the user turns them off.
+    pub fn fuel_in_popover(&self) -> bool {
+        self.fuel_in_popover.unwrap_or(true)
+    }
 }
 
 fn is_no_accounts(accounts: &AccountSettings) -> bool {

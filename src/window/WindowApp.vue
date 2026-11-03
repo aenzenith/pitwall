@@ -13,9 +13,9 @@ import PitwallGlyph from "../components/PitwallGlyph.vue";
 import StatusIcon from "../components/StatusIcon.vue";
 import { connectAccounts } from "../lib/accounts";
 import { agentOf } from "../lib/agents";
-import { fuelPicked } from "../lib/codexFuel";
+import { codexFuel, fuelPicked, fuelShown } from "../lib/codexFuel";
 import { claudeState, gitLine, meta, namesAgent, rowAgent } from "../lib/format";
-import { isLow, isStale, leadWindow, left, percentText } from "../lib/fuel";
+import { isLow, isStale, leadOf, left, percentText } from "../lib/fuel";
 import { searchProjects } from "../lib/fuzzy";
 import { language, t } from "../lib/i18n";
 import { filters, isFilter, openOrAtWork, type Filter, type Page, type View } from "../lib/pages";
@@ -61,10 +61,10 @@ const filter = ref<Filter>("all");
 const view = ref<"projects" | View>("projects");
 
 /** The sidebar's "26% left" beside Fuel: the session's share left (the week's on a reading without
- * one), red when low, grey when stale. */
+ * one), red when low, grey when stale; of the agent the Fuel page shows (`fuelShown`). */
 const fuelBadge = computed(() => {
-  const limits = fuel.value?.limits;
-  const lead = leadWindow(fuel.value, now.value);
+  const limits = (fuelShown.value === "codex" ? codexFuel(fuel.value) : fuel.value)?.limits;
+  const lead = leadOf(limits, now.value);
   if (!limits || !lead) return null;
   return { text: t("fuel.left", { value: percentText(left(lead.used), language.value) }), low: isLow(lead.used), stale: isStale(limits) };
 });

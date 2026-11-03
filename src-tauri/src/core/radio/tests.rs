@@ -145,53 +145,67 @@ fn a_switch_that_is_off_keeps_its_tool_from_acting() {
 }
 
 /// A call whose server Codex started (its parent is Codex's program) is Codex's: it does nothing
-/// while Codex's radio is off, and nothing when it can't be tied to one Codex session, whatever
-/// folder it says it comes from, the words saying why. Codex's server is told no session, and
-/// its folder isn't the session's: acting on it would be acting for anyone. Claude's calls from
-/// the same folder are answered as before.
+/// while Codex's radio is off, and once it is on it acts on the project of the folder it comes
+/// from and on no other, as Claude's does (Codex starts the server in its session's folder, its
+/// shared server too). Tied to no session it is answered, and writes on no card's note.
 #[cfg(unix)]
 #[test]
-fn a_codex_call_tied_to_no_session_is_refused() {
+fn a_codex_call_acts_on_its_folders_project_alone() {
     use std::os::unix::process::CommandExt;
 
     let pad = paddock(true);
     let alpha = pad.project("alpha");
-    // A stand-in for Codex's own program, the server's parent.
-    let mut codex = std::process::Command::new("/bin/sleep").arg0("codex").arg("30").spawn().unwrap();
-    assert!(process::seen_with(codex.id(), "codex"));
-    let caller = Caller { cwd: alpha.clone(), ppid: codex.id() };
-    let tries = || [("server_status", json!({})), ("board_add", json!({ "title": "from Codex" })), ("server_restart", json!({ "action": "start" }))];
+    let elsewhere = pad.tmp.path().join("elsewhere");
+    fs::create_dir_all(&elsewhere).unwrap();
+    // Stand-ins for Codex's own program, the server's parent: its TUI and its shared server.
+    let tui = std::process::Command::new("/bin/sleep").arg0("codex").arg("30").spawn().unwrap();
+    // (A shell that waits, not one that becomes `sleep`: its words stay its own.)
+    let shared = std::process::Command::new("/bin/sh").arg0("codex").args(["-c", "sleep 30; :", "app-server"]).spawn().unwrap();
+    assert!(process::seen_with(tui.id(), "codex") && process::seen_with(shared.id(), "codex"));
+    let callers = [Caller { cwd: alpha.clone(), ppid: tui.id() }, Caller { cwd: alpha.clone(), ppid: shared.id() }];
 
     // Codex isn't on this Mac: off, and its radio with it.
-    for (tool, args) in tries() {
-        let reply = pad.core.radio_call(&caller, tool, &args);
-        assert!(reply.error && reply.text.contains("off for Codex"), "{tool}: {}", reply.text);
+    for caller in &callers {
+        for (tool, args) in [("server_status", json!({})), ("board_add", json!({ "title": "from Codex" }))] {
+            let reply = pad.core.radio_call(caller, tool, &args);
+            assert!(reply.error && reply.text.contains("off for Codex"), "{tool}: {}", reply.text);
+        }
     }
+    assert!(pad.cards().is_empty());
 
-    // Found and its radio on, but the hook told of no session the call could be one of.
+    // Found and its radio on: the project of its folder, from under either.
     fs::create_dir_all(pad.tmp.path().join("codex")).unwrap();
     assert!(pad.core.look_for_agents());
     let mut settings = pad.core.settings();
     settings.agents.codex.radio = true;
     pad.core.set_settings(settings);
-    for (tool, args) in tries() {
-        let reply = pad.core.radio_call(&caller, tool, &args);
-        assert!(reply.error && reply.text.contains("can't tell which Codex session"), "{tool}: {}", reply.text);
+    for caller in &callers {
+        let reply = pad.core.radio_call(caller, "server_status", &json!({}));
+        assert!(!reply.error && reply.text.contains("status: stopped"), "{}", reply.text);
+        // From a folder of no listed project, nothing.
+        let away = Caller { cwd: elsewhere.to_string_lossy().into_owned(), ppid: caller.ppid };
+        let reply = pad.core.radio_call(&away, "board_add", &json!({ "title": "astray" }));
+        assert!(reply.error && reply.text.contains("isn't one of Pitwall's projects"), "{}", reply.text);
+        // The hook told of no session: no card is its own to note on.
+        let reply = pad.core.radio_call(caller, "board_note", &json!({ "note": "done" }));
+        assert!(reply.error && reply.text.contains("given no card"), "{}", reply.text);
     }
-    assert!(pad.cards().is_empty(), "no card from an untied call");
-    assert_eq!(pad.core.snapshot().projects[0].status, "stopped", "nothing started");
+    assert!(!pad.core.radio_call(&callers[1], "board_add", &json!({ "title": "from Codex" })).error);
+    assert_eq!(pad.cards(), [(alpha.clone(), "from Codex".to_string())]);
 
     // Turned off by the user, Codex's radio answers nothing either.
     pad.core.agent_set_on(Agent::Codex, false).unwrap();
-    let reply = pad.core.radio_call(&caller, "server_status", &json!({}));
+    let reply = pad.core.radio_call(&callers[0], "server_status", &json!({}));
     assert!(reply.error && reply.text.contains("off for Codex"), "{}", reply.text);
 
     // Claude's call from the same folder is Claude's.
     assert!(!pad.call(&alpha, "board_add", json!({ "title": "from Claude" })).error);
-    assert_eq!(pad.cards(), [(alpha.clone(), "from Claude".to_string())]);
+    assert_eq!(pad.cards().len(), 2);
 
-    let _ = codex.kill();
-    let _ = codex.wait();
+    for mut child in [tui, shared] {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 
 /// One line to the endpoint: what is sent, then everything it says until it closes. A port

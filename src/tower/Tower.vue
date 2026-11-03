@@ -3,7 +3,7 @@
 // glance at which projects run, where Claude works and where it waits on you. A row per project
 // (`list`) or one row of three-letter codes (`strip`), as `settings.tower.form` says.
 //
-// It draws from the snapshot every window gets, and from `fuel` for the session's share. While
+// It draws from the snapshot every window gets, and from `fuel` for each agent's share. While
 // the tower is off its window is hidden and this page draws nothing. The window is as large as
 // the panel: each time the panel's size changes the core is told (`tower_fit`), which sizes the
 // window, keeps it on a screen and brings it up.
@@ -15,19 +15,22 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, reactive, ref, watch } from "vue";
 
+import AgentMark from "../components/AgentMark.vue";
 import Icon from "../components/Icon.vue";
 import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Spinner from "../components/Spinner.vue";
 import StatusIcon from "../components/StatusIcon.vue";
+import { agentOn } from "../lib/agents";
+import { codexFuel } from "../lib/codexFuel";
 import { AGENT_ORDER, agentKey } from "../lib/format";
-import { isStale, leadWindow, left, LOW_LEFT, percentText } from "../lib/fuel";
+import { isStale, leadOf, left, LOW_LEFT, percentText } from "../lib/fuel";
 import { language, t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { openFromOutside } from "../lib/open";
 import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
 import { towerRows, towerSession, towerSettings, towerState } from "../lib/tower";
 import { codes } from "../lib/track";
-import type { Project } from "../lib/types";
+import type { Agent, Project, UsageState } from "../lib/types";
 
 const settings = computed(() => towerSettings(snapshot.value?.settings.tower));
 const on = computed(() => settings.value.on);
@@ -54,16 +57,29 @@ const workingLabel = computed(() =>
     .join(", "),
 );
 
-/** The session's fuel left (the week's on a reading without one), when there is a reading of it;
- * `label` says which. */
-const share = computed(() => {
-  const lead = leadWindow(fuel.value, now.value);
-  if (!lead || !fuel.value) return null;
+type Share = { agent: Agent; text: string; label: string; low: boolean; stale: boolean };
+
+/** An agent's session left (the week's on a reading without one), when there is a reading of it;
+ * `label` says which, and whose when `named`. */
+function shareOf(agent: Agent, limits: UsageState | null | undefined, named: boolean): Share | null {
+  const lead = leadOf(limits, now.value);
+  if (!lead || !limits) return null;
   const rest = left(lead.used);
   const text = percentText(rest, language.value);
-  const label = t(lead.id === "five_hour" ? "tower.fuel" : "tower.fuelWeek", { share: text });
-  return { text, label, low: rest <= LOW_LEFT, stale: isStale(fuel.value.limits) };
+  const week = lead.id !== "five_hour";
+  const label = named ? t(agentKey(week ? "core.tray.fuelWeek" : "core.tray.fuel", agent), { left: text }) : t(week ? "tower.fuelWeek" : "tower.fuel", { share: text });
+  return { agent, text, label, low: rest <= LOW_LEFT, stale: isStale(limits) };
+}
+
+/** The fuel left, as the menu bar shows it: Claude's alone as before while Codex has no reading
+ * to show (it is off, signed out or not read yet); beside it, each behind its agent's mark. */
+const shares = computed<Share[]>(() => {
+  const limits = agentOn("codex") ? codexFuel(fuel.value)?.limits : null;
+  const codex = limits && limits.status !== "signedOut" ? shareOf("codex", limits, true) : null;
+  const claude = shareOf("claude", fuel.value?.limits, codex !== null);
+  return [claude, codex].filter((share): share is Share => share !== null);
 });
+const marked = computed(() => shares.value.some((share) => share.agent === "codex"));
 
 /* ---------- what is pointed at ---------- */
 
@@ -311,9 +327,18 @@ onBeforeUnmount(() => {
       </ul>
       <!-- The projects its screen has no room for, counted. -->
       <span v-if="more" class="rest" role="img" :aria-label="t('flag.more', { count: more })" @mousedown="drag">{{ t("suggest.more", { count: more }) }}</span>
-      <template v-if="share">
+      <template v-if="shares.length">
         <span class="rule" aria-hidden="true" @mousedown="drag"></span>
-        <span :class="['share', { low: share.low, stale: share.stale }]" role="img" :aria-label="share.label" @mousedown="drag">{{ share.text }}</span>
+        <span
+          v-for="share in shares"
+          :key="share.agent"
+          :class="['share', { low: share.low, stale: share.stale, marked }]"
+          role="img"
+          :aria-label="share.label"
+          @mousedown="drag"
+        >
+          <AgentMark v-if="marked" :agent="share.agent" :size="11" color="currentColor" />{{ share.text }}
+        </span>
       </template>
     </template>
 
@@ -324,7 +349,9 @@ onBeforeUnmount(() => {
         <span v-if="running" class="count run" role="img" :aria-label="t('popover.running', { count: running })">{{ running }}</span>
         <span v-if="working" class="count claude" role="img" :aria-label="workingLabel">{{ working }}</span>
         <span class="grow"></span>
-        <span v-if="share" :class="['share', { low: share.low, stale: share.stale }]" role="img" :aria-label="share.label">{{ share.text }}</span>
+        <span v-for="share in shares" :key="share.agent" :class="['share', { low: share.low, stale: share.stale, marked }]" role="img" :aria-label="share.label">
+          <AgentMark v-if="marked" :agent="share.agent" :size="11" color="currentColor" />{{ share.text }}
+        </span>
         <button
           type="button"
           :class="['more', { lit: litAct('options') }]"
@@ -504,6 +531,13 @@ html[data-platform="linux"][data-surface="tower"] body {
 /* An older reading: no state colour, as the menu bar's. */
 .share.stale {
   color: var(--text-faint);
+}
+
+/* Beside Codex's, each share behind its agent's mark, in its colour. */
+.share.marked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .more,

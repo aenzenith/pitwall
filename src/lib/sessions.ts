@@ -117,11 +117,12 @@ export function keepOrder(frozen: Layout, next: Layout, present: Set<string> = n
 }
 
 /** What bringing a session up does, as its button and menu say it: an ended one opens again in a
- * Pitwall terminal, one running where Pitwall can't reach only has the project's window come up,
- * the rest come up where they run (one that has just stopped: in a Pitwall terminal, opened
- * again). */
+ * Pitwall terminal, and so does a Codex one outside Pitwall's tabs wherever it runs; a Claude one
+ * running where Pitwall can't reach only has the project's window come up; the rest come up where
+ * they run (one that has just stopped: in a Pitwall terminal, opened again). */
 export function bringKeys(row: SessionRow): { label: Key; title: Key } {
-  if (row.phase === "ended") return { label: "sessions.action.reopenTerminal", title: "sessions.action.reopenTitle" };
+  const reopen = { label: "sessions.action.reopenTerminal", title: "sessions.action.reopenTitle" } as const;
+  if (row.phase === "ended" || (row.agent === "codex" && row.origin.kind !== "pitwall")) return reopen;
   if (runsElsewhere(row)) return { label: "common.openInEditor", title: unlinkedEditor(row.origin) ? "sessions.unlinked.body" : "sessions.elsewhere.body" };
   return { label: "sessions.action.bringUp", title: "sessions.action.bringUpTitle" };
 }
@@ -181,9 +182,10 @@ export type OriginIcon = "pitwall" | "editor" | "terminal" | "external" | "info"
 export type OriginView = { icon: OriginIcon | null; short: string; long: string };
 
 /** Where a session of `agent` runs, as the row and the details name it. Codex's is known only in
- * the tabs Pitwall started it in: any other is "elsewhere". */
+ * the tabs Pitwall started it in: any other it was seen running in is "elsewhere" (one never seen
+ * running, as for Claude, unknown). */
 export function originView(origin: SessionOrigin, project: string, editor: string | undefined, agent: Agent = "claude"): OriginView {
-  if (agent === "codex" && origin.kind !== "pitwall") {
+  if (agent === "codex" && origin.kind !== "pitwall" && origin.kind !== "unknown") {
     const text = t("sessions.origin.elsewhere");
     return { icon: null, short: text, long: text };
   }

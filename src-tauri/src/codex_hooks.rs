@@ -15,10 +15,11 @@
 
 use std::ffi::{OsStr, OsString};
 use std::fs;
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Stdio};
 use std::sync::{mpsc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -36,6 +37,11 @@ const HOOK_FLAG: &str = "--codex-hook";
 const INPUT_LIMIT: u64 = 64 << 20;
 /// What Codex gives each run of the hook (seconds); hook mode itself gives up reading sooner.
 const TIMEOUT_S: u64 = 5;
+/// The name `/hooks` lists each entry by (Codex's `statusMessage`, also what its status line would
+/// say of a run that outlasted 300 ms); part of what Codex trusts, so it never changes either.
+const NAME: &str = "Pitwall";
+/// How long Codex's app server may take to say which hooks it trusts.
+const ASK_WITHIN: Duration = Duration::from_secs(10);
 const READ_WITHIN: Duration = Duration::from_millis(4_000);
 
 /// The events Pitwall listens to, with their matcher (a regular expression; `None`: the entry has
@@ -289,18 +295,76 @@ pub struct CodexHook {
     runner: Runner,
     cached: Mutex<Option<(Stamp, CodexHookStatus)>>,
     /// `~/.pitwall/codex-hook-heard.json`, Pitwall's own: which `hooks.json` (its path and when it
-    /// was last written) an event was heard after, so that a trusted hook reads at work after a
-    /// restart of Pitwall's. Nothing of a session goes into it.
+    /// was last written) an event was heard after, or Codex said it trusts, so that a trusted hook
+    /// reads at work after a restart of Pitwall's. Nothing of a session goes into it.
     heard_file: PathBuf,
-    /// That file as last read or written (`None` before the first read).
-    heard_for: Mutex<Option<Option<u64>>>,
+    /// That file as last read or written: when the `hooks.json` had changed and whether Codex said
+    /// it trusts it (`None` before the first read).
+    heard_for: Mutex<Option<Option<(u64, bool)>>>,
 }
 
-/// `codex-hook-heard.json`: the `hooks.json` an event was heard after, and when it had changed.
+/// `codex-hook-heard.json`: the `hooks.json` an event was heard after, or Codex said it trusts
+/// (`trusted`), and when it had changed.
 #[derive(serde::Serialize, Deserialize)]
 struct Heard {
     hooks: PathBuf,
     changed: u64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    trusted: bool,
+}
+
+/// What Codex itself said of Pitwall's entries in a home's `hooks.json`: how many of those
+/// wanted it trusts and runs, out of how many.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct CodexTrust {
+    pub trusted: usize,
+    pub total: usize,
+}
+
+/// A hook as Codex's `hooks/list` gives it: only these fields are read, every other skipped as
+/// it streams past; the command is only tested.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Listed {
+    event_name: String,
+    #[serde(default)]
+    command: Option<String>,
+    source_path: PathBuf,
+    enabled: bool,
+    trust_status: String,
+}
+
+#[derive(Deserialize)]
+struct ListedIn {
+    hooks: Vec<Listed>,
+}
+
+#[derive(Deserialize)]
+struct ListResult {
+    data: Vec<ListedIn>,
+}
+
+/// A line of the app server's: an answer (to `id`) or something else, skipped.
+#[derive(Deserialize)]
+struct Answer<T> {
+    id: Option<u64>,
+    result: Option<T>,
+}
+
+/// Ends Codex's app server: it leaves once its input closed; else, after a second, its whole
+/// group is stopped.
+fn end_server(mut child: Child) {
+    let until = Instant::now() + Duration::from_secs(1);
+    while Instant::now() < until {
+        if child.try_wait().ok().flatten().is_some() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    #[cfg(unix)]
+    let _ = crate::process::kill_tree(child.id(), true);
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 impl CodexHook {
@@ -316,34 +380,50 @@ impl CodexHook {
         }
     }
 
-    /// When the `hooks.json` an event was last heard after had changed, as written down; none for
-    /// another home's file or before any.
-    fn heard_for(&self) -> Option<u64> {
+    /// When the `hooks.json` an event was last heard after (or Codex said it trusts) had changed,
+    /// and whether Codex said so, as written down; none for another home's file or before any.
+    fn heard_for(&self) -> Option<(u64, bool)> {
         let mut known = self.heard_for.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *known.get_or_insert_with(|| {
             let heard: Heard = serde_json::from_str(&fs::read_to_string(&self.heard_file).ok()?).ok()?;
-            (heard.hooks == self.hooks_file).then_some(heard.changed)
+            (heard.hooks == self.hooks_file).then_some((heard.changed, heard.trusted))
         })
     }
 
     /// Whether an event was heard after `hooks.json` as it is now (`changed_at`), in this run or an
-    /// earlier one: Codex trusts it, unless it changed since.
+    /// earlier one, or Codex said it trusts it: Codex runs it, unless it changed since.
     pub fn heard_since_changed(&self) -> bool {
-        self.changed_at().is_some_and(|changed| self.heard_for() == Some(changed))
+        self.changed_at().is_some_and(|changed| self.heard_for().is_some_and(|(at, _)| at == changed))
+    }
+
+    /// Whether Codex itself said it trusts and runs every entry of `hooks.json` as it is now
+    /// (`ask_codex`): at work, whatever sessions began before the user trusted it.
+    pub fn trusted_since_changed(&self) -> bool {
+        self.changed_at().is_some_and(|changed| self.heard_for() == Some((changed, true)))
     }
 
     /// Writes down that an event was heard after `hooks.json` as it is now; once per change.
     pub fn note_heard(&self) {
+        self.note(false);
+    }
+
+    /// Writes down that Codex said it trusts and runs every entry of `hooks.json` as it is now.
+    pub fn note_trusted(&self) {
+        self.note(true);
+    }
+
+    fn note(&self, trusted: bool) {
         let Some(changed) = self.changed_at() else {
             return;
         };
-        if self.heard_for() == Some(changed) {
-            return;
+        match self.heard_for() {
+            Some((at, said)) if at == changed && (said || !trusted) => return,
+            _ => {}
         }
-        let heard = Heard { hooks: self.hooks_file.clone(), changed };
+        let heard = Heard { hooks: self.hooks_file.clone(), changed, trusted };
         let written = serde_json::to_string(&heard).ok().is_some_and(|json| write_atomic(&self.heard_file, &json).is_ok());
         if written {
-            *self.heard_for.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Some(changed));
+            *self.heard_for.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Some((changed, trusted)));
         }
     }
 
@@ -370,7 +450,7 @@ impl CodexHook {
         if let Some(matcher) = matcher {
             entry.insert("matcher".into(), matcher.into());
         }
-        entry.insert("hooks".into(), json!([{ "type": "command", "command": command, "timeout": TIMEOUT_S }]));
+        entry.insert("hooks".into(), json!([{ "type": "command", "command": command, "timeout": TIMEOUT_S, "statusMessage": NAME }]));
         Some(Value::Object(entry))
     }
 
@@ -381,8 +461,91 @@ impl CodexHook {
 
     /// A handler that runs Pitwall: the script, or the app in hook mode.
     fn is_our_hook(&self, hook: &Value) -> bool {
-        let command = hook.get("command").and_then(Value::as_str).unwrap_or_default();
+        self.is_our_command(hook.get("command").and_then(Value::as_str).unwrap_or_default())
+    }
+
+    /// A handler's command that runs Pitwall: only tested.
+    fn is_our_command(&self, command: &str) -> bool {
         command.contains(self.script_file.to_string_lossy().as_ref()) || runs_app(command)
+    }
+
+    /// Of what Codex listed, how many of the entries Pitwall wants under each event are in this
+    /// home's `hooks.json`, trusted and on.
+    fn trust_of(&self, listed: &[Listed]) -> CodexTrust {
+        let ours_file = |file: &Path| file == self.hooks_file || fs::canonicalize(file).ok() == fs::canonicalize(&self.hooks_file).ok();
+        let trusted = EVENTS
+            .iter()
+            .filter(|(event, _)| {
+                listed.iter().any(|hook| {
+                    hook.event_name.eq_ignore_ascii_case(event)
+                        && ours_file(&hook.source_path)
+                        && hook.command.as_deref().is_some_and(|command| self.is_our_command(command))
+                        && hook.enabled
+                        && hook.trust_status == "trusted"
+                })
+            })
+            .count();
+        CodexTrust { trusted, total: EVENTS.len() }
+    }
+
+    /// Asks Codex itself which of Pitwall's entries it trusts and runs: its app server
+    /// (`codex app-server`, the CLI at `codex` run with `env` and no shell, in the home) is asked
+    /// `hooks/list` for the home and ended once it answered. Of each hook only its event, its
+    /// command (tested), its file, its switch and its trust are read; nothing of it is kept.
+    pub fn ask_codex(&self, codex: &Path, env: &[(&str, &str)]) -> Result<CodexTrust, String> {
+        let failed = || t!("core.codex.askFailed");
+        let home = self.hooks_file.parent().map(Path::to_path_buf).unwrap_or_default();
+        let mut command = crate::process::terminal_command(codex, env);
+        command.arg("app-server").current_dir(&home).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        #[cfg(unix)]
+        std::os::unix::process::CommandExt::process_group(&mut command, 0);
+        let mut child = command.spawn().map_err(|_| failed())?;
+        let (Some(mut input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
+            end_server(child);
+            return Err(failed());
+        };
+        let (lines, heard) = mpsc::channel();
+        std::thread::spawn(move || {
+            for line in BufReader::new(output).lines() {
+                let Ok(line) = line else { break };
+                if lines.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let deadline = Instant::now() + ASK_WITHIN;
+        // The answer to `id`, read as `T`; every other line skipped.
+        let answer = |id: u64| -> Option<String> {
+            loop {
+                let line = heard.recv_timeout(deadline.checked_duration_since(Instant::now())?).ok()?;
+                let head: Answer<serde::de::IgnoredAny> = match serde_json::from_str(&line) {
+                    Ok(head) => head,
+                    Err(_) => continue,
+                };
+                if head.id == Some(id) {
+                    return head.result.is_some().then_some(line);
+                }
+            }
+        };
+        let mut send = |message: Value| writeln!(input, "{message}").and_then(|()| input.flush()).is_ok();
+        let trust = (|| {
+            let hello = json!({ "id": 1, "method": "initialize", "params": { "clientInfo": { "name": "pitwall", "version": env!("CARGO_PKG_VERSION") } } });
+            if !send(hello) {
+                return None;
+            }
+            answer(1)?;
+            let list = json!({ "id": 2, "method": "hooks/list", "params": { "cwds": [home] } });
+            if !send(json!({ "method": "initialized" })) || !send(list) {
+                return None;
+            }
+            let listed: Answer<ListResult> = serde_json::from_str(&answer(2)?).ok()?;
+            let listed: Vec<Listed> = listed.result?.data.into_iter().flat_map(|entry| entry.hooks).collect();
+            Some(self.trust_of(&listed))
+        })();
+        // Its input closed, the app server leaves.
+        drop(input);
+        end_server(child);
+        trust.ok_or_else(failed)
     }
 
     /// An entry that runs Pitwall: one of its handlers is ours.

@@ -213,7 +213,12 @@ export function errorKeys(error: UsageError | null): [Key, Key] {
  * (the Fuel page's big dial, the sidebar's badge, the mini tower's share; the menu bar's is the
  * core's `Fuel::bar`). None before a reading, or on a plan with neither. */
 export function leadWindow(fuel: Fuel | null, now: number): UsageWindow | null {
-  const windows = fuel?.limits.usage?.windows ?? [];
+  return leadOf(fuel?.limits, now);
+}
+
+/** The same of any agent's limits (Codex's: `codexFuel`). */
+export function leadOf(limits: UsageState | null | undefined, now: number): UsageWindow | null {
+  const windows = limits?.usage?.windows ?? [];
   const found = windows.find((window) => window.id === "five_hour") ?? windows.find((window) => window.id === "seven_day");
   return found ? current(found, now) : null;
 }

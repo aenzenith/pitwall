@@ -9,7 +9,9 @@ import type { UsageWindow } from "../../lib/types";
 /**
  * The Fuel page's ground between its bars, drawn with WebGL: warm smoke and embers rising behind
  * the page, the smoke lit round each dial's pod (`[data-ring]` in the canvas's parent) and sparks
- * circling them. The glow
+ * circling them. A pod's sparks are its own: drawn from its `data-ring` name, never from its place
+ * among the others, turning the way its `data-spin` says (1 or -1). A pod is lit as far as it is
+ * inside the canvas across, so one sliding out takes its light along. The glow
  * climbs as high as the session has fuel left, the embers and sparks thicken and quicken with its
  * burn rate; red when low, grey and still when stale. Drawn for the eye only; the dials say the
  * same. `readAt`: when `window` was read.
@@ -26,14 +28,17 @@ import type { UsageWindow } from "../../lib/types";
  */
 const props = defineProps<{ window: UsageWindow | null; readAt: number; stale: boolean }>();
 
-/** At most this many frames a second: smoke needs no more, the battery thanks us. */
+/** At most this many frames a second: smoke needs no more, the battery thanks us. Every frame while
+ * something under the canvas is on its way (`moving`): the sparks keep up with their pods. */
 const FPS = 30;
 /** Pixels drawn per device pixel: half a retina pixel, never under one CSS pixel, keeps sparks crisp. */
 const SCALE = 0.5;
-/** How often the pods' places are read again while running, in ms. */
+/** How often the pods' places are read again while running, in ms; every frame while something
+ * under the canvas is on its way (`moving`). */
 const MEASURE_MS = 500;
-/** Pods lit at most: the cluster's three dials. */
-const RINGS = 3;
+/** Pods lit at most: the cluster's three dials, and while another agent's slide in, the other's
+ * on their way out. */
+const RINGS = 6;
 /** The burn rate, in %/h, at which the embers are at their thickest and quickest. */
 const HOT_RATE = 25;
 /** How long the glow, the embers and the tint take to come most of the way to a new reading's, in
@@ -57,8 +62,14 @@ uniform vec3 uBase;
 uniform vec3 uTint;
 uniform float uLevel;
 uniform float uHeat;
-// Each pod: its centre in canvas pixels (from the bottom left) and its radius; 0 when absent.
-uniform vec3 uRings[${RINGS}];
+// Each pod: its centre in canvas pixels (from the bottom left), its radius (0 when absent) and how
+// much of it is lit (0–1).
+uniform vec4 uRings[${RINGS}];
+// Each pod's sparks: their seed, its sign the way they turn.
+uniform float uSeeds[${RINGS}];
+// How far along the ground the frame looks, in canvas pixels: each agent's page stands a page's
+// width further along it, and at a switch the ground slides with the page.
+uniform float uPan;
 #ifdef DAY
 // The footer: its top edge in canvas pixels from the bottom (0 with none), and how far under that
 // edge the specks have faded.
@@ -150,8 +161,11 @@ float orbit(vec2 v, float band, float radius, float n, float turns, float seed) 
 
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
+  // The smoke and the embers where they lie on the ground, which goes on past the frame both ways;
+  // the glow, the rims and the vignette stay where the frame has them.
+  vec2 ground = (gl_FragCoord.xy + vec2(uPan, 0.0)) / uRes;
   float aspect = uRes.x / uRes.y;
-  vec2 p = vec2(uv.x * aspect, uv.y) * 1.5;
+  vec2 p = vec2(ground.x * aspect, ground.y) * 1.5;
   float t = uTime;
 
   // Smoke: noise folded into itself, drifting up.
@@ -169,21 +183,21 @@ void main() {
   float rims = 0.0;
   float sparks = 0.0;
   for (int i = 0; i < ${RINGS}; i++) {
-    vec3 ring = uRings[i];
-    if (ring.z <= 0.0) continue;
+    vec4 ring = uRings[i];
+    if (ring.z <= 0.0 || ring.w <= 0.0) continue;
     vec2 v = gl_FragCoord.xy - ring.xy;
     float d = length(v);
-    spill += exp(-abs(d - ring.z) / ring.z * 3.5);
-    rims += exp(-abs(d - ring.z) / (ring.z * 0.03));
+    spill += ring.w * exp(-abs(d - ring.z) / ring.z * 3.5);
+    rims += ring.w * exp(-abs(d - ring.z) / (ring.z * 0.03));
     float band = (d - ring.z) / ring.z;
     if (band > 0.0 && band < 0.34) {
       // Each pod at a pace of its own, neighbours turning opposite ways; three layers at three speeds.
-      float seed = float(i) * 17.0;
-      float turns = 0.012 * (0.6 + 0.8 * hash(vec2(seed, 2.9))) * (mod(float(i), 2.0) < 0.5 ? 1.0 : -1.0);
+      float seed = abs(uSeeds[i]);
+      float turns = 0.012 * (0.6 + 0.8 * hash(vec2(seed, 2.9))) * sign(uSeeds[i]);
       float layers = orbit(v, band, ring.z, 30.0, turns * 0.55, seed)
         + orbit(v, band, ring.z, 26.0, turns, seed + 101.0)
         + orbit(v, band, ring.z, 22.0, turns * 1.6, seed + 211.0);
-      sparks += layers * (1.0 - band / 0.34);
+      sparks += ring.w * layers * (1.0 - band / 0.34);
     }
   }
   rims *= 0.75 + 0.25 * sin(t * 0.9);
@@ -191,7 +205,7 @@ void main() {
   // Only the smoke is lit from below, never a flat haze: no band along the bottom.
   float k = smoke * (0.35 + 0.9 * rise) + veins * 0.9 * rise + spill * (0.1 + 0.9 * smoke) * 0.7;
 
-  float e = embers(uv, aspect, 9.0, 0.28, 0.0) + embers(uv, aspect, 14.0, 0.42, 11.0) * 0.7 + embers(uv, aspect, 22.0, 0.6, 23.0) * 0.45;
+  float e = embers(ground, aspect, 9.0, 0.28, 0.0) + embers(ground, aspect, 14.0, 0.42, 11.0) * 0.7 + embers(ground, aspect, 22.0, 0.6, 23.0) * 0.45;
   e *= smoothstep(1.0, 0.15, uv.y);
 
 #ifdef DAY
@@ -236,7 +250,7 @@ const heat = computed(() => {
 });
 const running = computed(() => visible.value && !props.stale && !reducedMotion.value);
 
-type Uniforms = Record<"res" | "time" | "base" | "tint" | "level" | "heat" | "rings" | "foot", WebGLUniformLocation | null>;
+type Uniforms = Record<"res" | "time" | "base" | "tint" | "level" | "heat" | "rings" | "seeds" | "pan" | "foot", WebGLUniformLocation | null>;
 type Program = { program: WebGLProgram; uniforms: Uniforms };
 
 type Scene = {
@@ -250,6 +264,8 @@ type Scene = {
 
 let scene: Scene | null = null;
 let frame = 0;
+/** A still frame's frames while something under it moves (`follow`). */
+let following = 0;
 let lastAt = 0;
 let lastDrawn = 0;
 /** Scene time: it only moves while running, and faster when the session burns hot. */
@@ -264,8 +280,12 @@ let tintTo: [number, number, number] = [0, 0, 0];
 let shownLevel = 1;
 let shownHeat = 0;
 let tint: [number, number, number] = [0, 0, 0];
-/** The pods, as the shader takes them: x, y, radius each, in canvas pixels. */
-const rings = new Float32Array(RINGS * 3);
+/** The pods, as the shader takes them: x, y, radius each, in canvas pixels, and how much is lit. */
+const rings = new Float32Array(RINGS * 4);
+/** Each pod's sparks, as the shader takes them: their seed, signed the way they turn. */
+const seeds = new Float32Array(RINGS);
+/** How far along the ground the frame looks, in canvas pixels (`uPan`): kept while no page says. */
+let pan = 0;
 /** The footer, as the shader takes it: its top edge from the canvas's bottom and the fade under
  * that edge, in canvas pixels; 0 with no footer. */
 const foot = new Float32Array(2);
@@ -315,7 +335,7 @@ function build(gl: WebGLRenderingContext, theme: "dark" | "light"): Program | nu
   gl.linkProgram(program);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return drop();
   const at = (name: string) => gl.getUniformLocation(program, name);
-  return { program, uniforms: { res: at("uRes"), time: at("uTime"), base: at("uBase"), tint: at("uTint"), level: at("uLevel"), heat: at("uHeat"), rings: at("uRings"), foot: at("uFoot") } };
+  return { program, uniforms: { res: at("uRes"), time: at("uTime"), base: at("uBase"), tint: at("uTint"), level: at("uLevel"), heat: at("uHeat"), rings: at("uRings"), seeds: at("uSeeds"), pan: at("uPan"), foot: at("uFoot") } };
 }
 
 function setUp(target: HTMLCanvasElement): Scene | null {
@@ -346,9 +366,18 @@ function colour(): void {
   if (made) scene.gl.useProgram(made.program);
 }
 
+/** A pod's sparks from its name: the same name, the same sparks, turning the way its `data-spin`
+ * says; never 0, which would turn no way. */
+function seed(pod: HTMLElement): number {
+  let hash = 0;
+  for (const char of pod.dataset.ring ?? "") hash = (hash * 31 + char.charCodeAt(0)) % 9973;
+  return (1 + hash / 100) * (pod.dataset.spin === "-1" ? -1 : 1);
+}
+
 /** Where the pods sit on the canvas; they move with the window and when dials come or go. */
 function measure(): void {
   rings.fill(0);
+  seeds.fill(0);
   foot.fill(0);
   const target = canvas.value;
   const box = target?.getBoundingClientRect();
@@ -361,11 +390,28 @@ function measure(): void {
     if (found) observer?.observe(found);
     footer = found;
   }
+  // The page (`[data-pan]`: its place along the ground, in page widths) and how far it has slid
+  // from there: the ground goes as far, so the page lies still on it. At a switch both pages say
+  // the same.
+  const page = target.parentElement?.querySelector<HTMLElement>("[data-pan]");
+  if (page) {
+    const shift = getComputedStyle(page).transform;
+    pan = (Number(page.dataset.pan) * page.offsetWidth - (shift === "none" ? 0 : new DOMMatrixReadOnly(shift).m41)) * ratio;
+  }
   const pods = target.parentElement?.querySelectorAll<HTMLElement>("[data-ring]") ?? [];
   [...pods].slice(0, RINGS).forEach((pod, index) => {
     const at = pod.getBoundingClientRect();
-    rings.set([(at.left + at.width / 2 - box.left) * ratio, (box.bottom - at.top - at.height / 2) * ratio, (at.width / 2) * ratio], index * 3);
+    // Lit as far as it is inside the canvas across: one sliding out is dark by the time it is gone.
+    const inside = at.width ? Math.max(0, Math.min(at.right, box.right) - Math.max(at.left, box.left)) / at.width : 0;
+    rings.set([(at.left + at.width / 2 - box.left) * ratio, (box.bottom - at.top - at.height / 2) * ratio, (at.width / 2) * ratio, inside], index * 4);
+    seeds[index] = seed(pod);
   });
+}
+
+/** Something under the canvas is on its way (a dial coming or going, another agent's sliding in,
+ * the pace strip opening or closing): the pods may be moving with it. */
+function moving(): boolean {
+  return (canvas.value?.parentElement?.getAnimations({ subtree: true }).length ?? 0) > 0;
 }
 
 /** The frame shows the reading as it is. */
@@ -399,26 +445,56 @@ function draw(): void {
   gl.uniform3fv(uniforms.tint, tint);
   gl.uniform1f(uniforms.level, shownLevel);
   gl.uniform1f(uniforms.heat, shownHeat);
-  gl.uniform3fv(uniforms.rings, rings);
+  gl.uniform4fv(uniforms.rings, rings);
+  gl.uniform1fv(uniforms.seeds, seeds);
+  gl.uniform1f(uniforms.pan, pan);
   gl.uniform2fv(uniforms.foot, foot);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   ready.value = true;
 }
 
-function tick(at: number): void {
-  frame = requestAnimationFrame(tick);
-  if (at - lastDrawn < 1000 / FPS - 2) return;
-  const step = Math.min(0.1, (at - (lastAt || at)) / 1000);
+/** The scene moves on to `at`: the glow, the embers and the tint, and the smoke's own time. */
+function advance(at: number): void {
+  const seconds = Math.min(0.1, (at - (lastAt || at)) / 1000);
   lastAt = at;
   lastDrawn = at;
-  glide(step);
-  time += step * (0.6 + 1.2 * shownHeat);
-  if (at - lastMeasured > MEASURE_MS) {
+  glide(seconds);
+  time += seconds * (0.6 + 1.2 * shownHeat);
+}
+
+function tick(at: number): void {
+  frame = requestAnimationFrame(tick);
+  // The page draws the frames itself while it slides (`lead`).
+  if (led) return;
+  const busy = moving();
+  if (at - lastDrawn < 1000 / FPS - 2 && !busy) return;
+  advance(at);
+  if (at - lastMeasured > MEASURE_MS || busy) {
     lastMeasured = at;
     measure();
   }
   draw();
 }
+
+/** The page draws the frames while it slides the dials across (a switch of agent): its own frames
+ * stand aside, so none is drawn with the dials where they were a moment ago. */
+let led = false;
+
+function lead(on: boolean): void {
+  led = on;
+}
+
+/** A frame drawn at the page's word, right after it placed the dials for `at` (a rAF time): the
+ * ground and the pods' light where the dials now are, in that same frame, so the two never part.
+ * A still scene only follows them; a running one moves on too. */
+function step(at: number): void {
+  if (!scene) return;
+  if (frame && at !== lastAt) advance(at);
+  measure();
+  draw();
+}
+
+defineExpose({ step, lead });
 
 function play(): void {
   stop();
@@ -435,6 +511,8 @@ function play(): void {
 function stop(): void {
   cancelAnimationFrame(frame);
   frame = 0;
+  cancelAnimationFrame(following);
+  following = 0;
 }
 
 function fit(): void {
@@ -448,9 +526,22 @@ function fit(): void {
   if (!frame) draw();
 }
 
-function onScroll(): void {
+/** The pods moved: a still frame lights them where they are now. */
+function onMoved(): void {
   measure();
   if (!frame) draw();
+}
+
+/** The still frame's own frames while something under it is on its way: the ground and the pods'
+ * light go along with a page sliding in, the smoke and the embers standing still. */
+function follow(): void {
+  if (frame || following || !scene) return;
+  const step = (): void => {
+    measure();
+    draw();
+    following = moving() ? requestAnimationFrame(step) : 0;
+  };
+  following = requestAnimationFrame(step);
 }
 
 function onMotion(event: MediaQueryListEvent): void {
@@ -475,10 +566,13 @@ onMounted(() => {
   settle();
   // The canvas takes another size: its buffer follows. The footer alone does (the limits listed,
   // or folded away): only where it stands is read again.
-  observer = new ResizeObserver((entries) => (entries.some((entry) => entry.target === target) ? fit() : onScroll()));
+  observer = new ResizeObserver((entries) => (entries.some((entry) => entry.target === target) ? fit() : onMoved()));
   observer.observe(target);
   // The pods move when the page scrolls; scroll events don't bubble, a capturing listener sees them.
-  target.parentElement?.addEventListener("scroll", onScroll, { capture: true, passive: true });
+  // A still frame also puts them where a dial coming or going leaves them.
+  target.parentElement?.addEventListener("scroll", onMoved, { capture: true, passive: true });
+  target.parentElement?.addEventListener("transitionend", onMoved, { capture: true, passive: true });
+  target.parentElement?.addEventListener("transitionrun", follow, { capture: true, passive: true });
   fit();
   play();
 });
@@ -515,7 +609,9 @@ watch(
 onBeforeUnmount(() => {
   stop();
   observer?.disconnect();
-  canvas.value?.parentElement?.removeEventListener("scroll", onScroll, { capture: true });
+  canvas.value?.parentElement?.removeEventListener("scroll", onMoved, { capture: true });
+  canvas.value?.parentElement?.removeEventListener("transitionend", onMoved, { capture: true });
+  canvas.value?.parentElement?.removeEventListener("transitionrun", follow, { capture: true });
   motionQuery?.removeEventListener("change", onMotion);
   scene?.gl.getExtension("WEBGL_lose_context")?.loseContext();
   scene = null;

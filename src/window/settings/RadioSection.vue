@@ -169,7 +169,7 @@ onBeforeUnmount(() => watcher?.disconnect());
     <div v-if="tools.length" class="part" role="group" :aria-labelledby="`radio-tools-${agent}`">
       <div class="tools-head">
         <span :id="`radio-tools-${agent}`">{{ t(codex ? "radio.tools.codex" : "radio.tools") }}</span>
-        <small>{{ t(codex ? "radio.scope.codex" : "radio.scope") }}</small>
+        <small>{{ t("radio.scope") }}</small>
       </div>
       <!-- The whole row is the switch's. -->
       <div class="rows">
@@ -203,11 +203,6 @@ onBeforeUnmount(() => watcher?.disconnect());
 /* Under its name, in Settings › Agents. */
 small.kind {
   white-space: normal;
-}
-
-.hook-title.wraps {
-  flex-wrap: wrap;
-  row-gap: 4px;
 }
 
 .labels {

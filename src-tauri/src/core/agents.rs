@@ -111,6 +111,26 @@ impl Core {
         self.notify();
     }
 
+    /// Where `agent`'s fuel shows, at the user's word (Settings › Agents): in the menu bar
+    /// (`bar`) and in the popover's foot (`popover`), each left as it is when none. Claude's are
+    /// Settings' own (`fuel_in_bar`, `fuel_in_popover`), as before.
+    pub fn agent_set_fuel(&self, agent: Agent, bar: Option<bool>, popover: Option<bool>) -> Result<(), String> {
+        if agent.is_claude() {
+            return Err(format!("{}'s fuel is in Settings' form", agent.name()));
+        }
+        {
+            let mut inner = self.lock();
+            let part = inner.settings.agents.of_mut(agent);
+            // On is as never said: the copy of the agents' part goes while it is the default.
+            let said = |now: Option<bool>, was: Option<bool>| now.map_or(was, |on| (!on).then_some(false));
+            part.fuel_in_bar = said(bar, part.fuel_in_bar);
+            part.fuel_in_popover = said(popover, part.fuel_in_popover);
+        }
+        self.save_settings();
+        self.notify();
+        Ok(())
+    }
+
     /// Each agent's line under its name in Settings › Agents: its home folder as the user reads it
     /// and, for one that is on and found, its CLI's version as `--version` says it (asked through
     /// the user's shell, good for `VERSION_FOR`). It takes a moment, so off the main thread.

@@ -49,7 +49,7 @@ const cells = computed<Cell[]>(() => {
   <dl :class="['trip', { stale }]">
     <div v-for="cell in cells" :key="cell.key" class="cell">
       <dt class="label caps" :title="cell.label">{{ cell.label }}</dt>
-      <dd :class="['value', { hot: cell.hot, none: cell.value === NONE }]">{{ cell.value }}</dd>
+      <dd :class="['value', { hot: cell.hot, none: cell.value === NONE }]" data-swap>{{ cell.value }}</dd>
     </div>
   </dl>
 </template>

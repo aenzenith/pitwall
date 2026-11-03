@@ -65,7 +65,7 @@ const lastReadText = computed(() => (props.lastRead ? t("fuel.foot.lastRead.code
 <template>
   <div class="foot">
     <div class="line">
-      <p class="facts">
+      <p class="facts" data-swap>
         <span v-if="lastReadText" class="fact">{{ lastReadText }}</span>
         <span v-if="extraText" class="fact">{{ extraText }}</span>
         <span v-if="rest.length" class="fact">{{ t("fuel.foot.more", { count: rest.length }) }}</span>

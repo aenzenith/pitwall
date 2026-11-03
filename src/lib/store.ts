@@ -616,6 +616,9 @@ export const api = {
   /** Pitwall's hook in Codex's `hooks.json`; Codex runs it once the user trusted it in `/hooks`. */
   installCodexHook: () => invoke("install_codex_hook"),
   uninstallCodexHook: () => invoke("uninstall_codex_hook"),
+  /** "Check": what Codex itself says of Pitwall's lines in `hooks.json`, trusted and on out of
+   * all; once it runs them all, the hook reads On. */
+  checkCodexHook: () => invoke<{ trusted: number; total: number }>("check_codex_hook"),
   /** The terminal's history of Codex: the project's sessions `codex resume` finds. */
   codexPast: (path: string) => invoke<import("./types").PastSession[]>("codex_past", { path }),
   /** A Codex session of the terminal's history brought up where it runs, or opened again in a new
@@ -636,6 +639,8 @@ export const api = {
   agentAccountSyncPlan: (agent: import("./types").Agent, id: string) => invoke<import("./types").AgentSyncReport>("account_sync_plan", { id, agent }),
   /** Turns an agent on or off at the user's word; a look finds it again for nothing after. */
   agentSetOn: (agent: import("./types").Agent, on: boolean) => invoke("agent_set_on", { agent, on }),
+  /** Where an agent's fuel shows (not Claude's: Settings' form has it); one left out stays. */
+  agentSetFuel: (agent: import("./types").Agent, where: { bar?: boolean; popover?: boolean }) => invoke("agent_set_fuel", { agent, bar: where.bar ?? null, popover: where.popover ?? null }),
   /** The user was told that an agent was found and turned on: the notice closes for good. */
   agentTold: (agent: import("./types").Agent) => invoke("agent_told", { agent }),
   /** Looks for the agents' home folders again; true when that changed what is found. */

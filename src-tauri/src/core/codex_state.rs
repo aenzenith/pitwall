@@ -91,6 +91,7 @@ impl Core {
             let mut cache = self.sessions_cache();
             cache.codex = None;
             cache.codex_at = None;
+            cache.codex_held = None;
         }
         self.watch_codex();
     }
@@ -140,10 +141,19 @@ impl Core {
         }
 
         let tied = self.codex.lock().map(|codex| codex.tied()).unwrap_or_default();
-        let running = if tied.is_empty() { Some(HashMap::new()) } else { process::process_table().map(|table| running_of(&table, &tied)) };
+        let table = process::process_table();
+        let mut running = if tied.is_empty() { Some(HashMap::new()) } else { table.as_ref().map(|table| running_of(table, &tied)) };
+        // One under the shell of a tab that just went is ending with it: it runs no more.
+        let gone = self.gone_shells();
+        if let Some(running) = running.as_mut().filter(|_| !gone.is_empty()) {
+            running.retain(|_, run| !run.lineage.iter().any(|pid| gone.contains(pid)));
+        }
+        // Whether a session none of them is may still run, as a click asks it (`codex_liveness`).
+        let held = table.as_ref().zip(running.as_ref()).map(|(table, running)| (super::reveal::untied_codex(table, running, true), super::reveal::untied_codex(table, running, false)));
 
         let mut cache = self.sessions_cache();
         cache.codex = running.clone();
+        cache.codex_held = held;
         cache.codex_at = Some(Instant::now());
         cache.codex_stale = false;
         running
@@ -224,6 +234,25 @@ impl Core {
         result
     }
 
+    /// Asks Codex itself whether it trusts and runs Pitwall's hook in its own home (Settings ›
+    /// Agents › Codex, "Check"; `CodexHook::ask_codex`): once it runs every entry, that is written
+    /// down and the hook reads at work without waiting for an event. What Codex said, counted.
+    pub fn check_codex_hook(&self) -> Result<crate::codex_hooks::CodexTrust, String> {
+        if !self.agent_on(Agent::Codex) {
+            return Err(t!("core.codex.askFailed"));
+        }
+        let codex = crate::accounts::codex_sync::codex_program().ok_or_else(|| t!("radio.missing.codex"))?;
+        let hook = self.codex_hook();
+        let trust = hook.ask_codex(&codex, &[])?;
+        if trust.trusted == trust.total {
+            hook.note_trusted();
+        }
+        if self.update_codex_hook_status() {
+            self.notify();
+        }
+        Ok(trust)
+    }
+
     /// Takes Pitwall's entries out of Codex's `hooks.json`, nothing else of it; out of every
     /// Codex account's home too.
     pub fn uninstall_codex_hook(&self) -> Result<(), String> {
@@ -254,7 +283,12 @@ impl Core {
         if status.state != HookState::Missing {
             let changed = hook.changed_at();
             let heard_before = hook.heard_since_changed();
-            status.state = self.codex.lock().map(|codex| codex.hook_state(changed, heard_before)).unwrap_or(status.state);
+            status.state = if hook.trusted_since_changed() {
+                // Codex itself said it runs every entry, whatever sessions began before that.
+                HookState::Working
+            } else {
+                self.codex.lock().map(|codex| codex.hook_state(changed, heard_before)).unwrap_or(status.state)
+            };
             if status.state == HookState::Working && !heard_before {
                 hook.note_heard();
             }

@@ -231,44 +231,42 @@ impl Core {
     }
 
     /// A Codex session of the terminal's history (its project `path`, listed), as `resume_claude`
-    /// is Claude's: brought up in its tab while it runs in one, the project's window while it runs
-    /// elsewhere; once it has ended, opened again in a new tab (`codex resume`). Whatever can't be
-    /// told to have ended is never opened.
+    /// is Claude's: brought up in its tab while it runs in one; else, wherever else it runs or
+    /// ran, opened in a new tab (`codex resume`), as `reveal_codex_as` does.
     pub fn resume_codex(self: &Arc<Self>, path: &str, session: &str) -> Resumed {
         if !is_session_id(session) {
             return Resumed::Missing;
         }
-        let liveness = self.codex_liveness(session);
-        match plan_resume(&liveness, || self.codex_rollout(session).is_some()) {
-            Resume::Reveal => {
-                let own = matches!(&liveness, Liveness::Running { lineage, .. } if self.pitwall_terminal(lineage).is_some());
-                self.reveal_codex_as(path, session, liveness);
-                if own { Resumed::Shown } else { Resumed::Elsewhere }
+        if let Liveness::Running { lineage, .. } = self.codex_liveness(session) {
+            if let Some((id, path)) = self.pitwall_terminal(&lineage) {
+                self.emit(CoreEvent::RevealTerminal { path, id });
+                return Resumed::Shown;
             }
-            Resume::Reopen if self.reopen_codex(path, session) => Resumed::Opened,
-            Resume::Reopen | Resume::Missing => Resumed::Missing,
-            Resume::Unsure => Resumed::Unsure,
         }
+        if self.reopen_codex(path, session) { Resumed::Opened } else { Resumed::Missing }
     }
 
-    /// A Codex session brought up: its tab of Pitwall's terminals; one that runs elsewhere, or
-    /// that can't be opened again, the project's window only.
+    /// A Codex session brought up: its tab of Pitwall's terminals while it runs in one; else a new
+    /// tab of them that opens it (`reopen_codex`), even while it runs elsewhere (a terminal app,
+    /// an editor's Codex): Codex itself lets one process at a time write a thread (its writer
+    /// lock), so a second one says so in the tab and writes nothing. The project's window only
+    /// when there is no tab to open it in.
     fn reveal_codex_as(self: &Arc<Self>, path: &str, session: &str, liveness: Liveness) {
-        match &liveness {
-            Liveness::Running { lineage, .. } => match self.pitwall_terminal(lineage) {
-                Some((id, path)) => self.emit(CoreEvent::RevealTerminal { path, id }),
-                None => self.launch_editor(path),
-            },
-            Liveness::Ended | Liveness::Stopped if self.reopen_codex(path, session) => {}
-            Liveness::Ended | Liveness::Stopped | Liveness::Unknown => self.launch_editor(path),
+        if let Liveness::Running { lineage, .. } = &liveness {
+            if let Some((id, path)) = self.pitwall_terminal(lineage) {
+                return self.emit(CoreEvent::RevealTerminal { path, id });
+            }
+        }
+        if !self.reopen_codex(path, session) {
+            self.launch_editor(path);
         }
     }
 
-    /// Opens a Codex session no process runs again (`codex resume`) in a new tab of its project's
-    /// terminals, with the Codex account whose home keeps its rollout, and shows it; a card that
-    /// holds it follows it there. `false` when there is no such tab to open: a folder that isn't
-    /// listed has no terminals, and a session without a rollout nothing to open. Held as
-    /// `reopen` holds Claude's (`open_once`): never a second process on one rollout.
+    /// Opens a Codex session again (`codex resume`) in a new tab of its project's terminals, with
+    /// the Codex account whose home keeps its rollout, and shows it; a card that holds it follows
+    /// it there. `false` when there is no such tab to open: a folder that isn't listed has no
+    /// terminals, and a session without a rollout nothing to open. Held as `reopen` holds
+    /// Claude's (`open_once`): never a second tab of Pitwall's on one session.
     fn reopen_codex(self: &Arc<Self>, path: &str, session: &str) -> bool {
         let Some(path) = self.listed_paths().into_iter().find(|listed| same_path(listed, path)) else {
             return false;
@@ -528,7 +526,7 @@ pub(super) fn codex_runs_unseen(running: &HashMap<String, Running>, cli: bool) -
 /// (`cli`), any other one whether tied or not. Any other is accounted for only as one of a tied
 /// session's processes (its own and those above it, `Running::lineage`) or one started under a
 /// tied session's own.
-fn untied_codex(table: &HashMap<u32, ProcessInfo>, running: &HashMap<String, Running>, cli: bool) -> bool {
+pub(super) fn untied_codex(table: &HashMap<u32, ProcessInfo>, running: &HashMap<String, Running>, cli: bool) -> bool {
     let tied = |pid: &u32| running.values().any(|run| run.pid == *pid);
     let above = |pid: &u32| running.values().any(|run| run.lineage.contains(pid));
     table.iter().filter(|(_, process)| process::is_codex(process)).any(|(pid, _)| match editor_codex(table, *pid) {

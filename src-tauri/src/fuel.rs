@@ -314,14 +314,22 @@ impl Fuel {
         if !settings.fuel_in_bar {
             return None;
         }
-        let limits = self.state_of(&in_use_id(settings));
-        let windows = &limits.usage.as_ref()?.windows;
-        let lead = windows.iter().find(|window| window.id == "five_hour").or_else(|| windows.iter().find(|window| window.id == "seven_day"))?;
-        // A window whose reset has passed has refilled, as the page shows it (`current`).
-        let refilled = lead.resets_at.is_some_and(|at| at <= now_ms() as i64);
-        let left = if refilled { 100.0 } else { (100.0 - lead.used).clamp(0.0, 100.0) };
-        let stale = !matches!(limits.status, Status::Ready | Status::Loading);
-        Some(BarFuel { left: left.round() as u8, week: lead.id == "seven_day", low: left <= LOW_LEFT, stale })
+        bar_of(&self.state_of(&in_use_id(settings)))
+    }
+
+    /// Codex's, as `bar` is Claude's: its account in use's 5-hour window, else its week, as its
+    /// last reading has them; none while Codex is off, Settings hides it or nothing was read yet.
+    pub fn codex_bar(&self, settings: &Settings) -> Option<BarFuel> {
+        if !settings.agents.codex.fuel_in_bar() {
+            return None;
+        }
+        let core = &self.app.try_state::<AppState>()?.core;
+        if !core.agent_on(Agent::Codex) {
+            return None;
+        }
+        let in_use = codex_in_use(&core.codex_accounts());
+        let codex = lock(&self.codex);
+        codex.limits.iter().find(|(id, _)| *id == in_use).and_then(|(_, limits)| bar_of(limits))
     }
 
     /// Keeps both fresh for as long as the app runs.
@@ -391,6 +399,7 @@ impl Fuel {
             if had {
                 core.codex_day_off();
                 self.send(app);
+                crate::tray::refresh(app, &core.snapshot());
             }
             return;
         }
@@ -441,6 +450,7 @@ impl Fuel {
         core.day_fuel_of(Agent::Codex, DayFuel { date: today.date.clone(), tokens: today.tokens.total, week: None, estimated: false, used: None, sessions });
         if changed {
             self.send(app);
+            crate::tray::refresh(app, &core.snapshot());
             // A board card given to Codex that waits for its refill follows what was just read.
             if let Some(at) = refill {
                 core.board_refill_of(Agent::Codex, at);
@@ -726,6 +736,18 @@ fn codex_in_use(set: &crate::settings::AccountSettings) -> String {
         Ok(Some(account)) => account.id.clone(),
         _ => accounts::MAIN.to_string(),
     }
+}
+
+/// A reading's fuel as the menu bar shows it (`Fuel::bar`): its session's share left, else its
+/// week's. A reading the door couldn't renew is stale; Codex's, its own last words, never is.
+fn bar_of(limits: &UsageState) -> Option<BarFuel> {
+    let windows = &limits.usage.as_ref()?.windows;
+    let lead = windows.iter().find(|window| window.id == "five_hour").or_else(|| windows.iter().find(|window| window.id == "seven_day"))?;
+    // A window whose reset has passed has refilled, as the page shows it (`current`).
+    let refilled = lead.resets_at.is_some_and(|at| at <= now_ms() as i64);
+    let left = if refilled { 100.0 } else { (100.0 - lead.used).clamp(0.0, 100.0) };
+    let stale = !matches!(limits.status, Status::Ready | Status::Loading);
+    Some(BarFuel { left: left.round() as u8, week: lead.id == "seven_day", low: left <= LOW_LEFT, stale })
 }
 
 /// When a reading's lead window refills (the 5-hour session, else the week), while that is ahead.

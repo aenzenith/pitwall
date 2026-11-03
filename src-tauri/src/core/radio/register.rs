@@ -211,8 +211,8 @@ pub(super) fn lines_of(agent: Agent) -> usize {
 }
 
 
-/// Whether `process`, Codex's, is its shared server (`codex app-server`), whose sessions no call
-/// can be told apart by. Its command line is only tested.
+/// Whether `process`, Codex's, is its shared server (`codex app-server`), which runs many
+/// sessions: a call under it is told apart by its folder alone. Its command line is only tested.
 pub(super) fn is_codex_daemon(process: &process::ProcessInfo) -> bool {
     process.line.split_whitespace().any(|word| word == "app-server")
 }

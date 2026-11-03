@@ -20,6 +20,10 @@ use crate::claude::{inside, Peek, SessionState, TurnKind, WORKING_WINDOW_MS};
 use crate::process::ProcessInfo;
 use crate::spend::SessionSpend;
 
+/// How long the processes under a tab's shell are taken to be ending after the tab went: its
+/// processes get their signals at once and are ended for good 600 ms on (`close_terminal`).
+const GONE_FOR: Duration = Duration::from_secs(5);
+
 /// Running sessions are read again at most this often, unless their folder changed.
 const READ_EVERY: Duration = Duration::from_secs(30);
 /// The longest chain of parent processes followed.
@@ -202,8 +206,8 @@ pub(super) struct SessionsCache {
     read_at: Option<Instant>,
     /// The sessions folder changed since.
     stale: bool,
-    /// The origin each session had while it ran, kept for after it ends.
-    origins: HashMap<String, SessionOrigin>,
+    /// The origin each session had while it ran, with the pid it ran as, kept for after it ends.
+    origins: HashMap<String, (u32, SessionOrigin)>,
     day: DayCache,
     /// When each session was first seen in its phase, where nothing better tells.
     first: HashMap<String, (RowPhase, u64)>,
@@ -216,6 +220,12 @@ pub(super) struct SessionsCache {
     pub(super) codex: Option<HashMap<String, Running>>,
     pub(super) codex_at: Option<Instant>,
     pub(super) codex_stale: bool,
+    /// Read with those: whether a process of Codex's runs that may hold a session they don't list
+    /// (`reveal::untied_codex`), a thread of Codex's TUI and any other; `None`: can't be told.
+    pub(super) codex_held: Option<(bool, bool)>,
+    /// The shells of the tabs that just went (`Core::tab_gone`), and when: what ran under one is
+    /// ending with it, so it runs no more.
+    pub(super) gone_shells: Vec<(u32, Instant)>,
 }
 
 /// The process and its parents, nearest first.
@@ -394,6 +404,23 @@ impl Core {
         self.sessions_cache().stale = true;
     }
 
+    /// A tab went, its shell `shell`: the running sessions are read again on the next request,
+    /// Codex's too, and what runs under that shell is ending with it (`gone_shells`).
+    pub(super) fn tab_gone(&self, shell: Option<u32>) {
+        let mut cache = self.sessions_cache();
+        cache.stale = true;
+        cache.codex_stale = true;
+        cache.gone_shells.retain(|(_, at)| at.elapsed() < GONE_FOR);
+        if let Some(shell) = shell {
+            cache.gone_shells.push((shell, Instant::now()));
+        }
+    }
+
+    /// The shells of tabs that went a moment ago (`tab_gone`).
+    pub(super) fn gone_shells(&self) -> Vec<u32> {
+        self.sessions_cache().gone_shells.iter().filter(|(_, at)| at.elapsed() < GONE_FOR).map(|(shell, _)| *shell).collect()
+    }
+
     /// The running sessions now (`None` when that can't be told), read afresh.
     pub(super) fn read_running(&self) -> Option<HashMap<String, Running>> {
         let dir = self.sessions_dir().filter(|dir| dir.is_dir())?;
@@ -458,6 +485,7 @@ impl Core {
         let sightings: HashMap<String, Sighting> = self.sightings();
         let running = self.running_cached();
         let codex_running = self.codex_running();
+        let codex_held = self.sessions_cache().codex_held;
         let days = {
             let mut cache = self.sessions_cache();
             self.day_sessions(&mut cache.day)
@@ -517,10 +545,13 @@ impl Core {
                 .collect(),
             Err(_) => HashMap::new(),
         };
-        // Codex's: its rollout's last write and its name, from what its watch read.
+        // Codex's: its rollout's last write and its name, from what its watch read, and whether it
+        // is a thread of Codex's TUI.
+        let mut codex_cli: HashSet<String> = HashSet::new();
         if located.iter().any(|(id, _, _)| drafts[id].codex) {
             if let Ok(mut watch) = self.codex.lock() {
                 peeks.extend(located.iter().filter(|(id, _, _)| drafts[id].codex).filter_map(|(id, _, _)| Some((id.clone(), watch.peek(id)?))));
+                codex_cli.extend(located.iter().filter(|(id, _, _)| drafts[id].codex && watch.is_cli(id)).map(|(id, _, _)| id.clone()));
             }
         }
 
@@ -546,8 +577,13 @@ impl Core {
             let last = peek.map(|p| p.modified).or(draft.day.as_ref().map(|d| d.end)).unwrap_or(0);
             let running_now = match (&draft.running, &running) {
                 (Some(_), _) => Some(true),
-                // Codex's sessions without the hook can't be told; those it told of end by it.
-                (None, _) if draft.codex => None,
+                // Codex's sessions the hook didn't tie to a process can't be told while a process of
+                // Codex's may hold them; once none may, one quiet a while has ended, as a click on it
+                // finds (`codex_liveness`). Those it told of end by it.
+                (None, _) if draft.codex => match codex_held {
+                    Some((cli, other)) if !(if codex_cli.contains(&id) { cli } else { other }) && now.saturating_sub(last) > WORKING_WINDOW_MS => Some(false),
+                    _ => None,
+                },
                 (None, None) => None,
                 (None, Some(_)) if now.saturating_sub(last) > WORKING_WINDOW_MS => Some(false),
                 (None, Some(_)) => None,
@@ -597,11 +633,17 @@ impl Core {
 
             let origin = match &draft.running {
                 Some(run) => {
-                    let origin = origin_of(run, &pitwall, &peers);
-                    cache.origins.insert(id.clone(), origin.clone());
+                    let fresh = origin_of(run, &pitwall, &peers);
+                    // A process never moves to another tab: one whose tab of Pitwall's just closed
+                    // (its shell gone first, it a moment later) is still that tab's.
+                    let origin = match cache.origins.get(&id) {
+                        Some((pid, was @ SessionOrigin::Pitwall { .. })) if *pid == run.pid && !matches!(fresh, SessionOrigin::Pitwall { .. }) => was.clone(),
+                        _ => fresh,
+                    };
+                    cache.origins.insert(id.clone(), (run.pid, origin.clone()));
                     origin
                 }
-                None => cache.origins.get(&id).cloned().unwrap_or(SessionOrigin::Unknown),
+                None => cache.origins.get(&id).map(|(_, origin)| origin.clone()).unwrap_or(SessionOrigin::Unknown),
             };
 
             let today = draft.day.map(|day| SessionToday {

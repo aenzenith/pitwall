@@ -1509,6 +1509,14 @@ pub fn uninstall_codex_hook(state: State<'_, AppState>) -> Result<(), String> {
     state.core.uninstall_codex_hook()
 }
 
+/// Asks Codex whether it trusts Pitwall's hook ("Check"): its app server runs for a moment, so
+/// off the main thread.
+#[tauri::command]
+pub async fn check_codex_hook(app: AppHandle) -> Result<crate::codex_hooks::CodexTrust, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.check_codex_hook()).await.map_err(|error| error.to_string())?
+}
+
 /// The terminal's history of Codex: the project's sessions `codex resume` finds from its folder.
 /// It goes through Codex's rollouts, so it runs off the main thread.
 #[tauri::command]
@@ -1530,6 +1538,12 @@ pub async fn resume_codex(app: AppHandle, path: String, session: String) -> Resu
 #[tauri::command]
 pub fn agent_set_on(state: State<'_, AppState>, agent: crate::agent::Agent, on: bool) -> Result<(), String> {
     state.core.agent_set_on(agent, on)
+}
+
+/// Where an agent's fuel shows (Settings › Agents): in the menu bar, in the popover's foot.
+#[tauri::command]
+pub fn agent_set_fuel(state: State<'_, AppState>, agent: crate::agent::Agent, bar: Option<bool>, popover: Option<bool>) -> Result<(), String> {
+    state.core.agent_set_fuel(agent, bar, popover)
 }
 
 /// The user was told that an agent was found and turned on: the notice closes for good.

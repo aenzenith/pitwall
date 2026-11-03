@@ -46,6 +46,35 @@
   line-height: 1.55;
 }
 
+/* A name whose badge goes under it when the line is short, rather than the name breaking. */
+.hook-title.wraps {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+/* Codex's hook while it waits for the user's approval in Codex (CodexDetail): its name and how it
+   stands, what to know of it and the steps, and under them the one thing to do. No frame of its
+   own: it reads as the rows around it. */
+.hook-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 13px;
+}
+
+.hook-card small {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+}
+
+.hook-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 /* A list of settings, a line each: what it is, and its control at the line's end (a switch) or
    at its start (a check box). The list's first and last lines sit on its edges. */
 .rows {

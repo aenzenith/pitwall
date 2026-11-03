@@ -140,11 +140,12 @@ const cardSub = computed(() => {
 const seeable = computed(() => finishedWaits(props.row, props.rows));
 const seenHint = computed(() => (seeable.value && props.others > 0 ? t("sessions.seenOthers", { count: props.others, project: props.row.project }) : ""));
 
-/** Why it can't be brought up: an editor window without the extension, or another app (Codex's
- * never by its name: where it runs is known only in Pitwall's own tabs). */
+/** Why it can't be brought up: an editor window without the extension, or another app. Codex's
+ * (never by its name: where it runs is known only in Pitwall's own tabs) opens in a new tab here
+ * all the same. */
 const elsewhereNotice = computed(() => {
   const origin = props.row.origin;
-  if (codex.value) return { tag: t("sessions.elsewhere.tag"), title: t("sessions.elsewhere.titleUnnamed"), body: t("sessions.elsewhere.body") };
+  if (codex.value) return { tag: t("sessions.elsewhere.tag"), title: t("sessions.elsewhere.titleUnnamed"), body: t("sessions.elsewhere.body.codex") };
   if (unlinkedEditor(origin)) {
     return { tag: t("sessions.unlinked.tag"), title: t("sessions.unlinked.title", { editor: editorName(snapshot.value?.settings.editor) }), body: t("sessions.unlinked.body") };
   }

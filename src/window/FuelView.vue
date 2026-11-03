@@ -7,14 +7,15 @@ import Icon from "../components/Icon.vue";
 import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
 import { accountInUse, accountName, severalAccounts } from "../lib/accounts";
-import { agentName, agentsOn, multiAgent } from "../lib/agents";
-import { codexFuel, fuelPicked as picked } from "../lib/codexFuel";
+import { agentName, multiAgent } from "../lib/agents";
+import { codexFuel, fuelAgents, fuelPicked as picked, fuelShown as agent } from "../lib/codexFuel";
 import { duration } from "../lib/day";
 import { ago } from "../lib/format";
 import { clockText, cluster, errorKeys, isStale } from "../lib/fuel";
 import { language, t } from "../lib/i18n";
 import { openInPanel } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
+import { stillMotion } from "../lib/slide";
 import { api, fuel, now, visible } from "../lib/store";
 import type { Agent, UsageWindow } from "../lib/types";
 import AccountNote from "./fuel/AccountNote.vue";
@@ -40,12 +41,9 @@ const MIN_SPIN_MS = 500;
 
 /* ---------- the agent picked ---------- */
 
-/** The agents with a part on the page: Claude, and Codex while it is on and the core sends its. */
-const fuelAgents = computed<Agent[]>(() => agentsOn.value.filter((each) => each === "claude" || (each === "codex" && !!codexFuel(fuel.value))));
-/** More than one: the picker at the page's top, each with its accounts' chip. With Claude alone
- * the page is as it was. */
+/** More than one agent with a part on the page (`fuelAgents`): the picker at the page's top, each
+ * with its accounts' chip. With Claude alone the page is as it was. `agent`: the one shown. */
 const multi = computed(() => multiAgent.value && fuelAgents.value.length > 1);
-const agent = computed<Agent>(() => (multi.value && fuelAgents.value.includes(picked.value) ? picked.value : "claude"));
 const isCodex = computed(() => agent.value === "codex");
 
 /** The picked agent's part of the payload: its limits, today's tokens. */
@@ -95,8 +93,18 @@ function until(window: UsageWindow): string | null {
 
 /** The cluster's dials, left to right: the week, the session (big), the side one; without a
  * session the week is the big one. `name` goes in the pod, under the figure; `caption` under the
- * pod; `until`: how long until it refills, after the caption (the big dial only). */
-const dials = computed(() => gauges.value.dials.map((dial) => ({ ...dial, until: dial.size === "big" && dial.window ? until(dial.window) : null })));
+ * pod; `until`: how long until it refills, after the caption (the big dial only). `place`: the big
+ * one's, or left or right of it. A dial is known by its place, not its limit: a reading with other
+ * limits turns the dial standing there to its own value, and only a place filled or emptied
+ * brings a dial in or takes one out. Another agent's dials are a page of their own (`.page`). */
+const dials = computed(() => {
+  const big = gauges.value.dials.findIndex((dial) => dial.size === "big");
+  return gauges.value.dials.map((dial, index) => ({
+    ...dial,
+    place: index === big ? "big" : index < big ? "left" : "right",
+    until: dial.size === "big" && dial.window ? until(dial.window) : null,
+  }));
+});
 
 /** Nothing to show yet: the core hasn't answered, or its first reading is on its way. */
 const firstLoad = computed(() => !usage.value && (!fuel.value || status.value === "loading"));
@@ -210,10 +218,157 @@ for (const part of [trip, pace]) {
 onUpdated(measureShade);
 
 onBeforeUnmount(() => shadeObserver.disconnect());
+
+/* ---------- a switch of agent ---------- */
+
+/** How long what the page says of the agent picked takes to fade in, and how. */
+const SWAP = { duration: 260, easing: "ease-out" };
+/** How long the pace strip takes to open or close, and how: the dials above glide to make room
+ * for it, or into the room it leaves. */
+const FOLD = { duration: 320, easing: "cubic-bezier(0.2, 0, 0, 1)" };
+
+const root = ref<HTMLElement | null>(null);
+
+/** Where the agent picked stands in the picker: its dials as far along the ground, a page's width
+ * for each agent before it (`data-pan`, FuelBackdrop). */
+const agentIndex = computed(() => Math.max(0, fuelAgents.value.indexOf(agent.value)));
+
+/** How stiff the spring is that carries the view from one agent's dials to another's, per second:
+ * off at once, settled in under half a second, never past its mark. */
+const SPRING = 16;
+
+const backdrop = ref<InstanceType<typeof FuelBackdrop> | null>(null);
+const pages = ref<HTMLElement | null>(null);
+
+/** Where along the strip of the agents' dials the view stands, in pages (0: the first agent's),
+ * and how fast it goes there, in pages a second. Each page stands at its own place on the strip
+ * (`data-pan`), the ground under them all: a switch made while one slides goes on from where the
+ * view is, at the speed it has. */
+let view = agentIndex.value;
+let speed = 0;
+/** The frame the slide asked for, and when it last moved, in ms. */
+let sliding = 0;
+let movedAt = 0;
+/** The pages going out, with what lets them go once the view has left them. */
+const leaving = new Map<HTMLElement, () => void>();
+
+/** Every page where the view has it. */
+function place(): void {
+  const box = pages.value;
+  if (!box) return;
+  for (const page of box.querySelectorAll<HTMLElement>(":scope > .page")) {
+    page.style.transform = `translate3d(${(Number(page.dataset.pan) - view) * box.offsetWidth}px, 0, 0)`;
+  }
+}
+
+/** One frame of the slide: the view a step on, the pages placed, and the ground drawn under them
+ * in the same frame (FuelBackdrop's `step`), so the two never part. */
+function slide(at: number): void {
+  const seconds = Math.min(0.05, Math.max(0, (at - movedAt) / 1000));
+  movedAt = at;
+  // A critically damped spring, worked out exactly for the step, however long it was.
+  const off = view - agentIndex.value;
+  const lean = speed + SPRING * off;
+  const decay = Math.exp(-SPRING * seconds);
+  view = agentIndex.value + (off + lean * seconds) * decay;
+  speed = (speed - SPRING * lean * seconds) * decay;
+  // Within a pixel or so and all but still: the rest of the way is no more than a jump nobody sees.
+  const done = Math.abs(view - agentIndex.value) < 0.0008 && Math.abs(speed) < 0.02;
+  if (done) view = agentIndex.value;
+  place();
+  backdrop.value?.step(at);
+  if (done) arrive();
+  else sliding = requestAnimationFrame(slide);
+}
+
+/** The view at its mark: the pages going out let go, the one left back on the page's own layer. */
+function arrive(): void {
+  cancelAnimationFrame(sliding);
+  sliding = 0;
+  view = agentIndex.value;
+  speed = 0;
+  for (const done of leaving.values()) done();
+  leaving.clear();
+  for (const page of pages.value?.querySelectorAll<HTMLElement>(":scope > .page") ?? []) {
+    page.style.transform = "";
+    page.style.willChange = "";
+  }
+  backdrop.value?.lead(false);
+}
+
+// Another agent picked: the view slides to its dials, the ground along.
+watch(agentIndex, () => {
+  if (stillMotion()) return arrive();
+  if (sliding) return;
+  movedAt = performance.now();
+  backdrop.value?.lead(true);
+  sliding = requestAnimationFrame(slide);
+});
+
+/** A page coming in: on its own layer, where the view has it (off to its side, as the slide starts). */
+function pageIn(element: Element, done: () => void): void {
+  const page = element as HTMLElement;
+  if (sliding) {
+    page.style.willChange = "transform";
+    place();
+  }
+  done();
+}
+
+/** A page going out: over the place it had, until the view has left it. */
+function pageOut(element: Element, done: () => void): void {
+  const page = element as HTMLElement;
+  if (!sliding) return done();
+  page.classList.add("out");
+  page.style.willChange = "transform";
+  leaving.set(page, done);
+}
+
+onBeforeUnmount(() => cancelAnimationFrame(sliding));
+
+// Another agent picked: its dials slide in and what stays where it is (its account, the trip
+// computer, the pace strip, the foot) fades in where the other's stood (every `[data-swap]`), so
+// nothing changes at a stroke.
+watch(
+  agent,
+  () => {
+    if (stillMotion()) return;
+    for (const element of root.value?.querySelectorAll("[data-swap]") ?? []) element.animate([{ opacity: 0 }, { opacity: 1 }], SWAP);
+  },
+  { flush: "post" },
+);
+
+/** The pace strip comes (`opening`) or goes: it grows from nothing to its height, or shrinks back
+ * to nothing, rather than pushing the dials up or letting them fall at once. */
+function fold(element: Element, opening: boolean, done: () => void): void {
+  const box = element as HTMLElement;
+  if (stillMotion()) return done();
+  const style = getComputedStyle(box);
+  const open = { height: `${box.offsetHeight}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, borderTopWidth: style.borderTopWidth, opacity: 1 };
+  const shut = { height: "0px", paddingTop: "0px", paddingBottom: "0px", borderTopWidth: "0px", opacity: 0 };
+  box.style.overflow = "hidden";
+  const run = box.animate(opening ? [shut, open] : [open, shut], FOLD);
+  // The shade's top follows the trip computer's all the way there.
+  let frame = requestAnimationFrame(function follow() {
+    measureShade();
+    frame = requestAnimationFrame(follow);
+  });
+  const end = (): void => {
+    cancelAnimationFrame(frame);
+    box.style.overflow = "";
+    measureShade();
+    done();
+  };
+  run.onfinish = end;
+  run.oncancel = end;
+}
+
+const paceIn = (element: Element, done: () => void): void => fold(element, true, done);
+const paceOut = (element: Element, done: () => void): void => fold(element, false, done);
 </script>
 
 <template>
-  <div :class="['fuel', { stale }]">
+  <div ref="root" :class="['fuel', { stale }]">
     <!-- Its heading and free space drag the window; the refresh button stays clickable. -->
     <header class="bar" :data-tauri-drag-region="dragRegion">
       <div class="heading">{{ t("fuel.title") }}</div>
@@ -234,7 +389,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
          instrument panel, drawn for both themes: smoked glass over embers in the dark one, frosted
          glass over a warm haze in the light one (the cluster's own roles in styles/tokens.css). -->
     <div class="stage">
-      <FuelBackdrop :window="lead" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
+      <FuelBackdrop ref="backdrop" :window="lead" :read-at="limits?.fetchedAt ?? now" :stale="stale" />
       <!-- The page's lower part on a ground of its own, from the bottom up to the trip computer's
            top: the trip computer, the session's pace and the foot stand on it, parted by lines. -->
       <div v-if="shade" class="shade" :style="{ height: `${shade}px` }" aria-hidden="true"></div>
@@ -252,49 +407,73 @@ onBeforeUnmount(() => shadeObserver.disconnect());
               </button>
             </span>
             <span class="rule-v" aria-hidden="true"></span>
-            <AccountPanel :key="agent" :agent="agent" plan @add="openSettings('addAccount')" @manage="openSettings('accounts')" />
+            <AccountPanel :key="agent" :agent="agent" plan data-swap @add="openSettings('addAccount')" @manage="openSettings('accounts')" />
           </div>
           <!-- Across from it, for a moment after a switch: what new sessions open with, and how its
                MCP servers went. Held over the page: nothing moves as it comes and goes. -->
           <AccountNote />
 
-          <FuelNotice v-if="notice" :tag="notice.tag" :title="notice.title">
-            <Rich v-if="notice.kind === 'signedOut'" :text="notice.body">
-              <template #claude><code>claude</code></template>
-              <template #codex><code>codex</code></template>
-              <template #login><code>/login</code></template>
-            </Rich>
-            <template v-else>{{ notice.body }}</template>
-            <span v-if="stale" class="dimmed">{{ t("fuel.state.dimmed") }}</span>
-            <template v-if="notice.account && terminalProject" #actions>
-              <button type="button" class="control" @click="openClaude(notice.account.id)">{{ t("accounts.openClaude", { name: notice.account.name }) }}</button>
-            </template>
-          </FuelNotice>
+          <!-- What is drawn of the agent picked above the trip computer, as a page of its own: at a
+               switch the other agent's slides in whole from its side while this one slides out,
+               the ground with them (`data-pan`: where along it the page stands). -->
+          <div ref="pages" class="pages">
+            <Transition :css="false" @enter="pageIn" @leave="pageOut">
+              <div :key="agent" class="page" :data-pan="agentIndex">
+                <FuelNotice v-if="notice" :tag="notice.tag" :title="notice.title">
+                  <Rich v-if="notice.kind === 'signedOut'" :text="notice.body">
+                    <template #claude><code>claude</code></template>
+                    <template #codex><code>codex</code></template>
+                    <template #login><code>/login</code></template>
+                  </Rich>
+                  <template v-else>{{ notice.body }}</template>
+                  <span v-if="stale" class="dimmed">{{ t("fuel.state.dimmed") }}</span>
+                  <template v-if="notice.account && terminalProject" #actions>
+                    <button type="button" class="control" @click="openClaude(notice.account.id)">{{ t("accounts.openClaude", { name: notice.account.name }) }}</button>
+                  </template>
+                </FuelNotice>
 
-          <div v-if="firstLoad" class="loading" role="status">
-            <Spinner />
-            <span>{{ t(isCodex ? "fuel.loading.codex" : "fuel.loading") }}</span>
+                <div v-if="firstLoad" class="loading" role="status">
+                  <Spinner />
+                  <span>{{ t(isCodex ? "fuel.loading.codex" : "fuel.loading") }}</span>
+                </div>
+
+                <!-- Codex signed in, its limits not written down by it yet: they come with its next request. -->
+                <div v-if="unread" class="unread" role="status">
+                  <Icon name="fuel" :size="26" />
+                  <span class="unread-title">{{ t("fuel.unread.title.codex") }}</span>
+                  <span class="unread-body">{{ t("fuel.unread.body.codex") }}</span>
+                </div>
+
+                <!-- The instrument cluster: the dials on one line. -->
+                <section v-if="(windows.length || today) && !unreadOnly" :class="['cluster', { stale }]" :aria-label="t('fuel.cluster')">
+                  <!-- Each dial by its place: one coming grows out of it, one going shrinks into it. -->
+                  <TransitionGroup v-if="dials.length" tag="div" name="dial" class="dials">
+                    <FuelGauge
+                      v-for="dial in dials"
+                      :key="dial.place"
+                      :size="dial.size"
+                      :left="dial.left"
+                      :name="dial.name"
+                      :caption="dial.caption"
+                      :until="dial.until"
+                      :stale="stale"
+                      :ring="`${agent}-${dial.place}`"
+                    />
+                  </TransitionGroup>
+                </section>
+              </div>
+            </Transition>
           </div>
 
-          <!-- Codex signed in, its limits not written down by it yet: they come with its next request. -->
-          <div v-if="unread" class="unread" role="status">
-            <Icon name="fuel" :size="26" />
-            <span class="unread-title">{{ t("fuel.unread.title.codex") }}</span>
-            <span class="unread-body">{{ t("fuel.unread.body.codex") }}</span>
-          </div>
-
-          <!-- The instrument cluster: the dials on one line, the trip computer's boxes under them. -->
-          <section v-if="(windows.length || today) && !unreadOnly" :class="['cluster', { stale }]" :aria-label="t('fuel.cluster')">
-            <div v-if="dials.length" class="dials">
-              <FuelGauge v-for="dial in dials" :key="dial.key" :size="dial.size" :left="dial.left" :name="dial.name" :caption="dial.caption" :until="dial.until" :stale="stale" />
-            </div>
-            <!-- The page's lower part, as wide as the page on its own ground (`.shade`): the trip
-                 computer and the session's pace, parted by a line, the foot under them. -->
-            <div class="lower">
-              <TripComputer ref="trip" :window="lead" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
+          <!-- The page's lower part, as wide as the page on its own ground (`.shade`): the trip
+               computer and the leading window's pace, parted by a line, the foot under them. They stay
+               where they are at a switch, their words fading in. -->
+          <div v-if="(windows.length || today) && !unreadOnly" class="lower">
+            <TripComputer ref="trip" :window="lead" :read-at="limits?.fetchedAt ?? now" :today="today" :stale="stale" />
+            <Transition :css="false" @enter="paceIn" @leave="paceOut">
               <SessionPace v-if="lead" ref="pace" :window="lead" :read-at="limits?.fetchedAt ?? now" :now="now" :stale="stale" :agent="isCodex ? agent : undefined" />
-            </div>
-          </section>
+            </Transition>
+          </div>
         </div>
       </div>
 
@@ -453,6 +632,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   font-weight: 600;
   color: var(--text-faint);
   white-space: nowrap;
+  transition: color 0.2s ease;
 }
 
 .pick:hover {
@@ -467,6 +647,7 @@ onBeforeUnmount(() => shadeObserver.disconnect());
 .pick-mark {
   display: inline-flex;
   opacity: 0.4;
+  transition: opacity 0.2s ease;
 }
 
 .pick.on .pick-mark {
@@ -531,12 +712,71 @@ onBeforeUnmount(() => shadeObserver.disconnect());
  */
 .dials {
   --dial: clamp(170px, min(40cqw - 60px, 100cqh - 376px), 600px);
+  --dial-gap: clamp(16px, 4cqw, 56px);
   margin-block: auto;
+  /* The room between the pods is theirs, half on each side (below), so one coming or going brings
+     its share or takes it along; the line stands out by a half on each end to keep the outer pods
+     where a gap would have them. */
+  margin-inline: calc(var(--dial-gap) / -2);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(16px, 4cqw, 56px);
   padding: 28px 24px 22px;
+}
+
+.dials > .gauge {
+  margin-inline: calc(var(--dial-gap) / 2);
+}
+
+/* A dial coming grows out of nothing at its place, one going shrinks into it: the others glide
+   apart to make room, or together into the room it leaves. */
+.dials > .gauge.dial-enter-active,
+.dials > .gauge.dial-leave-active {
+  transition:
+    flex-basis 0.5s ease,
+    margin 0.5s ease,
+    opacity 0.35s ease;
+}
+
+.dials > .gauge.dial-enter-from,
+.dials > .gauge.dial-leave-to {
+  flex-basis: 0;
+  margin-inline: 0;
+  opacity: 0;
+}
+
+/* The agent picked's page, between the line that stays above and the trip computer below: as wide
+   as the window, its words where the page's padding had them. */
+.pages {
+  position: relative;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  margin-inline: -20px;
+}
+
+.page {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-inline: 20px;
+}
+
+/* A page going out at a switch lies over the place it had, the new one taking it; both are placed
+   by the slide (`place`). */
+.page.out {
+  position: absolute;
+  inset: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pick,
+  .pick-mark,
+  .dials > .gauge.dial-enter-active,
+  .dials > .gauge.dial-leave-active {
+    transition: none;
+  }
 }
 
 /* Below the scrolling part, its line and room its own (FuelFooter). */
@@ -596,6 +836,13 @@ onBeforeUnmount(() => shadeObserver.disconnect());
   syntax: "<length>";
   inherits: true;
   initial-value: 300px;
+}
+
+/* The room between two dials, worked out where it is set as `--dial` is. */
+@property --dial-gap {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 32px;
 }
 
 .fuel .glass {

@@ -17,11 +17,11 @@
 //! Whose call it is comes from the caller's parent pid, through Claude Code's running sessions
 //! (`sessions.rs`: its allowed fields only). Codex has a radio of its own beside Claude's
 //! (Settings › Agents › Codex), on the same endpoint: a call whose server Codex started is
-//! Codex's, tied to its session through the hook's pid (`codex_running`) and acting on the
-//! project of that session's folder; one that can't be tied to exactly one session (Codex's
-//! shared server, a session the hook never told of) is refused, and says why. Today's calls are kept per session, in memory, for
-//! that session's details: the tool, the time and what came of it, never what an argument said
-//! but a new card's title.
+//! Codex's and acts on the project of the folder it comes from, as Claude's does (Codex starts
+//! the server in its session's folder, its shared server too); it is tied to its session through
+//! the hook's pid (`codex_running`) when that tells exactly one, and noted nowhere when it
+//! doesn't. Today's calls are kept per session, in memory, for that session's details: the
+//! tool, the time and what came of it, never what an argument said but a new card's title.
 
 use std::io::BufReader;
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};

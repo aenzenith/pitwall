@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, useId } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 
 import { LOW_LEFT, percentText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
+import { stillMotion } from "../../lib/slide";
 
 /**
  * One dial of the cluster in its round pod, everything on the pod's centre: a 240° arc from E at
@@ -10,9 +11,11 @@ import { language, t } from "../../lib/i18n";
  * figure and the limit's name between the arc's ends; `caption` under the pod, `until` after it
  * past a middle dot (on a line of its own when the pod is narrow). `big` is the session's in the middle;
  * `side` the two beside it, the same drawing smaller. The pod is marked `data-ring` for the
- * backdrop to light around.
+ * backdrop to light around, by `ring`: the name it knows the pod by, whose sparks stay its own
+ * wherever it goes; they turn one way round the big one and the other way round its neighbours
+ * (`data-spin`).
  */
-const props = defineProps<{ size: "big" | "side"; left: number; name: string; caption: string; until: string | null; stale: boolean }>();
+const props = defineProps<{ size: "big" | "side"; left: number; name: string; caption: string; until: string | null; stale: boolean; ring: string }>();
 
 /* The drawing, in a 200 × 200 box round its centre: the arc's radius and stroke, the needle, the hub, E/F type. */
 const C = 100;
@@ -56,16 +59,50 @@ const MINUTES = Array.from({ length: 60 }, (_, index) => {
 /** The arc's glow filter; one per dial, so its id is too. */
 const glowId = `fuel-glow-${useId()}`;
 
+/** How long the needle, the arc and the figure take to run to a new share, in ms. */
+const RUN_MS = 700;
+
+/** The share the dial shows: it runs to a fresh reading's rather than jumps there, the needle, the
+ * arc and the figure together; at once when the system asks for less motion. */
+const shown = ref(props.left);
+let frame = 0;
+
+watch(
+  () => props.left,
+  (to) => {
+    cancelAnimationFrame(frame);
+    const from = shown.value;
+    if (from === to || stillMotion()) {
+      shown.value = to;
+      return;
+    }
+    const start = performance.now();
+    const step = (at: number): void => {
+      const k = Math.min(1, Math.max(0, (at - start) / RUN_MS));
+      // Off at once, as the click asked, and slowing into its place.
+      shown.value = from + (to - from) * (1 - (1 - k) ** 3);
+      if (k < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+  },
+);
+
+onBeforeUnmount(() => cancelAnimationFrame(frame));
+
 const low = computed(() => props.left <= LOW_LEFT);
+/** The share as VoiceOver reads it: where the dial is going, not where it is on the way. */
 const value = computed(() => percentText(props.left, language.value));
-const dash = computed(() => `${(props.left / 100) * LENGTH} ${LENGTH + 40}`);
+const figure = computed(() => percentText(shown.value, language.value));
+const dash = computed(() => `${(shown.value / 100) * LENGTH} ${LENGTH + 40}`);
+/** The lit arc fades out as it runs into E, so an empty dial shows no dot of it there. */
+const lit = computed(() => Math.min(1, shown.value / 2));
 /** Turned clockwise from E by the share left, up to F. */
-const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
+const turn = computed(() => `rotate(${(shown.value / 100) * SWEEP}deg)`);
 </script>
 
 <template>
   <div :class="['gauge', size, { low, stale }]">
-    <div class="pod" data-ring>
+    <div class="pod" :data-ring="ring" :data-spin="size === 'big' ? 1 : -1">
       <svg class="dial" viewBox="0 0 200 200" fill="none" role="img" :aria-label="t('fuel.gauge.label', { name, value })">
         <defs>
           <filter :id="glowId" x="-20%" y="-30%" width="140%" height="160%">
@@ -75,10 +112,10 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
         <path v-for="mark in MINUTES" :key="mark.d" :class="['minute', { major: mark.major }]" :d="mark.d" />
         <path class="track" :d="ARC" :stroke-width="STROKE" />
         <path v-for="tick in QUARTERS" :key="tick" class="tick" :d="tick" />
-        <template v-if="left > 0">
+        <g v-if="lit > 0" :opacity="lit">
           <path class="glow" :d="ARC" :stroke-width="STROKE" :stroke-dasharray="dash" :filter="`url(#${glowId})`" />
           <path class="fill" :d="ARC" :stroke-width="STROKE" :stroke-dasharray="dash" />
-        </template>
+        </g>
         <g class="needle" :style="{ transform: turn, transformOrigin: `${C}px ${C}px` }">
           <line :x1="C" :y1="C" :x2="TIP_X" :y2="TIP_Y" :stroke-width="NEEDLE_WIDTH" />
         </g>
@@ -86,7 +123,7 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
         <text class="end" :x="E_X" :y="TEXT_Y" :font-size="TYPE" text-anchor="middle" dominant-baseline="middle">{{ t("fuel.gauge.empty") }}</text>
         <text class="end" :x="F_X" :y="TEXT_Y" :font-size="TYPE" text-anchor="middle" dominant-baseline="middle">{{ t("fuel.gauge.full") }}</text>
       </svg>
-      <span class="value" aria-hidden="true">{{ value }}</span>
+      <span class="value" aria-hidden="true">{{ figure }}</span>
       <span class="name" aria-hidden="true" :title="name">{{ name }}</span>
     </div>
     <span class="caption" :title="until ? `${caption} · ${until}` : caption">
@@ -98,21 +135,23 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
 
 <style scoped>
 .gauge {
-  --tint: var(--claude);
+  --dial-tint: var(--claude);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   min-width: 0;
   container-type: inline-size;
+  /* Going low, or coming back: it turns red over the needle's run, not at a stroke. */
+  transition: --dial-tint 0.7s ease;
 }
 
 .gauge.low {
-  --tint: var(--crash);
+  --dial-tint: var(--crash);
 }
 
 .gauge.stale {
-  --tint: var(--idle-ring);
+  --dial-tint: var(--idle-ring);
 }
 
 /* `--dial`, set by the cluster, follows the window; the side ones are two thirds of it. */
@@ -136,7 +175,7 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
   backdrop-filter: blur(10px);
   box-shadow:
     inset 0 1px 0 var(--glass-shine),
-    inset 0 -6cqi 12cqi -3cqi color-mix(in srgb, var(--tint) var(--glass-glow-pod), transparent),
+    inset 0 -6cqi 12cqi -3cqi color-mix(in srgb, var(--dial-tint) var(--glass-glow-pod), transparent),
     0 0 0 1px var(--glass-edge),
     0 6cqi 16cqi var(--glass-shade);
 }
@@ -174,7 +213,7 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
 
 /* The arc's unlit part: the dial's own colour, faint, as a lamp's dark side. */
 .track {
-  stroke: color-mix(in srgb, var(--tint) var(--dial-track), transparent);
+  stroke: color-mix(in srgb, var(--dial-tint) var(--dial-track), transparent);
   stroke-linecap: round;
 }
 
@@ -185,9 +224,8 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
 
 .fill,
 .glow {
-  stroke: var(--tint);
+  stroke: var(--dial-tint);
   stroke-linecap: round;
-  transition: stroke-dasharray 0.6s ease;
 }
 
 /* A blurred copy under the arc: it reads as lit (on the frosted glass, as tinted). */
@@ -197,7 +235,6 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
 
 .needle {
   transform-box: view-box;
-  transition: transform 0.6s ease;
 }
 
 .needle line {
@@ -228,6 +265,7 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
   color: var(--claude-text);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  transition: color 0.7s ease;
 }
 
 /* Which limit this is, under its figure, as a car's dial says FUEL. */
@@ -315,10 +353,18 @@ const turn = computed(() => `rotate(${(props.left / 100) * SWEEP}deg)`);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fill,
-  .glow,
-  .needle {
+  .gauge,
+  .value {
     transition: none;
   }
+}
+</style>
+
+<style>
+/* A colour, so that a change of it can run by degrees (`.gauge`). */
+@property --dial-tint {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
 }
 </style>
