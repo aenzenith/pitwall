@@ -311,7 +311,7 @@ impl Fuel {
     /// page's big dial, `lead` in src/lib/fuel.ts): none while Settings hides it, before the
     /// first reading, and on a plan with neither. The account in use's.
     pub fn bar(&self, settings: &Settings) -> Option<BarFuel> {
-        if !settings.fuel_in_bar {
+        if !settings.fuel_in_bar || !self.claude_on() {
             return None;
         }
         bar_of(&self.state_of(&in_use_id(settings)))
@@ -332,15 +332,23 @@ impl Fuel {
         codex.limits.iter().find(|(id, _)| *id == in_use).and_then(|(_, limits)| bar_of(limits))
     }
 
+    /// Whether Claude is on: while it is off, nothing of it is asked for or read (its limits, its
+    /// Keychain item, its logs' tokens); what was read stays unshown.
+    fn claude_on(&self) -> bool {
+        self.app.try_state::<AppState>().is_some_and(|state| state.core.agent_on(Agent::Claude))
+    }
+
     /// Keeps both fresh for as long as the app runs.
     pub fn start(app: &AppHandle) {
         let app = app.clone();
         thread::spawn(move || loop {
             if let Some(state) = app.try_state::<AppState>() {
                 let settings = state.core.settings();
-                state.fuel.follow_accounts(&settings);
-                state.fuel.refresh_all(false, settings.fuel_every_ms());
-                state.fuel.read_spend(&app);
+                if state.fuel.claude_on() {
+                    state.fuel.follow_accounts(&settings);
+                    state.fuel.refresh_all(false, settings.fuel_every_ms());
+                    state.fuel.read_spend(&app);
+                }
                 state.fuel.read_codex(&app, false);
                 // A session that refilled meanwhile shows full in the menu bar too.
                 crate::tray::refresh(&app, &state.core.snapshot());
@@ -352,11 +360,16 @@ impl Fuel {
     /// From the page: on opening it and from its refresh button (`force`). `every_ms` is
     /// Settings' rest between two requests nobody asked for.
     pub fn refresh(&self, app: &AppHandle, force: bool, every_ms: i64) {
-        self.refresh_all(force, every_ms);
+        let claude = self.claude_on();
+        if claude {
+            self.refresh_all(force, every_ms);
+        }
         let app = app.clone();
         thread::spawn(move || {
             if let Some(state) = app.try_state::<AppState>() {
-                state.fuel.read_spend(&app);
+                if claude {
+                    state.fuel.read_spend(&app);
+                }
                 state.fuel.read_codex(&app, force);
             }
         });
@@ -470,7 +483,7 @@ impl Fuel {
     /// The accounts changed (one added, removed, renamed, switched to): the watches follow and
     /// every window hears of it; what follows the account in use (the menu bar) follows too.
     pub fn accounts_changed(&self, app: &AppHandle) {
-        if let Some(state) = app.try_state::<AppState>() {
+        if let Some(state) = app.try_state::<AppState>().filter(|_| self.claude_on()) {
             self.follow_accounts(&state.core.settings());
             crate::tray::refresh(app, &state.core.snapshot());
             if let Some(at) = self.refill_read() {

@@ -76,12 +76,7 @@ impl Core {
         };
 
         self.follow_projects(&paths);
-        let hook = self.hook.status();
-        {
-            let mut inner = self.lock();
-            inner.claude_hook = hook.installed;
-            inner.claude_hook_outdated = hook.outdated;
-        }
+        self.update_hook_status();
 
         if !self.refresh_claude() {
             self.notify();

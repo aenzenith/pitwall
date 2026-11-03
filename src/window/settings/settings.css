@@ -52,6 +52,12 @@
   row-gap: 4px;
 }
 
+/* An agent's buttons side by side (its part while it is off: Remove hook, Remove radio). */
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+
 /* Codex's hook while it waits for the user's approval in Codex (CodexDetail): its name and how it
    stands, what to know of it and the steps, and under them the one thing to do. No frame of its
    own: it reads as the rows around it. */

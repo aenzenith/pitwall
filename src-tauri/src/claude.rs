@@ -915,6 +915,19 @@ impl ClaudeWatch {
         true
     }
 
+    /// Claude turned off (Settings › Agents): everything read of it is let go and nothing is read
+    /// until it is on again; the watch still counts as ready, so other agents' sessions merged into
+    /// its scan (`Core::merge_agents`) are told as before.
+    pub fn let_go(&mut self) {
+        self.listed.clear();
+        self.logs.clear();
+        self.hooked.clear();
+        self.extra.clear();
+        self.busy.clear();
+        self.idle.clear();
+        self.ready = true;
+    }
+
     /// The sessions Claude Code itself calls busy now: its own `status` in
     /// `~/.claude/sessions/<pid>.json`, of processes that still run (read by the core). A busy
     /// session is followed however long ago its log was written (`evaluate`): one that has just

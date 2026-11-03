@@ -60,7 +60,10 @@ impl Core {
     /// Codex's watch follows the listed projects while Codex is on, and nothing at all while it is
     /// off (`agent_on`): no folder of it is looked into, no file watched.
     pub(super) fn follow_agents(&self) {
-        self.follow_codex(&self.listed_paths());
+        let paths = self.listed_paths();
+        self.follow_claude(&paths);
+        self.follow_codex(&paths);
+        self.watch_paths(&paths);
         self.update_codex_hook_status();
         self.refresh_claude();
     }

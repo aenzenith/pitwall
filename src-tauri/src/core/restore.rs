@@ -364,8 +364,8 @@ impl Core {
         let mut opened: Vec<Option<(u64, String)>> = vec![None; record.tabs.len()];
 
         for (at, tab) in record.tabs.into_iter().enumerate().filter(|(_, tab)| known(&tab.path)) {
-            // A Codex session while Codex is off comes back as a shell: nothing of Codex is read.
-            let session = tab.session.filter(|id| is_session_id(id)).filter(|_| tab.agent.is_claude() || self.agent_on(Agent::Codex));
+            // An agent's session while that agent is off comes back as a shell: nothing of it is read.
+            let session = tab.session.filter(|id| is_session_id(id)).filter(|_| self.agent_on(tab.agent));
             let launch = match (&session, tab.agent) {
                 (Some(session), Agent::Claude) => Launch::Resume { session: session.clone() },
                 (Some(session), Agent::Codex) => Launch::ResumeCodex { session: session.clone() },

@@ -42,7 +42,7 @@ export function agentsKey(key: AgentsKey): Key {
  * then it is Claude's as it always was. What names that tab (`Settings › Claude`) follows it. */
 export const agentsTab = computed(() => {
   const said = snapshot.value?.settings.agents?.codex;
-  return !!agentInfo("codex")?.found || said?.on !== undefined || !!said?.told;
+  return !!agentInfo("codex")?.found || said?.on !== undefined || !!said?.told || snapshot.value?.settings.agents?.claude?.on === false;
 });
 
 /** The agents in the order a count names them: Claude first, as the core lists them. */

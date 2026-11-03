@@ -179,12 +179,8 @@ impl Core {
         self.start_watching();
 
         let paths = self.listed_paths();
-        if let Ok(mut claude) = self.claude.lock() {
-            claude.set_listed(&paths);
-            claude.rescan();
-        }
-        crate::claude::take_events(&self.claude);
-        // Codex's, while it is on; let go while it is off.
+        // Each agent's, while it is on; let go while it is off.
+        self.follow_claude(&paths);
         self.follow_codex(&paths);
 
         self.watch_paths(&paths);
@@ -196,16 +192,20 @@ impl Core {
     /// The listed projects changed (added, removed, a window opened): follow their logs and Git
     /// folders now rather than at the next poll.
     pub(super) fn follow_projects(self: &Arc<Self>, paths: &[String]) {
+        let claude_on = !self.sessions_cache().claude_off;
         let added: Vec<String> = {
             let Ok(mut claude) = self.claude.lock() else {
                 return;
             };
             let before = claude.listed().to_vec();
-            if !claude.set_listed(paths) {
-                return;
-            }
-            if claude.ready() {
-                claude.rescan();
+            // While Claude is off its watch follows nothing (`follow_claude`).
+            if claude_on {
+                if !claude.set_listed(paths) {
+                    return;
+                }
+                if claude.ready() {
+                    claude.rescan();
+                }
             }
             paths.iter().filter(|path| !before.contains(path)).cloned().collect()
         };
@@ -292,12 +292,13 @@ impl Core {
 
     /// Watches the Claude folders and the Git folders of `paths`, and stops watching those of
     /// projects no longer listed. The watcher restarts only when something changed.
-    fn watch_paths(&self, paths: &[String]) {
+    pub(super) fn watch_paths(&self, paths: &[String]) {
         let (logs, events) = match self.claude.lock() {
             Ok(claude) => (claude.root().to_path_buf(), claude.events_dir().to_path_buf()),
             Err(_) => return,
         };
         let sessions = self.sessions_dir();
+        let claude_on = !self.sessions_cache().claude_off;
         let mut slot = self.watch_slot();
         let Some(watch) = slot.as_mut() else {
             return;
@@ -309,10 +310,15 @@ impl Core {
         let mut remove: Vec<PathBuf> = Vec::new();
 
         let claude_dirs = [(Some(logs.clone()), RecursiveMode::Recursive), (Some(events.clone()), RecursiveMode::NonRecursive), (sessions.clone(), RecursiveMode::NonRecursive)];
-        for (dir, mode) in claude_dirs.into_iter().filter_map(|(dir, mode)| Some((dir?, mode))) {
-            if !watch.claude.contains(&dir) && dir.is_dir() {
-                add.push((dir, mode));
+        if claude_on {
+            for (dir, mode) in claude_dirs.into_iter().filter_map(|(dir, mode)| Some((dir?, mode))) {
+                if !watch.claude.contains(&dir) && dir.is_dir() {
+                    add.push((dir, mode));
+                }
             }
+        } else {
+            // Claude off: none of its folders is watched.
+            remove.append(&mut watch.claude);
         }
 
         let wanted: HashMap<&String, Vec<(PathBuf, RecursiveMode)>> = paths.iter().map(|path| (path, git_dirs(path))).collect();
@@ -394,8 +400,10 @@ impl Core {
 
         self.deps_heads_changed(changes.heads.into_iter().collect());
 
-        // A session's own status too: `busy` keeps a turn that ended at work.
-        let claude_changed = changes.rescan || changes.events || changes.sessions || !changes.logs.is_empty();
+        // A session's own status too: `busy` keeps a turn that ended at work. Nothing of Claude's
+        // while it is off (its folders are no longer watched; a change on its way is let be).
+        let claude_on = !self.sessions_cache().claude_off;
+        let claude_changed = claude_on && (changes.rescan || changes.events || changes.sessions || !changes.logs.is_empty());
         let mut git: Vec<String> = changes.git.into_iter().collect();
 
         if claude_changed {

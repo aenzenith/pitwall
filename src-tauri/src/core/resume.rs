@@ -288,12 +288,15 @@ impl Core {
 
     /// What a tab comes back as: its agent's session going on, or a shell. None for a session
     /// that isn't known to have ended: a running session is never opened a second time
-    /// (`reveal.rs`), so its tab stays away; so does a Codex session while Codex is off.
+    /// (`reveal.rs`), so its tab stays away; so does an agent's session while that agent is off.
     fn launch_of(&self, tab: &OpenTab) -> Option<Launch> {
         let Some(session) = &tab.session else {
             return Some(Launch::Shell { shell: tab.shell, elevated: false });
         };
         let session = session.clone();
+        if !self.agent_on(tab.agent) {
+            return None;
+        }
         match tab.agent {
             Agent::Claude => matches!(self.liveness(&session), Liveness::Stopped | Liveness::Ended).then_some(Launch::Resume { session }),
             Agent::Codex => matches!(self.codex_liveness(&session), Liveness::Stopped | Liveness::Ended).then_some(Launch::ResumeCodex { session }),

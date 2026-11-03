@@ -76,7 +76,7 @@ function shareOf(agent: Agent, limits: UsageState | null | undefined, named: boo
 const shares = computed<Share[]>(() => {
   const limits = agentOn("codex") ? codexFuel(fuel.value)?.limits : null;
   const codex = limits && limits.status !== "signedOut" ? shareOf("codex", limits, true) : null;
-  const claude = shareOf("claude", fuel.value?.limits, codex !== null);
+  const claude = agentOn("claude") ? shareOf("claude", fuel.value?.limits, codex !== null) : null;
   return [claude, codex].filter((share): share is Share => share !== null);
 });
 const marked = computed(() => shares.value.some((share) => share.agent === "codex"));

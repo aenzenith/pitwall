@@ -24,7 +24,7 @@ const error = ref("");
  * the way. */
 function state(info: AgentInfo, detail: AgentDetail | undefined): { text: string; waits: boolean } {
   const version = detail?.version ?? "";
-  if (info.id === "claude") return { text: version, waits: false };
+  if (info.id === "claude") return { text: info.on ? version : t("settings.agents.state.off"), waits: false };
   if (!info.found) return { text: t("settings.agents.state.notFound"), waits: false };
   if (!info.on) return { text: t("settings.agents.state.off"), waits: false };
   if (info.hook === "waiting") return { text: t("settings.agents.state.approval"), waits: true };
@@ -62,7 +62,6 @@ async function turn(info: AgentInfo, event: Event): Promise<void> {
         type="checkbox"
         role="switch"
         :checked="info.on"
-        :disabled="info.id === 'claude'"
         :aria-label="info.name"
         @click.stop
         @change="turn(info, $event)"

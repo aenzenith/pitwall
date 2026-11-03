@@ -155,9 +155,9 @@ impl RadioState {
     }
 }
 
-/// The endpoint is wanted while Claude's radio or Codex's is on, Codex's only while Codex is.
+/// The endpoint is wanted while Claude's radio or Codex's is on, each only while its agent is.
 fn wanted(inner: &Inner) -> bool {
-    inner.settings.radio.on || (inner.settings.agents.codex.radio && super::agents::agent_on(inner, Agent::Codex))
+    (inner.settings.radio.on && super::agents::agent_on(inner, Agent::Claude)) || (inner.settings.agents.codex.radio && super::agents::agent_on(inner, Agent::Codex))
 }
 
 /// The tools there are (`mcp::TOOLS`), for their rows in Settings. Nothing is asked for it: the
@@ -428,8 +428,12 @@ impl Core {
     /// opens. Off: Pitwall is taken out again and the endpoint closes, whatever the CLI says;
     /// when it couldn't be taken out that is said once, and it goes the next time the state is
     /// asked (`radio_ask`). Until then it only answers that the radio is off. Claude Code's CLI
-    /// is told to write here; it takes a moment, so off the main thread.
+    /// is told to write here; it takes a moment, so off the main thread. Only while Claude is on,
+    /// but for taking it out.
     pub fn radio_set(self: &Arc<Self>, on: bool) -> Result<RadioState, String> {
+        if on && !self.agent_on(Agent::Claude) {
+            return Err(t!("core.radio.agentOff"));
+        }
         let asked = Arc::clone(&self.lock().radio.asked);
         let mut asked = asked.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         // Whatever comes of it, what Claude Code said before holds no more.
@@ -455,8 +459,12 @@ impl Core {
     }
 
     /// The radio as Claude Code has it. What its CLI says is asked by one caller at a time and
-    /// good for `ASKED_FOR`; it takes a moment, so off the main thread.
+    /// good for `ASKED_FOR`; it takes a moment, so off the main thread. Claude turned off is asked
+    /// nothing: its switch as the settings have it.
     pub fn radio_state(self: &Arc<Self>) -> RadioState {
+        if !self.agent_on(Agent::Claude) {
+            return if self.lock().settings.radio.on { RadioState { status: "on", missing: false, sessions: 0 } } else { RadioState::off(false) };
+        }
         let asked = Arc::clone(&self.lock().radio.asked);
         let mut asked = asked.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let state = match asked.as_ref().filter(|(at, _)| at.elapsed() < ASKED_FOR) {

@@ -201,6 +201,8 @@ pub struct SessionsView {
 /// What the page keeps between two requests.
 #[derive(Default)]
 pub(super) struct SessionsCache {
+    /// Claude is off (Settings › Agents): its running sessions are read for nothing.
+    pub(super) claude_off: bool,
     /// Running sessions as last read (`None`: can't be told) and when.
     running: Option<HashMap<String, Running>>,
     read_at: Option<Instant>,
@@ -226,6 +228,19 @@ pub(super) struct SessionsCache {
     /// The shells of the tabs that just went (`Core::tab_gone`), and when: what ran under one is
     /// ending with it, so it runs no more.
     pub(super) gone_shells: Vec<(u32, Instant)>,
+}
+
+impl SessionsCache {
+    pub(super) fn new(claude_off: bool) -> Self {
+        Self { claude_off, ..Default::default() }
+    }
+
+    /// Claude turned off: its running sessions as last read are let go.
+    pub(super) fn forget_claude(&mut self) {
+        self.running = None;
+        self.read_at = None;
+        self.stale = true;
+    }
 }
 
 /// The process and its parents, nearest first.
@@ -388,6 +403,9 @@ impl Core {
         if codex {
             return self.codex_last_message(session);
         }
+        if self.sessions_cache().claude_off {
+            return None;
+        }
         match self.session_log(session) {
             Some((log, _)) => crate::claude::last_message(&log),
             None => self.codex_last_message(session),
@@ -421,8 +439,12 @@ impl Core {
         self.sessions_cache().gone_shells.iter().filter(|(_, at)| at.elapsed() < GONE_FOR).map(|(shell, _)| *shell).collect()
     }
 
-    /// The running sessions now (`None` when that can't be told), read afresh.
+    /// The running sessions now (`None` when that can't be told, and while Claude is off), read
+    /// afresh.
     pub(super) fn read_running(&self) -> Option<HashMap<String, Running>> {
+        if self.sessions_cache().claude_off {
+            return None;
+        }
         let dir = self.sessions_dir().filter(|dir| dir.is_dir())?;
         let table = process::process_table()?;
         let running = read_running(&dir, &table);
@@ -454,6 +476,9 @@ impl Core {
     pub(super) fn running_cached(&self) -> Option<HashMap<String, Running>> {
         let due = {
             let cache = self.sessions_cache();
+            if cache.claude_off {
+                return None;
+            }
             cache.stale || cache.read_at.is_none_or(|at| at.elapsed() >= READ_EVERY)
         };
         if !due {

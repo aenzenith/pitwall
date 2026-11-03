@@ -55,6 +55,41 @@ impl Core {
         self.lock().candidates.values().any(|(_, since)| since.elapsed() >= NOTIFY_AFTER)
     }
 
+    /// Claude's watch set to the listed projects while Claude is on, read once more and its hook's
+    /// events taken (its hook's state read again as it comes back on); while it is off, let go:
+    /// nothing of it is read (its logs, its running sessions, its hook's file), and what its hook
+    /// still writes into `claude-events/` is deleted unread once a day old.
+    pub(super) fn follow_claude(&self, paths: &[String]) {
+        let on = self.agent_on(Agent::Claude);
+        let was_off = {
+            let mut cache = self.sessions_cache();
+            let was_off = std::mem::replace(&mut cache.claude_off, !on);
+            if !on {
+                cache.forget_claude();
+            }
+            was_off
+        };
+        if on {
+            if let Ok(mut claude) = self.claude.lock() {
+                claude.set_listed(paths);
+                claude.rescan();
+            }
+            crate::claude::take_events(&self.claude);
+            if was_off {
+                self.update_hook_status();
+            }
+        } else {
+            let events = match self.claude.lock() {
+                Ok(mut claude) => {
+                    claude.let_go();
+                    claude.events_dir().to_path_buf()
+                }
+                Err(_) => return,
+            };
+            crate::codex::sweep_events(&events);
+        }
+    }
+
     /// Where Claude stands, from what was read so far (`ClaudeWatch::evaluate`): working and
     /// waiting projects, their notifications once due, sounds and the day's timeline. Nothing
     /// before the first full read; false then.
@@ -121,11 +156,21 @@ impl Core {
     pub fn uninstall_claude_hook(&self) -> Result<(), String> {
         let result = self.hook.uninstall();
         self.account_hooks(false);
+        // Taken out while Claude is off: its settings aren't read again for it.
+        if result.is_ok() && self.sessions_cache().claude_off {
+            let mut inner = self.lock();
+            inner.claude_hook = false;
+            inner.claude_hook_outdated = false;
+        }
         self.update_hook_status();
         result
     }
 
-    fn update_hook_status(&self) {
+    pub(super) fn update_hook_status(&self) {
+        // Claude's own settings file is opened for nothing while it is off: its last state stays.
+        if self.sessions_cache().claude_off {
+            return;
+        }
         let status = self.hook.status();
         {
             let mut inner = self.lock();

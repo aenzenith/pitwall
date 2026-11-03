@@ -214,6 +214,10 @@ impl Core {
             let liveness = self.codex_liveness(session);
             return self.reveal_codex_as(path, session, liveness);
         }
+        // Claude off: none of its sessions is looked for, brought up or opened again.
+        if !self.agent_on(Agent::Claude) {
+            return;
+        }
         let liveness = if is_session_id(session) { self.liveness(session) } else { Liveness::Unknown };
         self.reveal_as(path, session, liveness);
     }

@@ -329,7 +329,6 @@ impl Core {
         let codex = CodexWatch::new(cfg.codex_home.clone(), &cfg.registry_dir);
         let found = agents::look(&cfg);
         let hook = ClaudeHook::new(cfg.claude_settings.clone(), &cfg.registry_dir);
-        let hook_status = hook.status();
         let favourites = registry.read_favourites();
         // A first start has seen this version's notes: they are for those who update to it.
         // No settings file alone makes no first start: an install whose settings were never
@@ -353,6 +352,9 @@ impl Core {
             settings.save(&cfg.settings_file);
         }
         let whats_new = crate::whatsnew::is_pending(settings.seen_version.as_deref());
+        // Claude off (Settings › Agents): its settings file isn't opened, nor anything else of it.
+        let claude_off = !settings.agents.is_on(Agent::Claude, true);
+        let hook_status = if claude_off { Default::default() } else { hook.status() };
         i18n::set(i18n::resolve(&settings.language));
         let peers = registry.read_peers();
         // Beside the settings, on this Mac only.
@@ -375,7 +377,7 @@ impl Core {
             terminals: Mutex::new(HashMap::new()),
             activity: Mutex::new(activity::Recorder::default()),
             day_tokens: Mutex::new(day_tokens::DayTokens::default()),
-            sessions: Mutex::new(sessions::SessionsCache::default()),
+            sessions: Mutex::new(sessions::SessionsCache::new(claude_off)),
             reservations: Mutex::new(Reservations::default()),
             claude: Mutex::new(claude),
             codex: Mutex::new(codex),

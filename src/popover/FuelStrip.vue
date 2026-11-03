@@ -77,7 +77,7 @@ function drawn(dial: ClusterDial): Drawn {
 
 const shown = computed<Shown | null>(() => {
   const limits = fuel.value?.limits;
-  if (!limits || !snapshot.value?.settings.fuelInPopover) return null;
+  if (!limits || !agentOn("claude") || !snapshot.value?.settings.fuelInPopover) return null;
   if (limits.usage) {
     const { windows, dials } = cluster(limits.usage, now.value, t, language.value);
     // An API-key account has no plan limits to draw; Extra usage alone is no cluster.

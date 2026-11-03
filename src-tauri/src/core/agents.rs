@@ -79,12 +79,10 @@ impl Core {
     }
 
     /// Turns `agent` on or off at the user's word (Settings › Agents, the found notice, the first
-    /// run): it stays so, whatever a look finds later, and the user counts as told. Claude is
-    /// always on. What Pitwall put into it (its hook, the radio's entry) stays where it is.
+    /// run): it stays so, whatever a look finds later, and the user counts as told. Claude too:
+    /// off, nothing of it is read, as of any agent. What Pitwall put into it (its hook, the
+    /// radio's entry) stays where it is.
     pub fn agent_set_on(self: &Arc<Self>, agent: Agent, on: bool) -> Result<(), String> {
-        if agent.is_claude() {
-            return Err(format!("{} is always on", agent.name()));
-        }
         {
             let mut inner = self.lock();
             let part = inner.settings.agents.of_mut(agent);
@@ -222,8 +220,43 @@ mod tests {
         assert!(!core.agent_on(Agent::Codex) && !info(&core).undecided, "found again, it stays off");
         let again = core_in(tmp.path());
         assert!(!again.agent_on(Agent::Codex), "and so after a start");
+    }
 
-        assert!(core.agent_set_on(Agent::Claude, false).is_err(), "Claude is always on");
-        assert!(core.agent_on(Agent::Claude));
+    /// Claude turned off is read for nothing, as any agent: its logs aren't scanned, its last
+    /// words aren't read, its running sessions aren't looked for and its radio isn't turned on,
+    /// from the start that finds it off too. On again, it is followed as before.
+    #[test]
+    fn claude_turned_off_is_read_for_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("app");
+        fs::create_dir_all(&project).unwrap();
+        let path = project.to_string_lossy().to_string();
+        let logs = tmp.path().join("claude").join("projects").join(crate::claude::encode_project_path(&path));
+        fs::create_dir_all(&logs).unwrap();
+        let id = "6f1c2a4e-1b2c-4d3e-8f90-1234567890ab";
+        let line = serde_json::json!({"type": "assistant", "cwd": path, "message": {"stop_reason": "end_turn", "content": [{"type": "text", "text": "Done here."}]}});
+        fs::write(logs.join(format!("{id}.jsonl")), format!("{line}\n")).unwrap();
+
+        let claude_scanned = |core: &Arc<Core>| {
+            core.poll_files();
+            core.follow_agents();
+            core.refresh_claude();
+            core.lock().scanned.iter().any(|session| session.agent == Agent::Claude && session.id == id)
+        };
+        let core = core_in(tmp.path());
+        core.add_project(&path).unwrap();
+        core.agent_set_on(Agent::Claude, false).unwrap();
+        assert!(!claude_scanned(&core), "off: its logs aren't scanned");
+        assert_eq!(core.last_message(id), None);
+        assert_eq!(core.running_cached(), None);
+        assert!(core.radio_set(true).is_err(), "its radio isn't turned on");
+
+        let again = core_in(tmp.path());
+        assert!(!again.agent_on(Agent::Claude) && again.sessions_cache().claude_off, "and so after a start");
+        assert!(!claude_scanned(&again));
+
+        again.agent_set_on(Agent::Claude, true).unwrap();
+        assert!(claude_scanned(&again), "on: followed again");
+        assert_eq!(again.last_message(id).as_deref(), Some("Done here."));
     }
 }

@@ -16,7 +16,7 @@ import { isMac, keys, shortcutModifiers } from "../lib/platform";
 import { recordingEnded, recordingStarts } from "../lib/shortcutRecording";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
-import { agents } from "../lib/agents";
+import { agentOn, agents } from "../lib/agents";
 import type { Agent, AgentDetail, ExtensionStatus, OpenTarget, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
 import NotificationsPage from "./settings/NotificationsPage.vue";
@@ -376,6 +376,33 @@ async function setHook(on: boolean): Promise<void> {
   }
 }
 
+/** Claude turned off (Settings › Agents): nothing of it is read, so its hook's state isn't either;
+ * once "Remove hook" did its work there, it is gone. What Pitwall put into it stays till then. */
+const claudeOn = computed(() => agentOn("claude"));
+const claudeHookTakenOut = ref(false);
+const claudeRadioOn = computed(() => !!snapshot.value?.settings.radio?.on);
+const radioBusy = ref(false);
+watch(claudeOn, (on) => {
+  if (on) claudeHookTakenOut.value = false;
+});
+
+async function removeOffHook(): Promise<void> {
+  await setHook(false);
+  if (!hookError.value) claudeHookTakenOut.value = true;
+}
+
+async function removeOffRadio(): Promise<void> {
+  radioBusy.value = true;
+  hookError.value = "";
+  try {
+    await api.radioSet(false);
+  } catch (reason) {
+    hookError.value = String(reason);
+  } finally {
+    radioBusy.value = false;
+  }
+}
+
 /* ---------- form ← snapshot ---------- */
 
 /** Each field as last taken from the snapshot (serialized): a field that differs from it holds
@@ -690,6 +717,31 @@ function setTheme(theme: Theme): void {
           <AgentList v-if="agentsTab" :picked="agentPicked" :details="details" @pick="agentPicked = $event" />
           <div v-show="!agentsTab || agentPicked === 'claude'" ref="claudePart" :class="['agent-part', { own: agentsTab }]">
           <AgentHead v-if="agentsTab" agent="claude" :detail="detailOf('claude')" />
+          <!-- Off by the user's word: nothing of it is read; what Pitwall put into it stays, as
+               Codex's part has it. -->
+          <template v-if="!claudeOn">
+            <div class="hook section">
+              <div class="hook-text">
+                <span class="hook-title">
+                  {{ t("settings.agents.offTitle") }}
+                  <span class="badge">{{ t("settings.off") }}</span>
+                </span>
+                <small>{{ t("settings.agents.offText") }}</small>
+              </div>
+            </div>
+            <div v-if="!claudeHookTakenOut || claudeRadioOn" class="buttons">
+              <button v-if="!claudeHookTakenOut" type="button" class="control" :disabled="hookBusy || radioBusy" :aria-busy="hookBusy" @click="removeOffHook">
+                <span :class="{ hidden: hookBusy }">{{ t("settings.removeHook") }}</span>
+                <Spinner v-if="hookBusy" class="over" :size="12" />
+              </button>
+              <button v-if="claudeRadioOn" type="button" class="control" :disabled="hookBusy || radioBusy" :aria-busy="radioBusy" @click="removeOffRadio">
+                <span :class="{ hidden: radioBusy }">{{ t("settings.agents.removeRadio") }}</span>
+                <Spinner v-if="radioBusy" class="over" :size="12" />
+              </button>
+            </div>
+            <p v-if="hookError" class="error" role="alert">{{ hookError }}</p>
+          </template>
+          <template v-else>
           <!-- As Agents, the menu bar's count is every agent's: it is in General. -->
           <label v-if="!agentsTab" class="check">
             <input v-model="form.claudesInBar" type="checkbox" />
@@ -753,6 +805,7 @@ function setTheme(theme: Theme): void {
           <p v-if="hookError" class="error">{{ hookError }}</p>
           <RadioSection :stacked="agentsTab" />
           <AccountsSection :start-add="startPart === 'addAccount' && (!agentsTab || agentPicked === 'claude')" />
+          </template>
           </div>
           <CodexDetail
             v-if="agentsTab && codexInfo"

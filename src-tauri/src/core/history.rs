@@ -95,7 +95,8 @@ impl Core {
         };
 
         let days = if every { self.sessions_ever(now) } else { self.sessions_on(start, now.clamp(start, end)) };
-        let logs = session_logs(&self.cfg.claude_dir);
+        // Claude's logs aren't listed while it is off: the day's file alone tells its sessions.
+        let logs = if self.sessions_cache().claude_off { Default::default() } else { session_logs(&self.cfg.claude_dir) };
 
         // What their last lines tell, of the logs written since those days began (one of an
         // earlier day's sessions may have been written to again since): only the logs that
@@ -174,6 +175,9 @@ impl Core {
     /// there is something kept of, the last heard of first. What the Sessions page's every day
     /// shows of them, nothing more is read.
     pub fn claude_past(&self, path: &str) -> Vec<PastSession> {
+        if self.sessions_cache().claude_off {
+            return Vec::new();
+        }
         let folder = self.cfg.claude_dir.join(encode_project_path(path));
         self.sessions_history(ALL)
             .sessions

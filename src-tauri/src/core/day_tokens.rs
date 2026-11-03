@@ -177,11 +177,12 @@ impl Core {
     }
 
     /// `tokens_today` of `agent`'s tokens: Claude's as above; Codex's as its rollouts were last
-    /// looked at (`codex_spend.rs`), none while it is off or wasn't looked at today.
+    /// looked at (`codex_spend.rs`), none while it wasn't looked at today; either's none while it
+    /// is off.
     pub(super) fn tokens_today_of(&self, agent: Agent, date: &str, owners: &HashMap<String, String>, listed: &[String]) -> (Option<DaySpend>, BTreeMap<String, ProjectSpend>) {
         match agent {
+            _ if !self.agent_on(agent) => (None, BTreeMap::new()),
             Agent::Claude => self.tokens_today(date, owners, listed),
-            Agent::Codex if !self.agent_on(Agent::Codex) => (None, BTreeMap::new()),
             Agent::Codex => self.held_today(agent, date, owners, listed),
         }
     }

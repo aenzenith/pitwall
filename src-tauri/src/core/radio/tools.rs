@@ -142,7 +142,7 @@ impl Core {
         }
         let (on, allowed) = {
             let inner = self.lock();
-            (inner.settings.radio.on, inner.settings.radio.allows(tool))
+            (inner.settings.radio.on && super::super::agents::agent_on(&inner, Agent::Claude), inner.settings.radio.allows(tool))
         };
         if !on {
             return Reply::refused(mcp::RADIO_OFF);

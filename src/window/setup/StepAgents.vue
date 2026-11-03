@@ -176,7 +176,6 @@ async function turn(info: AgentInfo, event: Event): Promise<void> {
               type="checkbox"
               role="switch"
               :checked="info.on"
-              :disabled="info.id === 'claude'"
               :aria-label="info.name"
               @change="turn(info, $event)"
             />

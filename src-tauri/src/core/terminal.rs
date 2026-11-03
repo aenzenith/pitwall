@@ -255,6 +255,9 @@ impl Core {
                 self.codex_start_with(account)?
             }
             _ => {
+                if agent == Some(Agent::Claude) && !self.agent_on(Agent::Claude) {
+                    return Err(t!("terminal.claudeOff"));
+                }
                 let inner = self.lock();
                 crate::accounts::start_with(&inner.settings.accounts, account)?.map(|account| (account.id.clone(), PathBuf::from(&account.dir)))
             }

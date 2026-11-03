@@ -256,11 +256,6 @@ const checkHook = () =>
   color: var(--text-subtle);
 }
 
-.buttons {
-  display: flex;
-  gap: 8px;
-}
-
 /* Its fuel's boxes, as Claude's (SettingsView's `.check`, its fieldset's gap), and under them
    where its limits come from. */
 .fuel {
