@@ -254,7 +254,7 @@ fn open_link(app: &AppHandle, url: &str) {
 const AUTOSTART_ARG: &str = "--autostart";
 
 pub fn run() {
-    // Started from inside a Claude session (a dev run), the app is no part of it.
+    // Started from inside a Claude session or by npm (a dev run), the app is no part of either.
     process::leave_claude_session();
 
     let app = tauri::Builder::default()

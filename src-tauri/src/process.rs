@@ -68,6 +68,20 @@ pub fn leave_claude_session() {
     for name in CLAUDE_SESSION_VARS.iter().chain(&CODEX_SESSION_VARS) {
         std::env::remove_var(name);
     }
+    // And npm's (`npm_script_var`): a dev run is a script of npm's.
+    let npm: Vec<std::ffi::OsString> = std::env::vars_os().map(|(name, _)| name).filter(|name| name.to_str().is_some_and(npm_script_var)).collect();
+    for name in npm {
+        std::env::remove_var(name);
+    }
+}
+
+/// What npm hands a script it runs (`npm_config_prefix`, `npm_package_name`,
+/// `npm_lifecycle_event`…, and `INIT_CWD`), which a dev run (`npm run tauri dev`) carries: the
+/// user's shell, read for the terminal's environment, would take them for its own, and nvm puts
+/// no Node on `PATH` under `npm_config_prefix`, so what npm installed through it (Codex's CLI)
+/// wasn't found; a project's own scripts would get Pitwall's package as theirs.
+fn npm_script_var(name: &str) -> bool {
+    name.starts_with("npm_") || name == "INIT_CWD"
 }
 
 /// One of those is among `names` (the variables a process was started with, the empty ones
