@@ -248,11 +248,15 @@ fn note_event(dir: &Path, event: &str, input: impl Read) -> Option<PathBuf> {
     write_event(dir, &text).ok()
 }
 
-/// `<pid>-<random>.tmp`, renamed to `.event`: the app never reads half a file.
+/// `<when>-<pid>-<random>.tmp`, renamed to `.event`: the app never reads half a file. `<when>` is
+/// the moment it was written, in nanoseconds: the files are read in the order of their times, and
+/// where a coarse clock gave two the same (Windows', Linux's: events a moment apart), of their names.
 pub(crate) fn write_event(dir: &Path, text: &str) -> std::io::Result<PathBuf> {
     fs::create_dir_all(dir)?;
 
-    let name = format!("{}-{}", std::process::id(), RandomState::new().hash_one(SystemTime::now()) as u32);
+    let now = SystemTime::now();
+    let when = now.duration_since(SystemTime::UNIX_EPOCH).map_or(0, |since| since.as_nanos());
+    let name = format!("{when:020}-{}-{}", std::process::id(), RandomState::new().hash_one(now) as u32);
     let temp = dir.join(format!("{name}.tmp"));
     let file = dir.join(format!("{name}.event"));
     let written = fs::write(&temp, text).and_then(|()| fs::rename(&temp, &file));

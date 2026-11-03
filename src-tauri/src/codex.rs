@@ -770,6 +770,7 @@ fn read_events(dir: &Path) -> Vec<HookEvent> {
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "event"))
         .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
         .collect();
+    // Two of the same time in the order of their names, which begin with when they were written.
     files.sort();
 
     let mut events = Vec::new();
@@ -1605,8 +1606,13 @@ pub(crate) mod tests {
         day
     }
 
+    /// One of the hook's events, its file's time cut to the second: events written a moment apart
+    /// share it, as a coarse clock gives them (Windows', Linux's), and are read in their order all
+    /// the same (`write_event`).
     fn event(dir: &Path, lines: &[&str]) {
-        crate::hooks::write_event(dir, &format!("{}\n", lines.join("\n"))).unwrap();
+        let file = crate::hooks::write_event(dir, &format!("{}\n", lines.join("\n"))).unwrap();
+        let second = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        fs::File::options().write(true).open(&file).unwrap().set_modified(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(second)).unwrap();
     }
 
     fn of<'a>(scan: &'a ScanResult, id: &str) -> Option<&'a SessionState> {

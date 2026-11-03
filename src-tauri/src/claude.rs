@@ -824,6 +824,7 @@ fn read_events(dir: &Path) -> Vec<HookEvent> {
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "event" || ext == "json"))
         .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
         .collect();
+    // Two of the same time in the order of their names, which begin with when they were written.
     files.sort();
 
     let mut events = Vec::new();
