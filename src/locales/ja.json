@@ -494,6 +494,7 @@
   "settings.agents.hook.check": "確認",
   "settings.agents.hook.checkNot": "まだ承認されていません（{total} 行中 {trusted} 行）。",
   "settings.agents.hook.afterApproval": "承認されると、ここは自動で「オン」になります。",
+  "settings.agents.hook.workingText": "Claude の状態は変わったその瞬間にここに表示されます。",
   "settings.agents.hook.workingText.codex": "Codex の状態は変わったその瞬間にここに表示されます。",
   "settings.agents.hook.lastEvent": "最後のイベント：{time}。",
   "settings.agents.hook.outdated.codex": "新しいフックがあります。インストールすると、Codex でもう一度承認が必要です。",

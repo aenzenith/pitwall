@@ -695,7 +695,8 @@ function setTheme(theme: Theme): void {
             <input v-model="form.claudesInBar" type="checkbox" />
             <span>{{ t("settings.claudesInBar") }}</span>
           </label>
-          <label class="check">
+          <!-- As Agents, a hairline under the head, as Codex's part has. -->
+          <label :class="['check', { section: agentsTab }]">
             <input v-model="form.fuelInBar" type="checkbox" />
             <span>{{ t("settings.fuelInBar") }}</span>
           </label>
@@ -714,13 +715,15 @@ function setTheme(theme: Theme): void {
               </button>
             </span>
           </div>
-          <div class="hook">
+          <!-- The hook, as Codex's is shown and as the radio's row: its name and how it stands, what
+               to know of it under them, and at the row's end the one thing to do. -->
+          <div class="hook section">
             <div class="hook-text">
-              <span class="hook-title">
+              <span class="hook-title wraps">
                 {{ t("settings.hookTitle") }}
-                <span :class="['badge', { on: snapshot?.claudeHook }]">{{ t(snapshot?.claudeHook ? "settings.on" : "settings.off") }}</span>
+                <span :class="['badge', { on: snapshot?.claudeHook }]">{{ t(snapshot?.claudeHook ? "settings.on" : "settings.agents.hook.missing") }}</span>
               </span>
-              <small>
+              <small v-if="!snapshot?.claudeHook">
                 <Rich :text="t('settings.hookText')">
                   <template #hook><code>Notification</code></template>
                   <template #settings><code>~/.claude/settings.json</code></template>
@@ -728,15 +731,22 @@ function setTheme(theme: Theme): void {
                   <template #backup><code>settings.json.pitwall-backup</code></template>
                 </Rich>
               </small>
-              <small v-if="hookOutdated">{{ t("settings.hookOutdated") }}</small>
+              <template v-else>
+                <small>{{ t("settings.agents.hook.workingText") }}</small>
+                <small v-if="hookOutdated">{{ t("settings.hookOutdated") }}</small>
+              </template>
             </div>
+            <button v-if="!snapshot?.claudeHook" type="button" class="control primary hook-button" :disabled="hookBusy" :aria-busy="hookBusy" @click="setHook(true)">
+              <span :class="{ hidden: hookBusy }">{{ t("settings.addHook") }}</span>
+              <Spinner v-if="hookBusy" class="over" :size="12" />
+            </button>
             <!-- An older hook: installing again upgrades it. -->
-            <button v-if="hookOutdated" type="button" class="control hook-button" :disabled="hookBusy" :aria-busy="hookBusy" @click="setHook(true)">
+            <button v-else-if="hookOutdated" type="button" class="control hook-button" :disabled="hookBusy" :aria-busy="hookBusy" @click="setHook(true)">
               <span :class="{ hidden: hookBusy }">{{ t("settings.updateHook") }}</span>
               <Spinner v-if="hookBusy" class="over" :size="12" />
             </button>
-            <button v-else type="button" class="control hook-button" :disabled="hookBusy" :aria-busy="hookBusy" @click="setHook(!snapshot?.claudeHook)">
-              <span :class="{ hidden: hookBusy }">{{ t(snapshot?.claudeHook ? "settings.removeHook" : "settings.addHook") }}</span>
+            <button v-else type="button" class="control hook-button" :disabled="hookBusy" :aria-busy="hookBusy" @click="setHook(false)">
+              <span :class="{ hidden: hookBusy }">{{ t("settings.removeHook") }}</span>
               <Spinner v-if="hookBusy" class="over" :size="12" />
             </button>
           </div>

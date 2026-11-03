@@ -501,6 +501,7 @@
   "settings.agents.hook.check": "Comprobar",
   "settings.agents.hook.checkNot": "Aún sin aprobar: {trusted} de {total} líneas.",
   "settings.agents.hook.afterApproval": "Una vez aprobado, aquí pasa solo a Activo.",
+  "settings.agents.hook.workingText": "El estado de Claude aparece aquí en cuanto cambia.",
   "settings.agents.hook.workingText.codex": "El estado de Codex aparece aquí en cuanto cambia.",
   "settings.agents.hook.lastEvent": "Último evento: {time}.",
   "settings.agents.hook.outdated.codex": "Hay un hook más nuevo. Al instalarlo, Codex vuelve a pedir tu aprobación una vez.",

@@ -509,6 +509,7 @@
   "settings.agents.hook.check": "Проверить",
   "settings.agents.hook.checkNot": "Ещё не одобрено: {trusted} из {total} строк.",
   "settings.agents.hook.afterApproval": "После одобрения здесь само появится «Вкл.».",
+  "settings.agents.hook.workingText": "Состояние Claude видно здесь, как только оно меняется.",
   "settings.agents.hook.workingText.codex": "Состояние Codex видно здесь, как только оно меняется.",
   "settings.agents.hook.lastEvent": "Последнее событие: {time}.",
   "settings.agents.hook.outdated.codex": "Готов новый хук. После установки Codex ещё раз попросит одобрения.",

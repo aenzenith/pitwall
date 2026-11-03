@@ -498,6 +498,7 @@
   "settings.agents.hook.check": "Kontrol et",
   "settings.agents.hook.checkNot": "Henüz onaylanmadı: {total} satırdan {trusted} tanesi onaylı.",
   "settings.agents.hook.afterApproval": "Onaylanınca burası kendiliğinden Açık olur.",
+  "settings.agents.hook.workingText": "Claude'un durumu değiştiği anda burada.",
   "settings.agents.hook.workingText.codex": "Codex'in durumu değiştiği anda burada.",
   "settings.agents.hook.lastEvent": "Son olay {time}.",
   "settings.agents.hook.outdated.codex": "Yeni bir hook hazır. Kurunca Codex'te bir kez daha onay istenir.",

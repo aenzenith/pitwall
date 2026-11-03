@@ -499,6 +499,7 @@
   "settings.agents.hook.check": "Check",
   "settings.agents.hook.checkNot": "Not approved yet: {trusted} of {total} lines.",
   "settings.agents.hook.afterApproval": "Once approved, this turns On by itself.",
+  "settings.agents.hook.workingText": "Claude's state shows here the moment it changes.",
   "settings.agents.hook.workingText.codex": "Codex's state shows here the moment it changes.",
   "settings.agents.hook.lastEvent": "Last event {time}.",
   "settings.agents.hook.outdated.codex": "A newer hook is ready. Installing it asks for your approval in Codex once more.",

@@ -494,6 +494,7 @@
   "settings.agents.hook.check": "检查",
   "settings.agents.hook.checkNot": "尚未批准：{total} 条中已批准 {trusted} 条。",
   "settings.agents.hook.afterApproval": "批准后，这里会自动变为“已开启”。",
+  "settings.agents.hook.workingText": "Claude 的状态一变化就会显示在这里。",
   "settings.agents.hook.workingText.codex": "Codex 的状态一变化就会显示在这里。",
   "settings.agents.hook.lastEvent": "最近一次事件：{time}。",
   "settings.agents.hook.outdated.codex": "有更新的 Hook。安装后需要在 Codex 中再批准一次。",

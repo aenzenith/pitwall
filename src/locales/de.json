@@ -499,6 +499,7 @@
   "settings.agents.hook.check": "Prüfen",
   "settings.agents.hook.checkNot": "Noch nicht freigegeben: {trusted} von {total} Zeilen.",
   "settings.agents.hook.afterApproval": "Nach der Freigabe steht hier von selbst „Ein“.",
+  "settings.agents.hook.workingText": "Der Status von Claude erscheint hier, sobald er sich ändert.",
   "settings.agents.hook.workingText.codex": "Der Status von Codex erscheint hier, sobald er sich ändert.",
   "settings.agents.hook.lastEvent": "Letztes Ereignis {time}.",
   "settings.agents.hook.outdated.codex": "Ein neuerer Hook ist bereit. Nach der Installation fragt Codex noch einmal nach deiner Freigabe.",
