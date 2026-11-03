@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.20.0](https://github.com/aenzenith/pitwall/compare/v1.19.0...v1.20.0) (2026-11-03)
+
+
+### Features
+
+* **agents:** Claude could be turned off too ([cb6dbd6](https://github.com/aenzenith/pitwall/commit/cb6dbd6c78d0e23b15347f8896b96a399d8d9776))
+* **agents:** Codex was brought level with Claude ([47bc36c](https://github.com/aenzenith/pitwall/commit/47bc36cfe1cf6fc2a8b5d866e757c17fdbc3f6a5))
+* **agents:** Codex was followed beside Claude ([f08f2f2](https://github.com/aenzenith/pitwall/commit/f08f2f242711fea83765afb3849d0dc7ef532050))
+* **fuel:** the pace strip followed the week without a session ([23e8928](https://github.com/aenzenith/pitwall/commit/23e8928a7d5db6daf9879f3a61e29da277c9891a))
+* **terminal:** a double-click on the panel's handle took it to full height ([d631d21](https://github.com/aenzenith/pitwall/commit/d631d21c02f6bd3d6f03efe12839b451e9442ca3))
+
+
+### Bug Fixes
+
+* **commands:** running a command left the panel as it was ([03273ca](https://github.com/aenzenith/pitwall/commit/03273cac6988c054785c64735e22249bcef43493))
+* **hooks:** events written a moment apart were read in their order ([752ec13](https://github.com/aenzenith/pitwall/commit/752ec13a347089b4eda84a0dc4796ff50699ff90))
+* **terminal:** another page taken from the sidebar folded the open panel ([f2101e5](https://github.com/aenzenith/pitwall/commit/f2101e53b147f936b814808128512fcae3c7f506))
+
 ## [1.19.0](https://github.com/aenzenith/pitwall/compare/v1.18.3...v1.19.0) (2026-10-31)
 
 
