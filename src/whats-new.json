@@ -1,109 +1,25 @@
 {
-  "since": "1.19.0",
+  "since": "1.20.0",
   "notes": [
     {
       "kind": "new",
       "title": {
-        "en": "Codex beside Claude",
-        "tr": "Claude'un yanında Codex",
-        "de": "Codex neben Claude",
-        "es": "Codex junto a Claude",
-        "ru": "Codex рядом с Claude",
-        "ja": "Claude の隣に Codex",
-        "zh-Hans": "Codex 与 Claude 并肩"
+        "en": "Search the terminal with ⌘F",
+        "tr": "Terminalde ⌘F ile arama",
+        "de": "Im Terminal suchen mit ⌘F",
+        "es": "Busca en la terminal con ⌘F",
+        "ru": "Поиск в терминале по ⌘F",
+        "ja": "⌘F でターミナル内を検索",
+        "zh-Hans": "用 ⌘F 在终端中查找"
       },
       "body": {
-        "en": "Pitwall now follows Codex too: open it from the terminal's +, give it cards and watch its fuel, right up in the menu bar. Settings › Agents turns either one on or off.",
-        "tr": "Pitwall artık Codex'i de izliyor: terminalin +'sından açın, kart verin, yakıtını menü çubuğundan takip edin. Ayarlar › Ajanlar'dan ikisini de açıp kapatabilirsiniz.",
-        "de": "Pitwall behält jetzt auch Codex im Blick: im Terminal über + starten, Karten geben, den Tank sogar in der Menüleiste sehen. Beide schaltest du unter Einstellungen › Agenten ein und aus.",
-        "es": "Pitwall ahora también sigue a Codex: ábrelo desde el + de la terminal, dale tarjetas y vigila su combustible, también en la barra de menús. Activas o desactivas cualquiera de los dos en Ajustes › Agentes.",
-        "ru": "Теперь Pitwall следит и за Codex: запускайте его через + в терминале, отдавайте ему карточки, следите за его топливом прямо в строке меню. Каждого из них можно включить или выключить в Настройках › Агенты.",
-        "ja": "Pitwall が Codex も見守るようになりました。ターミナルの + から開き、カードを渡し、燃料はメニューバーでも確認できます。どちらも 設定 › エージェント でオン・オフできます。",
-        "zh-Hans": "Pitwall 现在也照看 Codex：从终端的 + 打开它，把卡片交给它，在菜单栏里也能看它的燃料。两者都可在 设置 › 智能体 中开关。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "The week gets its strip",
-        "tr": "Haftanın da şeridi var",
-        "de": "Auch die Woche hat ihren Streifen",
-        "es": "La semana también tiene su franja",
-        "ru": "У недели тоже есть полоса",
-        "ja": "週間にも帯が出ます",
-        "zh-Hans": "本周也有时间条了"
-      },
-      "body": {
-        "en": "When Claude sends no 5-hour session, the strip on the Fuel page now follows the week, day by day, and tells you if your fuel lasts until it refills.",
-        "tr": "Claude 5 saatlik oturumu göndermediğinde Yakıt sayfasındaki şerit artık haftayı gün gün gösteriyor; yakıtın dolana kadar yetip yetmeyeceğini de söylüyor.",
-        "de": "Schickt Claude keine 5-Stunden-Sitzung, zeigt der Streifen auf der Tank-Seite jetzt die Woche, Tag für Tag, und ob der Tank bis zum Auffüllen reicht.",
-        "es": "Cuando Claude no envía la sesión de 5 horas, la franja de la página Combustible sigue ahora la semana, día a día, y te dice si te alcanza hasta que se rellene.",
-        "ru": "Если Claude не присылает 5-часовую сессию, полоса на странице «Топливо» теперь показывает неделю по дням и подсказывает, хватит ли топлива до пополнения.",
-        "ja": "Claude が 5 時間セッションを送ってこないときは、燃料ページの帯が週間を 1 日ずつ表示し、回復まで燃料がもつかどうかも教えてくれます。",
-        "zh-Hans": "Claude 没有发来 5 小时会话时，燃料页面的时间条现在会按天显示本周，并告诉你燃料能否撑到恢复。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Terminals at full height",
-        "tr": "Terminaller tam boy",
-        "de": "Terminals auf voller Höhe",
-        "es": "Terminales a toda altura",
-        "ru": "Терминалы на всю высоту",
-        "ja": "ターミナルをページいっぱいに",
-        "zh-Hans": "终端一键拉满"
-      },
-      "body": {
-        "en": "Double-click the handle on top of the terminals and they fill the page. Double-click again to bring them back.",
-        "tr": "Terminallerin üstündeki tutamaca çift tıklayınca bütün sayfayı kaplıyorlar. Bir daha çift tıklayınca eski boylarına dönüyorlar.",
-        "de": "Ein Doppelklick auf den Griff über den Terminals, und sie füllen die ganze Seite. Noch ein Doppelklick, und alles ist wie vorher.",
-        "es": "Haz doble clic en el asa de encima de las terminales y ocuparán toda la página. Otro doble clic y vuelven a como estaban.",
-        "ru": "Дважды щёлкните по ручке над терминалами, и они займут всю страницу. Ещё один двойной щелчок вернёт прежнюю высоту.",
-        "ja": "ターミナルの上端のハンドルをダブルクリックすると、ページいっぱいに広がります。もう一度ダブルクリックすれば元の高さに戻ります。",
-        "zh-Hans": "双击终端上方的把手，终端就会铺满整个页面；再双击一次，就回到原来的高度。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Terminals fold when you change pages",
-        "tr": "Sayfa değişince terminaller daralıyor",
-        "de": "Terminals klappen beim Seitenwechsel zu",
-        "es": "Las terminales se pliegan al cambiar de página",
-        "ru": "Терминалы сворачиваются при смене страницы",
-        "ja": "ページを移るとターミナルが折りたたまれます",
-        "zh-Hans": "切换页面时终端会自动收起"
-      },
-      "body": {
-        "en": "Open another page from the sidebar and the open terminals fold out of the way, so you see the new page whole.",
-        "tr": "Kenar çubuğundan başka bir sayfaya geçince açık terminaller kendiliğinden daralıyor, yeni sayfa bütünüyle görünüyor.",
-        "de": "Wechselst du in der Seitenleiste auf eine andere Seite, klappen offene Terminals zu und die neue Seite ist ganz zu sehen.",
-        "es": "Si abres otra página desde la barra lateral, las terminales abiertas se pliegan y ves la página nueva entera.",
-        "ru": "Перейдите на другую страницу через боковую панель, и открытые терминалы свернутся, чтобы новая страница была видна целиком.",
-        "ja": "サイドバーから別のページに移ると、開いていたターミナルが折りたたまれ、新しいページ全体が見えます。",
-        "zh-Hans": "从侧边栏打开另一个页面时，展开的终端会自动收起，新页面一览无余。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Commands run without pulling you away",
-        "tr": "Komutlar sizi yerinizden etmiyor",
-        "de": "Befehle laufen, ohne dich wegzuziehen",
-        "es": "Los comandos ya no te sacan de donde estás",
-        "ru": "Команды больше не уводят вас с места",
-        "ja": "コマンドを実行しても画面はそのまま",
-        "zh-Hans": "运行命令不再打断你"
-      },
-      "body": {
-        "en": "Running a command no longer opens the terminals or jumps to its output: you stay on the tab you were on. Its tab is there whenever you want a look.",
-        "tr": "Bir komutu çalıştırınca terminaller artık kendiliğinden açılmıyor, çıktısına da atlamıyor; olduğunuz sekmede kalıyorsunuz. Bakmak isterseniz sekmesi orada.",
-        "de": "Ein Befehl klappt die Terminals nicht mehr auf und springt nicht zu seiner Ausgabe: Du bleibst auf deinem Tab. Sein Tab wartet, falls du reinschauen willst.",
-        "es": "Ejecutar un comando ya no abre las terminales ni salta a su salida: te quedas en tu pestaña. La suya está ahí para cuando quieras mirarla.",
-        "ru": "Запуск команды больше не раскрывает терминалы и не переключает на её вывод: вы остаётесь на своей вкладке. Её вкладка рядом, если захотите заглянуть.",
-        "ja": "コマンドを実行しても、ターミナルが勝手に開いたり出力に切り替わったりしなくなりました。見たいときはそのタブを押すだけです。",
-        "zh-Hans": "运行命令时，终端不再自己展开，也不会跳到它的输出，你留在原来的标签页。想看时点它的标签页就行。"
+        "en": "Every match lights up, and the arrows take you from one to the next. Match case, whole word and regular expressions are a click away.",
+        "tr": "Bulunan her yer işaretleniyor, oklarla aralarında gezebiliyorsunuz. Büyük/küçük harf, tam kelime ve düzenli ifade de bir tık uzağınızda.",
+        "de": "Jeder Treffer wird markiert, mit den Pfeilen springst du von einem zum nächsten. Groß-/Kleinschreibung, ganze Wörter und reguläre Ausdrücke sind nur einen Klick entfernt.",
+        "es": "Cada coincidencia queda resaltada y con las flechas pasas de una a otra. Mayúsculas, palabras completas y expresiones regulares, a un clic.",
+        "ru": "Все совпадения подсвечиваются, а стрелки переводят от одного к другому. Учёт регистра, слово целиком и регулярные выражения — в один щелчок.",
+        "ja": "見つかった箇所がすべてハイライトされ、矢印で順に移動できます。大文字と小文字の区別、単語単位、正規表現もワンクリックで切り替えられます。",
+        "zh-Hans": "所有匹配都会高亮，用箭头逐个跳转。区分大小写、全字匹配和正则表达式，点一下就能切换。"
       }
     }
   ]

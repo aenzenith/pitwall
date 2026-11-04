@@ -36,6 +36,8 @@ import { CODEX_MODELS, MODEL_LABELS, MODELS, projectChoice, projectCodexChoice }
 import { attach, fitView, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { AgentStartChoice, Project, Shell, ShellChoice, TerminalView } from "../lib/types";
 
+import TerminalFind from "./TerminalFind.vue";
+
 /**
  * The terminal panel's panes (lib/panes): each with a head (the terminal's name, Claude's state,
  * split right, split down, zoom, close) over its terminal, or empty with buttons to open one. The
@@ -543,6 +545,7 @@ defineExpose({ placed, shown, rectOf, dropAt });
           <button type="button" class="x" tabindex="-1" :aria-label="t('common.close')" :title="t('common.close')" @click.stop="emit('close', pane.leaf.terminal)" @dblclick.stop>×</button>
         </div>
         <div :ref="(el) => hostRef(pane.leaf.key, el as Element | null)" class="host" :data-pane="pane.leaf.key"></div>
+        <TerminalFind :id="pane.leaf.terminal" />
       </template>
       <div v-else class="cell" :aria-label="t('panes.empty')" role="group">
         <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, false, null, null)">
@@ -772,6 +775,12 @@ body.grabbing .head {
 
 .host :deep(.xterm-viewport) {
   background-color: var(--bg-log) !important;
+}
+
+/* A terminal's search bar: under the pane's head as far as it stands in from the pane's top
+   corner with one terminal at a time. */
+.pane > .term-find {
+  top: 32px;
 }
 
 /* An empty pane: what can go into it. */

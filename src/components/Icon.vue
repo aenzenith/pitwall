@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex";
     size?: number;
   }>(),
   { size: 15 },
@@ -26,6 +26,10 @@ withDefaults(
     <path v-else-if="name === 'arrow-right'" d="M5 12h14M13 6l6 6-6 6" />
     <path v-else-if="name === 'arrow-up-right'" d="M7 17 17 7M8.5 7H17v8.5" />
     <g v-else-if="name === 'search'"><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></g>
+    <!-- A search's choices: match case (Aa), whole word (ab over its bracket), regular expression (.*). -->
+    <g v-else-if="name === 'case'"><path d="M3 18 7.5 6 12 18M4.7 14h5.6" /><circle cx="17.5" cy="15" r="3" /><path d="M20.5 12v6" /></g>
+    <g v-else-if="name === 'word'"><circle cx="7.5" cy="11.5" r="2.5" /><path d="M10 9v5M13 5.5V14" /><circle cx="15.5" cy="11.5" r="2.5" /><path d="M3 16.5V19h18v-2.5" /></g>
+    <g v-else-if="name === 'regex'"><path d="M15 4v10M10.7 6.5l8.6 5M19.3 6.5l-8.6 5" /><circle cx="6" cy="18" r="1.8" fill="currentColor" stroke="none" /></g>
     <g v-else-if="name === 'settings'"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></g>
     <g v-else-if="name === 'editor'"><path d="m8 8-4 4 4 4" /><path d="m16 8 4 4-4 4" /><path d="m13.5 5-3 14" /></g>
     <g v-else-if="name === 'terminal'"><path d="m5 7 5 5-5 5" /><path d="M13 18h6" /></g>

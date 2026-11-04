@@ -89,7 +89,7 @@ import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
-import { attach, fitView, focusView, measure, paneKeys, tabAccountLabel, terminalTip } from "../lib/terminals";
+import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
 import CardDialog from "./board/CardDialog.vue";
@@ -97,6 +97,7 @@ import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
 import LayoutMenu from "./LayoutMenu.vue";
 import RenameDialog from "./RenameDialog.vue";
+import TerminalFind from "./TerminalFind.vue";
 import TerminalHistory from "./TerminalHistory.vue";
 import TerminalPanes from "./TerminalPanes.vue";
 
@@ -1008,8 +1009,18 @@ function moveFocus(act: PaneAction): void {
   if (next.leaf.terminal === null) void nextTick(() => panel.value?.querySelector<HTMLElement>(".pane.on .cell button")?.focus());
 }
 
-/** The panes' keys, pressed anywhere in the panel (lib/panes: `paneAction`). */
+/** The panes' keys, pressed anywhere in the panel (lib/panes: `paneAction`); and the search's
+ * (lib/terminals: `findKey`) where the keyboard is in neither the terminal nor its search bar, which
+ * answer them themselves: on the tabs, a pane's head. */
 function onPanelKey(event: KeyboardEvent): void {
+  const find = findKey(event);
+  const shown = active.value && !showsOutput.value ? active.value.id : null;
+  if (find && shown !== null && !event.defaultPrevented && (find === "open" || finds.has(shown))) {
+    event.preventDefault();
+    if (find !== "open") return findStep(shown, find);
+    if (collapsed.value) toggleCollapsed();
+    return openFind(shown);
+  }
   const act = paneAction(event);
   if (!act || renaming.value || errorCard.value) return;
   const now = layout.value;
@@ -1871,6 +1882,7 @@ defineExpose({ openTerminal, closeShown });
       <div ref="stageEl" class="stage">
         <div v-show="!panesOn" :class="['screen', { away: showsOutput }]">
           <div ref="viewport" class="viewport" @pointerdown="pressScreen"></div>
+          <TerminalFind v-if="active && !panesOn" :key="active.id" :id="active.id" />
           <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
             <span>{{ t("terminal.none", { name: project.name }) }}</span>
             <!-- The "+" menu's rows, at hand where there is nothing yet. -->

@@ -1,9 +1,10 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { computed, watch } from "vue";
+import { computed, reactive, watch } from "vue";
 
 import { accountLabel, accountName, codexAccounts } from "./accounts";
 import { t } from "./i18n";
@@ -34,6 +35,7 @@ const THEMES: Record<ResolvedTheme, ITheme> = {
     scrollbarSliderBackground: "rgba(255, 255, 255, 0.13)",
     scrollbarSliderHoverBackground: "rgba(255, 255, 255, 0.24)",
     scrollbarSliderActiveBackground: "rgba(255, 255, 255, 0.32)",
+    overviewRulerBorder: "rgba(0, 0, 0, 0)",
     black: "#1c1f25",
     red: "#f28b8b",
     green: "#73c991",
@@ -60,6 +62,7 @@ const THEMES: Record<ResolvedTheme, ITheme> = {
     scrollbarSliderBackground: "rgba(15, 17, 20, 0.2)",
     scrollbarSliderHoverBackground: "rgba(15, 17, 20, 0.34)",
     scrollbarSliderActiveBackground: "rgba(15, 17, 20, 0.46)",
+    overviewRulerBorder: "rgba(0, 0, 0, 0)",
     black: "#1b1e24",
     red: "#b42a2a",
     green: "#17753e",
@@ -86,9 +89,23 @@ const THEMES: Record<ResolvedTheme, ITheme> = {
  */
 const CONTRAST: Record<ResolvedTheme, number> = { dark: 1, light: 4.5 };
 
+/**
+ * What a search marks in a terminal, in each theme: every match and the one it stands on, in the
+ * output's own find colours (tokens.css: --find-bg, --find-on-bg), written out as xterm takes
+ * them (#RRGGBB); beside the scrollbar, the same marks in its ruler.
+ */
+const FIND: Record<ResolvedTheme, NonNullable<ISearchOptions["decorations"]>> = {
+  dark: { matchBackground: "#3d3718", matchOverviewRuler: "#7a6a1c", activeMatchBackground: "#7a6a1c", activeMatchColorOverviewRuler: "#f0d08e" },
+  light: { matchBackground: "#fbeeb0", matchOverviewRuler: "#e0b400", activeMatchBackground: "#f2c200", activeMatchColorOverviewRuler: "#8a6a00" },
+};
+
 type View = {
+  id: number;
   term: Terminal;
   fit: FitAddon;
+  search: SearchAddon;
+  /** What its search last asked xterm for (lib: `asked`), while its bar is open. */
+  asked: string | null;
   element: HTMLElement;
   /** The theme it is drawn in. */
   theme: ResolvedTheme;
@@ -123,8 +140,19 @@ function paint(view: View): void {
   const theme = themeAt(view.element);
   if (view.theme === theme) return;
   view.theme = theme;
-  view.term.options.theme = THEMES[theme];
+  view.term.options.theme = colours(view);
   view.term.options.minimumContrastRatio = CONTRAST[theme];
+  relook(view.id);
+}
+
+/**
+ * A terminal's colours in its theme. While its search is open, the match it stands on (xterm's
+ * selection, which xterm paints over a search's own marks) wears the find's colour as long as the
+ * keyboard is out of the terminal, in the search's field.
+ */
+function colours(view: View): ITheme {
+  const theme = THEMES[view.theme];
+  return finds.has(view.id) ? { ...theme, selectionInactiveBackground: FIND[view.theme].activeMatchBackground } : theme;
 }
 
 // The theme changed (Settings, or the system's while it is followed): every open terminal with it.
@@ -138,6 +166,10 @@ const options = {
   cursorBlink: true,
   scrollback: 5000,
   macOptionIsMeta: true,
+  // The search's marks are decorations, still proposed API in xterm 6.
+  allowProposedApi: true,
+  // Where they show beside the scrollbar: as wide as xterm's scrollbar is anyway, so nothing moves.
+  overviewRuler: { width: 14 },
 };
 
 /** How many columns and rows a terminal in `host` would have, before any shell starts. */
@@ -202,12 +234,21 @@ function create(id: number): View {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon(openLink, hint));
+  const search = new SearchAddon({ highlightLimit: FIND_LIMIT });
+  term.loadAddon(search);
+  search.onDidChangeResults(({ resultIndex, resultCount }) => {
+    const find = finds.get(id);
+    if (!find) return;
+    find.index = resultIndex;
+    find.count = resultCount;
+  });
   term.open(element);
 
   // The panel's own keys; everything else goes to the shell. Returning false keeps a key from
   // the shell: it bubbles to the window, its default (copy, paste) left to the web view.
   //  - macOS: ⌘T and ⌘W belong to the window (new tab, close tab); ⌘K clears, like Terminal.app;
   //    ⌘C and ⌘V copy and paste through the web view.
+  //  - The search's keys (`findKey`) are the search's, here and nowhere else.
   //  - Windows, Linux: Ctrl+letter is the shell's (Ctrl+C, Ctrl+D, Ctrl+K, Ctrl+R, Ctrl+T…), so
   //    the panel's keys take Ctrl+Shift (lib/platform: terminalChord), as Windows Terminal,
   //    GNOME Terminal and Konsole do: Ctrl+Shift+T new tab, Ctrl+Shift+W closes it, Ctrl+Shift+K
@@ -216,10 +257,19 @@ function create(id: number): View {
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== "keydown") return true;
     if (paneKeys.claim(event)) return false;
+    const find = findKey(event);
+    if (find === "open" || (find && finds.has(id))) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (find === "open") openFind(id);
+      else findStep(id, find);
+      return false;
+    }
     if (isMac) {
       if (!event.metaKey) return true;
       if (event.code === "KeyK") {
         term.clear();
+        relook(id);
         return false;
       }
       return event.code !== "KeyT" && event.code !== "KeyW";
@@ -236,6 +286,7 @@ function create(id: number): View {
       case "KeyK":
         event.preventDefault();
         term.clear();
+        relook(id);
         return false;
       case "KeyC":
         copySelection(term, event);
@@ -256,7 +307,7 @@ function create(id: number): View {
   });
   term.onData((data) => void api.writeTerminal(id, data));
 
-  const view: View = { term, fit, element, theme, seq: 0, queue: [], cols: 0, rows: 0 };
+  const view: View = { id, term, fit, search, asked: null, element, theme, seq: 0, queue: [], cols: 0, rows: 0 };
   views.set(id, view);
 
   // History first; chunks that arrived meanwhile are kept only if they are newer than it.
@@ -312,9 +363,170 @@ export function fitView(id: number, tell = true): void {
 export function dispose(id: number): void {
   const view = views.get(id);
   if (!view) return;
+  finds.delete(id);
   view.term.dispose();
   view.element.remove();
   views.delete(id);
+}
+
+/* ---------- ⌘F: a terminal's search ---------- */
+
+/** How many matches are marked and counted; past them the count reads "1000+". */
+export const FIND_LIMIT = 1000;
+
+/**
+ * A terminal's search, while its bar is open: what is looked for, the match it stands on (from 0;
+ * -1 with none, or one past the counted ones) of how many, whether the pattern doesn't parse, and
+ * whether the bar's field is to take the keyboard.
+ */
+export type TerminalFind = { query: string; index: number; count: number; invalid: boolean; focus: boolean };
+
+/** The searches open, by terminal. In memory only, as the terminal's lines are. */
+export const finds = reactive(new Map<number, TerminalFind>());
+
+/** Match case, whole word, regular expression: one choice for every terminal, until Pitwall quits. */
+export const findOptions = reactive({ caseSensitive: false, wholeWord: false, regex: false });
+
+export type FindStep = "next" | "previous";
+
+/**
+ * The search's keys, as VS Code's terminal has them: ⌘F opens it (Ctrl+Shift+F on Windows and
+ * Linux, where Ctrl+F is the shell's), ⌘G and ⇧⌘G (F3 and Shift+F3) step down and up.
+ */
+export function findKey(event: KeyboardEvent): "open" | FindStep | null {
+  if (isMac) {
+    if (!event.metaKey || event.ctrlKey || event.altKey) return null;
+    if (event.code === "KeyF") return event.shiftKey ? null : "open";
+    return event.code === "KeyG" ? (event.shiftKey ? "previous" : "next") : null;
+  }
+  if (event.key === "F3" && !event.ctrlKey && !event.altKey && !event.metaKey) return event.shiftKey ? "previous" : "next";
+  return terminalChord(event) && event.code === "KeyF" ? "open" : null;
+}
+
+/** The characters xterm's search takes for no part of a word, escaped for a character class. */
+const WORD_EDGE = " ~!@#$%^&*()+`-=[]{}|\\;:\"',./<>?".replace(/[\\\]^-]/g, "\\$&");
+
+/** Whether this WebKit has lookbehind (Safari 16.4 and later). */
+const LOOKBEHIND = (() => {
+  try {
+    return new RegExp("(?<!a)b").test("b");
+  } catch {
+    return false;
+  }
+})();
+
+/**
+ * What xterm is asked to look for: the query, and as a regular expression the choices make it.
+ * Whole word goes as the word between lookarounds of xterm's own word edges, since xterm's own
+ * whole-word search tests only a line's first match (`laps … {lap}` finds no `lap`); without
+ * lookbehind, xterm's own. Null for a regular expression that doesn't parse (xterm would throw).
+ * `edged`: asked with those lookarounds.
+ */
+function asked(query: string): { term: string; options: ISearchOptions; edged: boolean } | null {
+  const { caseSensitive, wholeWord, regex } = findOptions;
+  let term = query;
+  let options: ISearchOptions = { caseSensitive, wholeWord, regex };
+  const edged = wholeWord && LOOKBEHIND;
+  if (edged) {
+    const body = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    term = `(?<![^${WORD_EDGE}])(?:${body})(?![^${WORD_EDGE}])`;
+    options = { caseSensitive, wholeWord: false, regex: true };
+  }
+  if (options.regex) {
+    try {
+      new RegExp(term, "g");
+    } catch {
+      return null;
+    }
+  }
+  return { term, options, edged };
+}
+
+/** Looks for the query from the match the search stands on (the selection), up (`previous`, to
+ * older lines) or down, round at the ends; with none, from the newest line up. */
+function look(id: number, step: FindStep): void {
+  const view = views.get(id);
+  const find = finds.get(id);
+  if (!view || !find) return;
+  const ask = find.query ? asked(find.query) : null;
+  find.invalid = !!find.query && !ask;
+  if (!ask) {
+    view.asked = null;
+    view.search.clearDecorations();
+    view.term.clearSelection();
+    find.index = -1;
+    find.count = 0;
+    return;
+  }
+  // xterm hands a regular expression the part of a line from the selection on, or up to it, so
+  // whole word's lookarounds take the cut for a word's edge: asked anew, it starts from the newest
+  // line rather than from the selection another query made. Stepping from a match it found cuts at
+  // that match's own edges, which are a word's.
+  const key = `${ask.term}\u0000${ask.options.caseSensitive}`;
+  if (ask.edged && key !== view.asked) view.term.clearSelection();
+  view.asked = key;
+  const options: ISearchOptions = { ...ask.options, decorations: FIND[view.theme] };
+  if (step === "next") view.search.findNext(ask.term, options);
+  else view.search.findPrevious(ask.term, options);
+}
+
+/** Marks drawn anew where the search stands: the theme or a choice changed, or the terminal was
+ * cleared. */
+function relook(id: number): void {
+  const view = views.get(id);
+  if (!view || !finds.get(id)?.query) return;
+  view.search.clearDecorations();
+  look(id, "previous");
+}
+
+/** ⌘F: the terminal's search bar, its field taking the keyboard. Text selected in the terminal,
+ * on one line, is what it looks for. */
+export function openFind(id: number): void {
+  const view = views.get(id);
+  if (!view) return;
+  const picked = view.term.hasSelection() ? view.term.getSelection() : "";
+  const seed = picked.trim() && !picked.includes("\n") ? picked : null;
+  const find = finds.get(id);
+  if (!find) {
+    finds.set(id, { query: seed ?? "", index: -1, count: 0, invalid: false, focus: true });
+    view.term.options.theme = colours(view);
+  } else {
+    find.focus = true;
+    if (seed === null || seed === find.query) return;
+    find.query = seed;
+  }
+  if (seed !== null) look(id, "previous");
+}
+
+/** The search closes: its marks go, the match it stood on stays selected (⌘C copies it), and the
+ * keyboard goes back to the terminal. */
+export function closeFind(id: number): void {
+  finds.delete(id);
+  const view = views.get(id);
+  if (!view) return;
+  view.asked = null;
+  view.search.clearDecorations();
+  view.term.options.theme = colours(view);
+  view.term.focus();
+}
+
+/** Typed: looked for from where the search stands, so each letter narrows the same match (with
+ * whole word, from the newest line: `look`). */
+export function findQuery(id: number, query: string): void {
+  const find = finds.get(id);
+  if (!find) return;
+  find.query = query;
+  look(id, "previous");
+}
+
+/** To the match below (`next`) or above. */
+export function findStep(id: number, step: FindStep): void {
+  if (finds.get(id)?.query) look(id, step);
+}
+
+export function toggleFindOption(option: keyof typeof findOptions): void {
+  findOptions[option] = !findOptions[option];
+  for (const id of finds.keys()) relook(id);
 }
 
 /* ---------- Codex's accounts, for its tabs ---------- */
