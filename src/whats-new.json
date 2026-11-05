@@ -42,6 +42,27 @@
         "ja": "メニューバーやクイックスイッチャーからプロジェクトのターミナルを開くと、一覧が絞り込まれていても「すべてのプロジェクト」に切り替わって選択されます。",
         "zh-Hans": "从菜单栏或快速切换器打开项目的终端时，即使列表有筛选，也会切换到“所有项目”并选中它。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Back to all projects when nothing waits",
+        "tr": "Bakılacak kalmayınca Tüm projeler'e dönüş",
+        "de": "Zurück zu allen Projekten, wenn nichts wartet",
+        "es": "De vuelta a todos los proyectos cuando nada espera",
+        "ru": "Назад ко всем проектам, когда ничего не ждёт",
+        "ja": "待ちがなくなると「すべてのプロジェクト」へ",
+        "zh-Hans": "没有待处理时回到所有项目"
+      },
+      "body": {
+        "en": "When the last project in Needs attention stops waiting, the list goes back to All projects and selects the one whose terminal you have open.",
+        "tr": "Bakılacaklar'daki son proje de sizi beklemeyi bırakınca liste Tüm projeler'e dönüyor ve terminali açık olan projeyi seçiyor.",
+        "de": "Wartet in „Zu prüfen“ das letzte Projekt nicht mehr, springt die Liste zurück zu „Alle Projekte“ und wählt das Projekt, dessen Terminal du offen hast.",
+        "es": "Cuando el último proyecto de Por revisar deja de esperarte, la lista vuelve a Todos los proyectos y selecciona el que tienes con la terminal abierta.",
+        "ru": "Когда в «Требуют внимания» не остаётся проектов, список возвращается ко «Всем проектам» и выбирает тот, чей терминал у вас открыт.",
+        "ja": "「要確認」の最後のプロジェクトが待ち状態でなくなると、一覧は「すべてのプロジェクト」に戻り、ターミナルを開いているプロジェクトを選びます。",
+        "zh-Hans": "“待处理”里最后一个项目不再等你时，列表会回到“所有项目”，并选中你正开着终端的那个项目。"
+      }
     }
   ]
 }

@@ -773,6 +773,22 @@ watch(pickRequest, (asked) => {
   void nextTick(() => lines().find((line) => line.dataset.path === path)?.scrollIntoView({ block: "nearest" }));
 });
 
+// Needs attention emptied while it was the list shown (the last project there no longer waits):
+// the list goes to every project and selects the one the terminal panel shows, its row in sight;
+// the keyboard stays where it is (the user's word, 2026-11-05). Picked while empty, it stays.
+watch(
+  () => (view.value === "projects" && filter.value === "waiting" && !shownTeam.value && !looseShown.value ? pool.value.length : null),
+  (left, was) => {
+    if (left !== 0 || !was) return;
+    filter.value = "all";
+    const path = panelPath.value;
+    if (!path || !projects.value.some((p) => p.path === path)) return;
+    showInList(path);
+    selectProject(path);
+    void nextTick(() => lines().find((line) => line.dataset.path === path)?.scrollIntoView({ block: "nearest" }));
+  },
+);
+
 /** From the switcher (⌘↵ on a command) or the Garage page: that command's output in the terminal
  * panel, open, on the page shown. */
 function revealOutput(path: string, job: string): void {
