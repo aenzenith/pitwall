@@ -21,6 +21,27 @@
         "ja": "見つかった箇所がすべてハイライトされ、矢印で順に移動できます。大文字と小文字の区別、単語単位、正規表現もワンクリックで切り替えられます。",
         "zh-Hans": "所有匹配都会高亮，用箭头逐个跳转。区分大小写、全字匹配和正则表达式，点一下就能切换。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "The list finds the project you open",
+        "tr": "Açtığınız proje listede seçili gelir",
+        "de": "Die Liste findet dein Projekt",
+        "es": "La lista encuentra tu proyecto",
+        "ru": "Список находит открытый проект",
+        "ja": "開いたプロジェクトが一覧で選ばれます",
+        "zh-Hans": "列表会找到你打开的项目"
+      },
+      "body": {
+        "en": "Open a project's terminal from the menu bar or the quick switcher and the list selects it even when it's filtered: it switches to All projects.",
+        "tr": "Menü çubuğundan ya da hızlı geçişten bir projenin terminalini açtığınızda, liste filtreli olsa bile Tüm projeler'e geçip projeyi seçiyor.",
+        "de": "Öffnest du das Terminal eines Projekts aus der Menüleiste oder dem Projektumschalter, wechselt die Liste auch mit Filter zu „Alle Projekte“ und wählt es aus.",
+        "es": "Al abrir la terminal de un proyecto desde la barra de menús o el selector rápido, la lista pasa a Todos los proyectos y lo selecciona, aunque tuvieras un filtro puesto.",
+        "ru": "Когда вы открываете терминал проекта из строки меню или быстрого перехода, список даже с фильтром переключается на «Все проекты» и выбирает его.",
+        "ja": "メニューバーやクイックスイッチャーからプロジェクトのターミナルを開くと、一覧が絞り込まれていても「すべてのプロジェクト」に切り替わって選択されます。",
+        "zh-Hans": "从菜单栏或快速切换器打开项目的终端时，即使列表有筛选，也会切换到“所有项目”并选中它。"
+      }
     }
   ]
 }

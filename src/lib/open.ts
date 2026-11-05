@@ -35,7 +35,7 @@ export const listRequest = ref<{ path: string; at: number } | null>(null);
  * the mini tower, a Claude session brought up): the page shown selects it too, where it lists it
  * (the Projects page's list, the Track page's tower, the Today page's lanes, the Garage's list),
  * so its details show beside the terminal. The page stays the one it is; only the page shown at
- * that moment takes it.
+ * that moment takes it. The Projects page's list, filtered away from it, goes to every project.
  */
 export const pickRequest = ref<{ path: string; at: number } | null>(null);
 

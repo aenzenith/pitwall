@@ -734,15 +734,20 @@ function revealProject(path: string): void {
   settingsOpen.value = false;
   setupOpen.value = false;
   view.value = "projects";
-  if (!rows.value.some((p) => p.path === path)) {
-    filter.value = "all";
-    teamFilter.value = null;
-    looseShown.value = false;
-    query.value = "";
-    const project = projects.value.find((p) => p.path === path);
-    if (project && !drawn(project)) setFavouritesOnly(false);
-  }
+  showInList(path);
   selectProject(path);
+}
+
+/** A project the list doesn't draw (a filter, a team's own view, a search or "Only favourites and
+ * open" hid it): the list goes to every project, where its row is. */
+function showInList(path: string): void {
+  if (rows.value.some((p) => p.path === path)) return;
+  filter.value = "all";
+  teamFilter.value = null;
+  looseShown.value = false;
+  query.value = "";
+  const project = projects.value.find((p) => p.path === path);
+  if (project && !drawn(project)) setFavouritesOnly(false);
 }
 
 /** From outside the window: the project's Files window, over the page shown; Settings, which
@@ -758,11 +763,12 @@ watch(listRequest, (asked) => {
 });
 
 // A project brought up on its terminal from outside the window (lib/open: pickRequest): selected
-// in the list too while the list shows it, its row in sight; the keyboard stays in the terminal and
-// the list is left as it is filtered.
+// in the list too, its row in sight; the keyboard stays in the terminal. A list that doesn't draw
+// it (a filter, a team, a search, "Only favourites and open") goes to every project for it.
 watch(pickRequest, (asked) => {
   const path = asked?.path;
-  if (!path || view.value !== "projects" || !rows.value.some((p) => p.path === path)) return;
+  if (!path || view.value !== "projects" || !projects.value.some((p) => p.path === path)) return;
+  showInList(path);
   selectProject(path);
   void nextTick(() => lines().find((line) => line.dataset.path === path)?.scrollIntoView({ block: "nearest" }));
 });
