@@ -8,8 +8,8 @@ import { closeFind, FIND_LIMIT, findKey, findOptions, findQuery, finds, findStep
 
 /**
  * A terminal's search bar, over its top right corner (lib/terminals: `finds`): what is looked
- * for, its choices (match case, whole word, regular expression), which match of how many, the
- * steps up and down and the close. As in VS Code's terminal, Return steps up, to older lines, and
+ * for, which match of how many at its end, then the buttons at the bar's right: the choices
+ * (match case, whole word, regular expression), the steps up and down and the close. As in VS Code's terminal, Return steps up, to older lines, and
  * ⇧Return down; Esc closes it, the keyboard going back to the terminal.
  */
 const props = defineProps<{ id: number }>();
@@ -45,9 +45,6 @@ const count = computed(() => {
   return t("files.findCount", { current: now.index < 0 ? "?" : now.index + 1, total });
 });
 
-/** The widest the count can read, so the bar keeps one width whatever it says. */
-const widest = computed(() => [t("files.findCount", { current: FIND_LIMIT - 1, total: `${FIND_LIMIT}+` }), t("files.findNone"), t("terminal.findInvalid")]);
-
 function onKey(event: KeyboardEvent): void {
   if (event.isComposing) return;
   const option = optionOf(event);
@@ -79,7 +76,7 @@ watch(() => find.value?.focus, take);
 
 <template>
   <div v-if="find" :class="['term-find', { invalid: find.invalid }]" role="search">
-    <Icon name="search" :size="13" />
+    <Icon name="search" :size="13" class="lead" />
     <input
       ref="field"
       type="text"
@@ -94,6 +91,7 @@ watch(() => find.value?.focus, take);
       @input="findQuery(id, ($event.target as HTMLInputElement).value)"
       @keydown="onKey"
     />
+    <span class="count" aria-live="polite">{{ count }}</span>
     <button
       v-for="option in OPTIONS"
       :key="option.key"
@@ -107,10 +105,6 @@ watch(() => find.value?.focus, take);
     >
       <Icon :name="option.icon" :size="14" />
     </button>
-    <span class="count" aria-live="polite">
-      <span v-for="text in widest" :key="text" class="sizer" aria-hidden="true">{{ text }}</span>
-      <span>{{ count }}</span>
-    </span>
     <button
       type="button"
       class="step"
@@ -171,6 +165,11 @@ watch(() => find.value?.focus, take);
   border-color: var(--crash-line);
 }
 
+/* The field gives the room, never the glass before it. */
+.lead {
+  flex-shrink: 0;
+}
+
 input {
   flex: 1 1 auto;
   min-width: 0;
@@ -219,24 +218,19 @@ input {
   transform: rotate(180deg);
 }
 
-/* Every text it can read in one cell: the widest sets its width. */
+/* At the field's end, as wide as what it reads: the field gives it the room, so the buttons
+   beside it never move. */
 .count {
   flex-shrink: 0;
-  display: grid;
-  justify-items: end;
-  padding: 0 4px 0 6px;
+  padding: 0 6px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.count > * {
-  grid-area: 1 / 1;
-}
-
-.count > .sizer {
-  visibility: hidden;
+.count:empty {
+  display: none;
 }
 
 .invalid .count {
