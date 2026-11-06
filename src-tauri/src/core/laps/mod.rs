@@ -1417,7 +1417,6 @@ impl Core {
                 if laps.lock.is_some() {
                     laps.save_runs(&lap);
                 }
-                drop(going.awake);
             }
             laps.held.clear();
             laps.lock = None;

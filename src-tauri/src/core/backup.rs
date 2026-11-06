@@ -1452,6 +1452,9 @@ mod tests {
         let core = core_in(tmp.path());
         let home = tmp.path().join("home");
         let here = |rest: &str| home.join(rest).to_string_lossy().into_owned();
+        // A path of the other Mac's moved here: this home, then the rest as the backup wrote it
+        // (`Homes::here`), its `/` kept on Windows too.
+        let moved = |rest: &str| format!("{}/{rest}", home.to_string_lossy());
         fs::create_dir_all(here("projects/paddock")).unwrap();
         core.add_project(&here("projects/paddock")).unwrap();
 
@@ -1488,12 +1491,12 @@ mod tests {
             places,
             [
                 ("l-a1", &Place::Project { path: here("projects/paddock") }, true),
-                ("l-b2", &Place::Folder { path: here("projects/gone") }, true),
-                ("l-c3", &Place::Folder { path: here("scratch") }, false),
+                ("l-b2", &Place::Folder { path: moved("projects/gone") }, true),
+                ("l-c3", &Place::Folder { path: moved("scratch") }, false),
             ]
         );
         for lap in &laps {
-            assert_eq!((lap.paused, lap.next_at, lap.file.clone()), (Some(PausedBy::User), None, Some(here("Notes/{tarih}.md"))), "{}", lap.id);
+            assert_eq!((lap.paused, lap.next_at, lap.file.clone()), (Some(PausedBy::User), None, Some(moved("Notes/{tarih}.md"))), "{}", lap.id);
             assert_eq!((&lap.account, lap.days_off.len(), lap.weekdays_off.len(), lap.streak, lap.runs_done), (&None, 0, 0, 0, 0), "{}", lap.id);
         }
     }
