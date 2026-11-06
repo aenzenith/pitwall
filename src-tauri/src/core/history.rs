@@ -120,6 +120,9 @@ impl Core {
             .collect();
         ids.sort();
         ids.dedup();
+        // The laps' runs' sessions are a layer of their own (`lap_sessions`), in no list.
+        let apart = self.lap_sessions();
+        ids.retain(|id| !apart.contains(*id));
 
         let mut rows: Vec<SessionRow> = Vec::new();
         for id in ids {

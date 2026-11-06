@@ -88,6 +88,8 @@ const LINES: Record<SignalKind, Key | AgentKey> = {
   "deps-waiting": "missed.depsWaiting",
   "fuel-high": "missed.fuelHigh",
   "card-review": "missed.cardReview",
+  "lap-done": "missed.lapDone",
+  "lap-failed": "missed.lapFailed",
 };
 
 /** The kinds whose line names the agent it is about: its waits, its long turn, its fuel. */
@@ -109,14 +111,15 @@ export function missedLine(entry: Missed): string {
   return t(named ? agentKey(named, agent) : LINES[entry.kind], { name: entry.detail ?? "" });
 }
 
-/** Whose it is: its project, or the page it is about when it is no project's. */
+/** Whose it is: its project, or the page it is about when it is no project's (a job in a folder
+ * is the Turlar page's). */
 export function missedName(entry: Missed): string {
-  return entry.name || t("fuel.nav");
+  return entry.name || t(entry.kind === "lap-done" || entry.kind === "lap-failed" ? "laps.nav" : "fuel.nav");
 }
 
 /** What a missed line's dot says: Claude's, something that broke, something that waits, or a thing done. */
 export function missedTone(kind: SignalKind): "claude" | "crash" | "warn" | "run" {
   if (kind.startsWith("claude-") || kind === "card-review") return "claude";
-  if (kind === "server-crashed" || kind === "command-failed") return "crash";
-  return kind === "command-done" ? "run" : "warn";
+  if (kind === "server-crashed" || kind === "command-failed" || kind === "lap-failed") return "crash";
+  return kind === "command-done" || kind === "lap-done" ? "run" : "warn";
 }

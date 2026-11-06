@@ -78,6 +78,14 @@ away.
 <img src=".github/readme/board.png" alt="The Board page: a project's cards in Up next, With Claude, To review and Done, and the selected card's session">
 <img src=".github/readme/track.png" alt="The Track page: projects lapping a circuit, servers in green, Claude in orange, the ones that need you at the pit wall">
 
+### Laps: jobs on a schedule
+
+Have Claude, Codex or a script do something every morning, every few hours or when your fuel
+refills: review the night's commits, sum up the open issues, run the tests. A job runs in its
+project (or any folder you pick) while Pitwall is open, catches up once on what it missed while
+the Mac slept, and can wait for a script's go-ahead or for new commits first. The calendar shows
+what ran, what failed and what comes next.
+
 ### Claude, Codex and your shell can ask too
 
 - **Team radio.** Claude Code and Codex ask Pitwall about the dev server over MCP instead of

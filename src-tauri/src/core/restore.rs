@@ -129,12 +129,12 @@ struct Record {
     elevated: Vec<String>,
 }
 
-/// Everything that runs under this app right now.
+/// Everything that runs under this app right now, but for the laps' own tabs (`apart`).
 pub(super) struct Standing {
     pub(super) servers: Vec<String>,
     /// Running custom commands: project, id, name, and whether it is started again.
     pub(super) commands: Vec<(String, String, String, bool)>,
-    /// The tabs a record holds: every one but an administrator's.
+    /// The tabs a record holds: every one but an administrator's and the laps' own.
     pub(super) tabs: Vec<Tab>,
     /// Each administrator's tab whose shell still runs, by its project and name: no record holds
     /// one, and a restart ends it.
@@ -218,10 +218,11 @@ impl Core {
         let inner = self.lock();
         // One Windows refused has no shell left: nothing of it is lost.
         let running = |id: u64| states.iter().any(|state| state.id == id && state.pid.is_some());
-        let elevated = inner.terminal_list.iter().filter(|view| view.elevated && running(view.id)).map(|view| (view.path.clone(), view.name.clone())).collect();
-        let tabs = inner
-            .terminal_list
-            .iter()
+        // The laps' own tabs (`TerminalView::apart`) are in no record and come back by none: a
+        // lap's session put back would be an ordinary tab of the panel.
+        let kept = || inner.terminal_list.iter().filter(|view| !view.apart);
+        let elevated = kept().filter(|view| view.elevated && running(view.id)).map(|view| (view.path.clone(), view.name.clone())).collect();
+        let tabs = kept()
             .filter(|view| !view.elevated)
             .filter_map(|view| {
                 let state = states.iter().find(|state| state.id == view.id)?;

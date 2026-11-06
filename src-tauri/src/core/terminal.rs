@@ -65,6 +65,13 @@ pub struct TerminalView {
     /// shell tab's is a Claude account (`accounts/`), a Codex tab's a Codex account
     /// (`core/codex_accounts.rs`).
     pub account: Option<String>,
+    /// The laps' own (a run's tab, or one a run's dialog opened its session again in): a layer of
+    /// its own, as their sessions are. In no snapshot (no project's tabs), in no record of a quit
+    /// or an update's restart, never brought up in the panel (`reveal_terminal`): it shows in its
+    /// run's dialog alone (`Core::lap_terminal`). Set as the tab is made, so no snapshot ever has
+    /// it.
+    #[serde(skip)]
+    pub apart: bool,
 }
 
 /// A terminal's recent output and the number of its last chunk, so a view can draw the history
@@ -83,8 +90,9 @@ pub(super) enum Launch {
     Shell { shell: Option<Shell>, elevated: bool },
     /// Claude Code, then the shell: with a first prompt (a board card's text), with the model and
     /// in the mode of `start`, and with the folder of that card's images among Claude's
-    /// directories.
-    Claude { prompt: Option<String>, start: Start, images: Option<PathBuf> },
+    /// directories. `session`: the id the new session takes (`--session-id`), one Pitwall made
+    /// for a lap's run (`start::new_uuid`), so the run knows its session before it starts.
+    Claude { prompt: Option<String>, start: Start, images: Option<PathBuf>, session: Option<String> },
     /// Claude Code with a session that has ended opened again (`claude --resume`), then the
     /// shell: a board card's session, going on.
     Resume { session: String },
@@ -191,7 +199,7 @@ impl Core {
     /// `accounts::MAIN` for the main one); none: the one in use.
     pub fn open_claude_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>) -> Result<TerminalView, String> {
         let start = start.unwrap_or_else(|| self.lock().settings.project(path).start_with(Agent::Claude));
-        self.open_terminal_with(path, &Launch::Claude { prompt: None, start, images: None }, None, false, size, false, account)
+        self.open_terminal_with(path, &Launch::Claude { prompt: None, start, images: None, session: None }, None, false, size, false, account)
     }
 
     /// A Codex tab in the project's folder ("New Codex"), as `open_claude_terminal_with` is
@@ -242,6 +250,28 @@ impl Core {
         unasked: bool,
         account: Option<&str>,
     ) -> Result<TerminalView, String> {
+        self.open_tab(path, launch, name, renamed, size, unasked, account, false)
+    }
+
+    /// A tab of the laps' (`TerminalView::apart`), named `name`: a run's agent, or a run's session
+    /// opened again for its dialog; with the account `account` names, as `open_terminal_with`
+    /// takes it.
+    pub(super) fn open_terminal_apart(self: &Arc<Self>, path: &str, launch: &Launch, name: String, size: Option<(u16, u16)>, account: Option<&str>) -> Result<TerminalView, String> {
+        self.open_tab(path, launch, Some(name), false, size, false, account, true)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn open_tab(
+        self: &Arc<Self>,
+        path: &str,
+        launch: &Launch,
+        name: Option<String>,
+        renamed: bool,
+        size: Option<(u16, u16)>,
+        unasked: bool,
+        account: Option<&str>,
+        apart: bool,
+    ) -> Result<TerminalView, String> {
         // A folder that is gone would start the shell in the home folder instead, unasked.
         if !Path::new(path).is_dir() {
             return Err(t!("core.error.notFolder", path = path));
@@ -274,7 +304,7 @@ impl Core {
 
         let shell_path = CommandBuilder::new_default_prog().get_shell();
         let mut command = match launch {
-            Launch::Claude { prompt, start, images } => claude_command(&shell_path, prompt.as_deref(), *start, images.as_deref()),
+            Launch::Claude { prompt, start, images, session } => claude_command(&shell_path, prompt.as_deref(), *start, images.as_deref(), session.as_deref()),
             Launch::Resume { session } => resume_command(&shell_path, session)?,
             Launch::Codex { prompt, start, images } => codex_command(&shell_path, prompt.as_deref(), *start, images.as_deref())?,
             Launch::ResumeCodex { session } => codex_resume_command(&shell_path, session)?,
@@ -340,7 +370,8 @@ impl Core {
             let mut inner = self.lock();
             inner.next_run += 1;
             let id = inner.next_run;
-            let same = inner.terminal_list.iter().filter(|t| t.path == path && t.kind == kind).count();
+            // The laps' own tabs aren't in the panel to tell apart from.
+            let same = inner.terminal_list.iter().filter(|t| t.path == path && t.kind == kind && !t.apart).count();
             let name = match name {
                 Some(name) => name,
                 // A shell of the list goes by its own name; two of one are told apart where they
@@ -349,7 +380,7 @@ impl Core {
                 None => format!("{base} {}", same + 1),
             };
             let account = account.map(|(id, _)| id);
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), shell, elevated, renamed, unasked, account };
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), shell, elevated, renamed, unasked, account, apart };
             inner.terminal_list.push(view.clone());
             view
         };
@@ -496,12 +527,13 @@ impl Core {
     /// Gives each Claude tab the name of the session that runs in it, as Claude Code shows it in
     /// `/resume`: once the session has one, and again when it changes (`/rename`, or another
     /// session in the tab). A tab the user renamed keeps their title, and a session without a
-    /// name leaves the tab's as it is. Runs after every refresh of Claude's state
+    /// name leaves the tab's as it is, and so do the laps' own tabs (`apart`), which show in no
+    /// panel. Runs after every refresh of Claude's state
     /// (`refresh_claude`) and costs nothing while no tab is left to name. Codex's tabs are named
     /// the same way first (`name_codex_terminals`).
     pub(super) fn name_terminals(&self) {
         self.name_codex_terminals();
-        let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == "claude" && !t.renamed).map(|t| t.id).collect();
+        let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == "claude" && !t.renamed && !t.apart).map(|t| t.id).collect();
         if open.is_empty() {
             return;
         }
@@ -532,7 +564,7 @@ impl Core {
     /// for the session (`SessionState::title`). Nothing while Codex is off or no Codex tab is
     /// left to name.
     fn name_codex_terminals(&self) {
-        let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == Agent::Codex.tab_kind() && !t.renamed).map(|t| t.id).collect();
+        let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == Agent::Codex.tab_kind() && !t.renamed && !t.apart).map(|t| t.id).collect();
         if open.is_empty() {
             return;
         }
@@ -680,6 +712,50 @@ impl Core {
         })
     }
 
+    /// The process group of what runs in tab `id`'s foreground, when that isn't its shell: the
+    /// agent a lap's run started there, which its timeout stops while the shell stays
+    /// (`laps/run.rs`). Read from the terminal itself, as `Session::foreground` is.
+    #[cfg(unix)]
+    pub(super) fn terminal_foreground(&self, id: u64) -> Option<u32> {
+        let sessions = self.terminal_sessions();
+        let session = sessions.get(&id)?;
+        let group = u32::try_from(session.master.process_group_leader()?).ok()?;
+        (group > 1 && Some(group) != session.pid).then_some(group)
+    }
+
+    /// Something other than its shell runs in tab `id`: on Unix what holds its foreground
+    /// (`terminal_foreground`); on Windows, which has no foreground group, a process its shell
+    /// started. A tab whose shell or processes can't be told holds something.
+    pub(super) fn terminal_busy(&self, id: u64) -> bool {
+        #[cfg(unix)]
+        {
+            self.terminal_foreground(id).is_some() || !self.terminal_sessions().get(&id).is_some_and(|session| session.pid.is_some())
+        }
+        #[cfg(not(unix))]
+        {
+            let Some(shell) = self.terminal_sessions().get(&id).and_then(|session| session.pid) else {
+                return true;
+            };
+            process::process_table().is_none_or(|table| table.values().any(|process| process.parent == shell))
+        }
+    }
+
+    /// Tab `id` is one of the laps' own (`TerminalView::apart`).
+    pub(super) fn terminal_apart(&self, id: u64) -> bool {
+        self.lock().terminal_list.iter().any(|view| view.id == id && view.apart)
+    }
+
+    /// Brings tab `id` of the project at `path` up in the window's terminal panel; never one of the
+    /// laps' own (`apart`), which shows in its run's dialog alone: whatever finds a session running
+    /// in one leaves it there. Whether it was brought up.
+    pub(super) fn reveal_terminal(&self, path: String, id: u64) -> bool {
+        if self.terminal_apart(id) {
+            return false;
+        }
+        self.emit(CoreEvent::RevealTerminal { path, id });
+        true
+    }
+
     /// Every terminal's shell, for shutdown.
     pub(super) fn terminal_pids(&self) -> Vec<u32> {
         self.terminal_sessions().values().filter_map(|session| session.pid).collect()
@@ -756,10 +832,13 @@ const IMAGES_VAR: &str = "PITWALL_IMAGES";
 /// `images`, the folder of the images that prompt names, becomes one of Claude's directories
 /// (`--add-dir`): Claude reads a file outside the project only after asking, and a card's images
 /// are outside it. The folder goes in `PITWALL_IMAGES`, never into the command line either.
+///
+/// `session`, the id a lap's run gives its new session (`--session-id`), is written into the
+/// line: only a session id (a UUID, `is_session_id`) gets there, anything else is left out.
 #[cfg(unix)]
-pub(super) fn claude_command(shell: &str, prompt: Option<&str>, start: Start, images: Option<&Path>) -> CommandBuilder {
+pub(super) fn claude_command(shell: &str, prompt: Option<&str>, start: Start, images: Option<&Path>, session: Option<&str>) -> CommandBuilder {
     let quoted = shell.replace('\'', "'\\''");
-    let mode = start.line();
+    let mode = format!("{}{}", start.line(), session_flag(session));
     let images = images.filter(|_| prompt.is_some());
     let script = match (prompt, images) {
         (Some(_), Some(_)) => format!("claude{mode} --add-dir \"${IMAGES_VAR}\" -- \"${PROMPT_VAR}\"; exec env -u {PROMPT_VAR} -u {IMAGES_VAR} '{quoted}' -l"),
@@ -782,10 +861,19 @@ pub(super) fn claude_command(shell: &str, prompt: Option<&str>, start: Start, im
 /// quotes, `&` or `|` in a card would end the argument and run as commands. Claude starts
 /// without the card's text here (it stays unused) rather than risk that.
 #[cfg(windows)]
-pub(super) fn claude_command(_shell: &str, _prompt: Option<&str>, start: Start, _images: Option<&Path>) -> CommandBuilder {
+pub(super) fn claude_command(_shell: &str, _prompt: Option<&str>, start: Start, _images: Option<&Path>, session: Option<&str>) -> CommandBuilder {
     let mut command = CommandBuilder::new("cmd.exe");
     command.args(windows_args(start));
+    if let Some(session) = session.filter(|session| is_session_id(session)) {
+        command.args(["--session-id", session]);
+    }
     command
+}
+
+/// ` --session-id <id>` for a session id, nothing for anything else.
+#[cfg(unix)]
+fn session_flag(session: Option<&str>) -> String {
+    session.filter(|session| is_session_id(session)).map(|session| format!(" --session-id {session}")).unwrap_or_default()
 }
 
 /// What `cmd.exe` is given on Windows: `/K claude`, then the model and the mode as arguments of
@@ -1027,7 +1115,7 @@ mod tests {
     /// The tab's command for `start`, as `open_terminal_with` makes it for its agent.
     fn command(start: Start, prompt: Option<&str>, images: Option<&Path>) -> CommandBuilder {
         match start.agent {
-            Agent::Claude => claude_command("/bin/zsh", prompt, start, images),
+            Agent::Claude => claude_command("/bin/zsh", prompt, start, images, None),
             Agent::Codex => codex_command("/bin/zsh", prompt, start, images).unwrap(),
         }
     }

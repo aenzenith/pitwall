@@ -75,6 +75,16 @@ pub fn leave_claude_session() {
     }
 }
 
+/// Takes the agents' session variables out of what `command` is given, over the environment it
+/// would have: a lap's agent started in the background (`core/laps/run.rs`) is never a part of
+/// another session, whatever the terminal's environment holds.
+pub fn without_session_vars(command: &mut Command) -> &mut Command {
+    for name in CLAUDE_SESSION_VARS.iter().chain(&CODEX_SESSION_VARS) {
+        command.env_remove(name);
+    }
+    command
+}
+
 /// What npm hands a script it runs (`npm_config_prefix`, `npm_package_name`,
 /// `npm_lifecycle_event`…, and `INIT_CWD`), which a dev run (`npm run tauri dev`) carries: the
 /// user's shell, read for the terminal's environment, would take them for its own, and nvm puts

@@ -275,6 +275,78 @@ impl Start {
     pub fn line(self) -> String {
         self.args().iter().map(|arg| format!(" {arg}")).collect()
     }
+
+    /// What a lap's agent in the background is started with, after its program's name
+    /// (`core/laps/run.rs`): no tab, read-only tools alone, nothing it can ask for. The prompt is
+    /// never among them: it goes in on the agent's stdin, which both read when they are given
+    /// none (so no text of the job's is in the process list, and Windows' `.cmd` shims, which
+    /// can't take a line break in an argument, start it all the same).
+    /// - Claude: `-p --session-id <session> --tools Read,Grep,Glob --strict-mcp-config` (no MCP
+    ///   server either) and the model of its list. Print mode answers and ends; with its tools it
+    ///   can only read, so no mode flag is given.
+    /// - Codex: `--no-daemon exec -s read-only --skip-git-repo-check --json`, the model of its
+    ///   list and `-` (the prompt from stdin). Read-only whatever its mode says.
+    ///
+    /// Every word is a constant of this file but the session id, which Pitwall made (`new_uuid`;
+    /// anything but a UUID is refused, and Claude has no run without one). Never
+    /// `--dangerously-*`, `--yolo`, `--full-auto` or a config override.
+    pub fn background_args(self, session: Option<&str>) -> Option<Vec<String>> {
+        let args: Vec<&str> = match self.agent {
+            Agent::Claude => {
+                let session = session.filter(|id| is_uuid(id))?;
+                let mut args = vec!["-p", "--session-id", session, "--tools", BACKGROUND_TOOLS, "--strict-mcp-config"];
+                if let Some(model) = self.model {
+                    args.extend(["--model", model.alias()]);
+                }
+                args
+            }
+            Agent::Codex => {
+                let mut args = vec!["--no-daemon", "exec", "-s", "read-only", "--skip-git-repo-check", "--json"];
+                if let Some(model) = self.codex.model {
+                    args.extend(["-m", model.id()]);
+                }
+                args.push("-");
+                args
+            }
+        };
+        Some(args.into_iter().map(str::to_string).collect())
+    }
+}
+
+/// The tools Claude has in the background: reading alone.
+const BACKGROUND_TOOLS: &str = "Read,Grep,Glob";
+
+/// A UUID as written (hex digits and dashes, 8-4-4-4-12): the only session id that reaches a
+/// command line.
+fn is_uuid(id: &str) -> bool {
+    id.len() == 36 && id.char_indices().all(|(i, c)| if matches!(i, 8 | 13 | 18 | 23) { c == '-' } else { c.is_ascii_hexdigit() })
+}
+
+/// A new session id for a session Pitwall starts with one of its own (`--session-id`, a lap's
+/// Claude): a version-4 UUID, its bits from SHA-256 of the clock's nanoseconds, the process id, a
+/// counter and an address on this thread's stack, so no two calls give the same one. No crate
+/// for it: those are what a random one would be made from.
+pub fn new_uuid() -> String {
+    use sha2::{Digest, Sha256};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|since| since.as_nanos()).unwrap_or(0);
+    let here = 0u8;
+    let mut hasher = Sha256::new();
+    hasher.update(nanos.to_le_bytes());
+    hasher.update(std::process::id().to_le_bytes());
+    hasher.update(COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes());
+    hasher.update((std::ptr::addr_of!(here) as usize).to_le_bytes());
+    let digest = hasher.finalize();
+
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    // Version 4, variant 10xx.
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
 
 #[cfg(test)]

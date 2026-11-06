@@ -38,6 +38,7 @@ mod cli;
 mod start;
 mod files;
 mod agent;
+mod awake;
 mod codex;
 mod codex_hooks;
 mod codex_usage;
@@ -147,6 +148,10 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         CoreEvent::Board(cards) => {
             let _ = app.emit_to(MAIN, "board", cards);
         }
+        // Only the window shows the laps.
+        CoreEvent::Laps(state) => {
+            let _ = app.emit_to(MAIN, "laps", state);
+        }
         CoreEvent::Deps(reports) => {
             let _ = app.emit_to(MAIN, "deps", reports);
         }
@@ -167,6 +172,11 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         CoreEvent::RevealFuel(agent) => {
             tray::show_main(app);
             let _ = app.emit("reveal-page", serde_json::json!({ "page": "fuel", "agent": agent }));
+        }
+        // The Turlar page, as a page is shown, with the run's dialog open.
+        CoreEvent::RevealLap(run) => {
+            tray::show_main(app);
+            let _ = app.emit("reveal-page", serde_json::json!({ "page": "laps", "run": run }));
         }
     }
 }
@@ -481,6 +491,27 @@ pub fn run() {
             commands::close_terminal,
             commands::terminal_buffer,
             commands::board_state,
+            commands::laps_state,
+            commands::lap_save,
+            commands::lap_delete,
+            commands::lap_switch,
+            commands::lap_pause,
+            commands::lap_run_now,
+            commands::lap_skip_next,
+            commands::lap_stop,
+            commands::lap_day_off,
+            commands::lap_day_on,
+            commands::lap_preview,
+            commands::lap_pick_folder,
+            commands::lap_calendar,
+            commands::lap_day,
+            commands::lap_runs,
+            commands::lap_summaries,
+            commands::lap_result,
+            commands::lap_terminal,
+            commands::lap_terminal_left,
+            commands::lap_read,
+            commands::lap_reorder,
             commands::board_add,
             commands::board_edit,
             commands::board_image,

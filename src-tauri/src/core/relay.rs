@@ -5,7 +5,7 @@
 //! made in one place (`Message`): the project's name, what happened in the UI's words (which
 //! name the agent: Claude's as they always were, Codex's its own) and, for a permission, the
 //! tool's name. Never the project's path, a command or its name, a card's title, a session's
-//! name, or anything an agent or the user wrote.
+//! name, a lap's name or its folder's, or anything an agent or the user wrote.
 //!
 //! The channel and its address are kept in `phone.json` beside the settings, readable by the
 //! user alone and part of no backup; the Telegram token never goes to the UI. Nothing is sent
@@ -89,9 +89,10 @@ impl When {
     }
 }
 
-/// The events offered, each with its box.
+/// The events offered, each with its box. A box a file of an older Pitwall doesn't name is as it
+/// starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(rename_all = "camelCase", default)]
 struct Events {
     asked: bool,
     permission: bool,
@@ -99,11 +100,15 @@ struct Events {
     crashed: bool,
     fuel: bool,
     card: bool,
+    /// A lap's run ended well (`laps/`).
+    lap_done: bool,
+    /// A lap's run failed, or its job paused itself after failures.
+    lap_failed: bool,
 }
 
 impl Default for Events {
     fn default() -> Self {
-        Self { asked: true, permission: true, finished: false, crashed: true, fuel: true, card: false }
+        Self { asked: true, permission: true, finished: false, crashed: true, fuel: true, card: false, lap_done: false, lap_failed: false }
     }
 }
 
@@ -127,6 +132,9 @@ fn offer(signal: &Signal, events: &Events) -> Option<Offer> {
         SignalKind::ServerCrashed => ("server-crashed", "phone.event.crashed", events.crashed),
         SignalKind::FuelHigh => ("fuel-high", "phone.event.fuel", events.fuel),
         SignalKind::CardReview => ("card-review", "phone.event.card", events.card),
+        // A lap's is no agent's turn: the same event whoever ran it.
+        SignalKind::LapDone => ("lap-done", "phone.event.lapDone", events.lap_done),
+        SignalKind::LapFailed => ("lap-failed", "phone.event.lapFailed", events.lap_failed),
         _ => return None,
     };
     let agents = matches!(kind, SignalKind::ClaudeAsking | SignalKind::ClaudePermission | SignalKind::ClaudeFinished | SignalKind::FuelHigh);
@@ -280,14 +288,16 @@ struct Message {
 
 impl Message {
     /// Of a signal only these are taken: its project's name, its kind and, of a permission, the
-    /// tool. Its path stays here, and so does any other kind's `detail` (a command's name).
-    fn of(signal: &Signal, offer: &Offer, app: &str) -> Self {
+    /// tool. Its path stays here, and so does any other kind's `detail` (a command's name, a
+    /// lap's). `named`: its name is a listed project's; a lap's folder that no listed project
+    /// holds is the user's own, and its name stays here too.
+    fn of(signal: &Signal, offer: &Offer, app: &str, named: bool) -> Self {
         let tool = signal.detail.as_deref().filter(|_| signal.kind == SignalKind::ClaudePermission).map(plain).filter(|tool| !tool.is_empty());
         let what = match &tool {
             Some(tool) => format!("{} ({tool})", t!(&offer.text)),
             None => t!(&offer.text),
         };
-        let project = Some(plain(&signal.name)).filter(|name| !name.is_empty());
+        let project = Some(plain(&signal.name)).filter(|name| named && !name.is_empty());
         Self { project, event: offer.event.clone(), tool, what, app: app.to_string() }
     }
 
@@ -476,6 +486,11 @@ impl Core {
 
     /// `relay`, with the user's presence as `look` tells it.
     fn relay_seen(&self, signal: &Signal, look: impl FnOnce() -> Presence) -> bool {
+        // A lap's folder may be no listed project's (its end, or what its run waits on there): its
+        // name is then no project's name to send. Looked up before the channel's lock, never under
+        // it.
+        let laps = signal.kind.is_laps() || (signal.kind.is_claudes() && self.lap_going_in(&signal.path).is_some());
+        let named = !laps || self.listed_paths().iter().any(|path| same_path(path, &signal.path));
         let handed = self.with_phone(|phone| {
             let config = &phone.config;
             let offer = offer(signal, &config.events).filter(|offer| config.on && offer.ticked)?;
@@ -495,7 +510,7 @@ impl Core {
 
             phone.sent.retain(|_, last| now.duration_since(*last) < REST);
             phone.sent.insert(key, now);
-            Some((target, Message::of(signal, &offer, &self.cfg.title)))
+            Some((target, Message::of(signal, &offer, &self.cfg.title, named)))
         });
         let Some((target, message)) = handed else {
             return false;
@@ -518,7 +533,7 @@ impl Core {
 
         self.with_phone(|phone| {
             let config = &phone.config;
-            let sample = offer(&waits, &config.events).map(|offer| Message::of(&waits, &offer, &self.cfg.title).text()).unwrap_or_default();
+            let sample = offer(&waits, &config.events).map(|offer| Message::of(&waits, &offer, &self.cfg.title, true).text()).unwrap_or_default();
             PhoneView {
                 on: config.on,
                 channel: config.channel,
@@ -759,6 +774,73 @@ mod tests {
         }
     }
 
+    /// A lap is the user's own work: its job's name, its prompt and its output are theirs, and so
+    /// is a folder they picked for it. Of a lap's end only the event leaves, under the project's
+    /// name for a listed project's job and under the app's for a folder's, whoever ran it, on
+    /// every channel.
+    #[test]
+    fn a_lap_goes_out_without_its_name_or_its_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_in(tmp.path());
+        let (address, requests) = listener(200, "{\"ok\":true}");
+        core.with_phone(|phone| phone.telegram = address.clone());
+        let project = tmp.path().join("clients").join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        core.set_favourite(&project, true);
+        let folder = tmp.path().join("secret-scratch").to_string_lossy().into_owned();
+        let (done, failed) = (t!("phone.event.lapDone"), t!("phone.event.lapFailed"));
+        assert!(![&done, &failed].iter().any(|text| text.contains("phone.")), "the texts are in the catalog");
+
+        // (kind, its folder, the name its banner has, whose it is; the project that goes, the event)
+        let cases = [
+            (SignalKind::LapDone, &project, "paddock", Agent::Claude, Some("paddock"), "lap-done", &done),
+            (SignalKind::LapFailed, &project, "paddock", Agent::Codex, Some("paddock"), "lap-failed", &failed),
+            (SignalKind::LapFailed, &folder, "secret-scratch", Agent::Claude, None, "lap-failed", &failed),
+            (SignalKind::LapDone, &folder, "secret-scratch", Agent::Codex, None, "lap-done", &done),
+        ];
+        for channel in [Channel::Ntfy, Channel::Telegram, Channel::Webhook] {
+            let events = Events { lap_done: true, lap_failed: true, ..Events::default() };
+            let config = PhoneConfig {
+                on: true,
+                channel,
+                ntfy_server: address.clone(),
+                ntfy_topic: "pitwall-topic".into(),
+                telegram_token: TOKEN.into(),
+                telegram_chat: "42".into(),
+                webhook_url: format!("{address}/hook"),
+                when: When::Always,
+                events,
+            };
+            core.phone_set(config).unwrap();
+
+            for (kind, path, name, agent, sent_as, event, text) in &cases {
+                core.with_phone(|phone| phone.sent.clear());
+                let signal = Signal { kind: *kind, path: path.to_string(), name: name.to_string(), detail: Some("Nightly invoice-run".into()), agent: *agent };
+                assert!(core.relay_seen(&signal, Presence::default), "{channel:?} {kind:?}");
+                let request = requests.recv_timeout(WAIT).expect("the lap goes out");
+
+                for kept in ["invoice-run", "Nightly", "secret-scratch", "clients", "Codex"] {
+                    assert!(!request.contains(kept), "{channel:?} sent {kept:?}: {request}");
+                }
+                let title = sent_as.unwrap_or("Pitwall");
+                let (_, head, body) = parts(&request);
+                match channel {
+                    Channel::Ntfy => {
+                        assert!(head.contains(&format!("\r\ntitle: {}\r\n", title.to_ascii_lowercase())), "{head}");
+                        assert_eq!(&body, *text);
+                    }
+                    Channel::Telegram => assert_eq!(serde_json::from_str::<Value>(&body).unwrap()["text"], format!("{title} — {text}")),
+                    Channel::Webhook => {
+                        let sent: Value = serde_json::from_str(&body).unwrap();
+                        let at = sent["at"].as_str().expect("a time");
+                        assert_eq!(sent, json!({ "project": sent_as, "event": event, "tool": null, "text": format!("{title} — {text}"), "at": at }));
+                    }
+                }
+            }
+        }
+    }
+
     /// The gate: nothing goes while the channel is off, at another moment than the one chosen,
     /// for an event whose box isn't ticked, or for a kind that has no box at all; and what went
     /// doesn't go again within the minute.
@@ -768,7 +850,7 @@ mod tests {
         let core = core_in(tmp.path());
         let (address, requests) = listener(200, "");
 
-        let all = Events { asked: true, permission: true, finished: true, crashed: true, fuel: true, card: true };
+        let all = Events { asked: true, permission: true, finished: true, crashed: true, fuel: true, card: true, lap_done: true, lap_failed: true };
         // Set as it is, whatever moments this system offers: the gate is the same on each.
         let set = |on: bool, when: When, events: Events| {
             let config = PhoneConfig { on, channel: Channel::Webhook, webhook_url: address.clone(), when, events, ..PhoneConfig::default() };
@@ -793,8 +875,9 @@ mod tests {
 
         // The boxes that start unticked.
         set(true, When::Always, Events::default());
-        assert!(!core.relay_seen(&signal(SignalKind::ClaudeFinished), away));
-        assert!(!core.relay_seen(&signal(SignalKind::CardReview), away));
+        for kind in [SignalKind::ClaudeFinished, SignalKind::CardReview, SignalKind::LapDone, SignalKind::LapFailed] {
+            assert!(!core.relay_seen(&signal(kind), away), "{kind:?}");
+        }
 
         // The kinds that have no box.
         set(true, When::Always, all);
@@ -862,7 +945,7 @@ mod tests {
         assert!(matches!(again.with_phone(|phone| phone.config.target(TELEGRAM)), Ok(Target::Telegram { url, .. }) if url.contains(TOKEN)));
 
         let backup = tmp.path().join("backup.json");
-        core.backup_write(&backup, BackupParts { settings: true, projects: true, board: true, activity: true }).unwrap();
+        core.backup_write(&backup, BackupParts { settings: true, projects: true, board: true, activity: true, laps: true }).unwrap();
         let backup = fs::read_to_string(backup).unwrap();
         assert!(!backup.contains(TOKEN) && !backup.contains("pitwall-private") && !backup.contains("telegram"), "{backup}");
     }

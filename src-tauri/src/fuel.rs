@@ -16,6 +16,11 @@
 //! counted from the rollouts of every account (`codex_spend.rs`), handed to the core for the day's
 //! file beside Claude's (counts only). Its alert is its own; the menu bar, the sidebar and the
 //! popover's fuel stay Claude's.
+//!
+//! The laps (`core/laps/`) hear of each agent's readings, every account's by its id, and of the
+//! account in use: the week's share used and the refills still ahead (`Core::laps_fuel`), for a
+//! job's fuel guard and for "Dolunca", each on the account the job runs with. Nothing more is
+//! read or asked for them.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -31,6 +36,7 @@ use crate::agent::Agent;
 use crate::clock::{day_name, local_day};
 use crate::codex_spend::CodexSpend;
 use crate::codex_usage::{self, Reading, Readings};
+use crate::core::laps::FuelReading;
 use crate::core::{Core, DayFuel, WeekMark};
 use crate::i18n::t;
 use crate::registry::now_ms;
@@ -387,6 +393,8 @@ impl Fuel {
                 if let Some(at) = state.fuel.refill_of(Agent::Codex) {
                     state.core.board_refill_of(Agent::Codex, at);
                 }
+                // So do the laps.
+                state.fuel.codex_to_laps(&state.core);
             }
         });
     }
@@ -468,6 +476,8 @@ impl Fuel {
             if let Some(at) = refill {
                 core.board_refill_of(Agent::Codex, at);
             }
+            // And the laps: their fuel guard and "Dolunca".
+            self.codex_to_laps(core);
             self.codex_alert(core, &in_use);
         }
     }
@@ -489,6 +499,7 @@ impl Fuel {
             if let Some(at) = self.refill_read() {
                 state.core.board_refill(at);
             }
+            self.claude_to_laps(&state.core);
         }
         self.send(app);
     }
@@ -533,6 +544,8 @@ impl Fuel {
         if id == accounts::MAIN {
             self.note_week(&state.core);
         }
+        // The laps hear of every account's: their fuel guard and "Dolunca" follow a job's own.
+        self.claude_to_laps(&state.core);
         if in_use_id(&state.core.settings()) != id {
             return;
         }
@@ -707,6 +720,23 @@ impl Fuel {
 }
 
 impl Fuel {
+    /// Every Claude account's reading as last read, by its id, and the account in use, for the
+    /// laps (`Core::laps_fuel`).
+    fn claude_to_laps(&self, core: &Core) {
+        let watches: Vec<(String, UsageWatch)> = lock(&self.usage).iter().map(|(id, watch)| (id.clone(), watch.clone())).collect();
+        let readings = watches.into_iter().map(|(id, watch)| (id, laps_reading(&watch.state()))).collect();
+        core.laps_fuel(Agent::Claude, &in_use_id(&core.settings()), readings);
+    }
+
+    /// Codex's, as `claude_to_laps` hands Claude's: none before the first look.
+    fn codex_to_laps(&self, core: &Core) {
+        let in_use = codex_in_use(&core.codex_accounts());
+        let readings: Vec<(String, Option<FuelReading>)> = lock(&self.codex).limits.iter().map(|(id, state)| (id.clone(), laps_reading(state))).collect();
+        if !readings.is_empty() {
+            core.laps_fuel(Agent::Codex, &in_use, readings);
+        }
+    }
+
     /// Codex's alert, as `alert` is Claude's: once when the account in use's 5-hour window or week
     /// passes 90 %, as its last reading says, while that window hasn't refilled yet.
     fn codex_alert(&self, core: &Core, id: &str) {
@@ -768,6 +798,22 @@ fn lead_refill(state: &UsageState) -> Option<u64> {
     let windows = &state.usage.as_ref()?.windows;
     let lead = windows.iter().find(|window| window.id == "five_hour").or_else(|| windows.iter().find(|window| window.id == "seven_day"))?;
     u64::try_from(lead.resets_at?).ok().filter(|at| *at > now_ms())
+}
+
+/// What the laps take of a reading (`Core::laps_fuel`): the week's share used as the page shows
+/// it (a week whose refill has passed is full again; none on a plan without one), and the
+/// refills still ahead, the 5-hour session's first, then the week's. None before a reading.
+fn laps_reading(state: &UsageState) -> Option<FuelReading> {
+    let usage = state.usage.as_ref()?;
+    let now = now_ms();
+    let window = |id: &str| usage.windows.iter().find(|window| window.id == id);
+    let ahead = |window: &Window| window.resets_at.and_then(|at| u64::try_from(at).ok()).filter(|at| *at > now);
+    let week = window("seven_day").map(|week| match week.resets_at.and_then(|at| u64::try_from(at).ok()) {
+        Some(at) if at <= now => 0.0,
+        _ => week.used.clamp(0.0, 100.0),
+    });
+    let refills = ["five_hour", "seven_day"].into_iter().filter_map(|id| window(id).and_then(ahead)).collect();
+    Some((week, refills))
 }
 
 /// Whether `path` was written at or after `since` (ms).

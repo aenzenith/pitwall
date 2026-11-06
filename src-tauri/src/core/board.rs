@@ -83,8 +83,9 @@ const LATE_MS: u64 = 30 * 60 * 1000;
 /// this much later: one further off is the next session's refill, not the one it waits for.
 const REFILL_REACH_MS: u64 = 4 * 60 * 60 * 1000;
 /// A card given from the line whose Claude isn't seen at work this long after the give (it sits
-/// idle, or nothing tells) holds the line no more: the next one goes, and the card stays.
-const UNSEEN_MS: u64 = 10 * 60 * 1000;
+/// idle, or nothing tells) holds the line no more: the next one goes, and the card stays. A lap's
+/// run in a tab didn't start (`laps/run.rs`).
+pub(super) const UNSEEN_MS: u64 = 10 * 60 * 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -548,9 +549,9 @@ fn read_cards(file: &Path, now: u64) -> (Vec<Card>, bool, bool, Vec<Card>) {
     (cards, writable, changed, dropped)
 }
 
-/// Where a followed session stands.
+/// Where a followed session stands (a card's, a lap's run in a tab: `laps/run.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Stand {
+pub(super) enum Stand {
     /// Working, or waiting on a permission or a question.
     Busy,
     /// Its turn is over: waiting with a finished turn (when it finished), or idle.
@@ -566,7 +567,7 @@ enum Stand {
 /// Where session `id` stands, as the Sessions page tells it: the hook's events where they
 /// decide, else Claude Code's own status, else its log. `ran`: it was in the running list
 /// before, so missing from it now means it ended.
-fn stand(id: &str, scanned: Option<&SessionState>, running: Option<&HashMap<String, Running>>, ran: bool) -> Stand {
+pub(super) fn stand(id: &str, scanned: Option<&SessionState>, running: Option<&HashMap<String, Running>>, ran: bool) -> Stand {
     let run = running.and_then(|all| all.get(id));
     if run.is_none() && (scanned.is_some_and(|s| s.ended) || (running.is_some() && ran)) {
         return Stand::Ended;
@@ -593,6 +594,19 @@ fn stand(id: &str, scanned: Option<&SessionState>, running: Option<&HashMap<Stri
         Some((RowPhase::Ended, _)) => Stand::Ended,
         None => Stand::Unknown,
     }
+}
+
+/// When the agent of `run` was started, for a tab given work at `given`: the session that
+/// starts in it within `ADOPT_MS` is the work's; one started there later is somebody else's.
+/// Its process's start tells, not the session's own `startedAt`: Claude Code lists a session only
+/// once its folder is trusted, however long that question stood. None for one started too late;
+/// `u64::MAX` when that can't be told. A lap's run in a tab takes its session so too.
+pub(super) fn born_for(run: &Running, given: u64) -> Option<u64> {
+    let born = process::started_at(run.pid).or(run.started_at);
+    if born.is_some_and(|at| at > given + ADOPT_MS) {
+        return None;
+    }
+    Some(born.unwrap_or(u64::MAX))
 }
 
 /// How a card is given to Claude.
@@ -1252,7 +1266,7 @@ impl Core {
                 let prompt = format!("{text}\n\n{}", t!("board.summaryPrompt"));
                 let images = images.map(|(dir, _)| dir);
                 match start.agent {
-                    Agent::Claude => Launch::Claude { prompt: Some(prompt), start, images },
+                    Agent::Claude => Launch::Claude { prompt: Some(prompt), start, images, session: None },
                     Agent::Codex => Launch::Codex { prompt: Some(prompt), start, images },
                 }
             }
@@ -1326,7 +1340,7 @@ impl Core {
         }
         self.board_changed(board);
         if held {
-            self.emit(CoreEvent::RevealTerminal { path: view.path.clone(), id: view.id });
+            self.reveal_terminal(view.path.clone(), view.id);
         }
         Ok(Some(view))
     }
@@ -1344,7 +1358,7 @@ impl Core {
 
     /// The sessions of `agent` whose process runs now (`running_cached`, `codex_running`); none
     /// when nothing could be read.
-    fn running_of(&self, agent: Agent) -> Option<HashMap<String, Running>> {
+    pub(super) fn running_of(&self, agent: Agent) -> Option<HashMap<String, Running>> {
         match agent {
             Agent::Claude => self.running_cached(),
             Agent::Codex => self.codex_running(),
@@ -1400,7 +1414,7 @@ impl Core {
     /// without a session while Codex runs in them, up to `UNSEEN_MS` after the give.
     fn codex_adopt(&self, links: &mut HashMap<u64, (String, u64)>, running: &HashMap<Agent, HashMap<String, Running>>, shells: &[(u32, u64, String)]) -> HashSet<u64> {
         let now = now_ms();
-        let (cards, held): (Vec<(u64, u64, String)>, HashSet<String>) = {
+        let (cards, mut held): (Vec<(u64, u64, String)>, HashSet<String>) = {
             let board = self.board();
             let cards = board
                 .cards
@@ -1414,7 +1428,22 @@ impl Core {
         if cards.is_empty() {
             return HashSet::new();
         }
+        // A lap's run holds its session as a card does (the board's lock let go first).
+        held.extend(self.lap_sessions());
+        self.codex_adopt_for(&cards, &held, links, running, shells)
+    }
 
+    /// `codex_adopt` for `cards` (each a tab, when it was given work and its folder), the sessions
+    /// `held` by a card or a lap's run left out: the board's cards, and a lap's run in a Codex tab
+    /// that no process ties to its session (`laps/run.rs`). Locks neither the board nor the laps.
+    pub(super) fn codex_adopt_for(
+        &self,
+        cards: &[(u64, u64, String)],
+        held: &HashSet<String>,
+        links: &mut HashMap<u64, (String, u64)>,
+        running: &HashMap<Agent, HashMap<String, Running>>,
+        shells: &[(u32, u64, String)],
+    ) -> HashSet<u64> {
         let in_tab = |run: &Running| shells.iter().any(|(shell, _, _)| run.lineage.contains(shell));
         let codex = running.get(&Agent::Codex);
         let free: Vec<(String, String)> = self
@@ -1582,11 +1611,9 @@ impl Core {
                 let Some(&(_, given, _)) = unlinked.iter().find(|(id, _, of)| *id == terminal && *of == agent) else {
                     continue;
                 };
-                let born = process::started_at(run.pid).or(run.started_at);
-                if born.is_some_and(|at| at > given + ADOPT_MS) {
+                let Some(started) = born_for(run, given) else {
                     continue;
-                }
-                let started = born.unwrap_or(u64::MAX);
+                };
                 if links.get(&terminal).is_none_or(|(_, first)| started < *first) {
                     links.insert(terminal, (session.clone(), started));
                 }

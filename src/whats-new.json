@@ -4,6 +4,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Laps: jobs on a schedule",
+        "tr": "Turlar: zamanlanmış işler",
+        "de": "Runden: Aufgaben nach Plan",
+        "es": "Vueltas: tareas programadas",
+        "ru": "Круги: задачи по расписанию",
+        "ja": "ラップ：定期タスク",
+        "zh-Hans": "圈次：定时任务"
+      },
+      "body": {
+        "en": "Have Claude, Codex or a script do something every day, every few hours or when your fuel refills. It runs while Pitwall is open, and the calendar shows what ran and what's next.",
+        "tr": "Claude'a, Codex'e ya da bir betiğe her gün, birkaç saatte bir ya da yakıt dolunca iş yaptırın. Pitwall açıkken çalışır; takvim neyin koştuğunu ve sırada ne olduğunu gösterir.",
+        "de": "Lass Claude, Codex oder ein Skript jeden Tag, alle paar Stunden oder beim Auffüllen des Tanks etwas erledigen. Es läuft, solange Pitwall offen ist, und der Kalender zeigt, was lief und was als Nächstes kommt.",
+        "es": "Pide a Claude, a Codex o a un script que hagan algo cada día, cada pocas horas o cuando se rellene el combustible. Funciona mientras Pitwall está abierto, y el calendario te muestra qué se hizo y qué viene.",
+        "ru": "Поручите Claude, Codex или скрипту дело — каждый день, раз в несколько часов или когда пополнится топливо. Работает, пока открыт Pitwall, а календарь показывает, что уже прошло и что впереди.",
+        "ja": "Claude や Codex、スクリプトに、毎日・数時間おき・燃料の回復時に仕事を任せられます。Pitwall を開いている間に動き、カレンダーで実行済みのものと次の予定がわかります。",
+        "zh-Hans": "让 Claude、Codex 或脚本每天、每隔几小时或在燃料恢复时自动做事。Pitwall 开着时就会运行，日历里能看到跑过什么、接下来是什么。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Search the terminal with ⌘F",
         "tr": "Terminalde ⌘F ile arama",
         "de": "Im Terminal suchen mit ⌘F",

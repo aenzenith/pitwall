@@ -49,6 +49,7 @@ function reportLine(report: ImportReport): string {
     ["backup.count.projects", report.projects],
     ["backup.count.cards", report.cards],
     ["backup.count.days", report.days],
+    ["backup.count.laps", report.laps ?? 0],
   ]);
   if (what) return t(report.settings ? "backup.restoredWithSettings" : "backup.restored", { what });
   return t(report.settings ? "backup.restoredSettings" : "backup.restoredNothing");

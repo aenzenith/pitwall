@@ -1,0 +1,349 @@
+/* What the Turlar page's parts share (LapsView and window/laps/*): its buttons, segments, fields,
+   pills and dialogs, in the app's own look (the board's and the backup's). Each part takes this as
+   a scoped style (`<style scoped src>`) before its own, as backup/dialog.css is taken. */
+
+/* ---------- buttons ---------- */
+
+.control {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.control:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+}
+
+.control:disabled {
+  opacity: 0.5;
+}
+
+.control.small {
+  height: 28px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+
+/* The one a dialog is for. */
+.control.primary {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-line);
+  color: var(--btn-primary-text);
+}
+
+.control.primary:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+}
+
+/* Hands something to an agent, or brings its session up. */
+.control.agent {
+  background: var(--btn-claude-bg);
+  border-color: var(--btn-claude-line);
+  color: var(--claude-text);
+}
+
+.control.agent:hover:not(:disabled) {
+  background: var(--btn-claude-hover);
+}
+
+.control.stop {
+  background: var(--crash-bg);
+  border-color: var(--crash-line);
+  color: var(--btn-stop-text);
+}
+
+/* "İşi sil": red words with no box. */
+.control.danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--crash-text);
+  padding-left: 4px;
+}
+
+.control.danger:hover:not(:disabled) {
+  background: var(--crash-bg);
+}
+
+/* A square button with an icon alone (⋯, ✕). */
+.icon-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--bg-icon-hover);
+  color: var(--text);
+}
+
+.icon-button.boxed {
+  border-color: var(--line-strong);
+  background: var(--bg-control);
+}
+
+.icon-button.boxed:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+}
+
+/* A busy button's label stays, unseen, under its spinner: the button never changes width. */
+.hidden {
+  visibility: hidden;
+}
+
+.over {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+/* ---------- a segmented control ---------- */
+
+.seg {
+  display: inline-flex;
+  flex-shrink: 0;
+  max-width: 100%;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--radius-control);
+  background: var(--bg-seg);
+  border: 1px solid var(--line);
+}
+
+.seg > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.seg > button:hover:not(:disabled):not(.on) {
+  color: var(--text);
+}
+
+.seg > button.on {
+  background: var(--bg-seg-on);
+  box-shadow: var(--shadow-seg-on);
+  color: var(--text-strong);
+}
+
+.seg > button:disabled {
+  opacity: 0.5;
+}
+
+.seg.small > button {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* ---------- pills ---------- */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: var(--bg-tag);
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pill.bad {
+  background: var(--crash-bg);
+  color: var(--crash-text);
+}
+
+/* ---------- fields ---------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-subtle);
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--crash-text);
+  overflow-wrap: anywhere;
+}
+
+.input,
+.select,
+.textarea {
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.input,
+.select {
+  height: 30px;
+}
+
+.select {
+  padding: 0 6px;
+  background: var(--bg-control);
+}
+
+.textarea {
+  min-height: 58px;
+  padding: 7px 10px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* A short figure in a sentence: `20`, `%85`, `09:00`. */
+.input.num {
+  width: 52px;
+  height: 26px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.input.time {
+  width: 62px;
+}
+
+/* A check box with its words, on its first line. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 26px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.check > input[type="checkbox"],
+.check > input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--run);
+}
+
+.check.off {
+  color: var(--text-faint);
+}
+
+/* ---------- dialogs ---------- */
+
+.dialog {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 1px solid var(--line-dialog);
+  border-radius: 12px;
+  background: var(--bg-dialog);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+  animation: laps-pop 0.16s ease-out;
+}
+
+.dialog-head {
+  flex-shrink: 0;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.dialog-foot {
+  flex-shrink: 0;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 0 20px;
+  border-top: 1px solid var(--line);
+}
+
+.grow {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+@keyframes laps-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: none;
+  }
+}

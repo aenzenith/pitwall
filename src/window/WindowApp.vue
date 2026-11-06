@@ -29,13 +29,15 @@ import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, rai
 import { focusTerminal, listRequest, openInWindow, openTarget, pickOnPage, pickRequest } from "../lib/open";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
-import { api, board, connectBoard, connectDeps, connectFuel, connectSessions, connectUpdate, deps, fuel, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
+import { api, board, connectBoard, connectDeps, connectFuel, connectLaps, connectSessions, connectUpdate, deps, fuel, laps, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
+import { lapAsked } from "../lib/laps";
 import { applyDrop, claudeNotes, createTeam, deleteTeam, leaveTeam, looseProjects, membersOf, moveToTeam, nudgeTeam, orderTeams, renameTeam, startTeam, stopTeam, teamAsk, teamOf, teams, teamState } from "../lib/teams";
 import type { Agent, Card, Project, Team } from "../lib/types";
 import BoardView from "./BoardView.vue";
 import DayView from "./DayView.vue";
 import DepsView from "./DepsView.vue";
 import FuelView from "./FuelView.vue";
+import LapsView from "./LapsView.vue";
 import ProjectDetail from "./ProjectDetail.vue";
 import ProjectSuggestions from "./ProjectSuggestions.vue";
 import ResumeDialog from "./ResumeDialog.vue";
@@ -89,6 +91,20 @@ onMounted(() => {
 onBeforeUnmount(() => {
   void accountsLink?.then((unlisten) => unlisten(), () => undefined);
 });
+
+/** The laps' feed: from the start too, for the sidebar's count of jobs that failed. */
+let lapsLink: Promise<UnlistenFn> | null = null;
+onMounted(() => {
+  lapsLink = connectLaps();
+});
+onBeforeUnmount(() => {
+  void lapsLink?.then((unlisten) => unlisten(), () => undefined);
+});
+
+/** Beside Turlar: the jobs whose last run failed or that paused themselves. */
+const lapsBadge = computed(() => laps.value?.failing ?? 0);
+/** The runs whose result wasn't opened yet: an orange dot beside Turlar. */
+const lapsUnread = computed(() => laps.value?.unread ?? 0);
 
 /** The dependencies' feed: from the start too, for the sidebar's count. */
 let depsLink: Promise<UnlistenFn> | null = null;
@@ -859,9 +875,11 @@ onMounted(async () => {
     pickOnPage(event.payload.path);
   });
   // `/` in the switcher: one of the sidebar's pages.
-  // A fuel alert's line in the list of what was missed opens the Fuel page on its agent.
-  unlistenPage = await listen<{ page: Page; tab?: "notifications"; agent?: Agent }>("reveal-page", (event) => {
+  // A fuel alert's line in the list of what was missed opens the Fuel page on its agent; what a
+  // lap's session waits on, the Turlar page with that run's dialog open (lib/laps: `lapAsked`).
+  unlistenPage = await listen<{ page: Page; tab?: "notifications"; agent?: Agent; run?: string }>("reveal-page", (event) => {
     if (event.payload.agent) fuelPicked.value = agentOf(event.payload.agent);
+    if (event.payload.run) lapAsked.value = event.payload.run;
     revealPage(event.payload.page, event.payload.tab);
   });
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
@@ -1003,6 +1021,11 @@ function server(project: Project): string {
           <button type="button" :class="{ on: view === 'board' }" :aria-current="view === 'board' ? 'page' : undefined" @click="turnTo('board')">
             <Icon name="board" /> <span class="nav-label">{{ t("board.nav") }}</span>
           </button>
+          <button type="button" :class="{ on: view === 'laps' }" :aria-current="view === 'laps' ? 'page' : undefined" @click="turnTo('laps')">
+            <Icon name="laps" /> <span class="nav-label">{{ t("laps.nav") }}</span>
+            <span v-if="lapsUnread" class="laps-unread" role="img" :aria-label="t('laps.unread', { count: lapsUnread })" :title="t('laps.unread', { count: lapsUnread })"></span>
+            <span v-if="lapsBadge" class="laps-badge" :aria-label="t('laps.failing', { count: lapsBadge })">{{ lapsBadge }}</span>
+          </button>
           <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="turnTo('track')"><Icon name="flag" /> {{ t("track.nav") }}</button>
           <button type="button" :class="{ on: view === 'fuel' }" :aria-current="view === 'fuel' ? 'page' : undefined" @click="turnTo('fuel')">
             <Icon name="fuel" /> <span class="nav-label">{{ t("fuel.nav") }}</span>
@@ -1053,6 +1076,7 @@ function server(project: Project): string {
       @open-claude="openClaudeTerminal"
     />
     <BoardView v-else-if="view === 'board'" :project-path="selected?.path ?? null" @open-settings="openSettings('claude')" />
+    <LapsView v-else-if="view === 'laps'" />
     <DepsView v-else-if="view === 'deps'" @open-project="revealProject" @open-output="revealOutput" />
 
     <template v-else>
@@ -1604,6 +1628,31 @@ function server(project: Project): string {
 
 .fuel-badge.stale {
   color: var(--text-subtle);
+}
+
+/* The jobs whose last run failed, beside Turlar: the failure red. */
+.laps-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--crash-text);
+}
+
+/* Runs whose result wasn't opened yet, beside Turlar: the laps' orange (their ring, their
+   countdown), as a dot; before the failures' count when both show. */
+.laps-unread {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--claude);
+}
+
+.laps-unread + .laps-badge {
+  margin-left: 0;
 }
 
 /* The projects whose dependencies need you, beside Garage: the attention yellow. */

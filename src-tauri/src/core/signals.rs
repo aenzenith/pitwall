@@ -64,6 +64,10 @@ pub enum SignalKind {
     FuelHigh,
     /// A card went to the review column.
     CardReview,
+    /// A lap's run ended well; `detail` is the job's name.
+    LapDone,
+    /// A lap's run failed, or the job paused itself after failures; `detail` is the job's name.
+    LapFailed,
 }
 
 /// One thing worth telling the user, as its source saw it.
@@ -108,6 +112,12 @@ impl SignalKind {
     /// Opening it brings a Claude session up, not Pitwall's window.
     pub fn is_claudes(self) -> bool {
         self.waits() || self == Self::ClaudeLongTurn
+    }
+
+    /// A lap's run ended (`laps/`): its `detail` is the job's name, and its `path` may be a folder
+    /// no listed project holds.
+    pub fn is_laps(self) -> bool {
+        matches!(self, Self::LapDone | Self::LapFailed)
     }
 
     /// As serde writes it: `server-crashed`.
@@ -222,6 +232,9 @@ fn decide(settings: &Settings, signal: &Signal, quiet: bool, again: bool) -> Ver
         FuelHigh => (settings.fuel_alert, None),
         // Never a banner on the Mac: it is there for the phone's list.
         CardReview => (false, None),
+        // Sent only when the job's own switches want a banner (`Lap::notify`); its sound is the
+        // job's too, played by the laps through `sound`, so quiet holds it with the rest.
+        LapDone | LapFailed => (true, None),
     };
     let sound = sound.filter(|id| !id.is_empty());
 
@@ -263,8 +276,8 @@ fn banner_id(signal: &Signal) -> String {
 }
 
 /// A signal's banner; none for the fuel alert, which brings its own (`fuel_high`), and for a
-/// card in review, which has none.
-fn banner(signal: &Signal) -> Option<Banner> {
+/// card in review, which has none. `paused`: a lap that failed paused itself with it.
+fn banner(signal: &Signal, paused: bool) -> Option<Banner> {
     use SignalKind::*;
 
     let detail = signal.detail.as_deref().unwrap_or_default();
@@ -281,6 +294,10 @@ fn banner(signal: &Signal) -> Option<Banner> {
         CommandFailed => t!("core.signal.commandFailed", name = detail),
         DepsWaiting => t!("core.signal.deps"),
         FuelHigh | CardReview => return None,
+        // The job's name; the project's (or the folder's) is the title.
+        LapDone => t!("core.signal.lapDone", name = detail),
+        LapFailed if paused => t!("core.signal.lapPaused", name = detail),
+        LapFailed => t!("core.signal.lapFailed", name = detail),
     };
     Some(Banner { id: banner_id(signal), title: signal.name.clone(), body })
 }
@@ -291,10 +308,14 @@ pub fn plain_banner(id: &str) -> bool {
     id.starts_with(BANNER) || id.starts_with(AGENT_BANNER) || id == crate::fuel::CODEX_NOTIFICATION_ID
 }
 
-/// Puts `entry` first on the list: one per project and kind (the fuel alert one per agent), of
-/// Claude's waiting turns one per project, the newest `MISSED_MAX` in all.
+/// Puts `entry` first on the list: one per project and kind (the fuel alert one per agent, a
+/// lap's one per job), of Claude's waiting turns one per project, the newest `MISSED_MAX` in all.
 fn miss(list: &mut Vec<Missed>, entry: Missed) {
-    let same = |known: &Missed| known.kind == entry.kind && (known.kind != SignalKind::FuelHigh || known.agent == entry.agent);
+    let same = |known: &Missed| {
+        known.kind == entry.kind
+            && (known.kind != SignalKind::FuelHigh || known.agent == entry.agent)
+            && (!known.kind.is_laps() || known.detail == entry.detail)
+    };
     list.retain(|known| !(same_path(&known.path, &entry.path) && (same(known) || (known.kind.waits() && entry.kind.waits()))));
     list.insert(0, entry);
     list.truncate(MISSED_MAX);
@@ -307,13 +328,16 @@ fn missed(signal: &Signal, banner: Option<&Banner>, at: u64) -> Missed {
 }
 
 /// The list as the snapshot gives it: a line goes with a project that left the list, and bears
-/// the name its project has now. What is no project's (the fuel alert) stays as it is.
+/// the name its project has now. What is no project's (the fuel alert, a lap of a folder no
+/// listed project holds) stays as it is.
 pub(super) fn listed(missed: &[Missed], projects: &[ProjectView]) -> Vec<Missed> {
     let named = |entry: &Missed| {
         if entry.path.is_empty() {
             return Some(entry.clone());
         }
-        let project = projects.iter().find(|project| same_path(&project.path, &entry.path))?;
+        let Some(project) = projects.iter().find(|project| same_path(&project.path, &entry.path)) else {
+            return entry.kind.is_laps().then(|| entry.clone());
+        };
         Some(Missed { name: project.name.clone(), ..entry.clone() })
     };
     missed.iter().filter_map(named).collect()
@@ -449,8 +473,16 @@ impl Core {
     }
 
     /// Several at once (the turns one scan found waiting): each on its own, one sound for the lot.
+    /// Never called with `inner` or `laps` held: a lap's banner asks the laps first.
     pub(super) fn signals(&self, batch: Vec<Signal>) {
-        self.tell(batch.into_iter().map(|signal| (banner(&signal), signal)).collect(), true);
+        self.tell(batch.into_iter().map(|signal| (self.banner_of(&signal), signal)).collect(), true);
+    }
+
+    /// `banner`, with what only the laps know: whether the job that failed paused itself
+    /// (`lap_paused_now`, which takes the laps' lock alone).
+    fn banner_of(&self, signal: &Signal) -> Option<Banner> {
+        let paused = signal.kind == SignalKind::LapFailed && signal.detail.as_deref().is_some_and(|name| self.lap_paused_now(&signal.path, name));
+        banner(signal, paused)
     }
 
     /// Claude's usage passed the alert's mark (`fuel.rs`, which words the banner and names it
@@ -765,6 +797,7 @@ impl Core {
             // On the page's part of the agent whose fuel it is.
             FuelHigh => self.emit(CoreEvent::RevealFuel(agent)),
             CardReview => self.emit(CoreEvent::RevealPage("board")),
+            LapDone | LapFailed => self.emit(CoreEvent::RevealPage("laps")),
         }
     }
 }
@@ -773,7 +806,7 @@ impl Core {
 mod tests {
     use super::*;
 
-    const KINDS: [SignalKind; 10] = [
+    const KINDS: [SignalKind; 12] = [
         SignalKind::ClaudeAsking,
         SignalKind::ClaudePermission,
         SignalKind::ClaudeFinished,
@@ -784,6 +817,8 @@ mod tests {
         SignalKind::DepsWaiting,
         SignalKind::FuelHigh,
         SignalKind::CardReview,
+        SignalKind::LapDone,
+        SignalKind::LapFailed,
     ];
 
     fn about(kind: SignalKind, path: &str) -> Signal {
@@ -819,12 +854,15 @@ mod tests {
             ("a finished turn", as_set, SignalKind::ClaudeFinished, false, false, told(true, Some("boxbox"), false, true)),
             ("a crash", as_set, SignalKind::ServerCrashed, false, false, told(true, Some("yellowflag"), false, true)),
             ("a card in review is the phone's alone", as_set, SignalKind::CardReview, false, false, told(false, None, false, true)),
+            // A lap's banner is the job's to want; its sound is the job's own, played apart.
+            ("a lap", as_set, SignalKind::LapFailed, false, false, told(true, None, false, true)),
             // Quiet holds the banner, the sound and the phone, and lists it.
             ("quiet: a finished turn", as_set, SignalKind::ClaudeFinished, true, false, told(false, None, true, false)),
             ("quiet: a crash", as_set, SignalKind::ServerCrashed, true, false, told(false, None, true, false)),
             ("quiet: a command", as_set, SignalKind::CommandFailed, true, false, told(false, None, true, false)),
             ("quiet: a long turn", as_set, SignalKind::ClaudeLongTurn, true, false, told(false, None, true, false)),
             ("quiet: the fuel alert", as_set, SignalKind::FuelHigh, true, false, told(false, None, true, false)),
+            ("quiet: a lap", as_set, SignalKind::LapDone, true, false, told(false, None, true, false)),
             // It has no banner for quiet to hold: nothing to list.
             ("quiet: a card in review", as_set, SignalKind::CardReview, true, false, nothing()),
             // A question and a permission pass, while Settings lets them.

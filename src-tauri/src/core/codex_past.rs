@@ -52,7 +52,8 @@ impl Core {
     /// again from the project's folder, of every Codex account's home. None while Codex is off:
     /// then nothing of Codex is read.
     pub fn codex_past(&self, path: &str) -> Vec<PastSession> {
-        let mut seen: HashSet<String> = HashSet::new();
+        // The laps' runs' sessions are a layer of their own (`lap_sessions`), in no list.
+        let mut seen: HashSet<String> = self.lap_sessions();
         let mut past: Vec<PastSession> = Vec::new();
         for home in self.codex_homes() {
             let mut names: Option<HashMap<String, String>> = None;

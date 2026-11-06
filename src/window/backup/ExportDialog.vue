@@ -21,12 +21,13 @@ useReturnFocus();
 const exportButton = ref<HTMLButtonElement | null>(null);
 
 /** Everything but the days' records, which is the bulk of it. */
-const parts = reactive<BackupParts>({ settings: true, projects: true, board: true, activity: false });
+const parts = reactive<BackupParts>({ settings: true, projects: true, board: true, activity: false, laps: true });
 const rows: Array<{ id: keyof BackupParts; label: Key }> = [
   { id: "settings", label: "common.settings" },
   { id: "projects", label: "backup.part.projects" },
   { id: "board", label: "backup.part.board" },
   { id: "activity", label: "backup.part.activity" },
+  { id: "laps", label: "backup.part.laps" },
 ];
 const nothing = computed(() => !rows.some((row) => parts[row.id]));
 

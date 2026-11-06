@@ -196,7 +196,8 @@ impl Core {
     }
 
     /// `open_claude` among `agent`'s sessions only (a click on that agent's banner, a line of the
-    /// quiet list); none: any agent's.
+    /// quiet list); none: any agent's. A lap's run that waits there (`lap_waits`; the laps'
+    /// sessions are in no project's list) comes up in its dialog, where its terminal is.
     pub fn open_waiting(self: &Arc<Self>, path: &str, agent: Option<Agent>) {
         let waiting = self.lock().claude_sessions.get(path).and_then(|sessions| {
             let waiting = sessions.iter().filter(|session| session.phase == SessionPhase::Waiting && agent.is_none_or(|agent| session.agent == agent));
@@ -205,7 +206,10 @@ impl Core {
 
         match waiting {
             Some(session) => self.reveal_claude(path, &session),
-            None => self.open_editor(path),
+            None => match self.lap_going_in(path) {
+                Some(run) => self.emit(CoreEvent::RevealLap(run)),
+                None => self.open_editor(path),
+            },
         }
     }
 
@@ -243,7 +247,7 @@ impl Core {
         }
         if let Liveness::Running { lineage, .. } = self.codex_liveness(session) {
             if let Some((id, path)) = self.pitwall_terminal(&lineage) {
-                self.emit(CoreEvent::RevealTerminal { path, id });
+                self.reveal_terminal(path, id);
                 return Resumed::Shown;
             }
         }
@@ -258,7 +262,8 @@ impl Core {
     fn reveal_codex_as(self: &Arc<Self>, path: &str, session: &str, liveness: Liveness) {
         if let Liveness::Running { lineage, .. } = &liveness {
             if let Some((id, path)) = self.pitwall_terminal(lineage) {
-                return self.emit(CoreEvent::RevealTerminal { path, id });
+                self.reveal_terminal(path, id);
+                return;
             }
         }
         if !self.reopen_codex(path, session) {
@@ -290,7 +295,7 @@ impl Core {
             }
         };
 
-        self.emit(CoreEvent::RevealTerminal { path, id: tab });
+        self.reveal_terminal(path, tab);
         true
     }
 
@@ -319,7 +324,7 @@ impl Core {
         // One of our own terminals: the window shows it.
         if let Liveness::Running { lineage, .. } = &liveness {
             if let Some((id, path)) = self.pitwall_terminal(lineage) {
-                self.emit(CoreEvent::RevealTerminal { path, id });
+                self.reveal_terminal(path, id);
                 return;
             }
         }
@@ -369,7 +374,7 @@ impl Core {
             }
         };
 
-        self.emit(CoreEvent::RevealTerminal { path, id: tab });
+        self.reveal_terminal(path, tab);
         true
     }
 

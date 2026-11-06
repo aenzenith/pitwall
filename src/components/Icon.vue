@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex" | "laps" | "pause" | "zap";
     size?: number;
   }>(),
   { size: 15 },
@@ -87,5 +87,9 @@ withDefaults(
     <g v-else-if="name === 'split-down'"><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M3.5 12h17" /></g>
     <path v-else-if="name === 'maximize'" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
     <path v-else-if="name === 'minimize'" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+    <!-- A lap: round and round again (the Turlar page). -->
+    <path v-else-if="name === 'pause'" d="M9 6v12M15 6v12" />
+    <path v-else-if="name === 'zap'" d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />
+    <g v-else-if="name === 'laps'"><path d="M17 3l3 3-3 3" /><path d="M4 11v-1a4 4 0 0 1 4-4h12" /><path d="M7 21l-3-3 3-3" /><path d="M20 13v1a4 4 0 0 1-4 4H4" /></g>
   </svg>
 </template>

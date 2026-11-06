@@ -31,6 +31,7 @@ import type {
   ShellChoice,
   SignalKind,
   Snapshot,
+  Agent,
   AgentStartChoice,
   SyncReport,
   TerminalLayout,
@@ -42,6 +43,7 @@ import type {
 import { dayName } from "./day";
 import { trackSettings, type TrackSettings } from "./track";
 import type { PhoneConfig, PhoneView } from "./types";
+import type { CalendarDay, DayRow, Lap, LapKind, LapResult, LapRun, LapsState, LapTerminal, LapWhen } from "./laps";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -223,6 +225,38 @@ export async function connectBoard(): Promise<UnlistenFn> {
     board.value = event.payload;
   });
   await loadBoard();
+  return unlisten;
+}
+
+/** The laps (Turlar): every job with its last runs, and the sidebar's count. Null until the core
+ * answers. */
+export const laps = ref<LapsState | null>(null);
+
+/** `laps` events heard so far: an answer asked for before the latest one is older than it. */
+let lapsHeard = 0;
+
+/** Asks the core for the laps; one that doesn't answer (yet) leaves them as they were. */
+export async function loadLaps(): Promise<void> {
+  const before = lapsHeard;
+  try {
+    const state = await api.lapsState();
+    // An event that came in meanwhile is newer.
+    if (lapsHeard === before) laps.value = state;
+  } catch {
+    // Kept as it was (null shows as loading); the next `laps` event fills it.
+  }
+}
+
+/**
+ * The main window's, from the start (the sidebar counts the jobs that failed): hears `laps` (sent
+ * to this window only, after each change of what the page shows) and asks for the current state.
+ */
+export async function connectLaps(): Promise<UnlistenFn> {
+  const unlisten = await getCurrentWindow().listen<LapsState>("laps", (event) => {
+    lapsHeard++;
+    laps.value = event.payload;
+  });
+  await loadLaps();
   return unlisten;
 }
 
@@ -650,6 +684,48 @@ export const api = {
   /** Codex's team radio, as `radioState` / `radioSet` are Claude's. */
   codexRadioState: () => invoke<RadioState>("codex_radio_state"),
   codexRadioSet: (on: boolean) => invoke<RadioState>("codex_radio_set", { on }),
+  /* The laps (Turlar): the jobs, their runs and the calendar (core/laps; event `laps`). */
+  lapsState: () => invoke<LapsState>("laps_state"),
+  /** Saves a job (a new one when its id is empty), checked whole by the core: the job saved, or
+   * why not. */
+  lapSave: (lap: Lap) => invoke<Lap>("lap_save", { lap }),
+  lapDelete: (id: string) => invoke("lap_delete", { id }),
+  /** The job's switch (an ended job comes back on). */
+  lapSwitch: (id: string, on: boolean) => invoke("lap_switch", { id, on }),
+  /** Duraklat (true) / Sürdür (false). */
+  lapPause: (id: string, paused: boolean) => invoke("lap_pause", { id, paused }),
+  /** Şimdi çalıştır: a run now, off the schedule. */
+  lapRunNow: (id: string) => invoke("lap_run_now", { id }),
+  /** Bu seferi atla: the next moment becomes a skipped run. */
+  lapSkipNext: (id: string) => invoke("lap_skip_next", { id }),
+  lapStop: (id: string) => invoke("lap_stop", { id }),
+  /** A day off: `date` alone, or (`every`) its weekday from now on. */
+  lapDayOff: (id: string, date: string, every: boolean) => invoke("lap_day_off", { id, date, every }),
+  /** "geri aç": `date`'s day off, or its weekday's, is taken back. */
+  lapDayOn: (id: string, date: string) => invoke("lap_day_on", { id, date }),
+  /** The next four moments of `when` for a job of `kind`, or why it is refused. */
+  /** The next moments of `when`; a refill's as the reading of `account` (null: the one in use) has them. */
+  lapPreview: (when: LapWhen, kind: LapKind, agent: Agent, account: string | null) => invoke<number[]>("lap_preview", { when, kind, agent, account }),
+  lapCalendar: (year: number, month: number) => invoke<CalendarDay[]>("lap_calendar", { year, month }),
+  lapDay: (date: string) => invoke<DayRow[]>("lap_day", { date }),
+  /** A job's kept runs, newest first. */
+  lapRuns: (id: string) => invoke<LapRun[]>("lap_runs", { id }),
+  /** The first line of what the agent last said in each of `runs`, read now, by run. */
+  lapSummaries: (runs: string[]) => invoke<Record<string, string>>("lap_summaries", { runs }),
+  /** A run's kept script output and what its agent last said, read now. */
+  lapResult: (run: string) => invoke<LapResult>("lap_result", { run }),
+  /** A run's terminal for its dialog: the laps' own tab its agent runs in, its session opened
+   * again in a new one once it has ended (Oturumu aç), or why there is none. */
+  lapTerminal: (run: string, size: { cols: number; rows: number } | null = null) => invoke<LapTerminal>("lap_terminal", { run, cols: size?.cols, rows: size?.rows }),
+  /** The run's dialog let go of its terminal: closed by the core once its agent has left. */
+  lapTerminalLeft: (id: number) => invoke("lap_terminal_left", { id }),
+  /** A run's result was opened: it is read from now on (one read already, or gone, is no error). */
+  lapRead: (run: string) => invoke("lap_read", { run }),
+  /** The jobs in the order the tower was dragged into: those named first, as named, the rest
+   * after them as they stood. */
+  lapReorder: (ids: string[]) => invoke("lap_reorder", { ids }),
+  /** "Klasör seç…" for a job in a folder: the folder picked (absolute, and as shown), or null. */
+  lapPickFolder: () => invoke<{ path: string; shown: string } | null>("lap_pick_folder"),
 };
 
 /** The Track page's settings as just picked, on the page or in Settings: shown at once, the core

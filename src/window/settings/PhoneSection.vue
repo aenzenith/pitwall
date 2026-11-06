@@ -19,7 +19,7 @@ const CHANNELS: Array<{ id: PhoneChannel; name: string }> = [
   { id: "webhook", name: "Webhook" },
 ];
 const WHEN: Record<PhoneWhen, Key> = { locked: "phone.when.locked", idle: "phone.when.idle", always: "phone.when.always" };
-/** Claude's three down the first column, the rest down the second. */
+/** Claude's three and a crash down the first column, the rest down the second (a lap's two last). */
 const EVENTS: Array<{ id: keyof PhoneEvents; label: Key }> = [
   { id: "asked", label: "phone.event.asked" },
   { id: "permission", label: "phone.event.permission" },
@@ -27,6 +27,8 @@ const EVENTS: Array<{ id: keyof PhoneEvents; label: Key }> = [
   { id: "crashed", label: "phone.event.crashed" },
   { id: "fuel", label: "phone.event.fuel" },
   { id: "card", label: "phone.event.card" },
+  { id: "lapDone", label: "phone.event.lapDone" },
+  { id: "lapFailed", label: "phone.event.lapFailed" },
 ];
 
 /** An event's words: Claude's alone as they always were; once the places name agents, the events
@@ -49,7 +51,7 @@ const form = reactive<PhoneConfig>({
   telegramChat: "",
   webhookUrl: "",
   when: "always",
-  events: { asked: true, permission: true, finished: false, crashed: true, fuel: true, card: false },
+  events: { asked: true, permission: true, finished: false, crashed: true, fuel: true, card: false, lapDone: false, lapFailed: false },
 });
 /** The channel as the core holds it; null until it answered. */
 const view = ref<PhoneView | null>(null);
@@ -76,7 +78,8 @@ function take(next: PhoneView, sent?: PhoneConfig): void {
   form.on = next.on;
   form.channel = next.channel;
   form.when = next.when;
-  form.events = { ...next.events };
+  // An older core's events lack a lap's two: off, as they start.
+  form.events = { ...next.events, lapDone: next.events.lapDone ?? false, lapFailed: next.events.lapFailed ?? false };
 }
 
 function load(): void {
@@ -363,14 +366,14 @@ watch(language, load);
   align-self: stretch;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(3, auto);
+  grid-template-rows: repeat(4, auto);
   grid-auto-flow: column;
   column-gap: 20px;
   margin: -6px 0;
 }
 
 /* The first line of each column has none above it. */
-.phone-events > .row:nth-child(3n + 1) {
+.phone-events > .row:nth-child(4n + 1) {
   border-top: 0;
 }
 

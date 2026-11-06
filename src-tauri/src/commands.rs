@@ -1580,3 +1580,137 @@ pub async fn codex_radio_set(app: AppHandle, on: bool) -> Result<crate::core::Ra
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     tauri::async_runtime::spawn_blocking(move || core.codex_radio_set(on)).await.map_err(|error| error.to_string())?
 }
+
+/* ---------- the laps (Turlar) ---------- */
+
+#[tauri::command]
+pub fn laps_state(state: State<'_, AppState>) -> crate::core::laps::LapsState {
+    state.core.laps_state()
+}
+
+#[tauri::command]
+pub fn lap_save(state: State<'_, AppState>, lap: crate::core::laps::Lap) -> Result<crate::core::laps::Lap, String> {
+    state.core.lap_save(lap)
+}
+
+#[tauri::command]
+pub fn lap_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state.core.lap_delete(&id)
+}
+
+#[tauri::command]
+pub fn lap_switch(state: State<'_, AppState>, id: String, on: bool) -> Result<(), String> {
+    state.core.lap_switch(&id, on)
+}
+
+#[tauri::command]
+pub fn lap_pause(state: State<'_, AppState>, id: String, paused: bool) -> Result<(), String> {
+    state.core.lap_pause(&id, paused)
+}
+
+/// Starts a script or an agent's tab, so it runs off the main thread.
+#[tauri::command]
+pub async fn lap_run_now(app: AppHandle, id: String) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.lap_run_now(&id)).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn lap_skip_next(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state.core.lap_skip_next(&id)
+}
+
+#[tauri::command]
+pub async fn lap_stop(app: AppHandle, id: String) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.lap_stop(&id)).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn lap_day_off(state: State<'_, AppState>, id: String, date: String, every: bool) -> Result<(), String> {
+    state.core.lap_day_off(&id, &date, every)
+}
+
+#[tauri::command]
+pub fn lap_day_on(state: State<'_, AppState>, id: String, date: String) -> Result<(), String> {
+    state.core.lap_day_on(&id, &date)
+}
+
+#[tauri::command]
+pub fn lap_preview(state: State<'_, AppState>, when: crate::core::laps::When, kind: crate::core::laps::LapKind, agent: Option<crate::agent::Agent>, account: Option<String>) -> Result<Vec<u64>, String> {
+    state.core.lap_preview_for(&when, kind, agent.unwrap_or_default(), account)
+}
+
+/// Asks for the folder a job of no listed project runs in: the folder and how it shows (`~/…`),
+/// None when the dialog was cancelled; one where no lap may run is refused (`lap_folder`).
+#[tauri::command]
+pub async fn lap_pick_folder(app: AppHandle) -> Result<Option<crate::core::laps::PickedFolder>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = app.dialog().file().set_title(t!("core.dialog.lapFolder"));
+        if let Some(home) = dirs::home_dir() {
+            dialog = dialog.set_directory(home);
+        }
+        let Some(picked) = dialog.blocking_pick_folder().and_then(|folder| folder.into_path().ok()) else {
+            return Ok(None);
+        };
+        app.state::<AppState>().core.lap_folder(&picked.to_string_lossy()).map(Some)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn lap_calendar(state: State<'_, AppState>, year: i32, month: u32) -> Vec<crate::core::laps::CalendarDay> {
+    state.core.lap_calendar(year, month)
+}
+
+#[tauri::command]
+pub fn lap_day(state: State<'_, AppState>, date: String) -> Vec<crate::core::laps::DayRow> {
+    state.core.lap_day(&date)
+}
+
+#[tauri::command]
+pub fn lap_runs(state: State<'_, AppState>, id: String) -> Vec<crate::core::laps::LapRun> {
+    state.core.lap_runs(&id)
+}
+
+/// Reads the runs' sessions' logs, so it runs off the main thread.
+#[tauri::command]
+pub async fn lap_summaries(app: AppHandle, runs: Vec<String>) -> Result<std::collections::HashMap<String, String>, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.lap_summaries(&runs)).await.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn lap_result(app: AppHandle, run: String) -> Result<crate::core::laps::LapResult, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.lap_result(&run)).await.map_err(|error| error.to_string())?
+}
+
+/// The terminal a run's dialog shows (`Core::lap_terminal`): it may read the process table and
+/// open a tab, so it runs off the main thread.
+#[tauri::command]
+pub async fn lap_terminal(app: AppHandle, run: String, cols: Option<u16>, rows: Option<u16>) -> Result<crate::core::laps::LapTerminal, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.lap_terminal(&run, cols.zip(rows))).await.map_err(|error| error.to_string())?
+}
+
+/// A run's dialog let go of its terminal (`Core::lap_terminal_left`): it reads the process table,
+/// so it runs off the main thread.
+#[tauri::command]
+pub async fn lap_terminal_left(app: AppHandle, id: u64) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.lap_terminal_left(id)).await.map_err(|error| error.to_string())
+}
+
+/// A run's result was opened: it is read from now on (the page's orange dot goes).
+#[tauri::command]
+pub fn lap_read(state: State<'_, AppState>, run: String) -> Result<(), String> {
+    state.core.lap_read(&run)
+}
+
+/// The jobs in the order the tower was dragged into (`Core::lap_reorder`).
+#[tauri::command]
+pub fn lap_reorder(state: State<'_, AppState>, ids: Vec<String>) -> Result<(), String> {
+    state.core.lap_reorder(&ids)
+}

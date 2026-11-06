@@ -555,6 +555,39 @@ mod tests {
         assert_eq!(restored.iter().map(|view| view.elevated).collect::<Vec<_>>(), [false], "put back by the update's record");
     }
 
+    /// A lap's tab (`apart`: its run's agent, or its session opened again for the run's dialog)
+    /// is the laps' own layer: no snapshot has it among its project's tabs, the panel never
+    /// brings it up, and neither the quit's record nor an update's holds it, so it never comes
+    /// back by itself as an ordinary tab of the panel, its session running a second time.
+    #[test]
+    fn a_laps_tab_is_in_no_snapshot_and_no_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        let core = core_in(tmp.path());
+        core.add_project(&project).unwrap();
+
+        let shell = Launch::Shell { shell: None, elevated: false };
+        let plain = core.open_terminal_as(&project, &shell, None, false, None, false).unwrap().id;
+        let lap = core.open_terminal_apart(&project, &shell, "nightly lap".into(), None, None).unwrap().id;
+        let shown: Vec<u64> = core.snapshot().projects.iter().flat_map(|project| project.terminals.iter().map(|tab| tab.id)).collect();
+        let revealed = core.reveal_terminal(project.clone(), lap);
+        core.save_last_session();
+        core.save_restore("9.9.9", false).unwrap();
+        core.close_terminal(plain);
+        core.close_terminal(lap);
+        core.dispose();
+
+        let read = |file: &Path| -> serde_json::Value { serde_json::from_slice(&fs::read(file).unwrap()).unwrap() };
+        let (quit, update) = (read(&core.resume_file()), read(&core.cfg.settings_file.with_file_name("restore.json")));
+        let written = format!("{quit} {update}");
+        assert_eq!(shown, [plain], "the snapshot has the ordinary tab alone");
+        assert!(!revealed, "the panel never brings it up");
+        assert_eq!((quit["projects"][0]["tabs"].as_array().map(Vec::len), update["tabs"].as_array().map(Vec::len)), (Some(1), Some(1)), "{written}");
+        assert!(!written.contains("nightly lap"), "the records hold the ordinary tab alone: {written}");
+    }
+
     /// A process that passes for Claude Code's (`claude` in its command line), gone with the
     /// test however that ends.
     struct Sleeper(std::process::Child);

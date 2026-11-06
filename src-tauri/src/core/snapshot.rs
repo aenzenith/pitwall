@@ -294,7 +294,8 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
                 run_command: run.map(|run| run.command.clone()).unwrap_or_else(|| run_command(inner, path)),
                 settings: inner.settings.project(path),
                 commands: jobs::command_views(inner, path),
-                terminals: inner.terminal_list.iter().filter(|t| &t.path == path).cloned().collect(),
+                // Never the laps' own (`TerminalView::apart`): they show in their run's dialog alone.
+                terminals: inner.terminal_list.iter().filter(|t| &t.path == path && !t.apart).cloned().collect(),
                 layout: inner.terminal_layouts.get(path).cloned(),
                 muted: super::signals::muted(inner, path),
             }

@@ -97,6 +97,8 @@ impl Core {
         // Before the watch is locked: it may read the process table.
         let busy = self.busy_sessions();
         let idle = self.idle_sessions();
+        // Taken before the watch is locked: the laps take their lock alone.
+        let apart = self.lap_sessions();
         self.codex_set_running();
         let announce = {
             let Ok(mut watch) = self.claude.lock() else {
@@ -111,6 +113,8 @@ impl Core {
             let mut scan = watch.evaluate();
             // Every other agent that is on, as if Claude had its sessions too.
             let merged = self.merge_agents(&mut scan);
+            // The laps' sessions are no project's: none of what follows hears of them.
+            let laps_own = set_apart(&mut scan, &apart);
             let (announce, projects) = {
                 let mut inner = self.lock();
                 let first = !inner.claude_scanned;
@@ -122,12 +126,18 @@ impl Core {
                 inner.working = scan.working;
                 inner.claude_sessions = live_sessions(&scan.sessions);
                 inner.scanned = scan.sessions.iter().chain(&scan.others).cloned().collect();
+                inner.lap_scanned = laps_own.clone();
                 (announce, build_snapshot(&inner).projects)
             };
             // Still under the watch's lock: two refreshes never write the timeline out of order.
             self.record_activity(&scan.sessions, &projects);
-            announce
+            (announce, laps_own)
         };
+
+        // A lap's session ends as the lap tells it (`LapDone`, `LapFailed`); what it waits on is
+        // told by the laps (`lap_waits`), asked with no lock held: they take theirs alone.
+        let (mut announce, laps_own) = announce;
+        announce.extend(self.lap_waits(&laps_own));
 
         // Banner, sound, quiet and the phone are the door's to decide (`signals.rs`).
         self.signals(announce);
@@ -179,6 +189,38 @@ impl Core {
         }
         self.notify();
     }
+}
+
+/// The sessions the laps' runs hold (`apart`, `Core::lap_sessions`) taken out of `scan` and
+/// given back: they are the laps' own layer, in no project's state, count or list (Needs
+/// attention, the Sessions page, the day's timeline, the tower). A project one of them was in
+/// waits and works by its other sessions alone, reckoned as `evaluate` does: with the newest turn
+/// one of them waits with, else at work while one of them works.
+fn set_apart(scan: &mut crate::claude::ScanResult, apart: &HashSet<String>) -> Vec<SessionState> {
+    if apart.is_empty() {
+        return Vec::new();
+    }
+    let (own, sessions): (Vec<SessionState>, Vec<SessionState>) = std::mem::take(&mut scan.sessions).into_iter().partition(|session| apart.contains(&session.id));
+    scan.sessions = sessions;
+    let (others, kept): (Vec<SessionState>, Vec<SessionState>) = std::mem::take(&mut scan.others).into_iter().partition(|session| apart.contains(&session.id));
+    scan.others = kept;
+
+    let touched: HashSet<&str> = own.iter().map(|session| session.path.as_str()).collect();
+    for path in touched {
+        scan.waiting.remove(path);
+        scan.working.remove(path);
+        let left = || scan.sessions.iter().filter(|session| session.path == path);
+        match left().filter(|session| session.phase == SessionPhase::Waiting).filter_map(|session| session.turn).max_by_key(|turn| turn.at) {
+            Some(turn) => {
+                scan.waiting.insert(path.to_string(), turn);
+            }
+            None if left().any(|session| session.phase == SessionPhase::Working) => {
+                scan.working.insert(path.to_string());
+            }
+            None => {}
+        }
+    }
+    own.into_iter().chain(others).collect()
 }
 
 /// The sessions working or waiting on you, by project.

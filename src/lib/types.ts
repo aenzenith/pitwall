@@ -361,7 +361,7 @@ export type ResumeOffer = { quitAt: number; projects: ResumeProject[] };
 /* ---------- Backup and moved folders (backup_*, missing_projects, rehome_project) ---------- */
 
 /** What a backup takes, or an import puts back. */
-export type BackupParts = { settings: boolean; projects: boolean; board: boolean; activity: boolean };
+export type BackupParts = { settings: boolean; projects: boolean; board: boolean; activity: boolean; laps: boolean };
 
 /** A backup file just picked: what it holds. `app`: the version that wrote it. A part that is
  * missing from the file is 0 or false. */
@@ -382,10 +382,12 @@ export type BackupInfo = {
   images: number;
   /** Days of the timeline. */
   days: number;
+  /** The laps' jobs (Turlar) it holds. */
+  laps: number;
 };
 
-/** What an import put back. */
-export type ImportReport = { projects: number; cards: number; days: number; settings: boolean };
+/** What an import put back. `laps`: the laps' jobs it wrote, each paused. */
+export type ImportReport = { projects: number; cards: number; days: number; settings: boolean; laps: number };
 
 /** A project whose folder is gone, and what Pitwall still keeps for it. */
 export type MissingProject = { path: string; name: string; commands: number; links: number; cards: number; listed: boolean };
@@ -791,7 +793,7 @@ export type PhoneChannel = "ntfy" | "telegram" | "webhook";
 export type PhoneWhen = "locked" | "idle" | "always";
 
 /** The events offered, each with its box. */
-export type PhoneEvents = { asked: boolean; permission: boolean; finished: boolean; crashed: boolean; fuel: boolean; card: boolean };
+export type PhoneEvents = { asked: boolean; permission: boolean; finished: boolean; crashed: boolean; fuel: boolean; card: boolean; lapDone: boolean; lapFailed: boolean };
 
 /** The channel as Settings sends it. Each channel keeps its address while another is picked. */
 export type PhoneConfig = {
@@ -832,11 +834,14 @@ export type SignalKind =
   | "command-failed"
   | "deps-waiting"
   | "fuel-high"
-  | "card-review";
+  | "card-review"
+  | "lap-done"
+  | "lap-failed";
 
 /** Something the user wasn't told while it was quiet. `path` and `name` are empty for what is
- * about no project (the fuel alert); `detail`: a permission's tool, a command's name, the fuel
- * alert's line. */
+ * about no project (the fuel alert); a lap's may be a folder no listed project holds, named by
+ * its last part; `detail`: a permission's tool, a command's or a lap's name, the fuel alert's
+ * line. */
 export type Missed = { kind: SignalKind; path: string; name: string; detail: string | null; at: number; agent: Agent };
 
 /** Quiet now: until when (ms; null: until it is switched off), and whether the quiet hours made it so. */

@@ -196,6 +196,7 @@ impl Core {
             entries
         };
         entries.extend(self.terminal_sessions().values().filter_map(|session| session.pid_entry()));
+        entries.extend(self.lap_groups());
         self.registry.record_pids(&entries);
     }
 }

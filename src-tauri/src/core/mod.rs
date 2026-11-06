@@ -34,6 +34,7 @@ mod activity;
 mod backup;
 mod day_tokens;
 mod board;
+pub mod laps;
 mod claude_state;
 mod dependencies;
 mod discover;
@@ -141,6 +142,11 @@ pub enum CoreEvent {
     RevealPage(&'static str),
     /// Show the Fuel page on this agent's part (a fuel alert's line in the list of what was missed).
     RevealFuel(Agent),
+    /// The laps changed: every job, for the main window (`laps/`).
+    Laps(laps::LapsState),
+    /// Show the Turlar page with this run's dialog open, its terminal there (a click on the banner
+    /// of what a lap's session waits on, `lap_waits`).
+    RevealLap(String),
 }
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
@@ -188,8 +194,11 @@ struct Inner {
     /// Sessions working or waiting on you, per project.
     claude_sessions: HashMap<String, Vec<LiveSession>>,
     /// Every session of the last scan, listed projects' and the hook's others, for the
-    /// Sessions page.
+    /// Sessions page; none of the laps'.
     scanned: Vec<SessionState>,
+    /// The sessions of the last scan the laps' runs hold (`Core::lap_sessions`): a layer of
+    /// their own, which only the laps follow (`set_apart` in `claude_state.rs`).
+    lap_scanned: Vec<SessionState>,
     git: HashMap<String, GitInfo>,
     claude_hook: bool,
     claude_hook_outdated: bool,
@@ -301,6 +310,8 @@ pub struct Core {
     board: Mutex<board::Board>,
     /// Held while the board follows its sessions, one pass at a time.
     board_follow: Mutex<()>,
+    /// The laps (`laps/`); never held together with `inner` or `board`.
+    laps: Mutex<laps::Laps>,
     /// The Dependencies page's checks.
     deps: dependencies::Dependencies,
     /// Held while the settings are taken and written, so the file never ends up older than
@@ -359,6 +370,7 @@ impl Core {
         let peers = registry.read_peers();
         // Beside the settings, on this Mac only.
         let board = board::Board::load(cfg.settings_file.with_file_name("board.json"), now_ms());
+        let laps = laps::Laps::load(&cfg.settings_file, now_ms());
 
         Arc::new(Self {
             registry,
@@ -389,6 +401,7 @@ impl Core {
             outbox: Arc::new(Mutex::new(Outbox::default())),
             git_queue: Mutex::new(HashSet::new()),
             board: Mutex::new(board),
+            laps: Mutex::new(laps),
             board_follow: Mutex::new(()),
             deps: dependencies::Dependencies::default(),
             settings_lock: Mutex::new(()),
@@ -413,6 +426,8 @@ impl Core {
         self.flush_day_tokens();
         self.record_app("stop");
         self.board_quit();
+        // What a lap runs is let go of here, its records cut, before the processes go.
+        self.laps_quit();
 
         let mut pids: Vec<u32> = {
             let mut inner = self.lock();
@@ -489,6 +504,12 @@ impl Core {
 
         // A board card told to wait for its moment is given when it comes (`board.rs`).
         self.board_due();
+
+        // A lap whose moment came runs (`laps/`), and the laps' tabs no one needs close.
+        self.laps_due();
+        if tick.is_multiple_of(5) {
+            self.lap_sweep_tabs();
+        }
     }
 }
 

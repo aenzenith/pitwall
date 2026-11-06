@@ -33,6 +33,8 @@ const has: BackupParts = {
   projects: info.hasProjects,
   board: info.cards + info.images > 0,
   activity: info.days > 0,
+  // An older core's file info has no laps: none.
+  laps: (info.laps ?? 0) > 0,
 };
 const parts = reactive<BackupParts>({ ...has });
 
@@ -58,6 +60,8 @@ const rows = computed<Array<{ id: keyof BackupParts; name: string; holds: string
     ]),
   },
   { id: "activity", name: t("backup.name.activity"), holds: counted([["backup.count.days", info.days]]) },
+  // An imported job comes in paused: nothing starts by itself on another Mac.
+  { id: "laps", name: t("laps.nav"), holds: (info.laps ?? 0) > 0 ? `${counted([["backup.count.laps", info.laps]])} · ${t("backup.laps.paused")}` : "" },
 ]);
 const nothing = computed(() => !rows.value.some((row) => parts[row.id]));
 

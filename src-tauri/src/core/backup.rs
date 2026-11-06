@@ -2,16 +2,19 @@
 //!
 //! A backup is one JSON file, written where the user says: the general preferences, the
 //! projects (the list, its order, each project's settings, the teams), the board (every card
-//! and its images) and the timeline's days, each part only when chosen. It holds what the app's
-//! own files hold and nothing else.
+//! and its images), the timeline's days and the laps (every job, without what is this Mac's own:
+//! its account, its days off, its next moment and its counts; never a run or its output), each
+//! part only when chosen. It holds what the app's own files hold and nothing else.
 //!
 //! An import puts the chosen parts of such a file back. The file may come from anywhere, so it
 //! is read and checked whole before anything changes (`backup_checked` says what is refused and
 //! what is skipped), and nothing in it names a place to write: a card's images go where the
 //! board puts them, a day where the timeline does. What is here now is copied to
 //! `backups/before-import-<ms>/` beside the settings first, and an import adds to what is here:
-//! only a card, a project's settings or a team the file names again is replaced, and a day that
-//! has a file is never written over.
+//! only a card, a project's settings, a team or a lap the file names again is replaced, and a day
+//! that has a file is never written over. A lap arrives paused, so nothing starts by itself on a
+//! Mac the file was carried to, and a lap of a project this Mac doesn't list arrives as a lap of
+//! that folder.
 //!
 //! A backup of another machine names that machine's home folder; its paths under that folder
 //! are put under this one's.
@@ -31,6 +34,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use super::board::{taken, CardImage, Column, ImageKind, IMAGES_MAX};
+use super::laps::{Lap, PausedBy, Place};
 use super::reveal::is_session_id;
 use super::*;
 use crate::registry::{base36, write_atomic};
@@ -52,6 +56,9 @@ pub struct BackupParts {
     pub projects: bool,
     pub board: bool,
     pub activity: bool,
+    /// The laps' jobs (`laps/`); a window that doesn't send it takes none.
+    #[serde(default)]
+    pub laps: bool,
 }
 
 /// What a backup file holds, as far as an import takes it. A part the file doesn't have is 0 or
@@ -77,9 +84,12 @@ pub struct BackupInfo {
     pub images: usize,
     /// Days of the timeline.
     pub days: usize,
+    /// The laps' jobs an import takes.
+    pub laps: usize,
 }
 
-/// What an import put back: the projects it listed, the cards it wrote, the days it added.
+/// What an import put back: the projects it listed, the cards it wrote, the days it added, the
+/// laps it wrote (each paused).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportReport {
@@ -87,6 +97,7 @@ pub struct ImportReport {
     pub cards: usize,
     pub days: usize,
     pub settings: bool,
+    pub laps: usize,
 }
 
 /// A project whose folder is gone, and what is still kept for it.
@@ -256,6 +267,9 @@ struct Document {
     /// Each day's file as it is, by the day's name (`YYYY-MM-DD`).
     #[serde(skip_serializing_if = "Option::is_none")]
     activity: Option<BTreeMap<String, String>>,
+    /// The laps' jobs, as `for_backup` leaves them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    laps: Option<Vec<Lap>>,
 }
 
 /// A card of a backup and the images it takes: each one's number and kind, and its bytes.
@@ -273,6 +287,7 @@ struct Backup {
     projects: Option<ProjectsPart>,
     cards: Option<Vec<Taken>>,
     days: Option<Vec<(String, String)>>,
+    laps: Option<Vec<Lap>>,
 }
 
 impl Backup {
@@ -296,12 +311,14 @@ impl Backup {
             cards: self.cards.as_ref().map_or(0, Vec::len),
             images: self.cards.iter().flatten().map(|taken| taken.images.len()).sum(),
             days: self.days.as_ref().map_or(0, Vec::len),
+            laps: self.laps.as_ref().map_or(0, Vec::len),
         }
     }
 
     /// Puts the paths of the machine that wrote the backup where they are on this one, whose
     /// home folder is `home`: the listed projects, the order, the projects' settings, the
-    /// teams' members, the cards, the projects folder and the projects the days' events name.
+    /// teams' members, the cards, the projects folder, the projects the days' events name, and
+    /// each lap's project or folder and the file it writes.
     fn move_home(&mut self, home: &str) {
         let ends = ['/', '\\'];
         let homes = Homes { from: self.home.trim_end_matches(ends).to_string(), to: home.trim_end_matches(ends).to_string() };
@@ -326,6 +343,14 @@ impl Backup {
         }
         for (_, text) in self.days.iter_mut().flatten() {
             *text = homes.day(text);
+        }
+        for lap in self.laps.iter_mut().flatten() {
+            match &mut lap.place {
+                Place::Project { path } | Place::Folder { path } => *path = homes.here(path),
+            }
+            if let Some(file) = &mut lap.file {
+                *file = homes.here(file);
+            }
         }
     }
 }
@@ -391,6 +416,70 @@ fn unique(paths: Vec<String>) -> Vec<String> {
         }
     }
     found
+}
+
+/// A lap as a backup holds it, and as an import takes it: without what is this Mac's own (the
+/// account it runs with, its days off, its next moment and its counts). An import's comes in
+/// paused by the user, whatever the file says, so nothing a file brings starts by itself.
+fn for_backup(lap: Lap) -> Lap {
+    Lap { account: None, days_off: Vec::new(), weekdays_off: Vec::new(), next_at: None, streak: 0, runs_done: 0, ..lap }
+}
+
+/// `lap` with its folder and its file under `home` as `home` is written: a folder job's folder
+/// is kept resolved, so under a home reached through a link it would begin with what the link
+/// leads to, and the other Mac's home would never take its place (`Homes::here`).
+fn as_given(mut lap: Lap, home: &str) -> Lap {
+    let Ok(resolved) = Path::new(home).canonicalize() else { return lap };
+    if resolved == Path::new(home) {
+        return lap;
+    }
+    let mend = |path: &mut String| {
+        if let Ok(rest) = Path::new(path.as_str()).strip_prefix(&resolved) {
+            *path = Path::new(home).join(rest).to_string_lossy().into_owned();
+        }
+    };
+    match &mut lap.place {
+        Place::Project { path } | Place::Folder { path } => mend(path),
+    }
+    if let Some(file) = &mut lap.file {
+        mend(file);
+    }
+    lap
+}
+
+/// A lap's id as the laps give one (`l-<base36>`): lower-case letters, digits and dashes, so it
+/// names no folder but its own when its runs are kept under it (`lap-runs/<id>`).
+fn is_lap_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+/// The laps of a backup as an import takes them (see `backup_checked`): a lap whose id isn't one
+/// the laps give is skipped, and so is an id's second lap.
+fn laps_taken(laps: Vec<Lap>) -> Vec<Lap> {
+    let mut found: Vec<Lap> = Vec::new();
+    for lap in laps {
+        if is_lap_id(&lap.id) && !found.iter().any(|known| known.id == lap.id) {
+            found.push(Lap { paused: Some(PausedBy::User), ..for_backup(lap) });
+        }
+    }
+    found
+}
+
+/// The laps of a backup where they are here (`listed`: the projects shown once the import is
+/// done): a lap of a listed project takes the spelling it is listed under, and one of a project
+/// this Mac doesn't list becomes a lap of that folder.
+fn laps_here(laps: Vec<Lap>, listed: &[String]) -> Vec<Lap> {
+    laps.into_iter()
+        .map(|mut lap| {
+            if let Place::Project { path } = &lap.place {
+                lap.place = match listed.iter().find(|known| same_path(known, path)) {
+                    Some(known) => Place::Project { path: known.clone() },
+                    None => Place::Folder { path: path.clone() },
+                };
+            }
+            lap
+        })
+        .collect()
 }
 
 /// The projects part of a backup put into `settings`. A project's settings in the file take the
@@ -544,6 +633,8 @@ impl Core {
             }),
             board: parts.board.then(|| self.backup_board()),
             activity: parts.activity.then(|| self.backup_days()),
+            // As the laps hand them over, and made sure of here: nothing of this Mac's own.
+            laps: parts.laps.then(|| self.laps_export().into_iter().map(|lap| as_given(for_backup(lap), home)).collect()),
         };
 
         let failed = |error: &dyn std::fmt::Display| t!("core.error.backupWrite", file = file.display(), error = error);
@@ -610,7 +701,8 @@ impl Core {
     /// id's second card; an image of no card in the file, one its card's note doesn't name, a
     /// number's second image, bytes that aren't the image its kind says or are larger than the
     /// board takes (`taken`), and those past a card's `IMAGES_MAX`; a day whose name isn't a
-    /// date (`is_day`); a listed project without a path, a team without an id.
+    /// date (`is_day`); a listed project without a path, a team without an id; a lap whose id
+    /// isn't one the laps give, and an id's second lap (`laps_taken`).
     fn backup_checked(&self, file: &Path) -> Result<Backup, String> {
         let mut raw = Vec::new();
         fs::File::open(file)
@@ -662,6 +754,7 @@ impl Core {
             projects,
             cards: document.board.map(|part| self.backup_cards(part)),
             days: document.activity.map(|days| days.into_iter().filter(|(day, _)| is_day(day)).collect()),
+            laps: document.laps.map(laps_taken),
         })
     }
 
@@ -723,10 +816,29 @@ impl Core {
         let projects = backup.projects.filter(|_| parts.projects);
         let cards = backup.cards.filter(|_| parts.board);
         let days = backup.days.filter(|_| parts.activity);
+        let laps = backup.laps.filter(|laps| parts.laps && !laps.is_empty());
         let incoming: Vec<&str> = cards.iter().flatten().map(|taken| taken.card.id.as_str()).collect();
         self.keep_before("import", &incoming).map_err(|error| t!("core.error.backupKeep", error = error))?;
 
         let mut report = ImportReport::default();
+
+        // The laps first: their file failing to be written, nothing else has changed. A lap's
+        // project is listed here when it is shown now or the import lists it, and its saved
+        // commands are those the import's settings for it bring (`put_projects`), else this Mac's.
+        if let Some(laps) = laps {
+            let mut known = self.laps_known();
+            if let Some(part) = &projects {
+                known.listed.extend(part.favourites.iter().map(|favourite| favourite.path.clone()).chain(part.added.iter().cloned()));
+                for (path, project) in &part.settings {
+                    let project = project.clone().upgraded();
+                    if !path.is_empty() && project != ProjectSettings::default() {
+                        known.set_commands(path, project.commands);
+                    }
+                }
+            }
+            let laps = laps_here(laps, &known.listed);
+            report.laps = self.laps_import(laps, &known).map_err(|error| t!("core.error.backupLaps", error = error))?;
+        }
 
         if general.is_some() || projects.is_some() {
             let (language, unnamed) = {
@@ -774,15 +886,16 @@ impl Core {
 
     /// Copies what `change` (an `import`, a `move`, a `forget`) is about to write over into
     /// `backups/before-<change>-<ms>/` beside the settings, as it is on disk now: the settings,
-    /// the board, the list of projects and, under `board-images/`, the images of the board's
-    /// cards among `incoming` (ids), whose place an import's cards take. A file that isn't
-    /// there yet has nothing to keep; any other failure is the caller's to stop at.
+    /// the board, the list of projects, the laps' jobs and, under `board-images/`, the images of
+    /// the board's cards among `incoming` (ids), whose place an import's cards take. A file that
+    /// isn't there yet has nothing to keep; any other failure is the caller's to stop at.
     fn keep_before(&self, change: &str, incoming: &[&str]) -> std::io::Result<()> {
         let settings = &self.cfg.settings_file;
         let dir = settings.with_file_name(KEPT_DIR).join(format!("before-{change}-{}", now_ms()));
         fs::create_dir_all(&dir)?;
 
-        for file in [settings.clone(), settings.with_file_name("board.json"), self.cfg.registry_dir.join("favorites.json")] {
+        let own = [settings.clone(), settings.with_file_name("board.json"), self.cfg.registry_dir.join("favorites.json")];
+        for file in own.into_iter().chain(self.laps_file()) {
             let Some(name) = file.file_name() else {
                 continue;
             };
@@ -955,6 +1068,8 @@ impl Core {
                 self.board_changed(board);
             }
         }
+        // Its laps, and those of folders inside it, go with it.
+        self.laps_rehome(from, to);
 
         self.notify();
         Ok(())
@@ -987,6 +1102,8 @@ impl Core {
 
         self.registry.set_favourite(Favourite { path: path.to_string(), name: folder_name(path) }, false);
         self.reload_favourites();
+        // Its laps stay, paused, as jobs of the folder that was.
+        self.laps_forget(path);
         self.notify();
         Ok(())
     }
@@ -999,7 +1116,7 @@ mod tests {
     use super::*;
     use crate::settings::ProjectLink;
 
-    const ALL: BackupParts = BackupParts { settings: true, projects: true, board: true, activity: true };
+    const ALL: BackupParts = BackupParts { settings: true, projects: true, board: true, activity: true, laps: true };
 
     fn core_in(tmp: &Path) -> Arc<Core> {
         Core::new(
@@ -1200,7 +1317,7 @@ mod tests {
         fs::write(&file, backup(parts)).unwrap();
 
         let report = core.backup_import(&file, ALL).unwrap();
-        assert_eq!(report, ImportReport { projects: 2, cards: 2, days: 1, settings: true });
+        assert_eq!(report, ImportReport { projects: 2, cards: 2, days: 1, settings: true, laps: 0 });
 
         // The file's preference came; what is this Mac's own stayed.
         let settings = core.settings();
@@ -1273,7 +1390,7 @@ mod tests {
 
         let to = core_in(b.path());
         let report = to.backup_import_as(&file, ALL, &home_b.to_string_lossy()).unwrap();
-        assert_eq!(report, ImportReport { projects: 3, cards: 1, days: 1, settings: true });
+        assert_eq!(report, ImportReport { projects: 3, cards: 1, days: 1, settings: true, laps: 0 });
 
         // A core started on what the import wrote: all of it is on disk, under the new home.
         let again = core_in(b.path());
@@ -1320,6 +1437,118 @@ mod tests {
         // As a core started on what the import wrote has them.
         let cards = core_in(b.path()).board_state();
         assert_eq!(cards.iter().map(|card| (card.title.as_str(), card.schedule, card.start)).collect::<Vec<_>>(), [("Waits", None, None), ("Started before", None, Some(chosen))]);
+    }
+
+    /// A lap runs by itself. One that arrived switched on with its moment, or under a folder of
+    /// the other Mac's, would start a script or an agent here that nobody asked for, or never run,
+    /// and nothing would say so. A backup's laps come in paused by the user with no moment and
+    /// nothing of the other Mac's own (its account, its days off, its counts), under this home
+    /// (the file each writes too), and a lap of a project this Mac doesn't list as a lap of that
+    /// folder; one whose id would name a place outside the laps' own folder is skipped, and so is
+    /// an id's second lap.
+    #[test]
+    fn a_backups_laps_arrive_paused_and_at_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_in(tmp.path());
+        let home = tmp.path().join("home");
+        let here = |rest: &str| home.join(rest).to_string_lossy().into_owned();
+        fs::create_dir_all(here("projects/paddock")).unwrap();
+        core.add_project(&here("projects/paddock")).unwrap();
+
+        let lap = |id: &str, place: Value, on: bool| {
+            json!({
+                "id": id, "name": format!("Job {id}"), "kind": "script", "place": place, "on": on, "paused": null,
+                "script": { "kind": "text", "text": "make report" }, "file": "/Users/them/Notes/{tarih}.md",
+                "account": "acct-7", "daysOff": ["2026-11-05"], "weekdaysOff": [3], "nextAt": 1_790_000_000_000u64, "streak": 2, "runsDone": 5,
+            })
+        };
+        let project = |path: &str| json!({ "kind": "project", "path": path });
+        let folder = |path: &str| json!({ "kind": "folder", "path": path });
+        let mut document: Value = serde_json::from_str(&backup(json!({ "laps": [
+            lap("l-a1", project("/Users/them/projects/paddock"), true),
+            lap("l-b2", project("/Users/them/projects/gone"), true),
+            lap("l-c3", folder("/Users/them/scratch"), false),
+            lap("../../kept", folder("/Users/them/scratch"), true),
+            lap("", folder("/Users/them/scratch"), true),
+            lap("l-a1", folder("/Users/them/second"), true),
+        ] })))
+        .unwrap();
+        document["home"] = json!("/Users/them");
+        let file = tmp.path().join("laps-backup.json");
+        fs::write(&file, document.to_string()).unwrap();
+
+        assert_eq!(core.backup_read(&file).unwrap().laps, 3);
+
+        // As the import hands them to the laps (`backup_import_as`).
+        let mut taken = core.backup_checked(&file).unwrap();
+        taken.move_home(&home.to_string_lossy());
+        let laps = laps_here(taken.laps.unwrap(), &core.listed_paths());
+        let places: Vec<(&str, &Place, bool)> = laps.iter().map(|lap| (lap.id.as_str(), &lap.place, lap.on)).collect();
+        assert_eq!(
+            places,
+            [
+                ("l-a1", &Place::Project { path: here("projects/paddock") }, true),
+                ("l-b2", &Place::Folder { path: here("projects/gone") }, true),
+                ("l-c3", &Place::Folder { path: here("scratch") }, false),
+            ]
+        );
+        for lap in &laps {
+            assert_eq!((lap.paused, lap.next_at, lap.file.clone()), (Some(PausedBy::User), None, Some(here("Notes/{tarih}.md"))), "{}", lap.id);
+            assert_eq!((&lap.account, lap.days_off.len(), lap.weekdays_off.len(), lap.streak, lap.runs_done), (&None, 0, 0, 0, 0), "{}", lap.id);
+        }
+    }
+
+    /// The laps part both ways, as two Macs have it (through the laps' own `laps_export` and
+    /// `laps_import`): the jobs leave without what is this Mac's own and with none of their runs
+    /// or outputs, and arrive paused, with no moment, under the other home.
+    #[test]
+    fn the_laps_part_goes_and_comes_back_paused() {
+        use super::super::laps::{LapKind, Script, When};
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (home_a, home_b) = (a.path().join("home"), b.path().join("home"));
+        let under = |home: &Path, rest: &str| home.join(rest).to_string_lossy().into_owned();
+        let (project, folder) = (under(&home_a, "projects/paddock"), under(&home_a, "scratch"));
+        fs::create_dir_all(&project).unwrap();
+        fs::create_dir_all(&folder).unwrap();
+
+        let from = core_in(a.path());
+        from.add_project(&project).unwrap();
+        let job = |name: &str, place: Place| Lap {
+            name: name.into(),
+            kind: LapKind::Script,
+            place,
+            script: Some(Script::Text { text: "echo laps".into() }),
+            when: When::Daily { at: "09:00".into(), days: Vec::new() },
+            ..Lap::default()
+        };
+        let nightly = from.lap_save(job("Nightly", Place::Project { path: project.clone() })).unwrap();
+        let sweep = from.lap_save(job("Sweep", Place::Folder { path: folder.clone() })).unwrap();
+        // A run's output where the laps keep it, beside the settings.
+        let runs = a.path().join("config").join("lap-runs").join(&nightly.id);
+        fs::create_dir_all(&runs).unwrap();
+        fs::write(runs.join("r-1.log"), "OUTPUT-OF-A-RUN\n").unwrap();
+
+        let file = a.path().join("pitwall-backup.json");
+        from.backup_write_as(&file, ALL, &home_a.to_string_lossy()).unwrap();
+        let text = fs::read_to_string(&file).unwrap();
+        // The run's id as a value or the output's file name: a lap's id (`l-<base36>-<n>`) may end
+        // in "r-1" too.
+        assert!(!text.contains("OUTPUT-OF-A-RUN") && !text.contains("\"r-1\"") && !text.contains("r-1.log"), "{text}");
+
+        let to = core_in(b.path());
+        assert_eq!(to.backup_read(&file).unwrap().laps, 2);
+        let only_laps = BackupParts { settings: false, projects: false, board: false, activity: false, laps: true };
+        assert_eq!(to.backup_import_as(&file, only_laps, &home_b.to_string_lossy()).unwrap().laps, 2);
+
+        let mut arrived: Vec<Lap> = to.laps_state().laps.into_iter().map(|view| view.lap).collect();
+        arrived.sort_by(|x, y| x.name.cmp(&y.name));
+        // The project isn't listed there: its lap is that folder's.
+        let expected = [(nightly.id.as_str(), Place::Folder { path: under(&home_b, "projects/paddock") }), (sweep.id.as_str(), Place::Folder { path: under(&home_b, "scratch") })];
+        assert_eq!(arrived.iter().map(|lap| (lap.id.as_str(), lap.place.clone())).collect::<Vec<_>>(), expected);
+        for lap in &arrived {
+            assert_eq!((lap.paused, lap.next_at, lap.streak, lap.runs_done), (Some(PausedBy::User), None, 0, 0), "{}", lap.name);
+            assert_eq!((&lap.prompt, &lap.script, &lap.when), (&nightly.prompt, &nightly.script, &nightly.when), "{}", lap.name);
+        }
     }
 
     /// What is kept for a project is typed in by hand: its commands, its links, its team, its
@@ -1418,7 +1647,7 @@ mod tests {
             core.add_unstarred(&dir.to_string_lossy()).unwrap();
         }
         let file = tmp.path().join("projects.json");
-        core.backup_write(&file, BackupParts { settings: false, projects: true, board: false, activity: false }).unwrap();
+        core.backup_write(&file, BackupParts { settings: false, projects: true, board: false, activity: false, laps: false }).unwrap();
         let info = core.backup_read(&file).unwrap();
         assert_eq!((info.projects, info.has_projects), (3, true));
 

@@ -1668,7 +1668,9 @@ onMounted(() => {
   requestAnimationFrame(() => requestAnimationFrame(() => (settled.value = true)));
   panelMeasure.size = newTabSize;
   // The panes' keys are the panel's, not the shell's: splitting from one terminal at a time too.
+  // A terminal outside the panel (a lap run's, in its dialog) keeps them as any other key.
   paneKeys.claim = (event) => {
+    if (!(event.target instanceof Node && panel.value?.contains(event.target))) return false;
     const act = paneAction(event);
     return !!act && (panesOn.value || act === "right" || act === "down");
   };

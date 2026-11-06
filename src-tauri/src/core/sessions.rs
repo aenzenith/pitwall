@@ -516,7 +516,9 @@ impl Core {
             self.day_sessions(&mut cache.day)
         };
 
-        // Every session once: the scan's, the running ones, then the day's.
+        // Every session once: the scan's, the running ones, then the day's; none the laps' runs
+        // hold, which are a layer of their own (`lap_sessions`; the scan has none of them).
+        let apart = self.lap_sessions();
         let mut order: Vec<String> = Vec::new();
         let mut drafts: HashMap<String, Draft> = HashMap::new();
         for state in scanned {
@@ -525,15 +527,15 @@ impl Core {
             draft.codex = state.agent == Agent::Codex;
             draft.scanned = Some(state);
         }
-        for (id, run) in running.iter().flatten() {
+        for (id, run) in running.iter().flatten().filter(|(id, _)| !apart.contains(*id)) {
             draft(&mut order, &mut drafts, id).running = Some(run.clone());
         }
-        for (id, run) in codex_running.iter().flatten() {
+        for (id, run) in codex_running.iter().flatten().filter(|(id, _)| !apart.contains(*id)) {
             let draft = draft(&mut order, &mut drafts, id);
             draft.codex = true;
             draft.running = Some(run.clone());
         }
-        for (id, day) in days {
+        for (id, day) in days.into_iter().filter(|(id, _)| !apart.contains(id)) {
             let draft = draft(&mut order, &mut drafts, &id);
             draft.codex |= day.agent == Agent::Codex;
             draft.day = Some(day);
