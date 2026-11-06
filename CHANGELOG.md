@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.21.0](https://github.com/aenzenith/pitwall/compare/v1.20.0...v1.21.0) (2026-11-06)
+
+
+### Features
+
+* **laps:** jobs could run on a schedule while Pitwall was open ([4053609](https://github.com/aenzenith/pitwall/commit/4053609637f54c11a89d5b5c9e327f5019063bda))
+* **list:** Needs attention went back to All projects once it emptied ([e540129](https://github.com/aenzenith/pitwall/commit/e5401296298b45bad4d966740f544f5d60cd07dc))
+* **open:** a list filtered away from the project went to All projects ([ee75ba9](https://github.com/aenzenith/pitwall/commit/ee75ba9b6d76cbcd56cb036f1426d5959cb191f8))
+* **terminal:** terminals could be searched with ⌘F ([8d67db1](https://github.com/aenzenith/pitwall/commit/8d67db174939630951391879af512d488242b093))
+
 ## [1.20.0](https://github.com/aenzenith/pitwall/compare/v1.19.0...v1.20.0) (2026-11-03)
 
 
