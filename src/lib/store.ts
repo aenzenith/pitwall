@@ -382,6 +382,8 @@ export const api = {
   /** What the last scan of one ecosystem listed; null for one kept from before it was listed. */
   depsScanDetails: (path: string, ecosystem: string) => invoke<DepScanDetails | null>("deps_scan_details", { path, ecosystem }),
   markSeen: (path: string) => invoke("mark_seen", { path }),
+  /** One session's tab looked at: its finished turn is seen, though a prompt elsewhere in its project holds the project's look back. */
+  markSessionSeen: (id: string) => invoke("mark_session_seen", { id }),
   setSettings: (settings: Settings) => invoke("set_settings", { settings }),
   setProjectSettings: (path: string, settings: ProjectSettings) => invoke("set_project_settings", { path, settings }),
   /** The folder typed for a project to run in as its settings keep it (`""`: its own); rejects with why it can't be. */

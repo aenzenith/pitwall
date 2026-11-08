@@ -1,88 +1,25 @@
 {
-  "since": "1.20.0",
+  "since": "1.21.0",
   "notes": [
     {
-      "kind": "new",
+      "kind": "fix",
       "title": {
-        "en": "Laps: jobs on a schedule",
-        "tr": "Turlar: zamanlanmış işler",
-        "de": "Runden: Aufgaben nach Plan",
-        "es": "Vueltas: tareas programadas",
-        "ru": "Круги: задачи по расписанию",
-        "ja": "ラップ：定期タスク",
-        "zh-Hans": "圈次：定时任务"
+        "en": "Fixed: the orange dot on a tab you looked at",
+        "tr": "Turuncu nokta hatası düzeltildi",
+        "de": "Behoben: der orange Punkt auf einem angesehenen Tab",
+        "es": "Corregido: el punto naranja de la pestaña que miras",
+        "ru": "Исправлено: оранжевая точка на просмотренной вкладке",
+        "ja": "修正：見たタブのオレンジの点",
+        "zh-Hans": "已修复：看过的标签页上的橙点"
       },
       "body": {
-        "en": "Have Claude, Codex or a script do something every day, every few hours or when your fuel refills. It runs while Pitwall is open, and the calendar shows what ran and what's next.",
-        "tr": "Claude'a, Codex'e ya da bir betiğe her gün, birkaç saatte bir ya da yakıt dolunca iş yaptırın. Pitwall açıkken çalışır; takvim neyin koştuğunu ve sırada ne olduğunu gösterir.",
-        "de": "Lass Claude, Codex oder ein Skript jeden Tag, alle paar Stunden oder beim Auffüllen des Tanks etwas erledigen. Es läuft, solange Pitwall offen ist, und der Kalender zeigt, was lief und was als Nächstes kommt.",
-        "es": "Pide a Claude, a Codex o a un script que hagan algo cada día, cada pocas horas o cuando se rellene el combustible. Funciona mientras Pitwall está abierto, y el calendario te muestra qué se hizo y qué viene.",
-        "ru": "Поручите Claude, Codex или скрипту дело — каждый день, раз в несколько часов или когда пополнится топливо. Работает, пока открыт Pitwall, а календарь показывает, что уже прошло и что впереди.",
-        "ja": "Claude や Codex、スクリプトに、毎日・数時間おき・燃料の回復時に仕事を任せられます。Pitwall を開いている間に動き、カレンダーで実行済みのものと次の予定がわかります。",
-        "zh-Hans": "让 Claude、Codex 或脚本每天、每隔几小时或在燃料恢复时自动做事。Pitwall 开着时就会运行，日历里能看到跑过什么、接下来是什么。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Search the terminal with ⌘F",
-        "tr": "Terminalde ⌘F ile arama",
-        "de": "Im Terminal suchen mit ⌘F",
-        "es": "Busca en la terminal con ⌘F",
-        "ru": "Поиск в терминале по ⌘F",
-        "ja": "⌘F でターミナル内を検索",
-        "zh-Hans": "用 ⌘F 在终端中查找"
-      },
-      "body": {
-        "en": "Every match lights up, and the arrows take you from one to the next. Match case, whole word and regular expressions are a click away.",
-        "tr": "Bulunan her yer işaretleniyor, oklarla aralarında gezebiliyorsunuz. Büyük/küçük harf, tam kelime ve düzenli ifade de bir tık uzağınızda.",
-        "de": "Jeder Treffer wird markiert, mit den Pfeilen springst du von einem zum nächsten. Groß-/Kleinschreibung, ganze Wörter und reguläre Ausdrücke sind nur einen Klick entfernt.",
-        "es": "Cada coincidencia queda resaltada y con las flechas pasas de una a otra. Mayúsculas, palabras completas y expresiones regulares, a un clic.",
-        "ru": "Все совпадения подсвечиваются, а стрелки переводят от одного к другому. Учёт регистра, слово целиком и регулярные выражения — в один щелчок.",
-        "ja": "見つかった箇所がすべてハイライトされ、矢印で順に移動できます。大文字と小文字の区別、単語単位、正規表現もワンクリックで切り替えられます。",
-        "zh-Hans": "所有匹配都会高亮，用箭头逐个跳转。区分大小写、全字匹配和正则表达式，点一下就能切换。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "The list finds the project you open",
-        "tr": "Açtığınız proje listede seçili gelir",
-        "de": "Die Liste findet dein Projekt",
-        "es": "La lista encuentra tu proyecto",
-        "ru": "Список находит открытый проект",
-        "ja": "開いたプロジェクトが一覧で選ばれます",
-        "zh-Hans": "列表会找到你打开的项目"
-      },
-      "body": {
-        "en": "Open a project's terminal from the menu bar or the quick switcher and the list selects it even when it's filtered: it switches to All projects.",
-        "tr": "Menü çubuğundan ya da hızlı geçişten bir projenin terminalini açtığınızda, liste filtreli olsa bile Tüm projeler'e geçip projeyi seçiyor.",
-        "de": "Öffnest du das Terminal eines Projekts aus der Menüleiste oder dem Projektumschalter, wechselt die Liste auch mit Filter zu „Alle Projekte“ und wählt es aus.",
-        "es": "Al abrir la terminal de un proyecto desde la barra de menús o el selector rápido, la lista pasa a Todos los proyectos y lo selecciona, aunque tuvieras un filtro puesto.",
-        "ru": "Когда вы открываете терминал проекта из строки меню или быстрого перехода, список даже с фильтром переключается на «Все проекты» и выбирает его.",
-        "ja": "メニューバーやクイックスイッチャーからプロジェクトのターミナルを開くと、一覧が絞り込まれていても「すべてのプロジェクト」に切り替わって選択されます。",
-        "zh-Hans": "从菜单栏或快速切换器打开项目的终端时，即使列表有筛选，也会切换到“所有项目”并选中它。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Back to all projects when nothing waits",
-        "tr": "Bakılacak kalmayınca Tüm projeler'e dönüş",
-        "de": "Zurück zu allen Projekten, wenn nichts wartet",
-        "es": "De vuelta a todos los proyectos cuando nada espera",
-        "ru": "Назад ко всем проектам, когда ничего не ждёт",
-        "ja": "待ちがなくなると「すべてのプロジェクト」へ",
-        "zh-Hans": "没有待处理时回到所有项目"
-      },
-      "body": {
-        "en": "When the last project in Needs attention stops waiting, the list goes back to All projects and selects the one whose terminal you have open.",
-        "tr": "Bakılacaklar'daki son proje de sizi beklemeyi bırakınca liste Tüm projeler'e dönüyor ve terminali açık olan projeyi seçiyor.",
-        "de": "Wartet in „Zu prüfen“ das letzte Projekt nicht mehr, springt die Liste zurück zu „Alle Projekte“ und wählt das Projekt, dessen Terminal du offen hast.",
-        "es": "Cuando el último proyecto de Por revisar deja de esperarte, la lista vuelve a Todos los proyectos y selecciona el que tienes con la terminal abierta.",
-        "ru": "Когда в «Требуют внимания» не остаётся проектов, список возвращается ко «Всем проектам» и выбирает тот, чей терминал у вас открыт.",
-        "ja": "「要確認」の最後のプロジェクトが待ち状態でなくなると、一覧は「すべてのプロジェクト」に戻り、ターミナルを開いているプロジェクトを選びます。",
-        "zh-Hans": "“待处理”里最后一个项目不再等你时，列表会回到“所有项目”，并选中你正开着终端的那个项目。"
+        "en": "While another session in the same project waited for your answer, switching to a Claude tab didn't clear its orange dot. That's fixed: looking at the tab clears it now.",
+        "tr": "Aynı projede başka bir oturum cevabınızı beklerken, geçtiğiniz Claude sekmesinin turuncu noktası sönmüyordu. Düzeltildi; artık sekmeye geçince nokta kalkıyor.",
+        "de": "Wartete eine andere Sitzung im selben Projekt auf deine Antwort, blieb der orange Punkt eines Claude-Tabs auch nach dem Hinsehen. Das ist behoben: Sobald du zum Tab wechselst, verschwindet er.",
+        "es": "Si otra sesión del mismo proyecto esperaba tu respuesta, el punto naranja de una pestaña de Claude no se apagaba al mirarla. Ya está corregido: al cambiar a la pestaña, desaparece.",
+        "ru": "Пока другая сессия в том же проекте ждала вашего ответа, оранжевая точка на вкладке Claude не гасла, даже когда вы на неё переходили. Исправлено: теперь она пропадает, как только вы открываете вкладку.",
+        "ja": "同じプロジェクトの別のセッションが返答を待っていると、Claude のタブを開いてもオレンジの点が消えませんでした。修正済みで、タブに切り替えれば消えます。",
+        "zh-Hans": "同一项目里另一个会话在等你回复时，切到某个 Claude 标签页，它的橙点也不会消失。现已修复：切过去就会熄灭。"
       }
     }
   ]

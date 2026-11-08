@@ -50,6 +50,15 @@ impl Core {
         self.notify();
     }
 
+    /// A session's own tab looked at: its finished turn counts as seen, though a permission
+    /// prompt or a question still open in another session of the project holds the project's
+    /// look back (`mark_seen`; the seen book has one moment per project). Only a finished turn no
+    /// later than the look goes (`looked_at`); a prompt never does. Of either agent.
+    pub fn mark_session_seen(&self, id: &str) {
+        self.lock().looked.insert(id.to_string(), now_ms());
+        self.refresh_claude();
+    }
+
     /// A waiting turn's notification falls due before the next heartbeat.
     pub(super) fn claude_due(&self) -> bool {
         self.lock().candidates.values().any(|(_, since)| since.elapsed() >= NOTIFY_AFTER)
@@ -117,6 +126,8 @@ impl Core {
             let laps_own = set_apart(&mut scan, &apart);
             let (announce, projects) = {
                 let mut inner = self.lock();
+                // The finished turns looked at in their own tabs.
+                looked_at(&mut scan, &mut inner.looked, now_ms());
                 let first = !inner.claude_scanned;
                 let fresh = first_scans(&mut inner, &merged, &scan);
                 let mut announce = due_notifications(&mut inner, &scan.waiting, &scan.sessions);
@@ -207,20 +218,51 @@ fn set_apart(scan: &mut crate::claude::ScanResult, apart: &HashSet<String>) -> V
 
     let touched: HashSet<&str> = own.iter().map(|session| session.path.as_str()).collect();
     for path in touched {
-        scan.waiting.remove(path);
-        scan.working.remove(path);
-        let left = || scan.sessions.iter().filter(|session| session.path == path);
-        match left().filter(|session| session.phase == SessionPhase::Waiting).filter_map(|session| session.turn).max_by_key(|turn| turn.at) {
-            Some(turn) => {
-                scan.waiting.insert(path.to_string(), turn);
-            }
-            None if left().any(|session| session.phase == SessionPhase::Working) => {
-                scan.working.insert(path.to_string());
-            }
-            None => {}
-        }
+        reckon(scan, path);
     }
     own.into_iter().chain(others).collect()
+}
+
+/// The finished turns looked at in their own session's tab (`Core::mark_session_seen`), seen in
+/// `scan` as a look at their project would see them: those sessions are idle, and a project they
+/// were in waits and works by its other sessions. A turn that finished after the look, and any
+/// prompt, still waits. A look a day old is forgotten.
+fn looked_at(scan: &mut crate::claude::ScanResult, looked: &mut HashMap<String, u64>, now: u64) {
+    looked.retain(|_, at| now.saturating_sub(*at) < crate::claude::EVENT_MAX_AGE_MS);
+    if looked.is_empty() {
+        return;
+    }
+    let mut touched: HashSet<String> = HashSet::new();
+    for session in scan.sessions.iter_mut().chain(scan.others.iter_mut()) {
+        let seen = session.phase == SessionPhase::Waiting
+            && session.turn.is_some_and(|turn| turn.kind == TurnKind::Finished && looked.get(&session.id).is_some_and(|at| turn.at <= *at));
+        if seen {
+            session.phase = SessionPhase::Idle;
+            session.turn = None;
+            touched.insert(session.path.clone());
+        }
+    }
+    // A folder that isn't listed (`others`, `path` empty) is no project's.
+    for path in touched.iter().filter(|path| !path.is_empty()) {
+        reckon(scan, path);
+    }
+}
+
+/// A project's waiting and working in `scan` worked out again from its sessions, as `evaluate`
+/// does: with the newest turn one of them waits with, else at work while one of them works.
+fn reckon(scan: &mut crate::claude::ScanResult, path: &str) {
+    scan.waiting.remove(path);
+    scan.working.remove(path);
+    let left = || scan.sessions.iter().filter(|session| session.path == path);
+    match left().filter(|session| session.phase == SessionPhase::Waiting).filter_map(|session| session.turn).max_by_key(|turn| turn.at) {
+        Some(turn) => {
+            scan.waiting.insert(path.to_string(), turn);
+        }
+        None if left().any(|session| session.phase == SessionPhase::Working) => {
+            scan.working.insert(path.to_string());
+        }
+        None => {}
+    }
 }
 
 /// The sessions working or waiting on you, by project.

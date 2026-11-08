@@ -618,15 +618,17 @@ function show(id: number): void {
 
 /**
  * What Claude finished in a tab counts as seen once the tab is looked at: picked (a click, the
- * keyboard) or pressed in, the panel open. Every session of its project stops waiting on you, as
- * on a board picked by hand. Not while one asks something there (a question, a permission
- * prompt): seen, it would no longer say so.
+ * keyboard) or pressed in, the panel open. That session's turn always (the core holds the
+ * project's look back before a prompt still open, so it alone would stay); and every session of
+ * its project stops waiting on you, as on a board picked by hand, unless one asks something there
+ * (a question, a permission prompt): seen, it would no longer say so.
  */
 function seeFinished(id: number | undefined): void {
   if (id === undefined || collapsed.value) return;
   const rows = sessions.value?.sessions ?? [];
   const finished = rows.find((row) => row.origin.kind === "pitwall" && row.origin.terminal === id && row.phase === "waiting" && row.turn?.kind === "finished");
   if (!finished) return;
+  void api.markSessionSeen(finished.id).catch(() => undefined);
   const path = finished.path ?? finished.folder;
   const asks = rows.some((row) => (row.path ?? row.folder) === path && row.phase === "waiting" && !!row.turn && row.turn.kind !== "finished");
   if (!asks) void api.markSeen(path).catch(() => undefined);

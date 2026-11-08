@@ -528,6 +528,7 @@ pub fn run() {
             commands::open_claude,
             commands::reveal_claude,
             commands::mark_seen,
+            commands::mark_session_seen,
             commands::set_settings,
             commands::set_project_settings,
             commands::work_folder,

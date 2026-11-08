@@ -199,6 +199,9 @@ struct Inner {
     /// The sessions of the last scan the laps' runs hold (`Core::lap_sessions`): a layer of
     /// their own, which only the laps follow (`set_apart` in `claude_state.rs`).
     lap_scanned: Vec<SessionState>,
+    /// When each session's own tab was last looked at, by session id (`mark_session_seen`): its
+    /// finished turn seen though a prompt elsewhere holds its project's look back. In memory only.
+    looked: HashMap<String, u64>,
     git: HashMap<String, GitInfo>,
     claude_hook: bool,
     claude_hook_outdated: bool,

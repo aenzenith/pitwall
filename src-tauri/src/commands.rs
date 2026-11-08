@@ -450,6 +450,14 @@ pub fn mark_seen(state: State<'_, AppState>, path: String) {
     state.core.mark_seen(&path);
 }
 
+/// One session's tab looked at (`Core::mark_session_seen`); the state is read again off the main
+/// thread.
+#[tauri::command]
+pub fn mark_session_seen(state: State<'_, AppState>, id: String) {
+    let core = state.core.clone();
+    std::thread::spawn(move || core.mark_session_seen(&id));
+}
+
 #[tauri::command]
 pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
     let before = state.core.settings();
