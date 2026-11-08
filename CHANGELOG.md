@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.1](https://github.com/aenzenith/pitwall/compare/v1.21.0...v1.21.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **claude:** a tab looked at lost its dot while another session asked ([13aa5ca](https://github.com/aenzenith/pitwall/commit/13aa5ca063be1e14eedacbf86f5d9df0c02c1943))
+
 ## [1.21.0](https://github.com/aenzenith/pitwall/compare/v1.20.0...v1.21.0) (2026-11-06)
 
 
