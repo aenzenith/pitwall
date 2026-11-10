@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.21.2](https://github.com/aenzenith/pitwall/compare/v1.21.1...v1.21.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **accounts:** a Claude account's sign-in ran out unseen ([83155ae](https://github.com/aenzenith/pitwall/commit/83155ae6f743b9d5f5f27ac13cbef95bd06f91b3))
+* **accounts:** an account sync could lose the server it replaced ([b849a47](https://github.com/aenzenith/pitwall/commit/b849a47a9b58e8bf695a0c261bd9545bdc48f2a2))
+* **claude:** a permission Claude Code turned down unasked was told as a wait ([62e1189](https://github.com/aenzenith/pitwall/commit/62e11892c14c615c3c331a68122a5e9e6f5637ea))
+* **laps:** the sidebar's dot blinked while a job ran ([675a73c](https://github.com/aenzenith/pitwall/commit/675a73c6f82f9abdf207dd19e51cc1055cc13e96))
+
 ## [1.21.1](https://github.com/aenzenith/pitwall/compare/v1.21.0...v1.21.1) (2026-11-08)
 
 
