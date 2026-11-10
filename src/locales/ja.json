@@ -2340,6 +2340,9 @@
   "laps.unread": {
     "other": "未読の結果 {count} 件"
   },
+  "laps.going": {
+    "other": "実行中のタスク {count} 件"
+  },
   "laps.runs.unread": "未読",
   "core.laps.prompt.script": "あなたの前に実行されたスクリプトの出力（終了コード {code}）:",
   "core.laps.prompt.noOutput": "（スクリプトは何も出力しませんでした。）",

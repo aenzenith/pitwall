@@ -2428,6 +2428,10 @@
     "one": "{count} unread result",
     "other": "{count} unread results"
   },
+  "laps.going": {
+    "one": "{count} job running",
+    "other": "{count} jobs running"
+  },
   "laps.runs.unread": "Unread",
   "core.laps.prompt.script": "The output of the script that ran before you (exit code {code}):",
   "core.laps.prompt.noOutput": "(The script printed nothing.)",

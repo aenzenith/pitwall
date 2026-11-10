@@ -2415,6 +2415,10 @@
     "one": "{count} okunmamış sonuç",
     "other": "{count} okunmamış sonuç"
   },
+  "laps.going": {
+    "one": "{count} iş koşuyor",
+    "other": "{count} iş koşuyor"
+  },
   "laps.runs.unread": "Okunmadı",
   "core.laps.prompt.script": "Senden önce çalışan betiğin çıktısı (çıkış kodu {code}):",
   "core.laps.prompt.noOutput": "(Betik hiçbir şey yazmadı.)",

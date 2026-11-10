@@ -105,6 +105,12 @@ onBeforeUnmount(() => {
 const lapsBadge = computed(() => laps.value?.failing ?? 0);
 /** The runs whose result wasn't opened yet: an orange dot beside Turlar. */
 const lapsUnread = computed(() => laps.value?.unread ?? 0);
+/** The jobs with a run going (waiting on you or on the refill too): the same dot, blinking. */
+const lapsGoing = computed(() => laps.value?.laps.filter((lap) => lap.running).length ?? 0);
+/** What the dot says: the runs going first, then the results not read. */
+const lapsDot = computed(() =>
+  [lapsGoing.value ? t("laps.going", { count: lapsGoing.value }) : "", lapsUnread.value ? t("laps.unread", { count: lapsUnread.value }) : ""].filter(Boolean).join(" · "),
+);
 
 /** The dependencies' feed: from the start too, for the sidebar's count. */
 let depsLink: Promise<UnlistenFn> | null = null;
@@ -1023,7 +1029,7 @@ function server(project: Project): string {
           </button>
           <button type="button" :class="{ on: view === 'laps' }" :aria-current="view === 'laps' ? 'page' : undefined" @click="turnTo('laps')">
             <Icon name="laps" /> <span class="nav-label">{{ t("laps.nav") }}</span>
-            <span v-if="lapsUnread" class="laps-unread" role="img" :aria-label="t('laps.unread', { count: lapsUnread })" :title="t('laps.unread', { count: lapsUnread })"></span>
+            <span v-if="lapsDot" :class="['laps-dot', { going: lapsGoing > 0 }]" role="img" :aria-label="lapsDot" :title="lapsDot"></span>
             <span v-if="lapsBadge" class="laps-badge" :aria-label="t('laps.failing', { count: lapsBadge })">{{ lapsBadge }}</span>
           </button>
           <button type="button" :class="{ on: view === 'track' }" :aria-current="view === 'track' ? 'page' : undefined" @click="turnTo('track')"><Icon name="flag" /> {{ t("track.nav") }}</button>
@@ -1641,9 +1647,11 @@ function server(project: Project): string {
 }
 
 /* Runs whose result wasn't opened yet, beside Turlar: the laps' orange (their ring, their
-   countdown), as a dot; before the failures' count when both show. */
-.laps-unread {
+   countdown), as a dot; before the failures' count when both show. While a run goes it blinks,
+   and stays lit once its result waits to be read. */
+.laps-dot {
   flex-shrink: 0;
+  box-sizing: border-box;
   width: 6px;
   height: 6px;
   margin-left: auto;
@@ -1651,7 +1659,26 @@ function server(project: Project): string {
   background: var(--claude);
 }
 
-.laps-unread + .laps-badge {
+.laps-dot.going {
+  animation: laps-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes laps-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* Without the motion, a run going is the ring the tower draws for one. */
+@media (prefers-reduced-motion: reduce) {
+  .laps-dot.going {
+    animation: none;
+    border: 1.5px solid var(--claude);
+    background: none;
+  }
+}
+
+.laps-dot + .laps-badge {
   margin-left: 0;
 }
 

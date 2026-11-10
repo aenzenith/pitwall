@@ -2492,6 +2492,11 @@
     "many": "{count} resultados sin leer",
     "other": "{count} resultados sin leer"
   },
+  "laps.going": {
+    "one": "{count} tarea en marcha",
+    "many": "{count} tareas en marcha",
+    "other": "{count} tareas en marcha"
+  },
   "laps.runs.unread": "Sin leer",
   "core.laps.prompt.script": "La salida del script que se ejecutó antes que tú (código de salida {code}):",
   "core.laps.prompt.noOutput": "(El script no imprimió nada.)",

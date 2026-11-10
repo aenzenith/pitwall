@@ -2428,6 +2428,10 @@
     "one": "{count} ungelesenes Ergebnis",
     "other": "{count} ungelesene Ergebnisse"
   },
+  "laps.going": {
+    "one": "{count} Aufgabe läuft",
+    "other": "{count} Aufgaben laufen"
+  },
   "laps.runs.unread": "Ungelesen",
   "core.laps.prompt.script": "Die Ausgabe des Skripts, das vor dir lief (Exit-Code {code}):",
   "core.laps.prompt.noOutput": "(Das Skript hat nichts ausgegeben.)",

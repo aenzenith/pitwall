@@ -2340,6 +2340,9 @@
   "laps.unread": {
     "other": "{count} 个未读结果"
   },
+  "laps.going": {
+    "other": "{count} 个任务运行中"
+  },
   "laps.runs.unread": "未读",
   "core.laps.prompt.script": "在你之前运行的脚本的输出（退出码 {code}）：",
   "core.laps.prompt.noOutput": "（脚本没有任何输出。）",

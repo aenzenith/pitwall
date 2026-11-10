@@ -1,25 +1,25 @@
 {
-  "since": "1.21.0",
+  "since": "1.21.1",
   "notes": [
     {
       "kind": "fix",
       "title": {
-        "en": "Fixed: the orange dot on a tab you looked at",
-        "tr": "Turuncu nokta hatası düzeltildi",
-        "de": "Behoben: der orange Punkt auf einem angesehenen Tab",
-        "es": "Corregido: el punto naranja de la pestaña que miras",
-        "ru": "Исправлено: оранжевая точка на просмотренной вкладке",
-        "ja": "修正：見たタブのオレンジの点",
-        "zh-Hans": "已修复：看过的标签页上的橙点"
+        "en": "Fixed: running jobs didn't show in the sidebar",
+        "tr": "Koşan işler artık kenar çubuğunda görünüyor",
+        "de": "Behoben: laufende Aufgaben fehlten in der Seitenleiste",
+        "es": "Corregido: las tareas en marcha no se veían",
+        "ru": "Исправлено: идущие задачи не было видно",
+        "ja": "修正：実行中のタスクがわからなかった",
+        "zh-Hans": "已修复：看不出任务正在运行"
       },
       "body": {
-        "en": "While another session in the same project waited for your answer, switching to a Claude tab didn't clear its orange dot. That's fixed: looking at the tab clears it now.",
-        "tr": "Aynı projede başka bir oturum cevabınızı beklerken, geçtiğiniz Claude sekmesinin turuncu noktası sönmüyordu. Düzeltildi; artık sekmeye geçince nokta kalkıyor.",
-        "de": "Wartete eine andere Sitzung im selben Projekt auf deine Antwort, blieb der orange Punkt eines Claude-Tabs auch nach dem Hinsehen. Das ist behoben: Sobald du zum Tab wechselst, verschwindet er.",
-        "es": "Si otra sesión del mismo proyecto esperaba tu respuesta, el punto naranja de una pestaña de Claude no se apagaba al mirarla. Ya está corregido: al cambiar a la pestaña, desaparece.",
-        "ru": "Пока другая сессия в том же проекте ждала вашего ответа, оранжевая точка на вкладке Claude не гасла, даже когда вы на неё переходили. Исправлено: теперь она пропадает, как только вы открываете вкладку.",
-        "ja": "同じプロジェクトの別のセッションが返答を待っていると、Claude のタブを開いてもオレンジの点が消えませんでした。修正済みで、タブに切り替えれば消えます。",
-        "zh-Hans": "同一项目里另一个会话在等你回复时，切到某个 Claude 标签页，它的橙点也不会消失。现已修复：切过去就会熄灭。"
+        "en": "The dot beside Laps only showed unread results, so a job at work went unnoticed. It now blinks while a job is running.",
+        "tr": "Turlar'ın yanındaki nokta yalnızca okunmamış sonuçları gösteriyordu, koşan bir iş fark edilmiyordu. Artık bir iş koşarken nokta yanıp sönüyor.",
+        "de": "Der Punkt neben Runden zeigte nur ungelesene Ergebnisse, eine laufende Aufgabe fiel nicht auf. Jetzt blinkt er, solange eine Aufgabe läuft.",
+        "es": "El punto junto a Vueltas solo mostraba resultados sin leer, así que una tarea en marcha pasaba desapercibida. Ahora parpadea mientras se ejecuta.",
+        "ru": "Точка у «Кругов» показывала только непрочитанные результаты, и идущая задача оставалась незамеченной. Теперь она мигает, пока задача выполняется.",
+        "ja": "「ラップ」の横の点は未読の結果しか示さず、実行中のタスクに気づけませんでした。今はタスクの実行中に点滅します。",
+        "zh-Hans": "“圈次”旁的圆点只提示未读结果，任务在运行时看不出来。现在任务运行时它会闪烁。"
       }
     }
   ]
