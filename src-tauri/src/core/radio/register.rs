@@ -17,6 +17,8 @@ const CLI_LIMIT: Duration = Duration::from_secs(30);
 const NOT_FOUND: [i32; 2] = [127, 9009];
 /// How the CLI says there is no such server, from `get` and from `remove`.
 const NO_SERVER: &str = "No MCP server named";
+/// How `add` says the name is taken.
+const TAKEN: &str = "already exists";
 
 /// What Claude Code has under Pitwall's name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +53,17 @@ fn run(line: &str) -> Option<Said> {
 fn run_in(line: &str, account: Option<&str>) -> Option<Said> {
     let extra: Vec<(&str, &str)> = account.map(|dir| (crate::accounts::ENV, dir)).into_iter().collect();
     run_with(line, &extra)
+}
+
+/// `run_in` for a line that writes Claude Code's configuration, run again after a moment while
+/// it ends badly for no reason it names (`process::retried`): Claude Code turns `mcp add` and
+/// `remove` away while another of its processes holds the configuration's lock (2.1.318). A name
+/// taken or not there, no CLI, or no answer in time is answer enough.
+fn write_in(line: &str, account: Option<&str>) -> Option<Said> {
+    process::retried(
+        || run_in(line, account),
+        |said| matches!(said, Some(Said { code: Some(code), text }) if *code != 0 && !NOT_FOUND.contains(code) && !text.contains(TAKEN) && !text.contains(NO_SERVER)),
+    )
 }
 
 /// `run` with `extra` in the command's environment: an account's folder for its agent's CLI.
@@ -149,10 +162,10 @@ pub(super) fn add() -> Result<(), String> {
     let app = own_app().ok_or_else(|| t!("core.radio.cliSilent"))?;
     let line = add_line(&app);
 
-    match run(&line) {
-        Some(said) if said.code != Some(0) && said.text.contains("already exists") => {
+    match write_in(&line, None) {
+        Some(said) if said.code != Some(0) && said.text.contains(TAKEN) => {
             remove()?;
-            settled(run(&line))
+            settled(write_in(&line, None))
         }
         said => settled(said),
     }
@@ -169,10 +182,10 @@ pub(super) fn add_in(account: &str) -> Result<(), String> {
     let app = own_app().ok_or_else(|| t!("core.radio.cliSilent"))?;
     let line = add_line(&app);
 
-    match run_in(&line, Some(account)) {
-        Some(said) if said.code != Some(0) && said.text.contains("already exists") => {
+    match write_in(&line, Some(account)) {
+        Some(said) if said.code != Some(0) && said.text.contains(TAKEN) => {
             remove_in(Some(account))?;
-            settled(run_in(&line, Some(account)))
+            settled(write_in(&line, Some(account)))
         }
         said => settled(said),
     }
@@ -181,7 +194,7 @@ pub(super) fn add_in(account: &str) -> Result<(), String> {
 /// Takes Pitwall out of the MCP servers of the account whose folder is `account` (none: the main
 /// one); not being there is as good.
 pub(super) fn remove_in(account: Option<&str>) -> Result<(), String> {
-    match run_in(&format!("claude mcp remove {SERVER_NAME} --scope user"), account) {
+    match write_in(&format!("claude mcp remove {SERVER_NAME} --scope user"), account) {
         Some(said) if said.text.contains(NO_SERVER) => Ok(()),
         said => settled(said),
     }

@@ -239,16 +239,22 @@ pub fn claude_program() -> Option<PathBuf> {
 
 /// One CLI call for the account whose folder is `dir`, in `cwd` (none: the home folder). What it
 /// prints is never kept. A project's folder that isn't there fails it: in the home folder the
-/// server would be the home folder's own.
+/// server would be the home folder's own. A call that ends badly is made again after a moment
+/// (`process::retried`): Claude Code turns one away while another of its processes holds its
+/// configuration's lock, and a server being replaced is gone until its `add-json` goes through.
 fn run_cli(claude: &Path, dir: &str, home: &Path, args: &[String], cwd: Option<&str>) -> bool {
     let cwd = match cwd {
         Some(cwd) if Path::new(cwd).is_dir() => PathBuf::from(cwd),
         Some(_) => return false,
         None => home.to_path_buf(),
     };
-    let mut command = crate::process::terminal_command(claude, &[(super::ENV, dir)]);
-    command.args(args).current_dir(cwd);
-    crate::process::output_within(&mut command, CLI_LIMIT).is_ok_and(|output| output.status.success())
+    let call = || {
+        let mut command = crate::process::terminal_command(claude, &[(super::ENV, dir)]);
+        command.args(args).current_dir(&cwd);
+        crate::process::output_within(&mut command, CLI_LIMIT).map(|output| output.status)
+    };
+    // One that didn't answer in time isn't waited for again.
+    crate::process::retried(call, |ended| matches!(ended, Ok(status) if !status.success())).is_ok_and(|status| status.success())
 }
 
 #[cfg(test)]
@@ -319,5 +325,47 @@ mod tests {
         assert_eq!(shown, [("a", "same"), ("b", "missing")]);
         // An account with no file of its own yet: everything is missing.
         assert_eq!(plan(&home, &tmp.path().join("none").to_string_lossy(), &[]).report().servers.len(), 2);
+    }
+
+    /// Claude Code's `mcp add-json` and `remove` exit 1 when another of its processes holds its
+    /// configuration's lock (2.1.318). A server being replaced is taken out first: an add-json
+    /// the lock turned away once must not leave the account without it.
+    #[cfg(unix)]
+    #[test]
+    fn a_replaced_server_outlives_an_add_the_lock_turned_away_once() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let (home, dir) = (tmp.path().join("home"), tmp.path().join("home/.claude-work"));
+        write(&home.join(".claude.json"), json!({ "mcpServers": { "notes": { "command": "notes" } } }));
+        write(&dir.join(".claude.json"), json!({ "mcpServers": { "notes": { "command": "old-notes" } } }));
+        // A stand-in Claude Code: each server a file of its own, and its first add-json turned
+        // away as the lock turns one away.
+        let servers = dir.join("servers");
+        std::fs::create_dir_all(&servers).unwrap();
+        std::fs::write(servers.join("notes"), r#"{"command":"old-notes"}"#).unwrap();
+        let claude = tmp.path().join("claude");
+        std::fs::write(
+            &claude,
+            "#!/bin/sh\n\
+             servers=\"$CLAUDE_CONFIG_DIR/servers\"\n\
+             case \"$2\" in\n\
+             remove) [ -f \"$servers/$5\" ] || exit 1; rm \"$servers/$5\" ;;\n\
+             add-json)\n\
+             if [ ! -f \"$CLAUDE_CONFIG_DIR/turned-away\" ]; then : > \"$CLAUDE_CONFIG_DIR/turned-away\"; echo 'config is locked' >&2; exit 1; fi\n\
+             [ -f \"$servers/$5\" ] && exit 1\n\
+             printf '%s' \"$6\" > \"$servers/$5\" ;;\n\
+             *) exit 1 ;;\n\
+             esac\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let account = dir.to_string_lossy().into_owned();
+        let report = plan(&home, &account, &[]).carry_out(|args, cwd| run_cli(&claude, &account, &home, args, cwd));
+
+        assert_eq!(std::fs::read_to_string(servers.join("notes")).ok().as_deref(), Some(r#"{"command":"notes"}"#), "the account keeps the server, as the main account has it");
+        let shown: Vec<(&str, &str)> = report.servers.iter().map(|server| (server.name.as_str(), server.state)).collect();
+        assert_eq!(shown, [("notes", "synced")]);
     }
 }

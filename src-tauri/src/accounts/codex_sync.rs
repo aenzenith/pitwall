@@ -1,6 +1,7 @@
 //! A Codex account's MCP servers brought level with the main account's, through Codex's own CLI
 //! alone: each home's servers are what `codex mcp list --json` says of it, and the other account
-//! is given the main one's with `codex mcp add` (and `remove`), run with its `CODEX_HOME`. Pitwall
+//! is given the main one's with `codex mcp add`, run with its `CODEX_HOME`, which puts a server
+//! whole in the place of one of the same name: one that fails leaves the old one there. Pitwall
 //! neither reads nor writes `config.toml`. Of the list only the servers' settings are taken, held
 //! for the sync and dropped: a server's settings can hold keys and tokens (an environment
 //! variable), which go nowhere but into that CLI call's arguments, never through a shell, and the
@@ -149,7 +150,8 @@ fn servers_of(listed: &[u8]) -> Vec<Server> {
 enum Step {
     Same,
     Add,
-    /// The other account has one of that name, set otherwise: it goes first.
+    /// The other account has one of that name, set otherwise: `add` puts the main one's in its
+    /// place.
     Replace,
 }
 
@@ -235,17 +237,12 @@ impl Plan {
                 (Step::Same, _) if server.signs_in() => "login",
                 (Step::Same, _) => "same",
                 (_, None) => "cantCopy",
-                (step, Some(add)) => {
-                    if step == Step::Replace {
-                        // Not being there any more is as good: `add` says otherwise.
-                        run(&["mcp".into(), "remove".into(), server.name.clone()]);
-                    }
-                    match run(&add) {
-                        false => "failed",
-                        true if server.signs_in() => "login",
-                        true => "synced",
-                    }
-                }
+                // Never taken out first: `add` replaces it whole, and one that fails leaves it.
+                (_, Some(add)) => match run(&add) {
+                    false => "failed",
+                    true if server.signs_in() => "login",
+                    true => "synced",
+                },
             };
             servers.push(SyncServer { name: server.name.clone(), state });
         }
@@ -334,7 +331,6 @@ mod tests {
                 call(&["mcp", "add", "github", "--env", "GITHUB_TOKEN=ghp_secret", "--", "npx", "-y", "gh-mcp"]),
                 call(&["mcp", "add", "figma", "--url", "https://mcp.figma.com/mcp"]),
                 call(&["mcp", "add", "linear", "--url", "https://mcp.linear.app/mcp", "--bearer-token-env-var", "LINEAR_KEY"]),
-                call(&["mcp", "remove", "notes"]),
                 call(&["mcp", "add", "notes", "--", "notes"]),
             ]
         );

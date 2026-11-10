@@ -746,6 +746,25 @@ pub fn output_within(command: &mut Command, limit: Duration) -> std::io::Result<
     Ok(std::process::Output { status, stdout, stderr })
 }
 
+/// The waits between tries of an agent's CLI call that writes its configuration: Claude Code's
+/// `mcp add`, `add-json` and `remove` exit 1 when another of its processes holds the
+/// configuration's lock (2.1.318), which it lets go of a moment later.
+pub const CLI_RETRY_WAITS: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(2)];
+
+/// `call`, made again after each of `CLI_RETRY_WAITS` while `again` says what it came to is worth
+/// another try. The waits hold up the caller's thread, so never the main one's.
+pub fn retried<T>(mut call: impl FnMut() -> T, again: impl Fn(&T) -> bool) -> T {
+    let mut came = call();
+    for wait in CLI_RETRY_WAITS {
+        if !again(&came) {
+            break;
+        }
+        thread::sleep(wait);
+        came = call();
+    }
+    came
+}
+
 /// Stops a child `output_within` waited on too long, and leaves its reaping to a thread: one
 /// stuck on a mount that stopped answering may not even end on a SIGKILL yet.
 fn give_up(mut child: Child) -> std::io::Error {

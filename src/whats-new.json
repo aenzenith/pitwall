@@ -23,6 +23,27 @@
       }
     },
     {
+      "kind": "fix",
+      "title": {
+        "en": "Fixed: an account sync could lose a server",
+        "tr": "Hesap eşitlemesinde sunucu artık kaybolmuyor",
+        "de": "Behoben: der Abgleich konnte einen Server verlieren",
+        "es": "Corregido: la sincronización podía perder un servidor",
+        "ru": "Исправлено: синхронизация могла потерять сервер",
+        "ja": "修正：同期でサーバーが消えることがあった",
+        "zh-Hans": "已修复：同步可能丢失服务器"
+      },
+      "body": {
+        "en": "If Claude Code was saving its settings just then, a sync could leave the account without the server it was replacing. Pitwall now waits a moment and tries again, and so does turning the team radio on.",
+        "tr": "Claude Code o sırada ayarlarını kaydediyorsa, eşitleme yenilediği sunucuyu hesaptan silinmiş bırakabiliyordu. Artık Pitwall kısa bir süre bekleyip yeniden deniyor, takım radyosunu açarken de aynısını yapıyor.",
+        "de": "Speicherte Claude Code gerade seine Einstellungen, konnte der Abgleich das Konto ohne den Server lassen, den er ersetzen wollte. Jetzt wartet Pitwall kurz und versucht es noch einmal, auch beim Einschalten des Teamfunks.",
+        "es": "Si Claude Code estaba guardando sus ajustes justo entonces, la sincronización podía dejar la cuenta sin el servidor que reemplazaba. Ahora Pitwall espera un momento y lo vuelve a intentar, también al activar la radio del equipo.",
+        "ru": "Если Claude Code в этот момент сохранял настройки, синхронизация могла оставить аккаунт без сервера, который заменяла. Теперь Pitwall немного ждёт и пробует снова, и так же поступает при включении командного радио.",
+        "ja": "Claude Code が設定を保存している最中だと、同期で置き換え中のサーバーがアカウントから消えたままになることがありました。今は少し待ってからやり直します。チーム無線をオンにするときも同じです。",
+        "zh-Hans": "如果 Claude Code 当时正在保存设置，同步可能让账户丢掉正要替换的服务器。现在 Pitwall 会稍等片刻再试一次，打开车队无线电时也是如此。"
+      }
+    },
+    {
       "kind": "new",
       "title": {
         "en": "See when each sign-in ends",
