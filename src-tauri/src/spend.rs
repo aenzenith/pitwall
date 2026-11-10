@@ -151,10 +151,13 @@ const fn price(input: f64, output: f64, read: f64, fast: f64) -> Price {
 }
 
 /// API prices from platform.claude.com/docs/en/about-claude/pricing, by family and version.
-/// Cache reads are 0.1× input except on Fable 5.1 and Mythos 5.1 (0.025×) and Opus 5.5
-/// (0.05×). Fast mode costs double on Opus 5.5, 5 and 4.8; Opus 4.6 bills it at standard rates.
-/// Haiku 5.5 has two rate cards: a prompt over 100K tokens costs five times as much.
+/// Cache reads are 0.1× input except on Fable and Mythos 5.2 and 5.1 (0.025×) and Opus 5.5
+/// (0.05×). Fast mode costs double on Fable 5.2, Mythos 5.2 and Opus 5.5, 5 and 4.8; Opus 4.6
+/// bills it at standard rates. Haiku 5.5 has two rate cards: a prompt over 100K tokens costs
+/// five times as much.
 const PRICES: &[(&str, (u32, u32), Price)] = &[
+    ("fable", (5, 2), price(8.0, 40.0, 0.20, 2.0)),
+    ("mythos", (5, 2), price(8.0, 40.0, 0.20, 2.0)),
     ("fable", (5, 1), price(10.0, 50.0, 0.25, 1.0)),
     ("mythos", (5, 1), price(10.0, 50.0, 0.25, 1.0)),
     ("fable", (5, 0), price(10.0, 50.0, 1.0, 1.0)),
@@ -1017,6 +1020,9 @@ mod tests {
         assert!(close(cost("claude-opus-5-5", million(m, m, m, m, m), false), 37.2));
         assert!(close(cost("claude-opus-5-5", million(m, 0, 0, 0, 0), true), 8.0));
         assert!(close(cost("claude-opus-4-6", million(m, 0, 0, 0, 0), true), 5.0), "Opus 4.6 bills fast mode at standard rates");
+        // Fable 5.2: 8 in, 40 out, 10 and 16 for writes, 0.20 for reads; fast mode doubles it.
+        assert!(close(cost("claude-fable-5-2", million(m, m, m, m, m), false), 74.2));
+        assert!(close(cost("claude-mythos-5-2", million(m, 0, 0, 0, 0), true), 16.0));
         assert!(close(cost("claude-fable-5-1", million(0, 0, 0, 0, m), false), 0.25));
         assert!(close(cost("claude-fable-5", million(0, 0, 0, 0, m), false), 1.0));
         assert!(close(cost("claude-sonnet-4-6", million(0, 0, 0, 0, m), false), 0.30));

@@ -1,88 +1,25 @@
 {
-  "since": "1.21.1",
+  "since": "1.21.2",
   "notes": [
     {
       "kind": "fix",
       "title": {
-        "en": "Fixed: running jobs didn't show in the sidebar",
-        "tr": "Koşan işler artık kenar çubuğunda görünüyor",
-        "de": "Behoben: laufende Aufgaben fehlten in der Seitenleiste",
-        "es": "Corregido: las tareas en marcha no se veían",
-        "ru": "Исправлено: идущие задачи не было видно",
-        "ja": "修正：実行中のタスクがわからなかった",
-        "zh-Hans": "已修复：看不出任务正在运行"
+        "en": "Fixed: Fable 5.2 had no cost",
+        "tr": "Fable 5.2'nin maliyeti artık görünüyor",
+        "de": "Behoben: Fable 5.2 hatte keine Kosten",
+        "es": "Corregido: Fable 5.2 no tenía coste",
+        "ru": "Исправлено: у Fable 5.2 не было стоимости",
+        "ja": "修正：Fable 5.2 のコストが出なかった",
+        "zh-Hans": "已修复：Fable 5.2 没有费用"
       },
       "body": {
-        "en": "The dot beside Laps only showed unread results, so a job at work went unnoticed. It now blinks while a job is running.",
-        "tr": "Turlar'ın yanındaki nokta yalnızca okunmamış sonuçları gösteriyordu, koşan bir iş fark edilmiyordu. Artık bir iş koşarken nokta yanıp sönüyor.",
-        "de": "Der Punkt neben Runden zeigte nur ungelesene Ergebnisse, eine laufende Aufgabe fiel nicht auf. Jetzt blinkt er, solange eine Aufgabe läuft.",
-        "es": "El punto junto a Vueltas solo mostraba resultados sin leer, así que una tarea en marcha pasaba desapercibida. Ahora parpadea mientras se ejecuta.",
-        "ru": "Точка у «Кругов» показывала только непрочитанные результаты, и идущая задача оставалась незамеченной. Теперь она мигает, пока задача выполняется.",
-        "ja": "「ラップ」の横の点は未読の結果しか示さず、実行中のタスクに気づけませんでした。今はタスクの実行中に点滅します。",
-        "zh-Hans": "“圈次”旁的圆点只提示未读结果，任务在运行时看不出来。现在任务运行时它会闪烁。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Fixed: an account sync could lose a server",
-        "tr": "Hesap eşitlemesinde sunucu artık kaybolmuyor",
-        "de": "Behoben: der Abgleich konnte einen Server verlieren",
-        "es": "Corregido: la sincronización podía perder un servidor",
-        "ru": "Исправлено: синхронизация могла потерять сервер",
-        "ja": "修正：同期でサーバーが消えることがあった",
-        "zh-Hans": "已修复：同步可能丢失服务器"
-      },
-      "body": {
-        "en": "If Claude Code was saving its settings just then, a sync could leave the account without the server it was replacing. Pitwall now waits a moment and tries again, and so does turning the team radio on.",
-        "tr": "Claude Code o sırada ayarlarını kaydediyorsa, eşitleme yenilediği sunucuyu hesaptan silinmiş bırakabiliyordu. Artık Pitwall kısa bir süre bekleyip yeniden deniyor, takım radyosunu açarken de aynısını yapıyor.",
-        "de": "Speicherte Claude Code gerade seine Einstellungen, konnte der Abgleich das Konto ohne den Server lassen, den er ersetzen wollte. Jetzt wartet Pitwall kurz und versucht es noch einmal, auch beim Einschalten des Teamfunks.",
-        "es": "Si Claude Code estaba guardando sus ajustes justo entonces, la sincronización podía dejar la cuenta sin el servidor que reemplazaba. Ahora Pitwall espera un momento y lo vuelve a intentar, también al activar la radio del equipo.",
-        "ru": "Если Claude Code в этот момент сохранял настройки, синхронизация могла оставить аккаунт без сервера, который заменяла. Теперь Pitwall немного ждёт и пробует снова, и так же поступает при включении командного радио.",
-        "ja": "Claude Code が設定を保存している最中だと、同期で置き換え中のサーバーがアカウントから消えたままになることがありました。今は少し待ってからやり直します。チーム無線をオンにするときも同じです。",
-        "zh-Hans": "如果 Claude Code 当时正在保存设置，同步可能让账户丢掉正要替换的服务器。现在 Pitwall 会稍等片刻再试一次，打开车队无线电时也是如此。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Fixed: permission alerts with nothing to answer",
-        "tr": "Boşuna izin bildirimi artık gelmiyor",
-        "de": "Behoben: Erlaubnis-Meldungen ohne echte Frage",
-        "es": "Corregido: avisos de permiso sin nada que responder",
-        "ru": "Исправлено: просьбы о разрешении, на которые нечего ответить",
-        "ja": "修正：答える必要のない許可の通知",
-        "zh-Hans": "已修复：无需回应的授权提醒"
-      },
-      "body": {
-        "en": "When Claude Code turned a tool down by itself, as it does in background laps, Pitwall still said Claude needed your permission. Now it only tells you when Claude really asks.",
-        "tr": "Claude Code bir aracı sormadan kendisi reddettiğinde, örneğin arka planda koşan turlarda, Pitwall yine de Claude'un izin istediğini söylüyordu. Artık yalnızca Claude gerçekten sorduğunda haber veriyor.",
-        "de": "Lehnte Claude Code ein Werkzeug selbst ab, wie bei Runden im Hintergrund, meldete Pitwall trotzdem, Claude brauche deine Erlaubnis. Jetzt meldet es sich nur, wenn Claude wirklich fragt.",
-        "es": "Si Claude Code rechazaba una herramienta por su cuenta, como en las vueltas en segundo plano, Pitwall avisaba igualmente de que Claude necesitaba tu permiso. Ahora solo avisa cuando Claude pregunta de verdad.",
-        "ru": "Когда Claude Code сам отклонял инструмент, как в фоновых кругах, Pitwall всё равно сообщал, что Claude нужно ваше разрешение. Теперь он сообщает, только когда Claude действительно спрашивает.",
-        "ja": "Claude Code が尋ねずにツールを自分で拒否したとき（バックグラウンドのラップなど）も、Pitwall は Claude が許可を求めていると知らせていました。今は Claude が本当に尋ねているときだけ知らせます。",
-        "zh-Hans": "Claude Code 不经询问自行拒绝某个工具时（例如在后台运行的圈次中），Pitwall 仍会提示 Claude 需要你授权。现在只有 Claude 真的在问时才会提醒。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "See when each sign-in ends",
-        "tr": "Girişin ne zaman biteceğini gör",
-        "de": "Sieh, wann deine Anmeldung endet",
-        "es": "Mira cuándo termina tu sesión",
-        "ru": "Видно, когда закончится вход",
-        "ja": "ログイン期間の終わりがわかる",
-        "zh-Hans": "看到登录何时到期"
-      },
-      "body": {
-        "en": "Your Claude accounts now show when their sign-in runs out. A few days before it does, you can renew it right there.",
-        "tr": "Claude hesaplarında girişin ne zaman biteceği artık görünüyor. Bitmesine birkaç gün kala oradan tek tıkla yenileyebilirsin.",
-        "de": "Deine Claude-Konten zeigen jetzt, wann ihre Anmeldung abläuft. Ein paar Tage vorher kannst du sie direkt dort erneuern.",
-        "es": "Tus cuentas de Claude ahora muestran cuándo termina su sesión. Unos días antes, puedes renovarla desde ahí mismo.",
-        "ru": "Аккаунты Claude теперь показывают, когда закончится вход. За несколько дней до этого его можно обновить прямо там.",
-        "ja": "Claude のアカウントに、ログイン期間がいつ終わるかが表示されるようになりました。終わる数日前からは、その場で更新できます。",
-        "zh-Hans": "Claude 账户现在会显示登录何时到期。到期前几天，你可以直接在那里重新登录。"
+        "en": "Claude Code now runs Fable as Fable 5.2, and the Fuel page left its tokens out of the API-equivalent cost. They count now, and so do Mythos 5.2's.",
+        "tr": "Claude Code artık Fable olarak Fable 5.2'yi çalıştırıyor, Yakıt sayfası ise onun tokenlarını API karşılığı maliyete katmıyordu. Artık bu tokenlar da Mythos 5.2'ninkiler de hesaba katılıyor.",
+        "de": "Claude Code nutzt für Fable jetzt Fable 5.2, und die Tank-Seite ließ dessen Tokens bei den API-äquivalenten Kosten weg. Jetzt zählen sie mit, genau wie die von Mythos 5.2.",
+        "es": "Claude Code usa ahora Fable 5.2 como Fable, y la página Combustible dejaba sus tokens fuera del coste equivalente en API. Ahora cuentan, igual que los de Mythos 5.2.",
+        "ru": "Claude Code теперь запускает Fable как Fable 5.2, а страница «Топливо» не учитывала его токены в стоимости по ценам API. Теперь они учитываются, как и токены Mythos 5.2.",
+        "ja": "Claude Code の Fable は Fable 5.2 になりましたが、燃料ページではそのトークンが API 換算のコストに含まれていませんでした。今は Mythos 5.2 の分も含めて計算されます。",
+        "zh-Hans": "Claude Code 现在把 Fable 运行为 Fable 5.2，燃料页面却没把它的 token 计入 API 等价费用。现在已经计入，Mythos 5.2 的也一样。"
       }
     }
   ]
