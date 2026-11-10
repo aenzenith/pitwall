@@ -44,6 +44,27 @@
       }
     },
     {
+      "kind": "fix",
+      "title": {
+        "en": "Fixed: permission alerts with nothing to answer",
+        "tr": "Boşuna izin bildirimi artık gelmiyor",
+        "de": "Behoben: Erlaubnis-Meldungen ohne echte Frage",
+        "es": "Corregido: avisos de permiso sin nada que responder",
+        "ru": "Исправлено: просьбы о разрешении, на которые нечего ответить",
+        "ja": "修正：答える必要のない許可の通知",
+        "zh-Hans": "已修复：无需回应的授权提醒"
+      },
+      "body": {
+        "en": "When Claude Code turned a tool down by itself, as it does in background laps, Pitwall still said Claude needed your permission. Now it only tells you when Claude really asks.",
+        "tr": "Claude Code bir aracı sormadan kendisi reddettiğinde, örneğin arka planda koşan turlarda, Pitwall yine de Claude'un izin istediğini söylüyordu. Artık yalnızca Claude gerçekten sorduğunda haber veriyor.",
+        "de": "Lehnte Claude Code ein Werkzeug selbst ab, wie bei Runden im Hintergrund, meldete Pitwall trotzdem, Claude brauche deine Erlaubnis. Jetzt meldet es sich nur, wenn Claude wirklich fragt.",
+        "es": "Si Claude Code rechazaba una herramienta por su cuenta, como en las vueltas en segundo plano, Pitwall avisaba igualmente de que Claude necesitaba tu permiso. Ahora solo avisa cuando Claude pregunta de verdad.",
+        "ru": "Когда Claude Code сам отклонял инструмент, как в фоновых кругах, Pitwall всё равно сообщал, что Claude нужно ваше разрешение. Теперь он сообщает, только когда Claude действительно спрашивает.",
+        "ja": "Claude Code が尋ねずにツールを自分で拒否したとき（バックグラウンドのラップなど）も、Pitwall は Claude が許可を求めていると知らせていました。今は Claude が本当に尋ねているときだけ知らせます。",
+        "zh-Hans": "Claude Code 不经询问自行拒绝某个工具时（例如在后台运行的圈次中），Pitwall 仍会提示 Claude 需要你授权。现在只有 Claude 真的在问时才会提醒。"
+      }
+    },
+    {
       "kind": "new",
       "title": {
         "en": "See when each sign-in ends",

@@ -713,6 +713,10 @@ impl HookSession {
                 Some((SessionPhase::Waiting, Some(Turn { kind: TurnKind::Finished, at: self.since })))
             }
             HookPhase::Waiting(TurnKind::Finished) => Some((SessionPhase::Idle, None)),
+            // A permission dialog on screen is `waiting` to Claude Code. While it calls the session
+            // busy none is open: the call was turned down unasked (print mode, a lap in the
+            // background, `permissions.denyInsteadOfPrompting`) and the turn goes on.
+            HookPhase::Waiting(TurnKind::Permission) if busy => Some((SessionPhase::Working, None)),
             HookPhase::Waiting(kind) => {
                 let written = self.transcript.as_deref().and_then(modified_ms).unwrap_or(0).max(logged);
 
@@ -1639,6 +1643,63 @@ mod tests {
         // A name that isn't a tool's never gets through.
         let session = step("7", 25, format!("event=PermissionRequest\ntool_name=rm -rf /\n{common}"));
         assert_eq!((session.turn.map(|turn| turn.kind), session.tool), (Some(TurnKind::Permission), None));
+    }
+
+    /// Claude Code shows a permission dialog as `waiting`. A `PermissionRequest` while it calls
+    /// the session busy opened none: the call was turned down unasked (`claude -p`, a lap in the
+    /// background, `permissions.denyInsteadOfPrompting`; seen on Claude Code 2.1.322) and the turn
+    /// goes on, so nothing waits and nothing is told. A dialog read while Claude Code was still
+    /// written busy waits from when it opened, once Claude Code says so.
+    #[test]
+    fn a_permission_turned_down_unasked_is_no_wait() {
+        use std::time::Duration;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let claude = tmp.path().join("claude");
+        let registry = tmp.path().join("registry");
+        let events = registry.join("claude-events");
+        let project = "/Users/me/projects/paddock";
+        let transcript = claude.join(encode_project_path(project)).join("s1.jsonl");
+        let base = SystemTime::now() - Duration::from_secs(60);
+        let at = |seconds: u64| base + Duration::from_secs(seconds);
+
+        fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+        fs::create_dir_all(&events).unwrap();
+        fs::write(registry.join("claude-seen.json"), r#"{"since":0,"paths":{}}"#).unwrap();
+        fs::write(&transcript, "{}\n").unwrap();
+        File::options().write(true).open(&transcript).unwrap().set_modified(base).unwrap();
+
+        let mut watch = ClaudeWatch::new(claude, &registry);
+        let paths = vec![project.to_string()];
+        let common = format!("session_id=s1\ncwd={project}\ntranscript_path={}\n", transcript.display());
+        // Claude Code's own word: busy, else (`waiting`, `idle`) not.
+        let mut step = |name: &str, seconds: u64, lines: Option<String>, busy: bool| {
+            watch.set_busy(if busy { HashSet::from(["s1".to_string()]) } else { HashSet::new() });
+            if let Some(lines) = lines {
+                let file = events.join(format!("{name}.event"));
+                fs::write(&file, lines).unwrap();
+                File::options().write(true).open(&file).unwrap().set_modified(at(seconds)).unwrap();
+            }
+            let result = watch.scan(&paths);
+            let waiting = result.waiting.contains_key(project);
+            (result.sessions.into_iter().find(|s| s.id == "s1").expect("the session is listed"), waiting)
+        };
+
+        step("1", 1, Some(format!("event=UserPromptSubmit\n{common}")), true);
+        let (session, waiting) = step("2", 5, Some(format!("event=PermissionRequest\ntool_name=Bash\n{common}")), true);
+        assert_eq!((session.phase, session.turn, waiting), (SessionPhase::Working, None, false), "no dialog opened");
+        let (session, waiting) = step("3", 7, Some("event=PostToolUse\nsession_id=s1\ntool_name=Read\n".into()), true);
+        assert_eq!((session.phase, session.turn, waiting), (SessionPhase::Working, None, false), "the turn goes on");
+        let (session, _) = step("4", 9, Some(format!("event=Stop\n{common}")), false);
+        assert_eq!(session.turn, Some(Turn { kind: TurnKind::Finished, at: system_ms(at(9)) }));
+
+        // A real dialog, its hook read before Claude Code's `waiting`.
+        step("5", 12, Some(format!("event=UserPromptSubmit\n{common}")), true);
+        let (session, _) = step("6", 15, Some(format!("event=PermissionRequest\ntool_name=Bash\n{common}")), true);
+        assert_eq!(session.phase, SessionPhase::Working);
+        let (session, waiting) = step("7", 15, None, false);
+        assert_eq!((session.phase, session.turn, waiting), (SessionPhase::Waiting, Some(Turn { kind: TurnKind::Permission, at: system_ms(at(15)) }), true));
+        assert_eq!(session.tool.as_deref(), Some("Bash"));
     }
 
     #[test]
