@@ -21,6 +21,27 @@
         "ja": "「ラップ」の横の点は未読の結果しか示さず、実行中のタスクに気づけませんでした。今はタスクの実行中に点滅します。",
         "zh-Hans": "“圈次”旁的圆点只提示未读结果，任务在运行时看不出来。现在任务运行时它会闪烁。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "See when each sign-in ends",
+        "tr": "Girişin ne zaman biteceğini gör",
+        "de": "Sieh, wann deine Anmeldung endet",
+        "es": "Mira cuándo termina tu sesión",
+        "ru": "Видно, когда закончится вход",
+        "ja": "ログイン期間の終わりがわかる",
+        "zh-Hans": "看到登录何时到期"
+      },
+      "body": {
+        "en": "Your Claude accounts now show when their sign-in runs out. A few days before it does, you can renew it right there.",
+        "tr": "Claude hesaplarında girişin ne zaman biteceği artık görünüyor. Bitmesine birkaç gün kala oradan tek tıkla yenileyebilirsin.",
+        "de": "Deine Claude-Konten zeigen jetzt, wann ihre Anmeldung abläuft. Ein paar Tage vorher kannst du sie direkt dort erneuern.",
+        "es": "Tus cuentas de Claude ahora muestran cuándo termina su sesión. Unos días antes, puedes renovarla desde ahí mismo.",
+        "ru": "Аккаунты Claude теперь показывают, когда закончится вход. За несколько дней до этого его можно обновить прямо там.",
+        "ja": "Claude のアカウントに、ログイン期間がいつ終わるかが表示されるようになりました。終わる数日前からは、その場で更新できます。",
+        "zh-Hans": "Claude 账户现在会显示登录何时到期。到期前几天，你可以直接在那里重新登录。"
+      }
     }
   ]
 }

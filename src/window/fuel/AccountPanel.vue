@@ -3,11 +3,12 @@ import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 
 import Icon from "../../components/Icon.vue";
 import Spinner from "../../components/Spinner.vue";
-import { accountInUseOf, accountName, accountsOf, switchAccount } from "../../lib/accounts";
+import { accountInUseOf, accountName, accountsOf, askLoginEnds, loginEndedOn, loginEndView, switchAccount, type LoginEndView } from "../../lib/accounts";
 import { clockText, cluster, isLow, isStale, left, percentText, readClock } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { now } from "../../lib/store";
 import type { Agent, ClaudeAccount, UsageState, UsageWindow } from "../../lib/types";
+import AccountRenewDialog from "../settings/AccountRenewDialog.vue";
 
 /**
  * The Fuel page's account chip, at the bar's end before "x min ago": the account in use by its
@@ -15,6 +16,9 @@ import type { Agent, ClaudeAccount, UsageState, UsageWindow } from "../../lib/ty
  * week (a bar and when it refills) and the Claude sessions running with it; a click on another one
  * switches to it (`account_use`). "Add account" opens Settings › Claude with the add dialog,
  * "Manage accounts" Settings › Claude. Shown only with more than one account (FuelView).
+ * A Claude account's row ends with when its claude.ai sign-in ends (asked as the panel opens);
+ * within three days of it or past it, "Renew sign-in" beside that line, a button of its own over
+ * the row's corner (a row is a button), opens `AccountRenewDialog`.
  */
 /* `agent`: whose accounts (none: Claude's, as before). `plan`: the chip says the plan in use after
  * the name, as beside the agent picker (FuelView with more than one agent on), its panel opening
@@ -33,6 +37,8 @@ const place = ref<Record<string, string>>({});
 /** The account being switched to: its row's spinner. */
 const switching = ref<string | null>(null);
 const error = ref("");
+/** The account whose sign-in is being renewed: its dialog. */
+const renewing = ref<ClaudeAccount | null>(null);
 
 /** One of an account's two bars: what it is and when it refills, its share left. */
 type Bar = { key: "session" | "week"; label: string; share: string; fill: number; low: boolean; aria: string };
@@ -80,6 +86,10 @@ type Row = {
   reading: boolean;
   /** Codex's: when its limits were last read. */
   read: string | null;
+  /** Claude's: when its sign-in ends, the row's last line; once past, what to do about it. */
+  login: (LoginEndView & { line: string }) | null;
+  /** Its sign-in ended: the tag says so, in the crash's colour. */
+  ended: boolean;
 };
 
 const rows = computed<Row[]>(() =>
@@ -87,7 +97,9 @@ const rows = computed<Row[]>(() =>
     const limits = account.limits;
     const { session, week } = cluster(limits.usage, now.value, t, language.value);
     const stale = isStale(limits);
-    const expired = limits.status === "expired";
+    const login = agent.value === "claude" && !account.missing ? loginEndView(account.id, now.value) : null;
+    const ended = login?.level === "ended";
+    const expired = limits.status === "expired" || ended;
     const bars = account.missing || expired ? [] : [...(session ? [bar("session", session)] : []), ...(week ? [bar("week", week)] : [])];
     return {
       account,
@@ -95,10 +107,13 @@ const rows = computed<Row[]>(() =>
       plan: limits.plan,
       bars,
       stale,
-      tag: account.missing ? t("accounts.missing") : stale ? stateTag(limits) : null,
-      line: !account.missing && expired ? t("accounts.expiredLine") : null,
+      tag: account.missing ? t("accounts.missing") : ended ? t("accounts.loginEnd.endedTag") : stale ? stateTag(limits) : null,
+      // A sign-in past its end is renewed only by signing in again, not by opening Claude.
+      line: !account.missing && expired && !ended ? t("accounts.expiredLine") : null,
       reading: !account.missing && limits.status === "loading" && !limits.usage,
       read: agent.value === "codex" && limits.fetchedAt ? t("fuel.lastRead", { time: readClock(limits.fetchedAt, now.value, language.value) }) : null,
+      login: login && { ...login, line: ended ? t("accounts.loginEnd.endedLine", { date: loginEndedOn(account.id, now.value) ?? "" }) : login.text },
+      ended,
     };
   }),
 );
@@ -129,6 +144,7 @@ function show(): void {
     place.value = { top: `${box.bottom + 6}px`, right: `${Math.max(16, right)}px`, maxHeight };
   }
   open.value = true;
+  if (agent.value === "claude") void askLoginEnds();
   window.addEventListener("pointerdown", onOutside, true);
   window.addEventListener("blur", hide);
   window.addEventListener("resize", hide);
@@ -207,6 +223,12 @@ function add(): void {
   emit("add");
 }
 
+/** "Renew sign-in": the panel makes way for its dialog. */
+function renew(account: ClaudeAccount): void {
+  hide();
+  renewing.value = account;
+}
+
 function manage(): void {
   hide();
   emit("manage");
@@ -235,48 +257,56 @@ function manage(): void {
 
     <div v-if="open" ref="panel" class="panel" role="dialog" :aria-label="t(agent === 'codex' ? 'accounts.title.codex' : 'accounts.title')" :style="place" @keydown="onKey" @focusout="onFocusOut">
       <span class="panel-label section-label" aria-hidden="true">{{ t(agent === "codex" ? "accounts.title.codex" : "accounts.title") }}</span>
-      <button
-        v-for="row in rows"
-        :key="row.account.id"
-        type="button"
-        :class="['row', { on: row.account.inUse, stale: row.stale }]"
-        :aria-pressed="row.account.inUse"
-        :disabled="row.account.missing"
-        :aria-busy="switching === row.account.id"
-        @click="pick(row)"
-      >
-        <span class="row-head">
-          <span class="row-name">{{ row.name }}</span>
-          <span v-if="row.plan" class="row-plan">{{ row.plan }}</span>
-          <span class="row-end">
-            <Spinner v-if="switching === row.account.id" :size="12" />
-            <span v-else-if="row.reading" class="row-reading"><Spinner :size="11" />{{ t("accounts.reading") }}</span>
-            <span v-else-if="row.tag" :class="['tag', { expired: row.account.limits.status === 'expired' }]">{{ row.tag }}</span>
-            <span v-else-if="row.account.inUse" class="tag">{{ t("accounts.inUse") }}</span>
-            <span v-else-if="row.read" class="row-read">{{ row.read }}</span>
-          </span>
-        </span>
-        <span v-if="row.line" class="row-line">{{ row.line }}</span>
-        <span v-if="row.bars.length" class="bars">
-          <span v-for="each in row.bars" :key="each.key" class="bar" role="img" :aria-label="each.aria">
-            <span class="bar-head">
-              <span class="bar-label">{{ each.label }}</span>
-              <span :class="['bar-share', { low: each.low }]">{{ each.share }}</span>
+      <div v-for="row in rows" :key="row.account.id" class="slot">
+        <button
+          type="button"
+          :class="['row', { on: row.account.inUse, stale: row.stale }]"
+          :aria-pressed="row.account.inUse"
+          :disabled="row.account.missing"
+          :aria-busy="switching === row.account.id"
+          @click="pick(row)"
+        >
+          <span class="row-head">
+            <span class="row-name">{{ row.name }}</span>
+            <span v-if="row.plan" class="row-plan">{{ row.plan }}</span>
+            <span class="row-end">
+              <Spinner v-if="switching === row.account.id" :size="12" />
+              <span v-else-if="row.reading" class="row-reading"><Spinner :size="11" />{{ t("accounts.reading") }}</span>
+              <span v-else-if="row.tag" :class="['tag', { expired: row.account.limits.status === 'expired', ended: row.ended }]">{{ row.tag }}</span>
+              <span v-else-if="row.account.inUse" class="tag">{{ t("accounts.inUse") }}</span>
+              <span v-else-if="row.read" class="row-read">{{ row.read }}</span>
             </span>
-            <span class="bar-track"><span :class="['bar-fill', { low: each.low }]" :style="{ width: `${each.fill}%` }"></span></span>
           </span>
-        </span>
-        <span v-if="agent === 'claude' && row.account.running > 0 && !row.account.missing" class="row-running">
-          <span class="dot" aria-hidden="true"></span>{{ t("accounts.running", { count: row.account.running }) }}
-        </span>
-        <!-- Codex's: its sessions running, and when the one in use was last read. -->
-        <span v-else-if="agent !== 'claude' && ((row.account.running > 0 && !row.account.missing) || (row.read && row.account.inUse))" class="row-foot">
-          <span v-if="row.account.running > 0 && !row.account.missing" class="row-running">
-            <span class="dot" aria-hidden="true"></span>{{ t("accounts.running.codex", { count: row.account.running }) }}
+          <span v-if="row.line" class="row-line">{{ row.line }}</span>
+          <span v-if="row.bars.length" class="bars">
+            <span v-for="each in row.bars" :key="each.key" class="bar" role="img" :aria-label="each.aria">
+              <span class="bar-head">
+                <span class="bar-label">{{ each.label }}</span>
+                <span :class="['bar-share', { low: each.low }]">{{ each.share }}</span>
+              </span>
+              <span class="bar-track"><span :class="['bar-fill', { low: each.low }]" :style="{ width: `${each.fill}%` }"></span></span>
+            </span>
           </span>
-          <span v-if="row.read && row.account.inUse" class="row-read">{{ row.read }}</span>
-        </span>
-      </button>
+          <span v-if="agent === 'claude' && row.account.running > 0 && !row.account.missing" class="row-running">
+            <span class="dot" aria-hidden="true"></span>{{ t("accounts.running", { count: row.account.running }) }}
+          </span>
+          <!-- Codex's: its sessions running, and when the one in use was last read. -->
+          <span v-else-if="agent !== 'claude' && ((row.account.running > 0 && !row.account.missing) || (row.read && row.account.inUse))" class="row-foot">
+            <span v-if="row.account.running > 0 && !row.account.missing" class="row-running">
+              <span class="dot" aria-hidden="true"></span>{{ t("accounts.running.codex", { count: row.account.running }) }}
+            </span>
+            <span v-if="row.read && row.account.inUse" class="row-read">{{ row.read }}</span>
+          </span>
+          <!-- Claude's: when its sign-in ends. "Renew sign-in" stands over the room kept for it. -->
+          <span v-if="row.login" :class="['row-login', row.login.level]">
+            <span class="row-login-text" :title="row.login.title ?? undefined">{{ row.login.line }}</span>
+            <span v-if="row.login.renew" class="renew-room" aria-hidden="true">{{ t("accounts.loginEnd.renew") }}</span>
+          </span>
+        </button>
+        <button v-if="row.login?.renew" type="button" class="renew" :aria-label="t('accounts.loginEnd.renewFor', { name: row.name })" @click="renew(row.account)">
+          {{ t("accounts.loginEnd.renew") }}
+        </button>
+      </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="rule" aria-hidden="true"></div>
       <div class="foot">
@@ -284,6 +314,7 @@ function manage(): void {
         <button type="button" class="foot-button manage" @click="manage">{{ t("accounts.manage") }}</button>
       </div>
     </div>
+    <AccountRenewDialog v-if="renewing" :account="renewing" @close="renewing = null" />
   </div>
 </template>
 
@@ -432,6 +463,10 @@ function manage(): void {
   color: var(--claude-text);
 }
 
+.tag.ended {
+  color: var(--crash-text);
+}
+
 .row-reading {
   display: inline-flex;
   align-items: center;
@@ -510,6 +545,76 @@ function manage(): void {
 
 .row.stale .bar-fill {
   background: var(--idle-ring);
+}
+
+/* A row and, over its bottom right corner, its "Renew sign-in" (a button can't hold one). */
+.slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-login {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-subtle);
+}
+
+/* A row is a button, whose words don't wrap by themselves. */
+.row-login-text {
+  flex-grow: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.row-login.near {
+  color: var(--warn-text);
+}
+
+.row-login.ended {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.row-login.out {
+  color: var(--crash-text);
+}
+
+/* The button's size, unseen, so the line's text never runs under it. */
+.renew-room,
+.renew {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.renew-room {
+  visibility: hidden;
+}
+
+.renew {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  border-color: var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg-control);
+  color: var(--text);
+}
+
+.renew:hover,
+.renew:focus-visible {
+  background: var(--bg-control-hover);
 }
 
 .row-foot {

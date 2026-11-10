@@ -152,7 +152,7 @@ impl Core {
     }
 
     /// `agent`'s CLI version, as last asked or asked now.
-    fn agent_version(&self, agent: Agent) -> Option<String> {
+    pub(super) fn agent_version(&self, agent: Agent) -> Option<String> {
         if let Some((_, version)) = self.lock().agent_versions.get(&agent).filter(|(at, _)| at.elapsed() < VERSION_FOR) {
             return version.clone();
         }

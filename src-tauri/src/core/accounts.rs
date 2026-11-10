@@ -3,8 +3,24 @@
 //! each.
 
 use super::*;
+use crate::accounts::login_end::{self, LoginEnd};
 use crate::accounts::{self, MAIN};
 use crate::settings::AccountSettings;
+
+/// How long an account's sign-in end, as Claude Code said it, is shown before it is asked again.
+const LOGIN_END_FOR: Duration = Duration::from_secs(10 * 60);
+
+/// One asking at a time: a second caller waits for it, then finds its answers.
+static ASKING_LOGIN_ENDS: Mutex<()> = Mutex::new(());
+
+/// When an account's sign-in ends, as the window gets it (`claude_login_ends`).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountLoginEnd {
+    pub id: String,
+    #[serde(flatten)]
+    pub end: LoginEnd,
+}
 
 impl Core {
     /// Claude's accounts as the settings hold them.
@@ -62,6 +78,68 @@ impl Core {
             *counts.entry(account).or_default() += 1;
         }
         counts
+    }
+}
+
+impl Core {
+    /// When each Claude account's claude.ai sign-in ends, as Claude Code says it (`login_end`),
+    /// for Settings › Claude and the Fuel page: the main one, then each other whose folder is
+    /// there. Nothing is asked while Claude is off or not found, nor of a Claude Code older than
+    /// 2.1.318; an answer is good for `LOGIN_END_FOR`, kept in memory only. It takes a moment, so
+    /// off the main thread; the accounts are asked side by side.
+    pub fn claude_login_ends(&self) -> Vec<AccountLoginEnd> {
+        let asked = {
+            let inner = self.lock();
+            agents::agent_on(&inner, Agent::Claude) && inner.found.contains(&Agent::Claude)
+        };
+        if !asked || !self.agent_version(Agent::Claude).is_some_and(|version| login_end::speaks(&version)) {
+            return Vec::new();
+        }
+        let _one = ASKING_LOGIN_ENDS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let settings = self.accounts();
+        let listed: Vec<(String, Option<String>)> = std::iter::once((MAIN.to_string(), None))
+            .chain(settings.others.into_iter().filter(|account| Path::new(&account.dir).is_dir()).map(|account| (account.id, Some(account.dir))))
+            .collect();
+
+        let fresh = |id: &str, dir: &Option<String>| -> Option<LoginEnd> {
+            self.lock().login_ends.get(id).filter(|(at, asked_with, _)| at.elapsed() < LOGIN_END_FOR && asked_with == dir).map(|(_, _, end)| *end)
+        };
+        enum Answer<'scope> {
+            Kept(LoginEnd),
+            Asking(thread::ScopedJoinHandle<'scope, Option<LoginEnd>>),
+        }
+        let answers: Vec<(String, Option<LoginEnd>)> = thread::scope(|scope| {
+            let asking: Vec<_> = listed
+                .into_iter()
+                .map(|(id, dir)| match fresh(&id, &dir) {
+                    Some(end) => (id, dir, Answer::Kept(end)),
+                    None => {
+                        let folder = dir.clone();
+                        (id, dir, Answer::Asking(scope.spawn(move || login_end::ask(folder.as_deref()))))
+                    }
+                })
+                .collect();
+            asking
+                .into_iter()
+                .map(|(id, dir, answer)| match answer {
+                    Answer::Kept(end) => (id, Some(end)),
+                    // No answer is kept too, as nothing said, so a Claude Code that doesn't answer
+                    // isn't asked again at once.
+                    Answer::Asking(handle) => {
+                        let end = handle.join().ok().flatten();
+                        self.lock().login_ends.insert(id.clone(), (Instant::now(), dir, end.unwrap_or_default()));
+                        (id, end)
+                    }
+                })
+                .collect()
+        });
+        answers.into_iter().filter_map(|(id, end)| end.map(|end| AccountLoginEnd { id, end })).collect()
+    }
+
+    /// Forgets what Claude Code said of the account `id`'s sign-in: it was renewed, or the account
+    /// removed.
+    pub fn forget_login_end(&self, id: &str) {
+        self.lock().login_ends.remove(id);
     }
 }
 

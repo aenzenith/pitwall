@@ -545,6 +545,18 @@ export type AccountSync =
   /** Its sync is off and the main account has servers it hasn't. */
   | { id: string; state: "differs"; report: SyncReport };
 
+/** When a Claude account's claude.ai sign-in ends, as Claude Code says it (`claude_login_ends`).
+ * `loggedIn`: null when it didn't say; `endsAt` (ms): null for another kind of sign-in. */
+export type LoginEnd = { id: string; loggedIn: boolean | null; endsAt: number | null };
+
+/** An account's sign-in renewed (event `account-renew`, one at a time). */
+export type AccountRenew =
+  /** The browser was asked to open; `url`: the sign-in page, once Claude printed it. */
+  | { state: "waiting"; url: string | null }
+  | { state: "done"; id: string }
+  /** closed: the sign-in ended before it was done; cli: Claude Code wasn't found. */
+  | { state: "failed"; reason: "closed" | "cli"; error: string | null };
+
 /** The Fuel page's data, pushed to the main window and the popover as `fuel`. `limits`: the
  * account in use's; `accounts`: the main one first, then the added ones in the order added. */
 export type Fuel = { limits: UsageState; today: SpendToday | null; accounts: ClaudeAccount[] };

@@ -78,7 +78,19 @@ type OnUrl = Arc<Mutex<Option<Box<dyn FnOnce(String) + Send>>>>;
 /// address once Claude printed it; `on_end`, on a thread of its own, how it ended.
 pub fn start(dir: &str, on_url: impl Fn(String) + Send + 'static, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
     let cli = Cli { program: super::sync::claude_program(), args: &["auth", "login", "--claudeai"], env: super::ENV, signed_in };
-    run(cli, dir, on_url, None, on_end)
+    run(cli, dir, true, on_url, None, on_end)
+}
+
+/// Starts the sign-in again for an account already listed, as `start` does a new one's: the one
+/// whose folder is `dir`, or the main one (none), whose sign-in Claude Code is asked for without
+/// the variable. Claude Code's own sign-in, which renews when its claude.ai sign-in ends.
+pub fn renew(dir: Option<&str>, on_url: impl Fn(String) + Send + 'static, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
+    let (folder, signed_in): (String, fn(&str) -> bool) = match dir {
+        Some(dir) => (dir.to_string(), signed_in),
+        None => (super::main_dir(&dirs::home_dir().unwrap_or_default()).to_string_lossy().into_owned(), main_signed_in),
+    };
+    let cli = Cli { program: super::sync::claude_program(), args: &["auth", "login", "--claudeai"], env: super::ENV, signed_in };
+    run(cli, &folder, dir.is_some(), on_url, None, on_end)
 }
 
 /// Starts the sign-in of the Codex account whose home is `dir`, as `start` does Claude's: `on_url`
@@ -86,10 +98,12 @@ pub fn start(dir: &str, on_url: impl Fn(String) + Send + 'static, on_end: impl F
 /// out), `on_end` how it ended.
 pub fn start_codex(dir: &str, on_url: impl Fn(String) + Send + 'static, on_line: impl Fn(String) + Send + Sync + 'static, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
     let cli = Cli { program: super::codex_sync::codex_program(), args: &["login"], env: super::codex::ENV, signed_in: |dir| crate::codex_usage::signed_in(Path::new(dir)) };
-    run(cli, dir, on_url, Some(Arc::new(on_line)), on_end)
+    run(cli, dir, true, on_url, Some(Arc::new(on_line)), on_end)
 }
 
-fn run(cli: Cli, dir: &str, on_url: impl Fn(String) + Send + 'static, on_line: Option<OnLine>, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
+/// Runs the sign-in of `cli` for the folder `dir`, given to it by its variable (`named`), or with
+/// the variable taken out for the main account, Claude's own folder.
+fn run(cli: Cli, dir: &str, named: bool, on_url: impl Fn(String) + Send + 'static, on_line: Option<OnLine>, on_end: impl FnOnce(Ended) + Send + 'static) -> Result<(), String> {
     let mut slot = running();
     if slot.is_some() {
         return Err(t!("core.accounts.loginBusy"));
@@ -100,7 +114,14 @@ fn run(cli: Cli, dir: &str, on_url: impl Fn(String) + Send + 'static, on_line: O
         return Ok(());
     };
     let home = dirs::home_dir().unwrap_or_default();
-    let mut command = crate::process::terminal_command(&program, &[(cli.env, dir)]);
+    let mut command = match named {
+        true => crate::process::terminal_command(&program, &[(cli.env, dir)]),
+        false => {
+            let mut command = crate::process::terminal_command(&program, &[]);
+            command.env_remove(cli.env);
+            command
+        }
+    };
     command.args(cli.args).current_dir(&home).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
@@ -211,6 +232,12 @@ fn wait(child: &mut Child, cancelled: &AtomicBool, dir: &str, said: &Mutex<Optio
 pub fn signed_in(dir: &str) -> bool {
     let file = Path::new(dir).join(".credentials.json").is_file();
     file || keychain_item(&super::keychain_service(Some(dir)))
+}
+
+/// Whether Claude Code holds a sign-in for the main account, whose folder is `dir`: its own
+/// Keychain item (named without a folder) or its credentials file.
+fn main_signed_in(dir: &str) -> bool {
+    Path::new(dir).join(".credentials.json").is_file() || keychain_item(&super::keychain_service(None))
 }
 
 #[cfg(target_os = "macos")]

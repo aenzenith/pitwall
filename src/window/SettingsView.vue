@@ -8,6 +8,7 @@ import PitwallGlyph from "../components/PitwallGlyph.vue";
 import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
 import ThemeSwitch from "../components/ThemeSwitch.vue";
+import { askLoginEnds } from "../lib/accounts";
 import { useBackdropClose } from "../lib/dialog";
 import { agentsTab, ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
@@ -135,6 +136,15 @@ watch(
       (listed) => (details.value = listed ?? []),
       () => undefined,
     );
+  },
+  { immediate: true },
+);
+
+// Claude's part shown: when each of its accounts' sign-in ends, as the core has it (good 10 minutes).
+watch(
+  () => tab.value === "claude" && (!agentsTab.value || agentPicked.value === "claude"),
+  (shown) => {
+    if (shown) void askLoginEnds();
   },
   { immediate: true },
 );

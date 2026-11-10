@@ -101,6 +101,7 @@ use servers::Run;
 use snapshot::{LiveSession, ProjectView};
 use supervise::{Supervisor, Unit};
 pub use signals::agent_key;
+pub use accounts::AccountLoginEnd;
 pub use agents::AgentDetail;
 
 const RESTART_DELAY: Duration = Duration::from_secs(3);
@@ -278,6 +279,10 @@ struct Inner {
     agents_scanned: HashSet<Agent>,
     /// Each agent's CLI version as it last said it, and when (`agents.rs`: `agent_details`).
     agent_versions: HashMap<Agent, (Instant, Option<String>)>,
+    /// When each Claude account's sign-in ends as Claude Code last said it, by the account's id,
+    /// with the folder it was asked with and when (`accounts.rs`: `claude_login_ends`). In memory
+    /// only.
+    login_ends: HashMap<String, (Instant, Option<String>, crate::accounts::login_end::LoginEnd)>,
 }
 
 pub struct Core {

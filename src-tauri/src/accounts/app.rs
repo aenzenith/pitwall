@@ -36,6 +36,18 @@ pub enum LoginEvent {
     Failed { reason: &'static str, error: Option<String> },
 }
 
+/// A sign-in renewed (`renew`), as the window hears of it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum RenewEvent {
+    /// The browser was asked to open; `url`, its page, once Claude printed it.
+    Waiting { url: Option<String> },
+    /// Signed in again, the account `id`.
+    Done { id: String },
+    /// Not signed in: `closed` or `cli` (no Claude Code).
+    Failed { reason: &'static str, error: Option<String> },
+}
+
 /// A sync, as the window hears of it.
 #[derive(Debug, Clone, Serialize)]
 pub struct SyncEvent {
@@ -75,6 +87,10 @@ fn listed_projects(app: &AppHandle) -> Vec<String> {
 
 fn tell_login(app: &AppHandle, event: LoginEvent) {
     let _ = app.emit_to(MAIN_WINDOW, "account-login", event);
+}
+
+fn tell_renew(app: &AppHandle, event: RenewEvent) {
+    let _ = app.emit_to(MAIN_WINDOW, "account-renew", event);
 }
 
 fn tell_sync(app: &AppHandle, id: &str, state: &'static str, report: Option<SyncReport>) {
@@ -191,6 +207,7 @@ pub fn remove(app: &AppHandle, id: &str) -> Result<(), String> {
         }
         Ok(accounts.others.remove(at))
     })?;
+    core.forget_login_end(id);
     state(app).fuel.accounts_changed(app);
 
     if Path::new(&account.dir).is_dir() {
@@ -350,4 +367,40 @@ fn finish(app: &AppHandle, mut account: ClaudeAccount, prepared: &Prepared) {
 /// Stops the sign-in under way; nothing is added.
 pub fn login_cancel() {
     login::cancel();
+}
+
+/// Signs the account `id` in again with Claude Code's own sign-in (`login::renew`): the main one
+/// without the variable, another with its folder, which must be there. What Claude Code said of
+/// its sign-in's end is forgotten once it is done, and its limits read again.
+pub fn renew(app: &AppHandle, id: &str) -> Result<(), String> {
+    let dir = match id {
+        MAIN => None,
+        _ => {
+            let account = other(app, id)?;
+            if !Path::new(&account.dir).is_dir() {
+                return Err(t!("core.accounts.missing", name = account.name));
+            }
+            Some(account.dir)
+        }
+    };
+    if login::busy() {
+        return Err(t!("core.accounts.loginBusy"));
+    }
+    tell_renew(app, RenewEvent::Waiting { url: None });
+    let (on_url, on_end, id) = (app.clone(), app.clone(), id.to_string());
+    login::renew(
+        dir.as_deref(),
+        move |url| tell_renew(&on_url, RenewEvent::Waiting { url: Some(url) }),
+        move |ended| match ended {
+            login::Ended::Done => {
+                let state = state(&on_end);
+                state.core.forget_login_end(&id);
+                state.fuel.refresh(&on_end, true, state.core.settings().fuel_every_ms());
+                tell_renew(&on_end, RenewEvent::Done { id });
+            }
+            login::Ended::Closed(error) => tell_renew(&on_end, RenewEvent::Failed { reason: "closed", error }),
+            login::Ended::Missing => tell_renew(&on_end, RenewEvent::Failed { reason: "cli", error: None }),
+            login::Ended::Cancelled => {}
+        },
+    )
 }

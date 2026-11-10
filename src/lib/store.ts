@@ -458,6 +458,12 @@ export const api = {
   accountSync: (id: string) => invoke<SyncReport>("account_sync", { id }),
   /** What differs, writing nothing ("Details"). */
   accountSyncPlan: (id: string) => invoke<SyncReport>("account_sync_plan", { id }),
+  /** When each account's sign-in ends, as Claude Code says it (from 2.1.318; none before): only
+   * the accounts it answered for, kept by the core for 10 minutes. */
+  claudeLoginEnds: () => invoke<import("./types").LoginEnd[]>("claude_login_ends"),
+  /** Claude Code's own sign-in again for the account (the main one too), in the browser; it goes
+   * on as `account-renew` events and is stopped by `accountLoginCancel`. Rejects with a message. */
+  accountRenew: (id: string) => invoke("account_renew", { id }),
   /** The board: every project's cards (the Board page). */
   boardState: () => invoke<Card[]>("board_state"),
   /** `images`: those pasted into the note; the card takes the ones its note names (`[Image #n]`). */

@@ -1887,6 +1887,27 @@
   "accounts.add.mcpCantCopy": "无法复制，需手动设置 · {names}",
   "accounts.add.codex": "添加 Codex 账户",
   "accounts.retry": "重试",
+  "accounts.loginEnd.far": {
+    "other": "登录有效至 {date} · 还剩 {count} 天"
+  },
+  "accounts.loginEnd.near": {
+    "other": "登录将在 {count} 天后到期 · {date}"
+  },
+  "accounts.loginEnd.tomorrow": "登录将在明天到期 · {time}",
+  "accounts.loginEnd.today": "登录将在今天到期 · {time}",
+  "accounts.loginEnd.ended": "登录已到期 · {date}",
+  "accounts.loginEnd.out": "未登录",
+  "accounts.loginEnd.endedTag": "登录已到期",
+  "accounts.loginEnd.endedLine": "这个账户的登录已于 {date} 到期。请在 Claude 中用 /login 重新登录，或在这里重新登录。",
+  "accounts.loginEnd.endedTitle": "你的 Claude 登录已到期",
+  "accounts.loginEnd.endedTitleOf": "{name} 的登录已到期",
+  "accounts.loginEnd.endedBody": "它已于 {date} 到期，Claude Code 不会自己续期。请在 Claude 中用 {login} 重新登录，或在这里重新登录。",
+  "accounts.loginEnd.renew": "重新登录",
+  "accounts.loginEnd.renewFor": "重新登录 {name}",
+  "accounts.renew.title": "正在重新登录 {name}",
+  "accounts.renew.hint": "Claude Code 已在浏览器中打开登录页面。登录后，新的到期日期会显示在这里。",
+  "accounts.renew.failedClosed": "浏览器中的登录还没完成就关闭了。{name} 的登录没有变化。",
+  "accounts.renew.failedCli": "找不到 Claude Code，无法开始登录。",
   "accounts.note.switched": "新的 Claude 将用 {name} 打开。",
   "accounts.note.syncing": "正在同步 MCP 服务器…",
   "accounts.note.synced": {

@@ -2,15 +2,16 @@
 import { computed, onMounted, ref } from "vue";
 
 import Icon from "../../components/Icon.vue";
-import { accountName, accountsOf, switchAccount } from "../../lib/accounts";
+import { accountName, accountsOf, loginEndView, switchAccount, type LoginEndView } from "../../lib/accounts";
 import { t } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
 import { isMac, isWindows } from "../../lib/platform";
-import { api } from "../../lib/store";
+import { api, now } from "../../lib/store";
 import type { Agent, ClaudeAccount } from "../../lib/types";
 import RenameDialog from "../RenameDialog.vue";
 import AccountAddDialog from "./AccountAddDialog.vue";
 import AccountRemoveDialog from "./AccountRemoveDialog.vue";
+import AccountRenewDialog from "./AccountRenewDialog.vue";
 
 /**
  * Settings › Claude's accounts: every Claude account, the main one first (it is always there: it
@@ -18,6 +19,10 @@ import AccountRemoveDialog from "./AccountRemoveDialog.vue";
  * switching" switch. A row's right-click: Use, Rename…, Show folder, Remove…. "Add account…"
  * under them is the only way to add one. Everything here goes to the core by its own command,
  * never with the form (`@change.stop`, `@submit.stop`: the dialogs' own forms).
+ *
+ * A Claude account's third line says when its claude.ai sign-in ends (`loginEnds`, asked as the
+ * tab shows: SettingsView), and within three days of it, or past it, "Renew sign-in" runs Claude
+ * Code's own sign-in again for it (`AccountRenewDialog`). Codex's accounts have none of it.
  *
  * `startAdd`: the Fuel page's "Add account" opened Settings: the add dialog comes up at once.
  * `agent`: whose accounts (none: Claude's, as before); Codex's in Settings › Codex, each a home
@@ -33,6 +38,12 @@ const error = ref("");
 const adding = ref(false);
 const renaming = ref<ClaudeAccount | null>(null);
 const removing = ref<ClaudeAccount | null>(null);
+const renewing = ref<ClaudeAccount | null>(null);
+
+/** When each one's sign-in ends, by its id: Claude's accounts' alone. */
+const ends = computed<Record<string, LoginEndView | null>>(() =>
+  Object.fromEntries(accounts.value.map((account) => [account.id, other || account.missing ? null : loginEndView(account.id, now.value)])),
+);
 
 /** Its folder, plan and settings, as one line under its name. */
 function details(account: ClaudeAccount): string[] {
@@ -110,7 +121,20 @@ onMounted(() => {
             <template v-if="account.missing"> · <span class="gone">{{ t("accounts.missing") }}</span></template>
             <template v-for="part in details(account)" :key="part"> · {{ part }}</template>
           </span>
+          <span v-if="ends[account.id]" :class="['account-end', ends[account.id]?.level]" :title="ends[account.id]?.title ?? undefined">{{ ends[account.id]?.text }}</span>
         </span>
+        <button
+          v-if="ends[account.id]?.renew"
+          type="button"
+          class="control renew"
+          :aria-label="t('accounts.loginEnd.renewFor', { name: accountName(account) })"
+          @click="
+            error = '';
+            renewing = account;
+          "
+        >
+          {{ t("accounts.loginEnd.renew") }}
+        </button>
         <span v-if="account.inUse" class="badge">{{ t("accounts.inUse") }}</span>
         <!-- The whole label is the switch's. -->
         <label v-if="!account.main" class="sync">
@@ -131,6 +155,7 @@ onMounted(() => {
       @save="(name) => renaming && rename(renaming, name)"
       @close="renaming = null"
     />
+    <AccountRenewDialog v-if="renewing" :account="renewing" @close="renewing = null" />
     <AccountRemoveDialog v-if="removing" :account="removing" :agent="other ? agent : undefined" @close="removing = null" />
   </div>
 </template>
@@ -151,6 +176,8 @@ onMounted(() => {
 
 .account {
   min-height: 52px;
+  padding: 7px 0;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -186,6 +213,32 @@ onMounted(() => {
 
 .dir {
   font-family: var(--font-mono);
+}
+
+/* When its sign-in ends: plain while far, in the warning's colour within three days, the crash's
+   once past. */
+.account-end {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.account-end.near {
+  color: var(--warn-text);
+}
+
+.account-end.ended,
+.account-end.out {
+  color: var(--crash-text);
+}
+
+.renew {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .gone {

@@ -3,9 +3,11 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, ref } from "vue";
 
 import { codexFuel } from "./codexFuel";
-import { t } from "./i18n";
+import { clock, dayName } from "./day";
+import { language, t } from "./i18n";
+import { dayShort } from "./period";
 import { api, fuel } from "./store";
-import type { Agent, AgentAccountLogin, AgentAccountSync, AgentSyncReport, ClaudeAccount } from "./types";
+import type { Agent, AccountRenew, AgentAccountLogin, AgentAccountSync, AgentSyncReport, ClaudeAccount, LoginEnd } from "./types";
 
 /**
  * Claude accounts, as the core sends them with the fuel (`fuel.accounts`): the main one first,
@@ -173,4 +175,102 @@ export async function syncAccount(id: string, agent: Agent = "claude"): Promise<
   } catch (reason) {
     if (syncing()) setNote({ id, agent, state: "failed", switched, report: null, error: String(reason) });
   }
+}
+
+/* ---------- when a Claude account's sign-in ends (`claude_login_ends`) ---------- */
+
+/** What Claude Code said of each Claude account's sign-in, by the account's id: only those it
+ * answered for (none from a Claude Code before 2.1.318, none while Claude is off). In memory only. */
+export const loginEnds = ref<Record<string, LoginEnd>>({});
+
+let askingEnds = false;
+let askAgain = false;
+
+/** Asks the core again (it keeps each answer 10 minutes): as Settings › Claude shows, as the Fuel
+ * page does and its account panel opens, after a renewal. One asking at a time; one asked for
+ * meanwhile follows it. */
+export async function askLoginEnds(): Promise<void> {
+  if (askingEnds) {
+    askAgain = true;
+    return;
+  }
+  askingEnds = true;
+  try {
+    do {
+      askAgain = false;
+      try {
+        const listed = await api.claudeLoginEnds();
+        loginEnds.value = Object.fromEntries(listed.map((end) => [end.id, end]));
+      } catch {
+        // An older core: nothing is shown.
+      }
+    } while (askAgain);
+  } finally {
+    askingEnds = false;
+  }
+}
+
+/** Claude Code warns of a sign-in's end three days before it: so does Pitwall. */
+const NEAR_DAYS = 3;
+const DAY_MS = 86_400_000;
+
+/** How an account's sign-in end is shown. `far`: plain; `near`: within three days, in the warning's
+ * colour; `ended` and `out` (signed out): in the crash's, with "Renew sign-in". */
+export type LoginEndView = {
+  level: "far" | "near" | "ended" | "out";
+  /** The line under the account's name. */
+  text: string;
+  /** The full date and time, as its tooltip. */
+  title: string | null;
+  /** Its sign-in can be renewed from here. */
+  renew: boolean;
+};
+
+/** Local days from `from`'s to `to`'s. */
+function daysApart(from: number, to: number): number {
+  const day = (at: number): number => {
+    const date = new Date(at);
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+  return Math.round((day(to) - day(from)) / DAY_MS);
+}
+
+const fullDates = new Map<string, Intl.DateTimeFormat>();
+
+/** `Monday 16 November 2026 at 13:19`, in the app's language. */
+function fullDate(at: number): string {
+  let format = fullDates.get(language.value);
+  if (!format) {
+    format = new Intl.DateTimeFormat(language.value, { dateStyle: "full", timeStyle: "short", hourCycle: "h23" });
+    fullDates.set(language.value, format);
+  }
+  return format.format(at);
+}
+
+/** What Claude account `id`'s row says of its sign-in's end at `now`; null when nothing is known. */
+export function loginEndView(id: string, now: number): LoginEndView | null {
+  const end = loginEnds.value[id];
+  if (!end) return null;
+  if (end.loggedIn === false) return { level: "out", text: t("accounts.loginEnd.out"), title: null, renew: true };
+  if (end.endsAt === null) return null;
+  const at = end.endsAt;
+  const title = fullDate(at);
+  const date = dayShort(dayName(at));
+  if (at <= now) return { level: "ended", text: t("accounts.loginEnd.ended", { date }), title, renew: true };
+  const days = daysApart(now, at);
+  if (days <= 0) return { level: "near", text: t("accounts.loginEnd.today", { time: clock(at) }), title, renew: true };
+  if (days === 1) return { level: "near", text: t("accounts.loginEnd.tomorrow", { time: clock(at) }), title, renew: true };
+  if (days <= NEAR_DAYS) return { level: "near", text: t("accounts.loginEnd.near", { count: days, date: `${date} ${clock(at)}` }), title, renew: true };
+  return { level: "far", text: t("accounts.loginEnd.far", { count: days, date }), title, renew: false };
+}
+
+/** The date Claude account `id`'s sign-in ended on, `8 Nov`; null while it hasn't. */
+export function loginEndedOn(id: string, now: number): string | null {
+  const at = loginEnds.value[id]?.endsAt;
+  return at != null && at <= now ? dayShort(dayName(at)) : null;
+}
+
+/** `account-renew`, while a renewal's dialog is open: its sign-in going on. */
+export function listenRenew(handler: (event: AccountRenew) => void): Promise<UnlistenFn> {
+  return getCurrentWindow().listen<AccountRenew>("account-renew", (event) => handler(event.payload));
 }

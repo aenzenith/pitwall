@@ -2006,6 +2006,29 @@
   "accounts.add.mcpCantCopy": "No se copiaron, configúralos a mano · {names}",
   "accounts.add.codex": "Añadir cuenta de Codex",
   "accounts.retry": "Reintentar",
+  "accounts.loginEnd.far": {
+    "one": "La sesión termina el {date} · {count} día",
+    "other": "La sesión termina el {date} · {count} días"
+  },
+  "accounts.loginEnd.near": {
+    "one": "La sesión termina en {count} día · {date}",
+    "other": "La sesión termina en {count} días · {date}"
+  },
+  "accounts.loginEnd.tomorrow": "La sesión termina mañana · {time}",
+  "accounts.loginEnd.today": "La sesión termina hoy · {time}",
+  "accounts.loginEnd.ended": "La sesión terminó · {date}",
+  "accounts.loginEnd.out": "Sin sesión",
+  "accounts.loginEnd.endedTag": "Sesión terminada",
+  "accounts.loginEnd.endedLine": "La sesión de esta cuenta terminó el {date}. Vuelve a iniciar sesión con /login en Claude o renuévala aquí.",
+  "accounts.loginEnd.endedTitle": "Tu sesión de Claude ha terminado",
+  "accounts.loginEnd.endedTitleOf": "La sesión de {name} ha terminado",
+  "accounts.loginEnd.endedBody": "Terminó el {date} y Claude Code no la renueva por sí solo. Vuelve a iniciar sesión con {login} en Claude o renuévala aquí.",
+  "accounts.loginEnd.renew": "Renovar sesión",
+  "accounts.loginEnd.renewFor": "Renovar la sesión de {name}",
+  "accounts.renew.title": "Renovando la sesión de {name}",
+  "accounts.renew.hint": "Claude Code abrió su página de inicio de sesión en tu navegador. Cuando inicies sesión, la nueva fecha de fin aparecerá aquí.",
+  "accounts.renew.failedClosed": "El inicio de sesión en el navegador se cerró antes de terminar. La sesión de {name} no cambió.",
+  "accounts.renew.failedCli": "No se encontró Claude Code, así que el inicio de sesión no pudo empezar.",
   "accounts.note.switched": "Los nuevos Claude se abren con {name}.",
   "accounts.note.syncing": "Sincronizando los servidores MCP…",
   "accounts.note.synced": {

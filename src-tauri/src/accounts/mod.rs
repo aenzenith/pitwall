@@ -15,6 +15,7 @@ pub mod codex;
 pub mod codex_app;
 pub mod codex_sync;
 pub mod login;
+pub mod login_end;
 pub mod sync;
 
 use std::collections::hash_map::RandomState;

@@ -702,6 +702,21 @@ pub fn account_login_cancel() {
     crate::accounts::app::login_cancel();
 }
 
+/// Claude's account `id` signed in again (`account-renew` tells how it goes); stopped as a new
+/// one's sign-in is, by `account_login_cancel`.
+#[tauri::command]
+pub fn account_renew(app: AppHandle, id: String) -> Result<(), String> {
+    crate::accounts::app::renew(&app, &id)
+}
+
+/// When each Claude account's sign-in ends, as Claude Code says it, for Settings › Claude and the
+/// Fuel page. It asks Claude Code's CLI, so it runs off the main thread.
+#[tauri::command]
+pub async fn claude_login_ends(app: AppHandle) -> Result<Vec<crate::core::AccountLoginEnd>, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.claude_login_ends()).await.map_err(|error| error.to_string())
+}
+
 /// An account's MCP servers brought level with the main account's now, through its agent's CLI.
 #[tauri::command]
 pub async fn account_sync(app: AppHandle, id: String, agent: Option<String>) -> Result<crate::accounts::sync::SyncReport, String> {

@@ -1887,6 +1887,27 @@
   "accounts.add.mcpCantCopy": "コピーできません。手動で設定してください · {names}",
   "accounts.add.codex": "Codex のアカウントを追加",
   "accounts.retry": "再試行",
+  "accounts.loginEnd.far": {
+    "other": "ログイン期間 {date} まで · あと {count} 日"
+  },
+  "accounts.loginEnd.near": {
+    "other": "ログイン期間はあと {count} 日で終わります · {date}"
+  },
+  "accounts.loginEnd.tomorrow": "ログイン期間は明日終わります · {time}",
+  "accounts.loginEnd.today": "ログイン期間は今日終わります · {time}",
+  "accounts.loginEnd.ended": "ログイン期間終了 · {date}",
+  "accounts.loginEnd.out": "未ログイン",
+  "accounts.loginEnd.endedTag": "ログイン期間終了",
+  "accounts.loginEnd.endedLine": "このアカウントのログイン期間は {date} に終わりました。Claude で /login を実行するか、ここから再ログインしてください。",
+  "accounts.loginEnd.endedTitle": "Claude のログイン期間が終わりました",
+  "accounts.loginEnd.endedTitleOf": "{name} のログイン期間が終わりました",
+  "accounts.loginEnd.endedBody": "{date} に終わり、Claude Code は自動では更新しません。Claude で {login} を実行するか、ここから再ログインしてください。",
+  "accounts.loginEnd.renew": "ログインを更新",
+  "accounts.loginEnd.renewFor": "{name} のログインを更新",
+  "accounts.renew.title": "{name} のログインを更新しています",
+  "accounts.renew.hint": "Claude Code がブラウザでログインページを開きました。ログインすると、新しい終了日がここに表示されます。",
+  "accounts.renew.failedClosed": "ブラウザでのログインが終わる前に閉じられました。{name} のログインは変わっていません。",
+  "accounts.renew.failedCli": "Claude Code が見つからず、ログインを始められませんでした。",
   "accounts.note.switched": "新しい Claude は {name} で開きます。",
   "accounts.note.syncing": "MCP サーバーを同期中…",
   "accounts.note.synced": {

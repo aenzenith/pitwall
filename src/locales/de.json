@@ -1957,6 +1957,29 @@
   "accounts.add.mcpCantCopy": "Nicht übertragen, von Hand einrichten · {names}",
   "accounts.add.codex": "Codex-Konto hinzufügen",
   "accounts.retry": "Erneut versuchen",
+  "accounts.loginEnd.far": {
+    "one": "Anmeldung endet am {date} · {count} Tag",
+    "other": "Anmeldung endet am {date} · {count} Tage"
+  },
+  "accounts.loginEnd.near": {
+    "one": "Anmeldung endet in {count} Tag · {date}",
+    "other": "Anmeldung endet in {count} Tagen · {date}"
+  },
+  "accounts.loginEnd.tomorrow": "Anmeldung endet morgen · {time}",
+  "accounts.loginEnd.today": "Anmeldung endet heute · {time}",
+  "accounts.loginEnd.ended": "Anmeldung beendet · {date}",
+  "accounts.loginEnd.out": "Nicht angemeldet",
+  "accounts.loginEnd.endedTag": "Anmeldung beendet",
+  "accounts.loginEnd.endedLine": "Die Anmeldung dieses Kontos endete am {date}. Melde dich in Claude mit /login neu an oder erneuere sie hier.",
+  "accounts.loginEnd.endedTitle": "Deine Claude-Anmeldung ist beendet",
+  "accounts.loginEnd.endedTitleOf": "Die Anmeldung von {name} ist beendet",
+  "accounts.loginEnd.endedBody": "Sie endete am {date}, und Claude Code erneuert sie nicht von selbst. Melde dich in Claude mit {login} neu an oder erneuere sie hier.",
+  "accounts.loginEnd.renew": "Anmeldung erneuern",
+  "accounts.loginEnd.renewFor": "Anmeldung von {name} erneuern",
+  "accounts.renew.title": "Anmeldung von {name} wird erneuert",
+  "accounts.renew.hint": "Claude Code hat seine Anmeldeseite im Browser geöffnet. Sobald du angemeldet bist, steht hier das neue Enddatum.",
+  "accounts.renew.failedClosed": "Die Anmeldung im Browser wurde vor dem Ende geschlossen. Die Anmeldung von {name} bleibt, wie sie war.",
+  "accounts.renew.failedCli": "Claude Code wurde nicht gefunden, die Anmeldung konnte nicht starten.",
   "accounts.note.switched": "Neue Claude-Sitzungen starten mit {name}.",
   "accounts.note.syncing": "MCP-Server werden abgeglichen …",
   "accounts.note.synced": {

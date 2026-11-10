@@ -2097,6 +2097,33 @@
   "accounts.add.mcpCantCopy": "Не перенесены, настройте вручную · {names}",
   "accounts.add.codex": "Добавить аккаунт Codex",
   "accounts.retry": "Повторить",
+  "accounts.loginEnd.far": {
+    "one": "Вход действует до {date} · {count} день",
+    "few": "Вход действует до {date} · {count} дня",
+    "many": "Вход действует до {date} · {count} дней",
+    "other": "Вход действует до {date} · {count} дня"
+  },
+  "accounts.loginEnd.near": {
+    "one": "Вход закончится через {count} день · {date}",
+    "few": "Вход закончится через {count} дня · {date}",
+    "many": "Вход закончится через {count} дней · {date}",
+    "other": "Вход закончится через {count} дня · {date}"
+  },
+  "accounts.loginEnd.tomorrow": "Вход закончится завтра · {time}",
+  "accounts.loginEnd.today": "Вход закончится сегодня · {time}",
+  "accounts.loginEnd.ended": "Вход закончился · {date}",
+  "accounts.loginEnd.out": "Нет входа",
+  "accounts.loginEnd.endedTag": "Вход закончился",
+  "accounts.loginEnd.endedLine": "Срок входа в этот аккаунт закончился {date}. Войдите заново командой /login в Claude или обновите вход здесь.",
+  "accounts.loginEnd.endedTitle": "Срок входа в Claude закончился",
+  "accounts.loginEnd.endedTitleOf": "Срок входа в аккаунт {name} закончился",
+  "accounts.loginEnd.endedBody": "Он закончился {date}, а сам Claude Code его не продлевает. Войдите заново командой {login} в Claude или обновите вход здесь.",
+  "accounts.loginEnd.renew": "Обновить вход",
+  "accounts.loginEnd.renewFor": "Обновить вход в аккаунт {name}",
+  "accounts.renew.title": "Обновление входа в аккаунт {name}",
+  "accounts.renew.hint": "Claude Code открыл страницу входа в браузере. После входа здесь появится новая дата окончания.",
+  "accounts.renew.failedClosed": "Вход в браузере закрыли, не закончив. Вход в аккаунт {name} не изменился.",
+  "accounts.renew.failedCli": "Claude Code не найден, вход не начался.",
   "accounts.note.switched": "Новые Claude открываются с аккаунтом {name}.",
   "accounts.note.syncing": "Синхронизация MCP-серверов…",
   "accounts.note.synced": {

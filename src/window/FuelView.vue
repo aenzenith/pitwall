@@ -6,7 +6,7 @@ import ClaudeLogo from "../components/ClaudeLogo.vue";
 import Icon from "../components/Icon.vue";
 import Rich from "../components/Rich.vue";
 import Spinner from "../components/Spinner.vue";
-import { accountInUse, accountName, severalAccounts } from "../lib/accounts";
+import { accountInUse, accountName, askLoginEnds, loginEndedOn, severalAccounts } from "../lib/accounts";
 import { agentName, multiAgent } from "../lib/agents";
 import { codexFuel, fuelAgents, fuelPicked as picked, fuelShown as agent } from "../lib/codexFuel";
 import { duration } from "../lib/day";
@@ -17,7 +17,7 @@ import { openInPanel } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { stillMotion } from "../lib/slide";
 import { api, fuel, now, visible } from "../lib/store";
-import type { Agent, UsageWindow } from "../lib/types";
+import type { Agent, ClaudeAccount, UsageWindow } from "../lib/types";
 import AccountNote from "./fuel/AccountNote.vue";
 import AccountPanel from "./fuel/AccountPanel.vue";
 import FuelBackdrop from "./fuel/FuelBackdrop.vue";
@@ -26,6 +26,7 @@ import FuelGauge from "./fuel/FuelGauge.vue";
 import FuelNotice from "./fuel/FuelNotice.vue";
 import SessionPace from "./fuel/SessionPace.vue";
 import TripComputer from "./fuel/TripComputer.vue";
+import AccountRenewDialog from "./settings/AccountRenewDialog.vue";
 
 /** `terminalProject`: the project the terminal panel shows, where "Open Claude with <account>"
  * opens its tab; null when there is none. */
@@ -112,8 +113,16 @@ const firstLoad = computed(() => !usage.value && (!fuel.value || status.value ==
 const readAgo = computed(() => (limits.value?.fetchedAt ? ago(limits.value.fetchedAt, now.value) : ""));
 
 /** What the notice above the values says, if anything; `account`: the account in use whose
- * sign-in expired, with more than one account (its "Open Claude with" button). */
-type Notice = { kind: "signedOut" | "expired" | "rateLimited" | "error" | "noLimits"; tag: string; title: string; body: string; account?: { id: string; name: string } };
+ * sign-in expired, with more than one account (its "Open Claude with" button); `renew`: the one
+ * whose sign-in is past its end (its "Renew sign-in" button). */
+type Notice = {
+  kind: "signedOut" | "expired" | "ended" | "rateLimited" | "error" | "noLimits";
+  tag: string;
+  title: string;
+  body: string;
+  account?: { id: string; name: string };
+  renew?: ClaudeAccount;
+};
 
 const notice = computed<Notice | null>(() => {
   const state = limits.value;
@@ -126,6 +135,13 @@ const notice = computed<Notice | null>(() => {
     case "signedOut":
       return { kind: "signedOut", tag: t("fuel.state.signedOut.tag"), title: t("fuel.state.signedOut.title"), body: t("fuel.state.signedOut.body") };
     case "expired": {
+      // Past its sign-in's end, as Claude Code says it: only signing in again renews it.
+      const inUse = accountInUse.value;
+      const endedOn = inUse ? loginEndedOn(inUse.id, now.value) : null;
+      if (inUse && endedOn) {
+        const title = severalAccounts.value ? t("accounts.loginEnd.endedTitleOf", { name: accountName(inUse) }) : t("accounts.loginEnd.endedTitle");
+        return { kind: "ended", tag: t("accounts.loginEnd.endedTag"), title, body: t("accounts.loginEnd.endedBody", { date: endedOn }), renew: inUse };
+      }
       // With more than one account, which one's: renewed by opening Claude with it.
       const account = severalAccounts.value ? accountInUse.value : null;
       if (account) {
@@ -175,7 +191,13 @@ async function refresh(): Promise<void> {
   asking.value = false;
 }
 
-onMounted(() => void ask(true));
+onMounted(() => {
+  void ask(true);
+  void askLoginEnds();
+});
+
+/** The account whose sign-in is being renewed: its dialog. */
+const renewing = ref<ClaudeAccount | null>(null);
 
 /** "Open Claude with <account>": a Claude tab with it, in the project the terminal panel shows. */
 function openClaude(account: string): void {
@@ -184,7 +206,9 @@ function openClaude(account: string): void {
 
 // Back on screen: a fresh look, as far as the core's pace allows.
 watch(visible, (on) => {
-  if (on) void ask(false);
+  if (!on) return;
+  void ask(false);
+  void askLoginEnds();
 });
 
 /* ---------- shade ---------- */
@@ -420,14 +444,17 @@ const paceOut = (element: Element, done: () => void): void => fold(element, fals
             <Transition :css="false" @enter="pageIn" @leave="pageOut">
               <div :key="agent" class="page" :data-pan="agentIndex">
                 <FuelNotice v-if="notice" :tag="notice.tag" :title="notice.title">
-                  <Rich v-if="notice.kind === 'signedOut'" :text="notice.body">
+                  <Rich v-if="notice.kind === 'signedOut' || notice.kind === 'ended'" :text="notice.body">
                     <template #claude><code>claude</code></template>
                     <template #codex><code>codex</code></template>
                     <template #login><code>/login</code></template>
                   </Rich>
                   <template v-else>{{ notice.body }}</template>
                   <span v-if="stale" class="dimmed">{{ t("fuel.state.dimmed") }}</span>
-                  <template v-if="notice.account && terminalProject" #actions>
+                  <template v-if="notice.renew" #actions>
+                    <button type="button" class="control" @click="renewing = notice.renew ?? null">{{ t("accounts.loginEnd.renew") }}</button>
+                  </template>
+                  <template v-else-if="notice.account && terminalProject" #actions>
                     <button type="button" class="control" @click="openClaude(notice.account.id)">{{ t("accounts.openClaude", { name: notice.account.name }) }}</button>
                   </template>
                 </FuelNotice>
@@ -492,6 +519,7 @@ const paceOut = (element: Element, done: () => void): void => fold(element, fals
         :last-read="isCodex && limits?.fetchedAt ? { at: limits.fetchedAt, now } : null"
       />
     </div>
+    <AccountRenewDialog v-if="renewing" :account="renewing" @close="renewing = null" />
   </div>
 </template>
 

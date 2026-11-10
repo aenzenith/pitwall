@@ -1957,6 +1957,29 @@
   "accounts.add.mcpCantCopy": "Not copied, set them up by hand · {names}",
   "accounts.add.codex": "Add a Codex account",
   "accounts.retry": "Try again",
+  "accounts.loginEnd.far": {
+    "one": "Sign-in ends {date} · {count} day",
+    "other": "Sign-in ends {date} · {count} days"
+  },
+  "accounts.loginEnd.near": {
+    "one": "Sign-in ends in {count} day · {date}",
+    "other": "Sign-in ends in {count} days · {date}"
+  },
+  "accounts.loginEnd.tomorrow": "Sign-in ends tomorrow · {time}",
+  "accounts.loginEnd.today": "Sign-in ends today · {time}",
+  "accounts.loginEnd.ended": "Sign-in ended · {date}",
+  "accounts.loginEnd.out": "Not signed in",
+  "accounts.loginEnd.endedTag": "Sign-in ended",
+  "accounts.loginEnd.endedLine": "This account's sign-in ended on {date}. Sign in again with /login in Claude, or renew it here.",
+  "accounts.loginEnd.endedTitle": "Your Claude sign-in has ended",
+  "accounts.loginEnd.endedTitleOf": "{name}'s sign-in has ended",
+  "accounts.loginEnd.endedBody": "It ended on {date}, and Claude Code doesn't renew it by itself. Sign in again with {login} in Claude, or renew it here.",
+  "accounts.loginEnd.renew": "Renew sign-in",
+  "accounts.loginEnd.renewFor": "Renew {name}'s sign-in",
+  "accounts.renew.title": "Renewing {name}'s sign-in",
+  "accounts.renew.hint": "Claude Code opened its sign-in page in your browser. Once you sign in, the new end date shows here.",
+  "accounts.renew.failedClosed": "The sign-in in the browser closed before it was done. {name}'s sign-in didn't change.",
+  "accounts.renew.failedCli": "Claude Code wasn't found, so the sign-in couldn't start.",
   "accounts.note.switched": "New Claude sessions open with {name}.",
   "accounts.note.syncing": "Syncing MCP servers…",
   "accounts.note.synced": {

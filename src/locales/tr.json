@@ -1944,6 +1944,29 @@
   "accounts.add.mcpCantCopy": "Kopyalanamadı, elle kurulmalı · {names}",
   "accounts.add.codex": "Codex hesabı ekle",
   "accounts.retry": "Yeniden dene",
+  "accounts.loginEnd.far": {
+    "one": "Giriş bitişi {date} · {count} gün",
+    "other": "Giriş bitişi {date} · {count} gün"
+  },
+  "accounts.loginEnd.near": {
+    "one": "Giriş {count} gün sonra bitiyor · {date}",
+    "other": "Giriş {count} gün sonra bitiyor · {date}"
+  },
+  "accounts.loginEnd.tomorrow": "Giriş yarın bitiyor · {time}",
+  "accounts.loginEnd.today": "Giriş bugün bitiyor · {time}",
+  "accounts.loginEnd.ended": "Giriş bitti · {date}",
+  "accounts.loginEnd.out": "Giriş yapılmamış",
+  "accounts.loginEnd.endedTag": "Giriş bitti",
+  "accounts.loginEnd.endedLine": "Bu hesabın girişi {date} tarihinde bitti. Claude'da /login ile ya da buradan yeniden giriş yapabilirsin.",
+  "accounts.loginEnd.endedTitle": "Claude girişin bitti",
+  "accounts.loginEnd.endedTitleOf": "{name} girişi bitti",
+  "accounts.loginEnd.endedBody": "Girişin {date} tarihinde bitti ve Claude Code onu kendiliğinden yenilemez. Claude'da {login} ile ya da buradan yeniden giriş yapabilirsin.",
+  "accounts.loginEnd.renew": "Girişi yenile",
+  "accounts.loginEnd.renewFor": "{name} girişini yenile",
+  "accounts.renew.title": "{name} girişi yenileniyor",
+  "accounts.renew.hint": "Claude Code giriş sayfasını tarayıcında açtı. Giriş yapınca yeni bitiş tarihi burada görünür.",
+  "accounts.renew.failedClosed": "Tarayıcıdaki giriş bitmeden kapandı. {name} girişi değişmedi.",
+  "accounts.renew.failedCli": "Claude Code bulunamadı, giriş başlatılamadı.",
   "accounts.note.switched": "Yeni Claude'lar {name} ile açılır.",
   "accounts.note.syncing": "MCP sunucuları eşitleniyor…",
   "accounts.note.synced": {

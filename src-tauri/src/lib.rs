@@ -562,6 +562,8 @@ pub fn run() {
             commands::account_pick_folder,
             commands::account_login,
             commands::account_login_cancel,
+            commands::account_renew,
+            commands::claude_login_ends,
             commands::account_sync,
             commands::account_sync_plan,
             commands::deps_state,
