@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.3](https://github.com/aenzenith/pitwall/compare/v1.21.2...v1.21.3) (2026-11-11)
+
+
+### Bug Fixes
+
+* **fuel:** Claude Fable 5.2's tokens had no cost ([0ed5124](https://github.com/aenzenith/pitwall/commit/0ed5124cdb808e6355d0fa926fd3e7ef6a1c3bff))
+
 ## [1.21.2](https://github.com/aenzenith/pitwall/compare/v1.21.1...v1.21.2) (2026-11-10)
 
 
