@@ -2,6 +2,27 @@
   "since": "1.21.3",
   "notes": [
     {
+      "kind": "fix",
+      "title": {
+        "en": "Fixed: Claude errors after uninstalling Pitwall",
+        "tr": "Pitwall'ı kaldırınca Claude artık hata vermiyor",
+        "de": "Behoben: Claude-Fehler nach dem Deinstallieren",
+        "es": "Corregido: errores de Claude tras desinstalar Pitwall",
+        "ru": "Исправлено: ошибки Claude после удаления Pitwall",
+        "ja": "修正：Pitwall を削除した後の Claude のエラー",
+        "zh-Hans": "已修复：卸载 Pitwall 后 Claude 报错"
+      },
+      "body": {
+        "en": "On Windows, Pitwall's uninstaller now takes its hooks and team radio out of Claude Code and Codex, so your sessions no longer trip over an app that's gone.",
+        "tr": "Windows'ta kaldırıcı, Pitwall'ın hook'larını ve takım radyosunu da Claude Code'dan ve Codex'ten çıkarıyor. Oturumların artık silinmiş bir uygulamaya takılmıyor.",
+        "de": "Unter Windows nimmt der Deinstaller von Pitwall jetzt auch seine Hooks und den Teamfunk aus Claude Code und Codex heraus. Deine Sitzungen stolpern nicht mehr über eine App, die weg ist.",
+        "es": "En Windows, el desinstalador de Pitwall ahora quita también sus hooks y la radio del equipo de Claude Code y Codex. Tus sesiones ya no tropiezan con una app que ya no está.",
+        "ru": "В Windows деинсталлятор Pitwall теперь убирает его хуки и командное радио из Claude Code и Codex. Ваши сессии больше не спотыкаются о приложение, которого уже нет.",
+        "ja": "Windows では、Pitwall のアンインストーラーが Claude Code と Codex からフックとチーム無線も外すようになりました。消えたアプリにセッションがつまずくことはもうありません。",
+        "zh-Hans": "在 Windows 上，Pitwall 的卸载程序现在会把它的 Hook 和车队无线电从 Claude Code 和 Codex 中一并移除，你的会话不会再被一个已经不在的应用绊住。"
+      }
+    },
+    {
       "kind": "new",
       "title": {
         "en": "Pick when a long turn is told",

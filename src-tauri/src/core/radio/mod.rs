@@ -30,7 +30,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use super::*;
 use crate::mcp::{self, receive, same_secret, send, Call, Endpoint, Hello, Reply, Timed, Welcome, TOOLS};
 
-mod register;
+pub(super) mod register;
 mod tools;
 
 // The command line (`cli`) tells a saved command and an output's current run the same way.

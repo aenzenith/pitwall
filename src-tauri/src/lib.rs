@@ -60,6 +60,7 @@ pub use crate::hooks::hook_mode;
 pub use crate::mcp::mcp_mode;
 pub use crate::cli::cli_mode;
 pub use crate::codex_hooks::codex_hook_mode;
+pub use crate::core::uninstall::uninstall_mode;
 
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";

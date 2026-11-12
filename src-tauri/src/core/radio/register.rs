@@ -193,7 +193,7 @@ pub(super) fn add_in(account: &str) -> Result<(), String> {
 
 /// Takes Pitwall out of the MCP servers of the account whose folder is `account` (none: the main
 /// one); not being there is as good.
-pub(super) fn remove_in(account: Option<&str>) -> Result<(), String> {
+pub(in crate::core) fn remove_in(account: Option<&str>) -> Result<(), String> {
     match write_in(&format!("claude mcp remove {SERVER_NAME} --scope user"), account) {
         Some(said) if said.text.contains(NO_SERVER) => Ok(()),
         said => settled(said),
@@ -289,7 +289,7 @@ pub(super) fn codex_add(home: Option<&Path>) -> Result<(), String> {
 }
 
 /// Takes Pitwall out of Codex's MCP servers in `home`; not being there is as good.
-pub(super) fn codex_remove(home: Option<&Path>) -> Result<(), String> {
+pub(in crate::core) fn codex_remove(home: Option<&Path>) -> Result<(), String> {
     match codex_run(&format!("codex mcp remove {SERVER_NAME}"), home) {
         Some(said) if said.text.contains(NO_SERVER) => Ok(()),
         said => settled_for(Agent::Codex, said),

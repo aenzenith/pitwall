@@ -73,6 +73,7 @@ mod agents;
 mod codex_state;
 mod codex_past;
 mod codex_accounts;
+pub(crate) mod uninstall;
 pub use activity::{DaySummary, WeekMark};
 mod export;
 pub use export::{export_file_name, ExportPreview};

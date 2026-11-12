@@ -11,6 +11,11 @@ fn main() {
     if pitwall_lib::codex_hook_mode(std::env::args_os().skip(1)) {
         return;
     }
+    // The Windows uninstaller's cleanup (`--uninstall-cleanup`): Pitwall's hooks and team radio
+    // taken out of Claude Code and Codex before the app is deleted (`core/uninstall.rs`).
+    if pitwall_lib::uninstall_mode(std::env::args_os().skip(1)) {
+        return;
+    }
     // Claude Code's MCP server (`--mcp`), the team radio's other end: it answers Claude Code
     // until that closes it, and nothing of the app starts either.
     if pitwall_lib::mcp_mode(std::env::args_os().skip(1)) {
