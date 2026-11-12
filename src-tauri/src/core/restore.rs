@@ -149,8 +149,9 @@ fn replay(scrollback: &str, cut: bool, at: u64) -> String {
 }
 
 /// The record's file, readable by the user alone: it holds what the terminals showed. Written
-/// beside it first and moved over it whole, so a quit in between leaves the one before (the
-/// phone's channel and the radio's endpoint are kept this way too).
+/// beside it first, synced to the disk and moved over it whole, so a quit in between leaves the
+/// one before and a power cut no file of NULs (`registry::write_durable`; the phone's channel,
+/// the laps and the radio's endpoint are kept this way too).
 pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
     use std::io::Write;
 
@@ -168,9 +169,17 @@ pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    let written = options.open(&temp).and_then(|mut new| new.write_all(json.as_bytes())).and_then(|()| fs::rename(&temp, file));
+    let written = options
+        .open(&temp)
+        .and_then(|mut new| {
+            new.write_all(json.as_bytes())?;
+            crate::registry::sync_file(&new)
+        })
+        .and_then(|()| fs::rename(&temp, file));
     if written.is_err() {
         let _ = fs::remove_file(&temp);
+    } else {
+        crate::registry::sync_folder(file);
     }
     written
 }

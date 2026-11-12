@@ -22,7 +22,7 @@ use serde_json::{json, Map, Value};
 
 use crate::claude::{system_ms, EVENT_MAX_AGE_MS};
 use crate::i18n::t;
-use crate::registry::{now_ms, write_atomic};
+use crate::registry::{now_ms, write_atomic, write_durable};
 
 const SCRIPT_NAME: &str = "claude-hook.sh";
 /// The first script, which saved the whole Notification input (message text included). Its
@@ -584,7 +584,7 @@ impl ClaudeHook {
         }
 
         let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-        write_atomic(&file, &format!("{json}\n")).map_err(|e| e.to_string())
+        write_durable(&file, &format!("{json}\n")).map_err(|e| e.to_string())
     }
 }
 

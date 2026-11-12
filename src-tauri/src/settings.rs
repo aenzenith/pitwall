@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::registry::{now_ms, same_path, write_atomic};
+use crate::registry::{now_ms, same_path, write_durable};
 use crate::agent::Agent;
 use crate::start::{CodexMode, CodexModel, CodexStart, Mode, Model, Start};
 
@@ -810,7 +810,7 @@ impl Settings {
         }
 
         if let Ok(json) = serde_json::to_string_pretty(self) {
-            let _ = write_atomic(file, &json);
+            let _ = write_durable(file, &json);
         }
         // `agents` again, in a file of its own that an older Pitwall leaves alone; none while
         // nothing was said or set of any agent.
@@ -929,8 +929,9 @@ fn read_agents(file: &Path) -> Option<Value> {
     serde_json::from_slice::<AgentsSettings>(&raw).ok().and_then(|agents| serde_json::to_value(agents).ok())
 }
 
-/// `json` into `file` for the user alone: written beside it first and moved over it whole
-/// (`core::restore::write_private`, which the phone's channel is kept with).
+/// `json` into `file` for the user alone: written beside it first, synced to the disk and moved
+/// over it whole, as `registry::write_durable` writes (`core::restore::write_private`, which the
+/// phone's channel is kept with).
 fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
     use std::io::Write;
 
@@ -943,9 +944,17 @@ fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    let written = options.open(&temp).and_then(|mut new| new.write_all(json.as_bytes())).and_then(|()| fs::rename(&temp, file));
+    let written = options
+        .open(&temp)
+        .and_then(|mut new| {
+            new.write_all(json.as_bytes())?;
+            crate::registry::sync_file(&new)
+        })
+        .and_then(|()| fs::rename(&temp, file));
     if written.is_err() {
         let _ = fs::remove_file(&temp);
+    } else {
+        crate::registry::sync_folder(file);
     }
     written
 }

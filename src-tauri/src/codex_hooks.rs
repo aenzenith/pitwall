@@ -28,7 +28,7 @@ use serde_json::{json, Map, Value};
 use crate::agent::HookState;
 use crate::hooks::{installed_app, make_executable, scalar, shell_quote, stamp, sweep_now_and_then, write_event};
 use crate::i18n::t;
-use crate::registry::write_atomic;
+use crate::registry::{write_atomic, write_durable};
 
 const SCRIPT_NAME: &str = "codex-hook.sh";
 /// The flag that runs the app as Codex's hook: `<app> --codex-hook <Event>`.
@@ -782,7 +782,7 @@ impl CodexHook {
             fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
         let json = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
-        write_atomic(&target, &format!("{json}\n")).map_err(|e| e.to_string())
+        write_durable(&target, &format!("{json}\n")).map_err(|e| e.to_string())
     }
 }
 

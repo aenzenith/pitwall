@@ -58,7 +58,7 @@ use super::sessions::{row_phase, status_phase, RowPhase, Running};
 use super::terminal::{Launch, TAB_NAME_MAX};
 use super::*;
 use crate::claude::TurnKind;
-use crate::registry::{base36, write_atomic};
+use crate::registry::{base36, write_durable};
 use crate::settings::set_aside;
 use crate::start::{Mode, Start};
 
@@ -407,7 +407,7 @@ impl Board {
         }
 
         let json = serde_json::json!({ "version": FILE_VERSION, "cards": self.cards });
-        let written = serde_json::to_string_pretty(&json).map_err(|error| error.to_string()).and_then(|text| write_atomic(&self.file, &text).map_err(|error| error.to_string()));
+        let written = serde_json::to_string_pretty(&json).map_err(|error| error.to_string()).and_then(|text| write_durable(&self.file, &text).map_err(|error| error.to_string()));
         if let Err(error) = &written {
             eprintln!("[pitwall] {} could not be written: {error}", self.file.display());
         }

@@ -23,6 +23,27 @@
       }
     },
     {
+      "kind": "fix",
+      "title": {
+        "en": "Fixed: settings broken by a power cut",
+        "tr": "Elektrik kesintisi artık ayarları bozmuyor",
+        "de": "Behoben: Einstellungen nach einem Stromausfall kaputt",
+        "es": "Corregido: ajustes dañados tras un apagón",
+        "ru": "Исправлено: настройки портились при отключении питания",
+        "ja": "修正：停電で設定が壊れることがある",
+        "zh-Hans": "已修复：断电后设置可能损坏"
+      },
+      "body": {
+        "en": "Pitwall now makes sure your settings, board and project list have really reached the disk, so a sudden power cut no longer leaves them broken.",
+        "tr": "Pitwall ayarlarını, panonu ve proje listeni kaydederken diske gerçekten yazıldıklarından emin oluyor. Ani bir kesinti artık onları bozuk bırakmıyor.",
+        "de": "Pitwall sorgt jetzt dafür, dass deine Einstellungen, dein Board und deine Projektliste wirklich gespeichert sind. Ein plötzlicher Stromausfall macht sie nicht mehr kaputt.",
+        "es": "Pitwall ahora se asegura de que tus ajustes, tu tablero y tu lista de proyectos queden guardados de verdad en el disco. Un apagón repentino ya no los deja dañados.",
+        "ru": "Pitwall теперь следит, чтобы настройки, доска и список проектов действительно попадали на диск. Внезапное отключение питания больше их не портит.",
+        "ja": "Pitwall は、設定・ボード・プロジェクト一覧がディスクに確実に書き込まれたことを確かめるようになりました。急に電源が落ちても、壊れたまま残ることはもうありません。",
+        "zh-Hans": "Pitwall 现在会确认你的设置、看板和项目列表真正写进了磁盘，突然断电也不会再把它们弄坏。"
+      }
+    },
+    {
       "kind": "new",
       "title": {
         "en": "Pick when a long turn is told",

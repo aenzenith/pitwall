@@ -37,7 +37,7 @@ use super::board::{taken, CardImage, Column, ImageKind, IMAGES_MAX};
 use super::laps::{Lap, PausedBy, Place};
 use super::reveal::is_session_id;
 use super::*;
-use crate::registry::{base36, write_atomic};
+use crate::registry::{base36, write_durable};
 use crate::settings::{CustomCommand, FlagSettings, OpenSettings, Sounds, Team};
 
 const FORMAT: &str = "pitwall-backup";
@@ -642,7 +642,7 @@ impl Core {
         if json.len() as u64 > FILE_BYTES_MAX {
             return Err(t!("core.error.backupWriteTooLarge", limit = FILE_BYTES_MAX / (1024 * 1024)));
         }
-        write_atomic(file, &json).map_err(|error| failed(&error))
+        write_durable(file, &json).map_err(|error| failed(&error))
     }
 
     /// Every card as the board's file has it, and each image file that is there. The moment a

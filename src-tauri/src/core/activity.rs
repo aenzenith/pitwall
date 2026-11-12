@@ -8,7 +8,7 @@
 //! and per project with their share of the week and their API-equivalent cost (`spend`).
 
 use std::collections::BTreeMap;
-use std::io::Write as _;
+use std::io::{Seek as _, SeekFrom, Write as _};
 
 use serde::Deserialize;
 
@@ -292,8 +292,14 @@ impl Core {
 
         let _ = fs::create_dir_all(&dir);
         let file = dir.join(format!("{}.jsonl", day_name(event.t)));
-        if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(file) {
-            let _ = writeln!(file, "{line}");
+        if let Ok(mut file) = fs::OpenOptions::new().create(true).read(true).append(true).open(file) {
+            // A last line cut short (a crash, or a power cut's NULs where its bytes never reached
+            // the disk) ends here, or the new line would be glued to it and lost with it.
+            let cut = file.seek(SeekFrom::End(-1)).is_ok() && {
+                let mut last = [0u8];
+                file.read_exact(&mut last).is_ok() && last[0] != b'\n'
+            };
+            let _ = file.write_all(format!("{}{line}\n", if cut { "\n" } else { "" }).as_bytes());
         }
     }
 
@@ -1048,6 +1054,21 @@ mod agent_tests {
     use super::*;
     use crate::claude::{Turn, TurnKind};
 
+    fn core_in(tmp: &Path) -> Arc<Core> {
+        Core::new(
+            CoreConfig {
+                registry_dir: tmp.join("registry"),
+                claude_dir: tmp.join("claude"),
+                codex_home: tmp.join("codex"),
+                settings_file: tmp.join("config").join("settings.json"),
+                claude_settings: tmp.join("claude-settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            Arc::new(|_| {}),
+        )
+    }
+
     fn session(id: &str, agent: Agent, phase: SessionPhase) -> SessionState {
         let turn = (phase == SessionPhase::Waiting).then_some(Turn { kind: TurnKind::Permission, at: 1_000 });
         SessionState {
@@ -1074,18 +1095,7 @@ mod agent_tests {
     #[test]
     fn each_agent_is_written_and_read_back_as_its_own() {
         let tmp = tempfile::tempdir().unwrap();
-        let core = Core::new(
-            CoreConfig {
-                registry_dir: tmp.path().join("registry"),
-                claude_dir: tmp.path().join("claude"),
-                codex_home: tmp.path().join("codex"),
-                settings_file: tmp.path().join("config").join("settings.json"),
-                claude_settings: tmp.path().join("claude-settings.json"),
-                legacy_registries: Vec::new(),
-                title: "Pitwall".into(),
-            },
-            Arc::new(|_| {}),
-        );
+        let core = core_in(tmp.path());
 
         core.record_activity(&[session("claude-1", Agent::Claude, SessionPhase::Working), session("codex-1", Agent::Codex, SessionPhase::Waiting)], &[]);
         let file = core.activity_dir().unwrap().join(format!("{}.jsonl", day_name(now_ms())));
@@ -1109,5 +1119,23 @@ mod agent_tests {
             sessions,
             [("before-agents".to_string(), Agent::Claude, 60_000, 0), ("claude-1".to_string(), Agent::Claude, 60_000, 0), ("codex-1".to_string(), Agent::Codex, 0, 60_000)]
         );
+    }
+
+    /// A power cut can leave the day's last line as NULs, its bytes never on the disk: the next
+    /// line still goes in on a line of its own, and the day is read with it.
+    #[test]
+    fn a_line_after_one_cut_short_is_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = core_in(tmp.path());
+        let now = now_ms();
+        let dir = core.activity_dir().unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        let running = serde_json::to_string(&Event::new(now - 1, "/work/paddock", "server", "running")).unwrap();
+        fs::write(dir.join(format!("{}.jsonl", day_name(now))), format!("{running}\n{}", "\0".repeat(183))).unwrap();
+
+        core.record_crash("/work/paddock");
+
+        let states: Vec<String> = core.read_day(&day_name(now)).into_iter().map(|event| event.state).collect();
+        assert_eq!(states, ["running", "crashed"]);
     }
 }

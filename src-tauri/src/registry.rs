@@ -192,15 +192,68 @@ fn unique() -> String {
 
 /// Write to `<file>.<pid>-<unique>.tmp`, then rename: readers never see half a file, two threads
 /// writing one file never share a temp, and the temp name doesn't end in `.json`, so directory
-/// scans skip it.
+/// scans skip it. A power cut may still leave the new name over bytes that never reached the
+/// disk: for the records written every few seconds, whose loss costs nothing.
 pub fn write_atomic(file: &Path, content: &str) -> std::io::Result<()> {
+    replace(file, content, false)
+}
+
+/// `write_atomic`, and a power cut leaves the file as it was or as written, never full of NULs:
+/// the temp's bytes reach the disk before it takes the name, and the name its folder after. For
+/// what is written seldom and dear to lose (the settings, the board, the list of projects, the
+/// files of Claude's and Codex's Pitwall edits); slow on macOS, where a sync is `F_FULLFSYNC`.
+pub fn write_durable(file: &Path, content: &str) -> std::io::Result<()> {
+    replace(file, content, true)
+}
+
+fn replace(file: &Path, content: &str, durable: bool) -> std::io::Result<()> {
+    use std::io::Write;
+
     let temp = PathBuf::from(format!("{}.{}-{}.tmp", file.display(), std::process::id(), unique()));
-    let written = fs::write(&temp, content).and_then(|()| fs::rename(&temp, file));
+    let written = fs::File::create(&temp)
+        .and_then(|mut new| {
+            new.write_all(content.as_bytes())?;
+            if durable {
+                sync_file(&new)?;
+            }
+            Ok(())
+        })
+        .and_then(|()| fs::rename(&temp, file));
 
     if written.is_err() {
         let _ = fs::remove_file(&temp);
+    } else if durable {
+        sync_folder(file);
     }
     written
+}
+
+/// `file`'s bytes onto the disk (`sync_all`). On macOS that is `F_FULLFSYNC`, which a file system
+/// without it (an SMB share) refuses: a plain `fsync` there, as SQLite does, so that such a folder
+/// is still written to.
+pub fn sync_file(file: &fs::File) -> std::io::Result<()> {
+    let synced = file.sync_all();
+    #[cfg(target_vendor = "apple")]
+    {
+        use std::os::fd::AsRawFd;
+        if synced.is_err() {
+            return if unsafe { libc::fsync(file.as_raw_fd()) } == 0 { Ok(()) } else { Err(std::io::Error::last_os_error()) };
+        }
+    }
+    synced
+}
+
+/// The folder `file` was just renamed in onto the disk, so the new name survives a power cut as
+/// its bytes do. Unix alone: Windows opens no folder as a file, and NTFS keeps its names in its
+/// journal. A folder that can't be synced is left as it is: the file is in place already.
+pub fn sync_folder(file: &Path) {
+    #[cfg(unix)]
+    {
+        let folder = file.parent().filter(|folder| !folder.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        let _ = fs::File::open(folder).and_then(|folder| sync_file(&folder));
+    }
+    #[cfg(not(unix))]
+    let _ = file;
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(file: &Path) -> Option<T> {
@@ -549,7 +602,7 @@ impl Registry {
         }
 
         if let Ok(json) = serde_json::to_string_pretty(&list) {
-            let _ = write_atomic(&self.dir.join("favorites.json"), &json);
+            let _ = write_durable(&self.dir.join("favorites.json"), &json);
         }
 
         on
