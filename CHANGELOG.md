@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.22.0](https://github.com/aenzenith/pitwall/compare/v1.21.3...v1.22.0) (2026-11-12)
+
+
+### Features
+
+* **notifications:** a long turn's notice could come after 10, 20, 30 or 60 minutes ([efba6dd](https://github.com/aenzenith/pitwall/commit/efba6dd8a90a06c2dfc957fb491762ae5be275a1))
+* **settings:** Claude's hook row told when its last event came ([02d19dc](https://github.com/aenzenith/pitwall/commit/02d19dc447f33b727766e290dbd286806d02bc01))
+* **today:** the days could be saved as a CSV file ([2cabe19](https://github.com/aenzenith/pitwall/commit/2cabe19183411b05f9af94ee4c09394efbb5a471))
+* **update:** a ready update was told of once and offered in the tray ([fe80675](https://github.com/aenzenith/pitwall/commit/fe8067535aca6f480566f900d9b4250d7f3dd194))
+
+
+### Bug Fixes
+
+* **hooks:** a hook's events piled up while Pitwall stayed closed ([2c8aac3](https://github.com/aenzenith/pitwall/commit/2c8aac3e806b5da673b2c89a8f1cf2aed5b4c9d6))
+* **storage:** a power cut could leave a saved file full of NULs ([e7c0c05](https://github.com/aenzenith/pitwall/commit/e7c0c05b28f85b44c772b555b52c4a642faaf0e8))
+* **windows:** an uninstall left Pitwall's hooks behind ([24ee580](https://github.com/aenzenith/pitwall/commit/24ee58069bd0023e72dbb68ff201759d3dfaaa62))
+
 ## [1.21.3](https://github.com/aenzenith/pitwall/compare/v1.21.2...v1.21.3) (2026-11-11)
 
 
