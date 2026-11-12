@@ -1169,6 +1169,12 @@ pub fn notify_event(state: State<'_, AppState>, event: String, on: bool) -> Resu
     state.core.set_notification(&event, on)
 }
 
+/// After how many minutes one turn is told of: 10, 20, 30 or 60.
+#[tauri::command]
+pub fn notify_long_turn(state: State<'_, AppState>, minutes: u32) -> Result<(), String> {
+    state.core.set_long_turn_minutes(minutes)
+}
+
 #[tauri::command]
 pub fn mute_project(state: State<'_, AppState>, path: String, muted: bool) {
     state.core.mute_project(&path, muted);

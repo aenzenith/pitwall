@@ -1,25 +1,25 @@
 {
-  "since": "1.21.2",
+  "since": "1.21.3",
   "notes": [
     {
-      "kind": "fix",
+      "kind": "new",
       "title": {
-        "en": "Fixed: Fable 5.2 had no cost",
-        "tr": "Fable 5.2'nin maliyeti artık görünüyor",
-        "de": "Behoben: Fable 5.2 hatte keine Kosten",
-        "es": "Corregido: Fable 5.2 no tenía coste",
-        "ru": "Исправлено: у Fable 5.2 не было стоимости",
-        "ja": "修正：Fable 5.2 のコストが出なかった",
-        "zh-Hans": "已修复：Fable 5.2 没有费用"
+        "en": "Pick when a long turn is told",
+        "tr": "Uzun tur uyarısının süresini sen seç",
+        "de": "Du wählst, wann lange Arbeit gemeldet wird",
+        "es": "Elige cuándo avisar de un turno largo",
+        "ru": "Сами выбирайте, когда сообщать о долгом ходе",
+        "ja": "長い応答を知らせるまでの時間を選べます",
+        "zh-Hans": "长时间工作的提醒时间由你决定"
       },
       "body": {
-        "en": "Claude Code now runs Fable as Fable 5.2, and the Fuel page left its tokens out of the API-equivalent cost. They count now, and so do Mythos 5.2's.",
-        "tr": "Claude Code artık Fable olarak Fable 5.2'yi çalıştırıyor, Yakıt sayfası ise onun tokenlarını API karşılığı maliyete katmıyordu. Artık bu tokenlar da Mythos 5.2'ninkiler de hesaba katılıyor.",
-        "de": "Claude Code nutzt für Fable jetzt Fable 5.2, und die Tank-Seite ließ dessen Tokens bei den API-äquivalenten Kosten weg. Jetzt zählen sie mit, genau wie die von Mythos 5.2.",
-        "es": "Claude Code usa ahora Fable 5.2 como Fable, y la página Combustible dejaba sus tokens fuera del coste equivalente en API. Ahora cuentan, igual que los de Mythos 5.2.",
-        "ru": "Claude Code теперь запускает Fable как Fable 5.2, а страница «Топливо» не учитывала его токены в стоимости по ценам API. Теперь они учитываются, как и токены Mythos 5.2.",
-        "ja": "Claude Code の Fable は Fable 5.2 になりましたが、燃料ページではそのトークンが API 換算のコストに含まれていませんでした。今は Mythos 5.2 の分も含めて計算されます。",
-        "zh-Hans": "Claude Code 现在把 Fable 运行为 Fable 5.2，燃料页面却没把它的 token 计入 API 等价费用。现在已经计入，Mythos 5.2 的也一样。"
+        "en": "In Settings › Notifications, choose how long Claude or Codex can work on one turn before Pitwall lets you know.",
+        "tr": "Claude ya da Codex bir turda ne kadar çalışınca haber verileceğini artık Ayarlar › Bildirimler'den seçebilirsin.",
+        "de": "In Einstellungen › Benachrichtigungen legst du fest, wie lange Claude oder Codex am Stück arbeiten darf, bevor Pitwall Bescheid gibt.",
+        "es": "En Ajustes › Notificaciones eliges cuánto puede trabajar Claude o Codex en un turno antes de que Pitwall te avise.",
+        "ru": "В «Настройки › Уведомления» можно выбрать, сколько Claude или Codex работает над одним ходом, прежде чем Pitwall вам сообщит.",
+        "ja": "設定 › 通知 で、Claude や Codex が 1 回の応答にどれだけ時間をかけたら Pitwall が知らせるかを選べるようになりました。",
+        "zh-Hans": "在“设置 › 通知”里，你可以选择 Claude 或 Codex 在一轮里工作多久后 Pitwall 来提醒你。"
       }
     }
   ]

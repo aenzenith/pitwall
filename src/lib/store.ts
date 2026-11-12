@@ -561,6 +561,8 @@ export const api = {
   quietHours: (on: boolean, from: string, to: string) => invoke("quiet_hours", { on, from, to }),
   /** Whether an event brings a notification. */
   notifyEvent: (event: "claude" | "serverCrashed" | "command" | "longTurn" | "deps" | "fuel", on: boolean) => invoke("notify_event", { event, on }),
+  /** After how many minutes one turn is told of. */
+  notifyLongTurn: (minutes: number) => invoke("notify_long_turn", { minutes }),
   muteProject: (path: string, muted: boolean) => invoke("mute_project", { path, muted }),
   /** Opens what a missed notification was about; its line goes. `agent`: whose line it is. */
   missedOpen: (path: string, kind: SignalKind, agent: import("./types").Agent = "claude") => invoke("missed_open", { path, kind, agent }),

@@ -612,6 +612,7 @@ pub fn run() {
             commands::quiet_option,
             commands::quiet_hours,
             commands::notify_event,
+            commands::notify_long_turn,
             commands::mute_project,
             commands::missed_open,
             commands::missed_clear,

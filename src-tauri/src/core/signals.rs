@@ -16,10 +16,8 @@ use chrono::{DateTime, Days, Local, NaiveDate, NaiveTime, TimeDelta, TimeZone, T
 
 use super::*;
 use crate::deps::{CheckState, DepReport, ToolState};
-use crate::settings::{Notifications, QuietPeriod, Sounds};
+use crate::settings::{Notifications, QuietPeriod, Sounds, LONG_TURN_MINUTES};
 
-/// One turn this long is told of, once (`ClaudeLongTurn`).
-const LONG_TURN_MS: u64 = 20 * 60 * 1000;
 /// The list of what was missed holds this many, the newest.
 const MISSED_MAX: usize = 20;
 const HOUR_MS: u64 = 60 * 60 * 1000;
@@ -288,7 +286,7 @@ fn banner(signal: &Signal, paused: bool) -> Option<Banner> {
         ClaudePermission if signal.detail.is_some() => t!(&said("core.signal.permission"), tool = detail),
         ClaudePermission => t!(&said("core.notify.permission")),
         ClaudeFinished => t!(&said("core.notify.finished")),
-        ClaudeLongTurn => t!(&said("core.signal.longTurn")),
+        ClaudeLongTurn => t!(&said("core.signal.longTurn"), minutes = detail),
         ServerCrashed => t!("core.signal.serverCrashed"),
         CommandDone => t!("core.signal.commandDone", name = detail),
         CommandFailed => t!("core.signal.commandFailed", name = detail),
@@ -418,16 +416,19 @@ pub(super) fn name_of(inner: &Inner, path: &str) -> String {
     inner.favourites.iter().find(|favourite| same_path(&favourite.path, path)).map(|favourite| favourite.name.clone()).unwrap_or_else(|| folder_name(path))
 }
 
-/// The sessions of listed projects that have been in one turn for twenty minutes, each told once
-/// for that turn. Only the hook tells when a turn began (a prompt sent, a question answered); a
+/// The sessions of listed projects that have been in one turn for as long as Settings ›
+/// Notifications says (`Notifications::turn_minutes`, the same for every agent), each told once
+/// for that turn, with those minutes as its `detail`. Only the hook tells when a turn began (a prompt sent, a question answered); a
 /// session known from its log alone is never told of. The first scan after launch only takes
 /// note, as it does of waiting turns.
 /// So does the first scan of an agent that just came on (`fresh`).
 pub(super) fn long_turns(inner: &mut Inner, sessions: &[SessionState], first: bool, fresh: &[Agent]) -> Vec<Signal> {
     let now = now_ms();
+    let minutes = inner.settings.notifications.turn_minutes();
+    let after = u64::from(minutes) * 60 * 1000;
     let working = |session: &&SessionState| session.hooked && session.phase == SessionPhase::Working && !session.path.is_empty();
     let long: Vec<(&SessionState, u64)> =
-        sessions.iter().filter(working).filter_map(|session| Some((session, session.since.filter(|since| now.saturating_sub(*since) >= LONG_TURN_MS)?))).collect();
+        sessions.iter().filter(working).filter_map(|session| Some((session, session.since.filter(|since| now.saturating_sub(*since) >= after)?))).collect();
 
     // A turn that ended (the session's phase began anew) is forgotten, and what is listed of it
     // goes: the next one is told of again. A session that fell silent reads idle for a while, or
@@ -447,7 +448,7 @@ pub(super) fn long_turns(inner: &mut Inner, sessions: &[SessionState], first: bo
         if first || fresh.contains(&session.agent) {
             continue;
         }
-        found.push(Signal { kind: SignalKind::ClaudeLongTurn, path: session.path.clone(), name: name_of(inner, &session.path), detail: None, agent: session.agent });
+        found.push(Signal { kind: SignalKind::ClaudeLongTurn, path: session.path.clone(), name: name_of(inner, &session.path), detail: Some(minutes.to_string()), agent: session.agent });
     }
     found
 }
@@ -710,6 +711,16 @@ impl Core {
         }
         self.save_settings();
         self.notify();
+        Ok(())
+    }
+
+    /// How long a turn runs before it is told of, in minutes: one of those Settings offers
+    /// (`LONG_TURN_MINUTES`). A turn told of already isn't told again for it.
+    pub fn set_long_turn_minutes(&self, minutes: u32) -> Result<(), String> {
+        if !LONG_TURN_MINUTES.contains(&minutes) {
+            return Err(format!("unknown length of a turn: {minutes}"));
+        }
+        self.change_notifications(|own| own.long_turn_minutes = minutes);
         Ok(())
     }
 

@@ -15,6 +15,7 @@ const DEFAULTS: NotificationSettings = {
   serverCrashed: true,
   command: false,
   longTurn: true,
+  longTurnMinutes: 20,
   deps: false,
   muted: [],
   quietHours: { on: false, from: "22:00", to: "08:00" },
@@ -41,6 +42,17 @@ export const EVENTS: Array<{ id: NotifyEvent; label: Key }> = [
   { id: "deps", label: "notifications.deps" },
   { id: "fuel", label: "notifications.fuel" },
 ];
+
+/** The lengths of a turn Settings offers to be told of, in minutes (`LONG_TURN_MINUTES` in the
+ * core's settings.rs). */
+export const LONG_TURN_MINUTES = [10, 20, 30, 60];
+
+/** After how many minutes one turn is told of: what the core counts with, the default for a value
+ * it doesn't offer (`Notifications::turn_minutes`). */
+export const longTurnMinutes = computed(() => {
+  const stored = notifications.value.longTurnMinutes;
+  return LONG_TURN_MINUTES.includes(stored) ? stored : 20;
+});
 
 /** Whether an event brings a notification: Claude's switch is Settings' older `notify`, the fuel
  * alert's its `fuelAlert` (the Fuel page's chip turns the same one). */
@@ -107,6 +119,8 @@ export function missedLine(entry: Missed): string {
   if (entry.kind === "claude-permission" && entry.detail) return t(agentKey("missed.claudePermissionTool", agent), { tool: entry.detail });
   // The fuel alert's own line says how much.
   if (entry.kind === "fuel-high" && entry.detail) return entry.detail;
+  // A long turn says the minutes it was told after, as its banner did.
+  if (entry.kind === "claude-long-turn") return t(agentKey("missed.claudeLongTurn", agent), { minutes: entry.detail ?? String(longTurnMinutes.value) });
   const named = AGENTS[entry.kind];
   return t(named ? agentKey(named, agent) : LINES[entry.kind], { name: entry.detail ?? "" });
 }

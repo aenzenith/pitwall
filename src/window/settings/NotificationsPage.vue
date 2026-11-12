@@ -10,7 +10,7 @@ import Icon from "../../components/Icon.vue";
 import { agentsKey } from "../../lib/format";
 import { t, type Key } from "../../lib/i18n";
 import { useNativeMenu } from "../../lib/nativeMenu";
-import { EVENTS, eventOn, notifications, type NotifyEvent } from "../../lib/quiet";
+import { EVENTS, eventOn, LONG_TURN_MINUTES, longTurnMinutes, notifications, type NotifyEvent } from "../../lib/quiet";
 import { api, snapshot } from "../../lib/store";
 import PhoneSection from "./PhoneSection.vue";
 
@@ -32,6 +32,21 @@ function labelOf(label: Key): Key {
 
 function setEvent(event: Event, id: NotifyEvent): void {
   void flip(event, (on) => api.notifyEvent(id, on), () => eventOn(id));
+}
+
+/* ---------- a long turn's minutes ---------- */
+
+/** The length picked, lit at once; the next snapshot says what the core keeps. */
+const turnMinutes = ref(longTurnMinutes.value);
+watch(longTurnMinutes, (stored) => (turnMinutes.value = stored));
+
+async function setTurnMinutes(minutes: number): Promise<void> {
+  turnMinutes.value = minutes;
+  try {
+    await api.notifyLongTurn(minutes);
+  } catch {
+    turnMinutes.value = longTurnMinutes.value;
+  }
 }
 
 /* ---------- quiet hours ---------- */
@@ -88,10 +103,23 @@ function pickProject(event: MouseEvent): void {
 <template>
   <div class="notif">
     <div class="rows">
-      <label v-for="event in EVENTS" :key="event.id" class="row">
-        <span class="name">{{ t(labelOf(event.label)) }}</span>
-        <input type="checkbox" role="switch" :checked="eventOn(event.id)" @change="setEvent($event, event.id)" />
-      </label>
+      <template v-for="event in EVENTS" :key="event.id">
+        <!-- A long turn's row holds its minutes too, picked beside the switch: the switch has a
+             label of its own, so a press on a length is never a press on the switch. -->
+        <div v-if="event.id === 'longTurn'" class="row">
+          <label id="notif-long-turn" for="notif-long-turn-on" class="name">{{ t(labelOf(event.label)) }}</label>
+          <span :class="['seg', { off: !eventOn(event.id) }]" role="group" aria-labelledby="notif-long-turn">
+            <button v-for="minutes in LONG_TURN_MINUTES" :key="minutes" type="button" :aria-pressed="turnMinutes === minutes" @click="setTurnMinutes(minutes)">
+              {{ t("notifications.longTurnMinutes", { minutes }) }}
+            </button>
+          </span>
+          <input id="notif-long-turn-on" type="checkbox" role="switch" :checked="eventOn(event.id)" @change="setEvent($event, event.id)" />
+        </div>
+        <label v-else class="row">
+          <span class="name">{{ t(labelOf(event.label)) }}</span>
+          <input type="checkbox" role="switch" :checked="eventOn(event.id)" @change="setEvent($event, event.id)" />
+        </label>
+      </template>
     </div>
 
     <div v-if="$slots.sounds" class="section part">
@@ -180,6 +208,13 @@ function pickProject(event: MouseEvent): void {
   opacity: 1;
   color: var(--text-faint);
   -webkit-text-fill-color: var(--text-faint);
+}
+
+/* A long turn's minutes while its switch is off: there to read and to pick, counting for nothing
+   yet. */
+.seg.off button,
+.seg.off button[aria-pressed="true"] {
+  color: var(--text-faint);
 }
 
 .chips {

@@ -864,6 +864,8 @@ export type NotificationSettings = {
   serverCrashed: boolean;
   command: boolean;
   longTurn: boolean;
+  /** After how many minutes one turn is told of; one of `LONG_TURN_MINUTES` (lib/quiet). */
+  longTurnMinutes: number;
   deps: boolean;
   /** The muted projects' paths. */
   muted?: string[];

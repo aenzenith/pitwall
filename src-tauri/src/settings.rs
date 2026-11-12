@@ -330,8 +330,10 @@ pub struct Notifications {
     pub server_crashed: bool,
     /// … when a command ended, well or not.
     pub command: bool,
-    /// … when Claude has been in one turn for 20 minutes.
+    /// … when an agent has been in one turn for `long_turn_minutes`.
     pub long_turn: bool,
+    /// How long that turn is, in minutes: one of `LONG_TURN_MINUTES` (`turn_minutes`).
+    pub long_turn_minutes: u32,
     /// … when the Garage page finds something to install, or a migration that waits.
     pub deps: bool,
     /// Projects nothing is told about, by path.
@@ -353,12 +355,29 @@ impl Default for Notifications {
             server_crashed: true,
             command: false,
             long_turn: true,
+            long_turn_minutes: LONG_TURN_DEFAULT,
             deps: false,
             muted: Vec::new(),
             quiet_hours: QuietHours::default(),
             questions_through: true,
             sounds_too: true,
             quiet: None,
+        }
+    }
+}
+
+/// The lengths of a turn Settings › Notifications offers to be told of, in minutes.
+pub const LONG_TURN_MINUTES: [u32; 4] = [10, 20, 30, 60];
+const LONG_TURN_DEFAULT: u32 = 20;
+
+impl Notifications {
+    /// The minutes a turn runs before it is told of: one of those Settings offers, else the
+    /// default (a settings file written by hand, or by a Pitwall that offered others).
+    pub fn turn_minutes(&self) -> u32 {
+        if LONG_TURN_MINUTES.contains(&self.long_turn_minutes) {
+            self.long_turn_minutes
+        } else {
+            LONG_TURN_DEFAULT
         }
     }
 }
