@@ -47,6 +47,9 @@
   "time.justNow": "たった今",
   "time.minutesAgo": "{count}分前",
   "time.hoursAgo": "{count}時間前",
+  "time.daysAgo": {
+    "other": "{count}日前"
+  },
   "time.upMinutes": "稼働 {minutes}分",
   "time.upHours": "稼働 {hours}時間{minutes}分",
   "time.duration": "{hours} 時間 {minutes} 分",
@@ -504,7 +507,13 @@
   "settings.agents.hook.afterApproval": "承認されると、ここは自動で「オン」になります。",
   "settings.agents.hook.workingText": "Claude の状態は変わったその瞬間にここに表示されます。",
   "settings.agents.hook.workingText.codex": "Codex の状態は変わったその瞬間にここに表示されます。",
-  "settings.agents.hook.lastEvent": "最後のイベント：{time}。",
+  "settings.agents.hook.lastEvent": "最後のイベントは{time}に届きました。",
+  "settings.agents.hook.noEvent": "まだイベントは届いていません。Claude にプロンプトを送ると、最後に届いた時刻がここに表示されます。",
+  "settings.agents.hook.silent": "応答なし",
+  "settings.agents.hook.quiet": {
+    "other": "Claude は {count} 分前から作業していますが、フックからは何も届いていません。フックが動いていない可能性があります。"
+  },
+  "settings.agents.hook.why": "考えられる原因",
   "settings.agents.hook.outdated.codex": "新しいフックがあります。インストールすると、Codex でもう一度承認が必要です。",
   "settings.agents.missingTextOff.codex": "このコンピュータに Codex CLI が見つかりません。Codex はオフにしてあるので、戻ってきてもここに表示されるだけで、オンにするまでオフのままです。",
   "about.version": "バージョン {version}",

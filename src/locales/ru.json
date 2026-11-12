@@ -47,6 +47,12 @@
   "time.justNow": "только что",
   "time.minutesAgo": "{count} мин назад",
   "time.hoursAgo": "{count} ч назад",
+  "time.daysAgo": {
+    "one": "{count} день назад",
+    "few": "{count} дня назад",
+    "many": "{count} дней назад",
+    "other": "{count} дня назад"
+  },
   "time.upMinutes": "работает {minutes} мин",
   "time.upHours": "работает {hours} ч {minutes} мин",
   "time.duration": "{hours} ч {minutes} мин",
@@ -519,7 +525,16 @@
   "settings.agents.hook.afterApproval": "После одобрения здесь само появится «Вкл.».",
   "settings.agents.hook.workingText": "Состояние Claude видно здесь, как только оно меняется.",
   "settings.agents.hook.workingText.codex": "Состояние Codex видно здесь, как только оно меняется.",
-  "settings.agents.hook.lastEvent": "Последнее событие: {time}.",
+  "settings.agents.hook.lastEvent": "Последнее событие пришло {time}.",
+  "settings.agents.hook.noEvent": "Событий пока не было. Когда вы отправите Claude запрос, здесь появится, когда пришло последнее.",
+  "settings.agents.hook.silent": "Молчит",
+  "settings.agents.hook.quiet": {
+    "one": "Claude работает уже {count} минуту, но от хука ничего не пришло. Возможно, он не запускается.",
+    "few": "Claude работает уже {count} минуты, но от хука ничего не пришло. Возможно, он не запускается.",
+    "many": "Claude работает уже {count} минут, но от хука ничего не пришло. Возможно, он не запускается.",
+    "other": "Claude работает уже {count} минуты, но от хука ничего не пришло. Возможно, он не запускается."
+  },
+  "settings.agents.hook.why": "Почему так бывает?",
   "settings.agents.hook.outdated.codex": "Готов новый хук. После установки Codex ещё раз попросит одобрения.",
   "settings.agents.missingTextOff.codex": "Codex CLI на этом компьютере не найден. Вы выключили Codex, поэтому, когда он вернётся, он появится здесь и останется выключенным, пока вы его не включите.",
   "about.version": "Версия {version}",

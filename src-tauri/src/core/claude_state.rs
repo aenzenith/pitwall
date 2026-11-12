@@ -106,6 +106,7 @@ impl Core {
         // Before the watch is locked: it may read the process table.
         let busy = self.busy_sessions();
         let idle = self.idle_sessions();
+        let turns = self.turns_under_way();
         // Taken before the watch is locked: the laps take their lock alone.
         let apart = self.lap_sessions();
         self.codex_set_running();
@@ -119,6 +120,9 @@ impl Core {
 
             watch.set_busy(busy);
             watch.set_idle(idle);
+            watch.set_turns(turns);
+            // The hook's latest event and its silence, for Settings' hook row.
+            let (heard, quiet) = (watch.heard(), watch.quiet(now_ms()));
             let mut scan = watch.evaluate();
             // Every other agent that is on, as if Claude had its sessions too.
             let merged = self.merge_agents(&mut scan);
@@ -126,6 +130,8 @@ impl Core {
             let laps_own = set_apart(&mut scan, &apart);
             let (announce, projects) = {
                 let mut inner = self.lock();
+                inner.claude_heard = heard;
+                inner.claude_quiet = quiet;
                 // The finished turns looked at in their own tabs.
                 looked_at(&mut scan, &mut inner.looked, now_ms());
                 let first = !inner.claude_scanned;

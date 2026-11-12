@@ -5,8 +5,9 @@ import Icon from "../../components/Icon.vue";
 import Rich from "../../components/Rich.vue";
 import Spinner from "../../components/Spinner.vue";
 import { clock } from "../../lib/day";
+import { agoDays } from "../../lib/format";
 import { t } from "../../lib/i18n";
-import { api, snapshot } from "../../lib/store";
+import { api, now, snapshot } from "../../lib/store";
 import type { AgentDetail, AgentInfo } from "../../lib/types";
 import AccountsSection from "./AccountsSection.vue";
 import AgentHead from "./AgentHead.vue";
@@ -24,7 +25,7 @@ const props = defineProps<{ info: AgentInfo; detail: AgentDetail | null; startAd
 
 const hook = computed(() => props.info.hook);
 /** Where its hooks file is, as the user reads it. */
-/** When the hook's latest event came (the core's, to the minute), for "Last event". */
+/** When the hook's latest event came (the core's, to the minute), for "The last event came…". */
 const heard = computed(() => snapshot.value?.codexHeard ?? null);
 const hooksFile = computed(() => `${props.detail?.home ?? "~/.codex"}/hooks.json`);
 const radioOn = computed(() => !!snapshot.value?.settings.agents?.codex?.radio);
@@ -158,7 +159,7 @@ const checkHook = () =>
           <template v-else>
             <small>
               {{ t("settings.agents.hook.workingText.codex") }}
-              <template v-if="heard">{{ t("settings.agents.hook.lastEvent", { time: clock(heard) }) }}</template>
+              <span v-if="heard" :title="clock(heard)">{{ t("settings.agents.hook.lastEvent", { time: agoDays(heard, now) }) }}</span>
             </small>
             <small v-if="info.hookOutdated">{{ t("settings.agents.hook.outdated.codex") }}</small>
           </template>

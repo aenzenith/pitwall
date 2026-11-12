@@ -47,6 +47,10 @@
   "time.justNow": "gerade eben",
   "time.minutesAgo": "vor {count} Min.",
   "time.hoursAgo": "vor {count} Std.",
+  "time.daysAgo": {
+    "one": "vor {count} Tag",
+    "other": "vor {count} Tagen"
+  },
   "time.upMinutes": "seit {minutes} Min.",
   "time.upHours": "seit {hours} Std. {minutes} Min.",
   "time.duration": "{hours} h {minutes} min",
@@ -509,7 +513,14 @@
   "settings.agents.hook.afterApproval": "Nach der Freigabe steht hier von selbst „Ein“.",
   "settings.agents.hook.workingText": "Der Status von Claude erscheint hier, sobald er sich ändert.",
   "settings.agents.hook.workingText.codex": "Der Status von Codex erscheint hier, sobald er sich ändert.",
-  "settings.agents.hook.lastEvent": "Letztes Ereignis {time}.",
+  "settings.agents.hook.lastEvent": "Das letzte Ereignis kam {time}.",
+  "settings.agents.hook.noEvent": "Bisher ist kein Ereignis gekommen. Sobald du Claude einen Prompt schickst, steht hier, wann das letzte kam.",
+  "settings.agents.hook.silent": "Stumm",
+  "settings.agents.hook.quiet": {
+    "one": "Claude arbeitet seit einer Minute, aber vom Hook ist nichts gekommen. Vielleicht läuft er nicht.",
+    "other": "Claude arbeitet seit {count} Minuten, aber vom Hook ist nichts gekommen. Vielleicht läuft er nicht."
+  },
+  "settings.agents.hook.why": "Woran kann das liegen?",
   "settings.agents.hook.outdated.codex": "Ein neuerer Hook ist bereit. Nach der Installation fragt Codex noch einmal nach deiner Freigabe.",
   "settings.agents.missingTextOff.codex": "Codex CLI wurde auf diesem Computer nicht gefunden. Du hast Codex ausgeschaltet: Ist es wieder da, erscheint es hier und bleibt aus, bis du es einschaltest.",
   "about.version": "Version {version}",

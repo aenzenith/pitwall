@@ -120,6 +120,13 @@ pub struct Snapshot {
     /// When the latest event of Codex's hook came, to the minute: none before the first.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codex_heard: Option<u64>,
+    /// When the latest event of Claude's hook came, to the minute: none before the first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claude_heard: Option<u64>,
+    /// Since when a turn Claude Code calls under way has gone on with nothing of it from the hook,
+    /// once that is ten minutes: the hook may not run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claude_quiet: Option<u64>,
 }
 
 /// The last `Snapshot::seq` given.
@@ -343,5 +350,7 @@ pub(super) fn build_snapshot(inner: &Inner) -> Snapshot {
         seq: 0,
         agents: super::agents::agent_infos(inner),
         codex_heard: inner.codex_heard,
+        claude_heard: inner.claude_heard,
+        claude_quiet: inner.claude_quiet,
     }
 }

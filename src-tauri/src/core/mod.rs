@@ -276,6 +276,11 @@ struct Inner {
     /// When the latest event of Codex's hook came, to the minute (`CodexWatch::heard`): Settings'
     /// "Last event". In memory only.
     codex_heard: Option<u64>,
+    /// When the latest event of Claude's hook came, to the minute (`ClaudeWatch::heard`), and since
+    /// when a turn has gone on unheard by it (`ClaudeWatch::quiet`): Settings' hook row. In memory
+    /// only.
+    claude_heard: Option<u64>,
+    claude_quiet: Option<u64>,
     /// The agents besides Claude whose sessions the last scan merged (`merge_agents`): one merged
     /// for the first time since it came on only takes note of what waits (`first_scans`).
     agents_scanned: HashSet<Agent>,

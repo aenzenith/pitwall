@@ -47,6 +47,9 @@
   "time.justNow": "刚刚",
   "time.minutesAgo": "{count} 分钟前",
   "time.hoursAgo": "{count} 小时前",
+  "time.daysAgo": {
+    "other": "{count} 天前"
+  },
   "time.upMinutes": "已运行 {minutes} 分钟",
   "time.upHours": "已运行 {hours} 小时 {minutes} 分钟",
   "time.duration": "{hours} 小时 {minutes} 分",
@@ -504,7 +507,13 @@
   "settings.agents.hook.afterApproval": "批准后，这里会自动变为“已开启”。",
   "settings.agents.hook.workingText": "Claude 的状态一变化就会显示在这里。",
   "settings.agents.hook.workingText.codex": "Codex 的状态一变化就会显示在这里。",
-  "settings.agents.hook.lastEvent": "最近一次事件：{time}。",
+  "settings.agents.hook.lastEvent": "最近一次事件是{time}收到的。",
+  "settings.agents.hook.noEvent": "还没有收到事件。向 Claude 发送提示后，这里会显示最近一次事件的时间。",
+  "settings.agents.hook.silent": "无响应",
+  "settings.agents.hook.quiet": {
+    "other": "Claude 已经工作了 {count} 分钟，但 Hook 没有传来任何事件。它可能没有运行。"
+  },
+  "settings.agents.hook.why": "可能是什么原因？",
   "settings.agents.hook.outdated.codex": "有更新的 Hook。安装后需要在 Codex 中再批准一次。",
   "settings.agents.missingTextOff.codex": "这台电脑上没有找到 Codex CLI。你已关闭 Codex，它回来后会出现在这里，但在你打开之前一直保持关闭。",
   "about.version": "版本 {version}",

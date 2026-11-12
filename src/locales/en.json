@@ -47,6 +47,10 @@
   "time.justNow": "just now",
   "time.minutesAgo": "{count} min ago",
   "time.hoursAgo": "{count} h ago",
+  "time.daysAgo": {
+    "one": "{count} day ago",
+    "other": "{count} days ago"
+  },
   "time.upMinutes": "up {minutes}m",
   "time.upHours": "up {hours}h {minutes}m",
   "time.duration": "{hours} h {minutes} min",
@@ -509,7 +513,14 @@
   "settings.agents.hook.afterApproval": "Once approved, this turns On by itself.",
   "settings.agents.hook.workingText": "Claude's state shows here the moment it changes.",
   "settings.agents.hook.workingText.codex": "Codex's state shows here the moment it changes.",
-  "settings.agents.hook.lastEvent": "Last event {time}.",
+  "settings.agents.hook.lastEvent": "The last event came {time}.",
+  "settings.agents.hook.noEvent": "No event has come yet. Once you send Claude a prompt, you'll see here when the last one came.",
+  "settings.agents.hook.silent": "Silent",
+  "settings.agents.hook.quiet": {
+    "one": "Claude has been working for a minute, but nothing has come from the hook. It may not be running.",
+    "other": "Claude has been working for {count} minutes, but nothing has come from the hook. It may not be running."
+  },
+  "settings.agents.hook.why": "Why could that be?",
   "settings.agents.hook.outdated.codex": "A newer hook is ready. Installing it asks for your approval in Codex once more.",
   "settings.agents.missingTextOff.codex": "Codex CLI wasn't found on this computer. You turned Codex off, so once it's back it shows up here and stays off until you turn it on.",
   "about.version": "Version {version}",

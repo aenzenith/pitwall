@@ -472,6 +472,16 @@ impl Core {
         running.into_iter().filter(|(_, run)| idle(run)).filter_map(|(id, run)| Some((id, run.status_at?))).collect()
     }
 
+    /// The turns Claude Code calls under way (`busy`, or `waiting` on a prompt), by session id,
+    /// with when it said so: of sessions in a terminal or VS Code only, which run the user's hooks
+    /// (one an SDK started may load none). For the hook's silence (`ClaudeWatch::quiet`).
+    pub(super) fn turns_under_way(&self) -> HashMap<String, u64> {
+        let running = self.running_cached().unwrap_or_default();
+        let judged = |run: &Running| matches!(run.entrypoint.as_deref(), Some("cli" | "claude-vscode"));
+        let under_way = |run: &Running| matches!(run.status.as_deref(), Some("busy" | "waiting"));
+        running.into_iter().filter(|(_, run)| judged(run) && under_way(run)).filter_map(|(id, run)| Some((id, run.status_at?))).collect()
+    }
+
     /// The running sessions as last read; again when the folder changed, or 30 s on.
     pub(super) fn running_cached(&self) -> Option<HashMap<String, Running>> {
         let due = {

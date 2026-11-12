@@ -10,7 +10,8 @@ import Spinner from "../components/Spinner.vue";
 import ThemeSwitch from "../components/ThemeSwitch.vue";
 import { askLoginEnds } from "../lib/accounts";
 import { useBackdropClose } from "../lib/dialog";
-import { agentsTab, ago, editorName, megabytes, shortcutLabel, updateError } from "../lib/format";
+import { clock } from "../lib/day";
+import { agentsTab, ago, agoDays, editorName, guideUrl, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../lib/open";
 import { isMac, keys, shortcutModifiers } from "../lib/platform";
@@ -373,6 +374,11 @@ function onCancel(event: Event): void {
 const hookError = ref("");
 /** Installed, but from before the hooks that report Claude's state at once. */
 const hookOutdated = computed(() => !!snapshot.value?.claudeHook && !!snapshot.value.claudeHookOutdated);
+/** When the hook's latest event came (the core's, to the minute), for "The last event came…". */
+const claudeHeard = computed(() => snapshot.value?.claudeHeard ?? null);
+/** Since when a turn has gone on with nothing of it from the hook (ten minutes at least): it may not run. */
+const claudeQuiet = computed(() => (snapshot.value?.claudeHook ? (snapshot.value.claudeQuiet ?? null) : null));
+const quietMinutes = computed(() => (claudeQuiet.value === null ? 0 : Math.max(1, Math.floor((now.value - claudeQuiet.value) / 60_000))));
 
 async function setHook(on: boolean): Promise<void> {
   hookBusy.value = true;
@@ -783,7 +789,8 @@ function setTheme(theme: Theme): void {
             <div class="hook-text">
               <span class="hook-title wraps">
                 {{ t("settings.hookTitle") }}
-                <span :class="['badge', { on: snapshot?.claudeHook }]">{{ t(snapshot?.claudeHook ? "settings.on" : "settings.agents.hook.missing") }}</span>
+                <span v-if="claudeQuiet" class="badge warn">{{ t("settings.agents.hook.silent") }}</span>
+                <span v-else :class="['badge', { on: snapshot?.claudeHook }]">{{ t(snapshot?.claudeHook ? "settings.on" : "settings.agents.hook.missing") }}</span>
               </span>
               <small v-if="!snapshot?.claudeHook">
                 <Rich :text="t('settings.hookText')">
@@ -794,7 +801,16 @@ function setTheme(theme: Theme): void {
                 </Rich>
               </small>
               <template v-else>
-                <small>{{ t("settings.agents.hook.workingText") }}</small>
+                <!-- When the last event came, as long ago as it is; its time of day in the tip. -->
+                <small>
+                  {{ t("settings.agents.hook.workingText") }}
+                  <span v-if="claudeHeard" :title="clock(claudeHeard)">{{ t("settings.agents.hook.lastEvent", { time: agoDays(claudeHeard, now) }) }}</span>
+                  <template v-else>{{ t("settings.agents.hook.noEvent") }}</template>
+                </small>
+                <small v-if="claudeQuiet" class="quiet-line">
+                  {{ t("settings.agents.hook.quiet", { count: quietMinutes }) }}
+                  <button type="button" class="link" @click="api.openUrl(guideUrl('troubleshooting', 'the-hook-shows-silent'))">{{ t("settings.agents.hook.why") }}</button>
+                </small>
                 <small v-if="hookOutdated">{{ t("settings.hookOutdated") }}</small>
               </template>
             </div>
@@ -1342,6 +1358,16 @@ code {
 .hook-button {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* The hook gone quiet while Claude works: a warning's colour, on its badge and its line. */
+.badge.warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.hook small.quiet-line {
+  color: var(--warn-text);
 }
 
 .folder {

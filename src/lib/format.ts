@@ -112,6 +112,22 @@ export function ago(at: number, now: number): string {
   return hours < 24 ? t("time.hoursAgo", { count: hours }) : new Date(at).toLocaleDateString(language.value);
 }
 
+/** As `ago`, but a day or more as days: "3 days ago" (a hook's last event, which may be days old). */
+export function agoDays(at: number, now: number): string {
+  const days = Math.floor((now - at) / 86_400_000);
+  return days > 0 ? t("time.daysAgo", { count: days }) : ago(at, now);
+}
+
+/** The site of the user guide. */
+const GUIDE = "https://pitwall.aenzenith.com";
+
+/** A section of the user guide, in the app's language: English at `/docs`, the others under
+ * their own prefix (Chinese as `zh`). Opened in the browser, only when clicked (`open_url`). */
+export function guideUrl(page: string, section: string): string {
+  const lang = language.value === "zh-Hans" ? "zh" : language.value;
+  return `${GUIDE}${lang === "en" ? "" : `/${lang}`}/docs/${page}#${section}`;
+}
+
 const PHASES: Record<NonNullable<Project["phase"]>, Key> = {
   "starting…": "phase.starting",
   "stopping…": "phase.stopping",

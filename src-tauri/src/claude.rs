@@ -401,6 +401,12 @@ struct Log {
 pub(crate) const WORKING_WINDOW_MS: u64 = 5 * 60 * 1000;
 /// Hook events, and sessions known only from them, are dropped after a day.
 pub(crate) const EVENT_MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
+/// A turn Claude Code has called under way this long with nothing of it from the hook says the
+/// hook may not run (`ClaudeWatch::quiet`): a working hook tells of a turn as it begins.
+const QUIET_AFTER_MS: u64 = 10 * 60 * 1000;
+/// The hook's event of a turn's start may come a moment before Claude Code writes the turn's
+/// status.
+const QUIET_SLACK_MS: u64 = 30_000;
 /// Claude Code reports a permission prompt only once it has been open this long.
 const PROMPT_NOTICE_MS: u64 = 6_000;
 /// Log writes this soon after a prompt was reported are the turn catching up, not an answer.
@@ -867,6 +873,14 @@ pub struct ClaudeWatch {
     busy: HashSet<String>,
     /// The sessions it calls idle now, and since when (`set_idle`).
     idle: HashMap<String, u64>,
+    /// When the hook's latest event came (Settings' "Last event"); 0 before the first. In memory
+    /// only.
+    heard: u64,
+    /// The turns Claude Code calls under way, by session id, with when each began (`set_turns`).
+    turns: HashMap<String, u64>,
+    /// When this watch was made: a turn that began before it isn't judged (`quiet`), as the
+    /// hook's events of its start may have been taken by an earlier run of Pitwall's.
+    opened: u64,
     /// A full scan ran; nothing is known before.
     ready: bool,
 }
@@ -884,6 +898,9 @@ impl ClaudeWatch {
             listed: Vec::new(),
             busy: HashSet::new(),
             idle: HashMap::new(),
+            heard: 0,
+            turns: HashMap::new(),
+            opened: now_ms(),
             ready: false,
         }
     }
@@ -930,6 +947,8 @@ impl ClaudeWatch {
         self.extra.clear();
         self.busy.clear();
         self.idle.clear();
+        self.heard = 0;
+        self.turns.clear();
         self.ready = true;
     }
 
@@ -953,6 +972,34 @@ impl ClaudeWatch {
     /// file isn't written yet for a prompt just sent.
     pub fn set_idle(&mut self, sessions: HashMap<String, u64>) {
         self.idle = sessions;
+    }
+
+    /// The turns Claude Code calls under way now (`busy`, or `waiting` on a prompt), by session id,
+    /// each with when it said so (read by the core). A turn keeps the time it was first seen with:
+    /// a prompt answered writes the status again, and the turn goes on.
+    pub fn set_turns(&mut self, under_way: HashMap<String, u64>) {
+        self.turns.retain(|id, _| under_way.contains_key(id));
+        for (id, at) in under_way {
+            self.turns.entry(id).or_insert(at);
+        }
+    }
+
+    /// When the hook's latest event came, to the minute (Settings' "Last event"); none before the
+    /// first.
+    pub fn heard(&self) -> Option<u64> {
+        (self.heard > 0).then(|| self.heard - self.heard % 60_000)
+    }
+
+    /// The hook may not run: since when the longest of the turns under way has gone on with nothing
+    /// of it from the hook, once that is `QUIET_AFTER_MS`. A turn that began before this watch was
+    /// made isn't judged.
+    pub fn quiet(&self, now: u64) -> Option<u64> {
+        let told = |id: &str, began: u64| self.hooked.get(id).is_some_and(|session| session.last + QUIET_SLACK_MS >= began);
+        self.turns
+            .iter()
+            .filter(|(id, began)| **began >= self.opened && now.saturating_sub(**began) >= QUIET_AFTER_MS && !told(id, **began))
+            .map(|(_, began)| *began)
+            .min()
     }
 
     /// The shared book plus every "I looked" from the legacy books (latest wins). The start
@@ -1163,6 +1210,7 @@ impl ClaudeWatch {
         let mut ended = Vec::new();
 
         for event in events {
+            self.heard = self.heard.max(event.at);
             let session = self.hooked.entry(event.session_id.clone()).or_insert_with(|| HookSession::new(event.at));
             session.apply(&event);
 

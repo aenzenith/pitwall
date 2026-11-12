@@ -326,6 +326,11 @@ export type Snapshot = {
   agents: AgentInfo[];
   /** When the latest event of Codex's hook came, to the minute: Settings' "Last event". */
   codexHeard?: number;
+  /** When the latest event of Claude's hook came, to the minute: Settings' "Last event". */
+  claudeHeard?: number;
+  /** Since when a turn Claude Code calls under way has gone on with nothing of it from the hook,
+   * once that is ten minutes: the hook may not run. */
+  claudeQuiet?: number;
 };
 
 /* ---------- First run and the projects folder (discover_projects, add_projects) ---------- */

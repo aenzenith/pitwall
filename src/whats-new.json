@@ -42,6 +42,27 @@
         "ja": "今日ページの「書き出す」で、1 日、1 週間、または好きな期間を CSV ファイルに保存できます。プロジェクトごとの時間、トークン、コストが入っています。",
         "zh-Hans": "在“今天”页面点“导出”，就能把一天、一周或你选的任意时段存成 CSV 文件，里面有每个项目的时间、token 和费用。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "See that the hook is listening",
+        "tr": "Hook'un son haberi görünüyor",
+        "de": "Sieh, ob der Hook zuhört",
+        "es": "Comprueba que el hook escucha",
+        "ru": "Видно, слышит ли хук",
+        "ja": "フックの様子が見えるように",
+        "zh-Hans": "能看到 Hook 是否在工作"
+      },
+      "body": {
+        "en": "Claude's hook in Settings now says when its last event came, and turns Silent if Claude works for a while without a word from it.",
+        "tr": "Ayarlar'daki Claude hook'u artık son olayın ne zaman geldiğini söylüyor. Claude uzun süre çalışıp hook'tan haber gelmezse Sessiz diye uyarıyor.",
+        "de": "Der Claude-Hook in den Einstellungen zeigt jetzt, wann sein letztes Ereignis kam, und wird Stumm, wenn Claude eine Weile arbeitet, ohne dass von ihm etwas kommt.",
+        "es": "El hook de Claude en Ajustes ahora dice cuándo llegó su último evento, y pasa a En silencio si Claude trabaja un buen rato sin noticias de él.",
+        "ru": "Хук Claude в настройках теперь показывает, когда пришло последнее событие, и помечается «Молчит», если Claude долго работает, а от хука ничего нет.",
+        "ja": "設定の Claude のフックに、最後のイベントがいつ届いたかが表示されます。Claude がしばらく作業してもフックから何も届かないときは「応答なし」になります。",
+        "zh-Hans": "设置里 Claude 的 Hook 现在会显示最近一次事件是什么时候收到的；如果 Claude 工作了好一阵 Hook 却毫无动静，会标为“无响应”。"
+      }
     }
   ]
 }

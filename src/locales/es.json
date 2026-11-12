@@ -47,6 +47,10 @@
   "time.justNow": "hace un momento",
   "time.minutesAgo": "hace {count} min",
   "time.hoursAgo": "hace {count} h",
+  "time.daysAgo": {
+    "one": "hace {count} día",
+    "other": "hace {count} días"
+  },
   "time.upMinutes": "activo {minutes} min",
   "time.upHours": "activo {hours} h {minutes} min",
   "time.duration": "{hours} h {minutes} min",
@@ -511,7 +515,14 @@
   "settings.agents.hook.afterApproval": "Una vez aprobado, aquí pasa solo a Activo.",
   "settings.agents.hook.workingText": "El estado de Claude aparece aquí en cuanto cambia.",
   "settings.agents.hook.workingText.codex": "El estado de Codex aparece aquí en cuanto cambia.",
-  "settings.agents.hook.lastEvent": "Último evento: {time}.",
+  "settings.agents.hook.lastEvent": "El último evento llegó {time}.",
+  "settings.agents.hook.noEvent": "Todavía no ha llegado ningún evento. Cuando le envíes un prompt a Claude, aquí verás cuándo llegó el último.",
+  "settings.agents.hook.silent": "En silencio",
+  "settings.agents.hook.quiet": {
+    "one": "Claude lleva un minuto trabajando, pero del hook no ha llegado nada. Puede que no se esté ejecutando.",
+    "other": "Claude lleva {count} minutos trabajando, pero del hook no ha llegado nada. Puede que no se esté ejecutando."
+  },
+  "settings.agents.hook.why": "¿Por qué puede pasar?",
   "settings.agents.hook.outdated.codex": "Hay un hook más nuevo. Al instalarlo, Codex vuelve a pedir tu aprobación una vez.",
   "settings.agents.missingTextOff.codex": "No se encontró Codex CLI en esta computadora. Como desactivaste Codex, cuando vuelva aparecerá aquí y seguirá inactivo hasta que lo actives.",
   "about.version": "Versión {version}",

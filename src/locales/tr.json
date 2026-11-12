@@ -47,6 +47,9 @@
   "time.justNow": "az önce",
   "time.minutesAgo": "{count} dk önce",
   "time.hoursAgo": "{count} sa önce",
+  "time.daysAgo": {
+    "other": "{count} gün önce"
+  },
   "time.upMinutes": "{minutes} dk'dır",
   "time.upHours": "{hours} sa {minutes} dk'dır",
   "time.duration": "{hours} sa {minutes} dk",
@@ -508,7 +511,13 @@
   "settings.agents.hook.afterApproval": "Onaylanınca burası kendiliğinden Açık olur.",
   "settings.agents.hook.workingText": "Claude'un durumu değiştiği anda burada.",
   "settings.agents.hook.workingText.codex": "Codex'in durumu değiştiği anda burada.",
-  "settings.agents.hook.lastEvent": "Son olay {time}.",
+  "settings.agents.hook.lastEvent": "Son olay {time} geldi.",
+  "settings.agents.hook.noEvent": "Henüz olay gelmedi. Claude'a bir istem gönderince son olayın zamanı burada görünür.",
+  "settings.agents.hook.silent": "Sessiz",
+  "settings.agents.hook.quiet": {
+    "other": "Claude {count} dakikadır çalışıyor ama hook'tan haber gelmedi. Hook çalışmıyor olabilir."
+  },
+  "settings.agents.hook.why": "Neden olabilir?",
   "settings.agents.hook.outdated.codex": "Yeni bir hook hazır. Kurunca Codex'te bir kez daha onay istenir.",
   "settings.agents.missingTextOff.codex": "Codex CLI bu bilgisayarda bulunamadı. Codex'i kapattığın için geri gelince burada görünür, sen açana kadar kapalı kalır.",
   "about.version": "Sürüm {version}",
