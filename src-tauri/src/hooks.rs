@@ -20,8 +20,9 @@ use std::time::SystemTime;
 use serde::{Deserialize, Deserializer};
 use serde_json::{json, Map, Value};
 
+use crate::claude::{system_ms, EVENT_MAX_AGE_MS};
 use crate::i18n::t;
-use crate::registry::write_atomic;
+use crate::registry::{now_ms, write_atomic};
 
 const SCRIPT_NAME: &str = "claude-hook.sh";
 /// The first script, which saved the whole Notification input (message text included). Its
@@ -33,6 +34,8 @@ const HOOK_FLAG: &str = "--claude-hook";
 /// stream past, never held, so this only bounds the time: `PostToolUse` carries the tool's
 /// output, which for an image runs to megabytes.
 const INPUT_LIMIT: u64 = 64 << 20;
+/// About one run of the hook in this many also sweeps its events folder (`sweep_now_and_then`).
+const SWEEP_ONE_IN: u64 = 100;
 
 /// The events Pitwall listens to, with their matcher (`None`: the event takes none). A tool
 /// call that finishes after a prompt answers it; `PreToolUse` only for the tools that ask.
@@ -51,7 +54,8 @@ const EVENTS: [(&str, Option<&str>); 8] = [
 
 /// Writes the few fields Pitwall needs, one `key=value` per line, to a file in the events folder
 /// and prints nothing. `plutil` reads the JSON on stdin; the input stays in memory, so the
-/// prompt, messages and tool input never reach the disk. `@EVENTS@` is the events folder.
+/// prompt, messages and tool input never reach the disk. `@EVENTS@` is the events folder. About
+/// one run in a hundred then deletes the folder's files a day old, as `sweep_events` does.
 const SCRIPT: &str = r#"#!/bin/sh
 # Pitwall: Claude Code hook, run as `claude-hook.sh <event>`. Notes for the Pitwall app which
 # session changed state and where; never the prompt, a message or a tool's input (of a
@@ -79,6 +83,8 @@ done
 [ -d "$dir" ] || mkdir -p "$dir" 2>/dev/null || exit 0
 file="$dir/$$-${RANDOM:-0}"
 { printf '%s\n' "$out" > "$file.tmp" && mv -f "$file.tmp" "$file.event"; } 2>/dev/null
+# About one run in a hundred deletes, unread, what is a day old: Pitwall may stay closed for days.
+[ $(( ${RANDOM:-$$} % 100 )) -eq 0 ] && /usr/bin/find "$dir" -maxdepth 1 -type f \( -name '*.event' -o -name '*.tmp' \) -mmin +1440 -delete 2>/dev/null
 exit 0
 "#;
 
@@ -267,10 +273,32 @@ pub(crate) fn write_event(dir: &Path, text: &str) -> std::io::Result<PathBuf> {
     written.map(|()| file)
 }
 
+/// Deletes from an events folder, unread, the hook's files a day old and more (an `.event`, and
+/// the `.tmp` of a write cut short), as the registry's dead records go. Pitwall does it at its
+/// start and while the agent is off, and the hook itself now and then (`sweep_now_and_then`):
+/// while Pitwall stays closed, nothing else would.
+pub(crate) fn sweep_events(dir: &Path) {
+    let now = now_ms();
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let ours = entry.path().extension().is_some_and(|ext| ext == "event" || ext == "tmp");
+        if ours && entry.metadata().ok().and_then(|meta| meta.modified().ok()).is_some_and(|at| now.saturating_sub(system_ms(at)) >= EVENT_MAX_AGE_MS) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// After the hook noted its event, about one run in `SWEEP_ONE_IN` sweeps its folder: the folder
+/// can't grow without end while Pitwall stays closed, and the other runs stay as quick as ever.
+pub(crate) fn sweep_now_and_then(dir: &Path) {
+    if RandomState::new().hash_one(SystemTime::now()).is_multiple_of(SWEEP_ONE_IN) {
+        sweep_events(dir);
+    }
+}
+
 /// Hook mode, Claude Code's hook on Windows and Linux: when `args` (after the program) are
 /// `--claude-hook <Event>`, notes the event in `~/.pitwall/claude-events/` like the script does
-/// and returns true, before anything of the app starts. Prints nothing and never fails, so it
-/// can't affect Claude.
+/// (and now and then sweeps the folder, as it does too) and returns true, before anything of the
+/// app starts. Prints nothing and never fails, so it can't affect Claude.
 pub fn hook_mode(mut args: impl Iterator<Item = OsString>) -> bool {
     if args.next().as_deref() != Some(OsStr::new(HOOK_FLAG)) {
         return false;
@@ -279,7 +307,9 @@ pub fn hook_mode(mut args: impl Iterator<Item = OsString>) -> bool {
     let event = args.next().and_then(|event| event.into_string().ok()).unwrap_or_default();
 
     if let Some(home) = dirs::home_dir() {
-        note_event(&home.join(".pitwall").join("claude-events"), &event, std::io::stdin().lock());
+        let dir = home.join(".pitwall").join("claude-events");
+        note_event(&dir, &event, std::io::stdin().lock());
+        sweep_now_and_then(&dir);
     }
     true
 }
@@ -984,6 +1014,30 @@ mod tests {
         // Events Pitwall doesn't listen to leave nothing.
         assert!(note_event(&hook.events_dir, "PreCompact", prompt.to_string().as_bytes()).is_none());
         assert_eq!(fs::read_dir(&hook.events_dir).unwrap().count(), 0);
+    }
+
+    /// What the hook sweeps from its folder is gone unread: a day old and more, of its own files
+    /// only. An event Pitwall hasn't read yet, a write under way or another file stays.
+    #[test]
+    fn a_sweep_deletes_only_the_hooks_files_a_day_old() {
+        let tmp = tempfile::tempdir().unwrap();
+        let written = |name: &str, hours_ago: u64| {
+            let file = tmp.path().join(name);
+            fs::write(&file, "event=Stop\n").unwrap();
+            let at = SystemTime::now() - std::time::Duration::from_secs(hours_ago * 60 * 60);
+            fs::File::options().write(true).open(&file).unwrap().set_modified(at).unwrap();
+        };
+        written("old.event", 25);
+        written("old.tmp", 25);
+        written("old.txt", 25);
+        written("recent.event", 23);
+        written("now.tmp", 0);
+
+        sweep_events(tmp.path());
+
+        let mut left: Vec<String> = fs::read_dir(tmp.path()).unwrap().flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect();
+        left.sort();
+        assert_eq!(left, ["now.tmp", "old.txt", "recent.event"]);
     }
 
     #[test]

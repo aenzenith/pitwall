@@ -90,7 +90,7 @@ impl Core {
                 crate::agent::AgentWatch::rescan(&mut *codex);
             }
         } else {
-            crate::codex::sweep_events(&events_dir);
+            crate::hooks::sweep_events(&events_dir);
             let mut cache = self.sessions_cache();
             cache.codex = None;
             cache.codex_at = None;

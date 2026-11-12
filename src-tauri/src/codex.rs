@@ -787,18 +787,6 @@ fn read_events(dir: &Path) -> Vec<HookEvent> {
     events
 }
 
-/// While Codex is off its hook may still write: what it left a day ago and more goes, unread,
-/// as the registry's dead records do.
-pub fn sweep_events(dir: &Path) {
-    let now = now_ms();
-    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
-        let old = entry.metadata().ok().and_then(|meta| meta.modified().ok()).is_some_and(|at| now.saturating_sub(system_ms(at)) >= EVENT_MAX_AGE_MS);
-        if old && entry.path().extension().is_some_and(|ext| ext == "event" || ext == "tmp") {
-            let _ = fs::remove_file(entry.path());
-        }
-    }
-}
-
 /// Where a session stands by its hook events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HookPhase {

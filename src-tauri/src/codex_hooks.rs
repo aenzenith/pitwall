@@ -9,9 +9,10 @@
 //!
 //! The rules for `hooks.json` are `settings.json`'s: back the file up once, never touch a file
 //! that isn't valid JSON, keep every other key and hook in place, add our entries once, remove
-//! only ours. Codex untrusts a hook whose entry changed, so the entries and the script stay the
-//! same, byte for byte, from one version of Pitwall to the next: a moved app is the only change
-//! that asks the user for trust again.
+//! only ours. Codex trusts a hook by its entry (its event, matcher and handler, hashed; not what
+//! the script holds) and untrusts one whose entry changed, so the entries stay the same, byte for
+//! byte, from one version of Pitwall to the next: a moved app is the only change that asks the
+//! user for trust again.
 
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -25,7 +26,7 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
 use crate::agent::HookState;
-use crate::hooks::{installed_app, make_executable, scalar, shell_quote, stamp, write_event};
+use crate::hooks::{installed_app, make_executable, scalar, shell_quote, stamp, sweep_now_and_then, write_event};
 use crate::i18n::t;
 use crate::registry::write_atomic;
 
@@ -65,8 +66,10 @@ const KEYS: [&str; 6] = ["session_id", "turn_id", "agent_id", "cwd", "source", "
 
 /// Writes the few fields Pitwall needs, one `key=value` per line, to a file in the events folder
 /// and prints nothing. `plutil` reads the JSON on stdin; the input stays in memory, so the prompt,
-/// messages and tool input never reach the disk. `@EVENTS@` is the events folder. It carries no
-/// version: Codex untrusts a hook that changed.
+/// messages and tool input never reach the disk. `@EVENTS@` is the events folder. About one run in
+/// a hundred then deletes the folder's files a day old, as `hooks::sweep_events` does. It carries
+/// no version. What it holds is no part of Codex's trust (the entry that runs it is), so a new
+/// script only makes the hook outdated, for `install` to write again, and the user's trust stays.
 const SCRIPT: &str = r#"#!/bin/sh
 # Pitwall: Codex hook, run as `codex-hook.sh <event>`. Notes for the Pitwall app which session
 # changed state and where; never the prompt, a message or a tool's input or output (of a tool
@@ -87,6 +90,8 @@ ppid=$PPID"
 [ -d "$dir" ] || mkdir -p "$dir" 2>/dev/null || exit 0
 file="$dir/$$-${RANDOM:-0}"
 { printf '%s\n' "$out" > "$file.tmp" && mv -f "$file.tmp" "$file.event"; } 2>/dev/null
+# About one run in a hundred deletes, unread, what is a day old: Pitwall may stay closed for days.
+[ $(( ${RANDOM:-$$} % 100 )) -eq 0 ] && /usr/bin/find "$dir" -maxdepth 1 -type f \( -name '*.event' -o -name '*.tmp' \) -mmin +1440 -delete 2>/dev/null
 exit 0
 "#;
 
@@ -254,9 +259,9 @@ fn codex_above(pid: u32) -> Option<u32> {
 }
 
 /// Hook mode, Codex's hook on Windows and Linux: when `args` (after the program) are
-/// `--codex-hook <Event>`, notes the event in `~/.pitwall/codex-events/` like the script does and
-/// returns true, before anything of the app starts. Prints nothing and never fails, so it can't
-/// affect Codex.
+/// `--codex-hook <Event>`, notes the event in `~/.pitwall/codex-events/` like the script does (and
+/// now and then sweeps the folder, as it does too) and returns true, before anything of the app
+/// starts. Prints nothing and never fails, so it can't affect Codex.
 pub fn codex_hook_mode(mut args: impl Iterator<Item = OsString>) -> bool {
     if args.next().as_deref() != Some(OsStr::new(HOOK_FLAG)) {
         return false;
@@ -265,7 +270,9 @@ pub fn codex_hook_mode(mut args: impl Iterator<Item = OsString>) -> bool {
     let event = args.next().and_then(|event| event.into_string().ok()).unwrap_or_default();
     if let Some(home) = dirs::home_dir() {
         let parent = own_parent().map(|parent| codex_above(parent).unwrap_or(parent));
-        note_event(&home.join(".pitwall").join("codex-events"), &event, std::io::stdin(), parent);
+        let dir = home.join(".pitwall").join("codex-events");
+        note_event(&dir, &event, std::io::stdin(), parent);
+        sweep_now_and_then(&dir);
     }
     true
 }

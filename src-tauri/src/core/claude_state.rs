@@ -95,7 +95,7 @@ impl Core {
                 }
                 Err(_) => return,
             };
-            crate::codex::sweep_events(&events);
+            crate::hooks::sweep_events(&events);
         }
     }
 
