@@ -1,7 +1,10 @@
 //! Pitwall's own updates. A new version is asked for at the latest GitHub release (`latest.json`,
 //! `tauri-plugin-updater`), downloaded in the background and checked against the public key in
 //! `tauri.conf.json`. It is installed only when the user restarts for it, or when the app quits:
-//! Pitwall never restarts by itself. A restart puts back what was open (`core::restore`).
+//! Pitwall never restarts by itself. A restart puts back what was open (`core::restore`). Where
+//! nothing installs it at a quit (Windows, a system package, a place the user can't write), the
+//! user is told once a version that it waits (`Core::update_waits`), and the tray's menu and the
+//! popover offer it while it does.
 //!
 //! The request carries the plugin's user agent and nothing of the user's.
 
@@ -18,7 +21,7 @@ use tauri_plugin_updater::{Error, UpdaterExt};
 use crate::core::Restored;
 use crate::i18n::t;
 use crate::registry::now_ms;
-use crate::{tray, AppState, MAIN};
+use crate::{tray, AppState, MAIN, POPOVER};
 
 /// How often a new version is asked for while the app runs.
 const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
@@ -51,6 +54,15 @@ pub struct UpdateView {
     pub error: Option<&'static str>,
     /// A ready update is installed when the app quits, too.
     pub on_quit: bool,
+}
+
+impl UpdateView {
+    /// The new version waits for the user: nothing installs it at a quit (`on_quit`), or this
+    /// install can't put it in its place (`available`). Only then is it told of (`Core::update_waits`),
+    /// and the tray's menu and the popover offer it.
+    pub fn waits_for_user(&self) -> bool {
+        self.status == "available" || (!self.on_quit && matches!(self.status, "ready" | "installing"))
+    }
 }
 
 pub struct Update {
@@ -152,12 +164,28 @@ impl Update {
     }
 
     fn set(&self, app: &AppHandle, change: impl FnOnce(&mut UpdateView)) {
-        let view = {
+        let (view, was) = {
             let mut view = lock(&self.view);
+            let was = view.status;
             change(&mut view);
-            view.clone()
+            (view.clone(), was)
         };
+        // The popover's line follows it too, and the tray's menu (Windows, Linux) with its state.
+        let _ = app.emit_to(POPOVER, "update", view.clone());
+        if view.status != was {
+            if let Some(state) = app.try_state::<AppState>() {
+                tray::refresh(app, &state.core.snapshot());
+            }
+        }
         let _ = app.emit_to(MAIN, "update", view);
+    }
+
+    /// The user is told once of a version that waits for them (`UpdateView::waits_for_user`).
+    fn tell(&self, app: &AppHandle) {
+        let view = self.view();
+        if let (true, Some(version), Some(state)) = (view.waits_for_user(), &view.version, app.try_state::<AppState>()) {
+            state.core.update_waits(version, view.status == "available");
+        }
     }
 
     /// Asks by itself for as long as the app runs, unless Settings turned that off.
@@ -184,7 +212,7 @@ impl Update {
         }
         // An update that waits stays in sight while a newer one is asked for.
         self.set(app, |view| {
-            if view.status != "ready" {
+            if !matches!(view.status, "ready" | "available") {
                 view.status = "checking";
                 view.error = None;
             }
@@ -225,8 +253,11 @@ impl Update {
             }
             Err(error) => {
                 eprintln!("[pitwall] update: {error}");
+                // No answer: a version this install can't put in its place is still out.
                 return self.set(app, |view| {
-                    rest(view);
+                    if view.status != "available" {
+                        rest(view);
+                    }
                     view.offline = true;
                 });
             }
@@ -234,12 +265,13 @@ impl Update {
 
         let version = update.version.clone();
         if install_path().is_none_or(|path| read_only_place(&path)) {
-            return self.set(app, |view| {
+            self.set(app, |view| {
                 view.status = "available";
                 view.version = Some(version);
                 view.checked_at = Some(now_ms());
                 view.offline = false;
             });
+            return self.tell(app);
         }
 
         self.set(app, |view| {
@@ -269,13 +301,21 @@ impl Update {
             Ok(bytes) => {
                 *lock(&self.ready) = Some((update, bytes));
                 self.set(app, |view| view.status = "ready");
+                self.tell(app);
             }
             Err(error) => {
                 eprintln!("[pitwall] update: {error}");
                 let step = download_error(&error);
-                self.set(app, |view| {
-                    view.status = "failed";
-                    view.error = Some(step);
+                // The one downloaded before still waits; the newer one is asked for again later.
+                self.set(app, |view| match &waiting {
+                    Some(version) => {
+                        view.status = "ready";
+                        view.version = Some(version.clone());
+                    }
+                    None => {
+                        view.status = "failed";
+                        view.error = Some(step);
+                    }
                 });
             }
         }

@@ -881,7 +881,7 @@ mod tests {
 
         // The kinds that have no box.
         set(true, When::Always, all);
-        for kind in [SignalKind::ClaudeLongTurn, SignalKind::CommandDone, SignalKind::CommandFailed, SignalKind::DepsWaiting] {
+        for kind in [SignalKind::ClaudeLongTurn, SignalKind::CommandDone, SignalKind::CommandFailed, SignalKind::DepsWaiting, SignalKind::Update] {
             assert!(!core.relay_seen(&signal(kind), away), "{kind:?}");
         }
         assert!(requests.recv_timeout(QUIET).is_err(), "something was sent");

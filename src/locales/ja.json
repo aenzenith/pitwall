@@ -1451,6 +1451,7 @@
   "missed.cardReview": "レビュー待ちのカードあり",
   "missed.lapDone": "ラップが完了：{name}",
   "missed.lapFailed": "ラップが失敗：{name}",
+  "missed.update": "新しいバージョンが出ました：{name}",
   "backup.part.laps": "ラップ: 定期タスク",
   "backup.count.laps": {
     "other": "タスク {count} 件"
@@ -1980,6 +1981,8 @@
   "core.tray.tooltip": "Pitwall — 実行中 {running} · 入力待ち {waiting}",
   "core.tray.working": "Claude 作業中 {count}",
   "core.tray.percent": "{value}%",
+  "core.tray.update": "再起動してアップデート…",
+  "core.tray.updateAvailable": "新しいバージョンを入手…",
   "core.tray.tooltipFuel": "Pitwall — 実行中 {running} · 入力待ち {waiting} · セッション残り {left}",
   "core.tray.tooltipFuelWeek": "Pitwall — 実行中 {running} · 入力待ち {waiting} · 週間残り {left}",
   "core.tray.working.codex": "Codex 作業中 {count}",
@@ -2101,6 +2104,8 @@
   "core.signal.lapFailed": "ラップ「{name}」が失敗しました。",
   "core.signal.lapPaused": "ラップ「{name}」は失敗が続いたため、一時停止しました。",
   "core.signal.deps": "ガレージにインストール待ちのパッケージか未実行のマイグレーションがあります。",
+  "core.signal.updateReady": "Pitwall を再起動するとインストールされます。",
+  "core.signal.updateAvailable": "このインストールは自動でアップデートできません。ダウンロードページから新しいバージョンを入手してください。",
   "core.signal.permission.codex": "Codex が {tool} の許可を求めています。",
   "core.signal.longTurn.codex": "Codex が {minutes} 分間作業を続けています。",
   "core.radio.noEndpoint": "無線の回線を開けませんでした: {error}",

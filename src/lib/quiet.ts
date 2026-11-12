@@ -102,6 +102,7 @@ const LINES: Record<SignalKind, Key | AgentKey> = {
   "card-review": "missed.cardReview",
   "lap-done": "missed.lapDone",
   "lap-failed": "missed.lapFailed",
+  update: "missed.update",
 };
 
 /** The kinds whose line names the agent it is about: its waits, its long turn, its fuel. */

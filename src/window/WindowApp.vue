@@ -136,6 +136,14 @@ const updateButton = computed(() => update.value?.status === "ready" || update.v
 const installing = computed(() => update.value?.status === "installing");
 /** The update dialog: opened from the brand row's button and from Settings › About. */
 const updateOpen = ref(false);
+/** Asked for from outside the window (a notification, the popover's line, the tray's menu): the
+ * dialog, once the update's state is known, while a new version still waits. */
+const updateAsked = ref(false);
+watch([updateAsked, update], ([asked, state]) => {
+  if (!asked || !state) return;
+  updateAsked.value = false;
+  if (state.status === "ready" || state.status === "available") updateOpen.value = true;
+});
 
 /** Beside Garage: how many listed projects need you (lib/deps: needsAttention). */
 const depsBadge = computed(() => {
@@ -883,7 +891,9 @@ onMounted(async () => {
   // `/` in the switcher: one of the sidebar's pages.
   // A fuel alert's line in the list of what was missed opens the Fuel page on its agent; what a
   // lap's session waits on, the Turlar page with that run's dialog open (lib/laps: `lapAsked`).
-  unlistenPage = await listen<{ page: Page; tab?: "notifications"; agent?: Agent; run?: string }>("reveal-page", (event) => {
+  // A new version that waits (its notification, the popover's line, the tray's menu): its dialog.
+  unlistenPage = await listen<{ page: Page | "update"; tab?: "notifications"; agent?: Agent; run?: string }>("reveal-page", (event) => {
+    if (event.payload.page === "update") return void (updateAsked.value = true);
     if (event.payload.agent) fuelPicked.value = agentOf(event.payload.agent);
     if (event.payload.run) lapAsked.value = event.payload.run;
     revealPage(event.payload.page, event.payload.tab);

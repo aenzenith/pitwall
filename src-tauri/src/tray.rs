@@ -950,7 +950,8 @@ mod bar {
     }
 }
 
-/// The tray's menu on Windows and Linux: Pitwall's window, the quick switcher, the projects that
+/// The tray's menu on Windows and Linux: a new version that waits for the user first (the
+/// window with the update's dialog), Pitwall's window, the quick switcher, the projects that
 /// wait on you and those that run (a few of each; a click opens one as Settings › Projects says
 /// for the menu bar), and Quit. Rebuilt only when what it lists changes.
 #[cfg(not(target_os = "macos"))]
@@ -965,6 +966,7 @@ mod menu {
     use crate::i18n::t;
     use crate::AppState;
 
+    const UPDATE: &str = "pitwall:update";
     const OPEN: &str = "pitwall:open";
     const SWITCHER: &str = "pitwall:switcher";
     const QUIT: &str = "pitwall:quit";
@@ -992,8 +994,26 @@ mod menu {
         lines
     }
 
+    /// The line that offers a new version, while one waits for the user
+    /// (`UpdateView::waits_for_user`): whether it can be clicked, and its words.
+    fn update_line<R: Runtime>(app: &AppHandle<R>) -> Option<(bool, String)> {
+        let view = app.try_state::<AppState>()?.update.view();
+        if !view.waits_for_user() {
+            return None;
+        }
+        Some(match view.status {
+            "installing" => (false, t!("about.update.installing", version = view.version.unwrap_or_default())),
+            "available" => (true, t!("core.tray.updateAvailable")),
+            _ => (true, t!("core.tray.update")),
+        })
+    }
+
     pub fn build<R: Runtime>(app: &AppHandle<R>, snapshot: Option<&Snapshot>) -> tauri::Result<Menu<R>> {
         let menu = Menu::new(app)?;
+        if let Some((enabled, label)) = update_line(app) {
+            menu.append(&MenuItem::with_id(app, UPDATE, label, enabled, None::<&str>)?)?;
+            menu.append(&PredefinedMenuItem::separator(app)?)?;
+        }
         menu.append(&MenuItem::with_id(app, OPEN, t!("switcher.openPitwall"), true, None::<&str>)?)?;
         menu.append(&MenuItem::with_id(app, SWITCHER, t!("switcher.placeholder"), true, None::<&str>)?)?;
 
@@ -1018,6 +1038,9 @@ mod menu {
         let mut now = lines(snapshot);
         // The fixed lines change with the language only.
         now.push((String::new(), t!("switcher.openPitwall")));
+        if let Some((enabled, label)) = update_line(app) {
+            now.push((format!("{UPDATE}:{enabled}"), label));
+        }
 
         // Not held while building: menus are made on the main thread, which may be waiting here.
         {
@@ -1036,6 +1059,11 @@ mod menu {
 
     pub fn clicked<R: Runtime>(app: &AppHandle<R>, id: &str) {
         match id {
+            // The window, with the update's dialog over it.
+            UPDATE => {
+                super::show_main(app);
+                let _ = app.emit("reveal-page", serde_json::json!({ "page": "update" }));
+            }
             OPEN => super::show_main(app),
             SWITCHER => super::toggle_switcher(app),
             // With something still open, the chequered flag's dialog first (`flag.rs`).

@@ -664,6 +664,10 @@ pub struct Settings {
     /// that knows of them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seen_version: Option<String>,
+    /// The newest version of Pitwall the user was told waits for them (`Core::update_waits`): it
+    /// isn't told of a second time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_told: Option<String>,
     /// The first run's steps were finished or put off: they don't come up by themselves again.
     pub onboarded: bool,
     /// A project that appears in the projects folder is offered under the list
@@ -736,6 +740,7 @@ impl Default for Settings {
             teams: Vec::new(),
             resume: "ask".into(),
             seen_version: None,
+            update_told: None,
             onboarded: false,
             suggest_projects: false,
             seen_folders: Vec::new(),

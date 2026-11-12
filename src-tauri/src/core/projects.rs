@@ -127,6 +127,7 @@ impl Core {
                 track: kept.track,
                 teams: kept.teams,
                 seen_version: kept.seen_version,
+                update_told: kept.update_told,
                 onboarded: kept.onboarded,
                 seen_folders,
                 // Settings › Notifications' own, each by its command (`signals.rs`).

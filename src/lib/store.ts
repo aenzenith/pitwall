@@ -266,8 +266,9 @@ export async function connectLaps(): Promise<UnlistenFn> {
 export const update = ref<UpdateView | null>(null);
 
 /**
- * The main window's: hears `update` (sent to this window only, on every change) and asks for the
- * current state. A core that doesn't answer leaves it null: no version, no button.
+ * The main window's and the popover's: hears `update` (the window's on every change and the
+ * download's progress, the popover's on every change of state) and asks for the current state. A
+ * core that doesn't answer leaves it null: no version, no button.
  */
 export async function connectUpdate(): Promise<UnlistenFn> {
   let heard = 0;

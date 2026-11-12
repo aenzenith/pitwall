@@ -158,7 +158,7 @@ impl General {
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
             theme, resume, suggest_projects, flag, open,
             // This Mac's own: its registration with the system, and what it has shown so far.
-            launch_at_login: _, seen_version: _, onboarded: _, seen_folders: _, board_scope: _,
+            launch_at_login: _, seen_version: _, update_told: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
             projects: _, order: _, added: _, teams: _,
             // Kept out: what is told and when is this Mac's own, every event's switch with the

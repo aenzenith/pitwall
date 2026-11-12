@@ -17,13 +17,14 @@ import { openFromOutside, openTarget } from "../lib/open";
 import { atWork } from "../lib/pages";
 import { missed, notifications, quiet, quietLine, waits } from "../lib/quiet";
 import { rowKeys } from "../lib/rows";
-import { api, connectFuel, fuel, now, snapshot } from "../lib/store";
+import { api, connectFuel, connectUpdate, fuel, now, snapshot, update } from "../lib/store";
 import { applyDrop, teamOf, teams } from "../lib/teams";
 import type { Project } from "../lib/types";
 import FuelStrip from "./FuelStrip.vue";
 import MissedList from "./MissedList.vue";
 import QuietBanner from "./QuietBanner.vue";
 import ResumeBanner from "./ResumeBanner.vue";
+import UpdateStrip from "./UpdateStrip.vue";
 
 const MAX_HEIGHT = 620;
 /** Three rows of the project list with the room under them: what it keeps before anything else
@@ -178,23 +179,29 @@ async function fitWindow(): Promise<void> {
 watch(() => snapshot.value, () => void fitWindow());
 // The fuel strip comes, goes and takes a line more with what the core last read of the limits.
 watch(fuel, () => void fitWindow());
+// So does the line of a new version that waits.
+watch(update, () => void fitWindow());
 
 function onKey(event: KeyboardEvent): void {
   if (event.key === "Escape") void api.hidePopover();
 }
 
 let unlistenFuel: (() => void) | null = null;
+let unlistenUpdate: (() => void) | null = null;
 
 onMounted(async () => {
   window.addEventListener("keydown", onKey);
   void fitWindow();
   // The limits, for the strip in the foot: sent to this window too.
   unlistenFuel = await connectFuel();
+  // A new version's state, for the line over the foot: sent to this window too.
+  unlistenUpdate = await connectUpdate();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   unlistenFuel?.();
+  unlistenUpdate?.();
 });
 </script>
 
@@ -328,6 +335,9 @@ onBeforeUnmount(() => {
       <p>{{ t("popover.empty") }}</p>
       <button type="button" class="primary" @click="api.pickFolder()">{{ t("common.addProject") }}</button>
     </section>
+
+    <!-- Over the foot, while a new version waits for the user: the way to its dialog. -->
+    <UpdateStrip />
 
     <!-- The foot, when there is fuel to show: Claude's limits. -->
     <FuelStrip ref="strip" />

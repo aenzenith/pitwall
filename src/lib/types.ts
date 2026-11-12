@@ -857,7 +857,9 @@ export type SignalKind =
   | "fuel-high"
   | "card-review"
   | "lap-done"
-  | "lap-failed";
+  | "lap-failed"
+  /** A new version of Pitwall waits for the user; `detail` is its version. */
+  | "update";
 
 /** Something the user wasn't told while it was quiet. `path` and `name` are empty for what is
  * about no project (the fuel alert); a lap's may be a folder no listed project holds, named by

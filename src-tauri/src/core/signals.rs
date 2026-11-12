@@ -66,6 +66,10 @@ pub enum SignalKind {
     LapDone,
     /// A lap's run failed, or the job paused itself after failures; `detail` is the job's name.
     LapFailed,
+    /// A new version of Pitwall waits for the user where it isn't installed at a quit
+    /// (`Core::update_waits`); `detail` is the version. About no project: `path` is empty, and it
+    /// never leaves for the phone.
+    Update,
 }
 
 /// One thing worth telling the user, as its source saw it.
@@ -233,6 +237,8 @@ fn decide(settings: &Settings, signal: &Signal, quiet: bool, again: bool) -> Ver
         // Sent only when the job's own switches want a banner (`Lap::notify`); its sound is the
         // job's too, played by the laps through `sound`, so quiet holds it with the rest.
         LapDone | LapFailed => (true, None),
+        // Told once a version (`Core::update_waits`), with no switch of its own.
+        Update => (true, None),
     };
     let sound = sound.filter(|id| !id.is_empty());
 
@@ -273,8 +279,9 @@ fn banner_id(signal: &Signal) -> String {
     id
 }
 
-/// A signal's banner; none for the fuel alert, which brings its own (`fuel_high`), and for a
-/// card in review, which has none. `paused`: a lap that failed paused itself with it.
+/// A signal's banner; none for the fuel alert and a new version, which bring their own
+/// (`fuel_high`, `update_waits`), and for a card in review, which has none. `paused`: a lap that
+/// failed paused itself with it.
 fn banner(signal: &Signal, paused: bool) -> Option<Banner> {
     use SignalKind::*;
 
@@ -291,7 +298,7 @@ fn banner(signal: &Signal, paused: bool) -> Option<Banner> {
         CommandDone => t!("core.signal.commandDone", name = detail),
         CommandFailed => t!("core.signal.commandFailed", name = detail),
         DepsWaiting => t!("core.signal.deps"),
-        FuelHigh | CardReview => return None,
+        FuelHigh | CardReview | Update => return None,
         // The job's name; the project's (or the folder's) is the title.
         LapDone => t!("core.signal.lapDone", name = detail),
         LapFailed if paused => t!("core.signal.lapPaused", name = detail),
@@ -499,6 +506,29 @@ impl Core {
         let signal = Signal { kind: SignalKind::FuelHigh, path: String::new(), name: String::new(), detail: None, agent };
         let told = self.tell(vec![(Some(Banner { id: id.to_string(), title, body }), signal)], !again);
         told.iter().any(|verdict| verdict.banner || verdict.missed)
+    }
+
+    /// A new version of Pitwall waits where nothing installs it by itself (`update.rs`):
+    /// downloaded, or to be fetched by hand (`available`). Told once a version, ever: the version
+    /// told is kept in the settings. Its banner opens the window with the update's dialog, quiet
+    /// holds it on the list of what was missed, and nothing of it goes to the phone.
+    pub fn update_waits(&self, version: &str, available: bool) {
+        {
+            let mut inner = self.lock();
+            if inner.settings.update_told.as_deref() == Some(version) {
+                return;
+            }
+            inner.settings.update_told = Some(version.to_string());
+        }
+        self.save_settings();
+
+        let signal = Signal { kind: SignalKind::Update, path: String::new(), name: "Pitwall".into(), detail: Some(version.to_string()), agent: Agent::Claude };
+        let (title, body) = if available {
+            (t!("update.dialog.available", version = version), t!("core.signal.updateAvailable"))
+        } else {
+            (t!("update.dialog.ready", version = version), t!("core.signal.updateReady"))
+        };
+        self.tell(vec![(Some(Banner { id: banner_id(&signal), title, body }), signal)], false);
     }
 
     /// A banner the user asked for (the first run's "Send a test"), so nothing holds it: not
@@ -809,6 +839,8 @@ impl Core {
             FuelHigh => self.emit(CoreEvent::RevealFuel(agent)),
             CardReview => self.emit(CoreEvent::RevealPage("board")),
             LapDone | LapFailed => self.emit(CoreEvent::RevealPage("laps")),
+            // The window, with the update's dialog over it.
+            Update => self.emit(CoreEvent::RevealPage("update")),
         }
     }
 }
@@ -817,7 +849,7 @@ impl Core {
 mod tests {
     use super::*;
 
-    const KINDS: [SignalKind; 12] = [
+    const KINDS: [SignalKind; 13] = [
         SignalKind::ClaudeAsking,
         SignalKind::ClaudePermission,
         SignalKind::ClaudeFinished,
@@ -830,6 +862,7 @@ mod tests {
         SignalKind::CardReview,
         SignalKind::LapDone,
         SignalKind::LapFailed,
+        SignalKind::Update,
     ];
 
     fn about(kind: SignalKind, path: &str) -> Signal {

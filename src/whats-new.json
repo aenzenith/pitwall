@@ -46,6 +46,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Ready updates no longer hide",
+        "tr": "Hazır güncelleme artık gözden kaçmıyor",
+        "de": "Fertige Updates fallen jetzt auf",
+        "es": "Ya ves cuándo hay una actualización lista",
+        "ru": "Готовое обновление больше не теряется",
+        "ja": "準備できたアップデートを見逃しません",
+        "zh-Hans": "准备好的更新不会再被错过"
+      },
+      "body": {
+        "en": "On Windows, Pitwall tells you once when a new version is ready, and keeps it on hand in the tray until you restart for it.",
+        "tr": "Windows'ta yeni sürüm hazır olunca Pitwall bir kez haber veriyor. Sen yeniden başlatana kadar da tepside seni bekliyor.",
+        "de": "Unter Windows sagt dir Pitwall einmal Bescheid, wenn eine neue Version bereitliegt, und hält sie im Tray bereit, bis du neu startest.",
+        "es": "En Windows, Pitwall te avisa una vez cuando hay una versión nueva lista y la deja a mano en la bandeja del sistema hasta que reinicies.",
+        "ru": "В Windows Pitwall один раз сообщает, что новая версия готова, и держит её под рукой в трее, пока вы не перезапустите приложение.",
+        "ja": "Windows では、新しいバージョンの準備ができると Pitwall が一度だけ知らせ、再起動するまでトレイで待っています。",
+        "zh-Hans": "在 Windows 上，新版本准备好后 Pitwall 会提醒你一次，并一直留在托盘里，直到你重启。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Your days as a spreadsheet",
         "tr": "Günlerini tabloya dök",
         "de": "Deine Tage als Tabelle",

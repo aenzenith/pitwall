@@ -1451,6 +1451,7 @@
   "missed.cardReview": "有卡片待审查",
   "missed.lapDone": "定时任务已完成：{name}",
   "missed.lapFailed": "定时任务失败：{name}",
+  "missed.update": "新版本已发布：{name}",
   "backup.part.laps": "圈次：定时任务",
   "backup.count.laps": {
     "other": "{count} 个任务"
@@ -1980,6 +1981,8 @@
   "core.tray.tooltip": "Pitwall：{running} 个运行中 · {waiting} 个在等你",
   "core.tray.working": "{count} 个 Claude 工作中",
   "core.tray.percent": "{value}%",
+  "core.tray.update": "重启以更新…",
+  "core.tray.updateAvailable": "获取新版本…",
   "core.tray.tooltipFuel": "Pitwall：{running} 个运行中 · {waiting} 个在等你 · 会话剩余 {left}",
   "core.tray.tooltipFuelWeek": "Pitwall：{running} 个运行中 · {waiting} 个在等你 · 本周剩余 {left}",
   "core.tray.working.codex": "{count} 个 Codex 工作中",
@@ -2101,6 +2104,8 @@
   "core.signal.lapFailed": "定时任务“{name}”失败了。",
   "core.signal.lapPaused": "定时任务“{name}”接连失败，已暂停。",
   "core.signal.deps": "车库里有待安装的包或待执行的迁移。",
+  "core.signal.updateReady": "重启 Pitwall 后即可安装。",
+  "core.signal.updateAvailable": "此安装无法自行更新；请从下载页面获取新版本。",
   "core.signal.permission.codex": "Codex 需要你授权使用 {tool}。",
   "core.signal.longTurn.codex": "Codex 已持续工作 {minutes} 分钟。",
   "core.radio.noEndpoint": "无线电无法打开线路：{error}",
