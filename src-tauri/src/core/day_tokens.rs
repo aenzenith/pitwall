@@ -50,6 +50,10 @@ pub struct DaySpend {
 pub struct ProjectSpend {
     pub tokens: u64,
     pub week: Option<f64>,
+    /// Its API-equivalent cost in USD, of the models that have a price; none when none has, or
+    /// for a day written down before it was kept. A CSV export's alone (`export.rs`).
+    #[serde(skip)]
+    pub cost: Option<f64>,
 }
 
 /// The last look at the day's tokens and what was last written down of them.
@@ -153,6 +157,7 @@ impl Core {
             week: fuel.week.map(round),
             estimated: fuel.estimated,
             used: fuel.used,
+            costs: parts.iter().filter_map(|(path, part)| Some((path.clone(), (part.cost? * 10_000.0).round() / 10_000.0))).collect(),
             projects: parts.into_iter().map(|(path, part)| (path, (part.tokens, part.week.map(round)))).collect(),
         };
         match agent {
@@ -205,7 +210,7 @@ fn split(agent: Agent, fuel: &DayFuel, owners: &HashMap<String, String>, listed:
     let weight = |session: &SessionSpend| if priced { session.cost_usd } else { session.tokens.total as f64 };
     let whole: f64 = fuel.sessions.values().map(weight).sum();
 
-    let mut parts: BTreeMap<String, (u64, f64)> = BTreeMap::new();
+    let mut parts: BTreeMap<String, (u64, f64, f64)> = BTreeMap::new();
     for (id, session) in &fuel.sessions {
         let path = owners
             .get(id)
@@ -216,14 +221,15 @@ fn split(agent: Agent, fuel: &DayFuel, owners: &HashMap<String, String>, listed:
         let part = parts.entry(path).or_default();
         part.0 += session.tokens.total;
         part.1 += weight(session);
+        part.2 += session.cost_usd;
     }
 
     parts
         .into_iter()
-        .filter(|(_, (tokens, _))| *tokens > 0)
-        .map(|(path, (tokens, part))| {
+        .filter(|(_, (tokens, _, _))| *tokens > 0)
+        .map(|(path, (tokens, part, cost))| {
             let week = fuel.week.map(|week| if whole > 0.0 { week * part / whole } else { 0.0 });
-            (path, ProjectSpend { tokens, week })
+            (path, ProjectSpend { tokens, week, cost: priced.then_some(cost) })
         })
         .collect()
 }

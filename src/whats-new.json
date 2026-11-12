@@ -21,6 +21,27 @@
         "ja": "設定 › 通知 で、Claude や Codex が 1 回の応答にどれだけ時間をかけたら Pitwall が知らせるかを選べるようになりました。",
         "zh-Hans": "在“设置 › 通知”里，你可以选择 Claude 或 Codex 在一轮里工作多久后 Pitwall 来提醒你。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Your days as a spreadsheet",
+        "tr": "Günlerini tabloya dök",
+        "de": "Deine Tage als Tabelle",
+        "es": "Tus días en una hoja de cálculo",
+        "ru": "Ваши дни в таблице",
+        "ja": "毎日の記録を表計算ソフトへ",
+        "zh-Hans": "把每天的记录导出成表格"
+      },
+      "body": {
+        "en": "Export on the Today page saves a day, a week or any stretch you pick as a CSV file, with each project's time, tokens and cost.",
+        "tr": "Bugün sayfasındaki Dışa aktar, bir günü, bir haftayı ya da seçtiğin aralığı CSV dosyası olarak kaydediyor. Her projenin süresi, tokenları ve maliyeti içinde yer alıyor.",
+        "de": "Exportieren auf der Seite Heute speichert einen Tag, eine Woche oder einen frei gewählten Zeitraum als CSV-Datei, mit Zeit, Tokens und Kosten jedes Projekts.",
+        "es": "Exportar, en la página Hoy, guarda un día, una semana o el periodo que elijas como archivo CSV, con el tiempo, los tokens y el coste de cada proyecto.",
+        "ru": "Кнопка «Экспорт» на странице «Сегодня» сохраняет день, неделю или любой выбранный период в CSV-файл, где есть время, токены и стоимость каждого проекта.",
+        "ja": "今日ページの「書き出す」で、1 日、1 週間、または好きな期間を CSV ファイルに保存できます。プロジェクトごとの時間、トークン、コストが入っています。",
+        "zh-Hans": "在“今天”页面点“导出”，就能把一天、一周或你选的任意时段存成 CSV 文件，里面有每个项目的时间、token 和费用。"
+      }
     }
   ]
 }

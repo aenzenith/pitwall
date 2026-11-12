@@ -429,6 +429,10 @@ export type DayProject = {
  * before they were written down. */
 export type DaySummary = { date: string; start: number; end: number; today: boolean; now: number; projects: DayProject[]; spend: DaySpend | null; codexSpend?: DaySpend };
 
+/** What a CSV export of a stretch of days would hold (core/export.rs): the days asked for, cut to
+ * those there can be records of (`oldest` the earliest), and the file's column heads. */
+export type ExportPreview = { from: string; to: string; oldest: string; projects: number; rows: number; columns: string[] };
+
 /* ---------- Fuel: Claude's plan limits (src-tauri/src/usage.rs) and today's spend (spend.rs) ---------- */
 
 /** One limit. `five_hour` is the session, `seven_day` the week across models; then each model's

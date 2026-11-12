@@ -5,7 +5,7 @@
 //! in the app's own folder. A day's summary is built from that file and the projects' `git log`.
 //! The day's Claude tokens go into the same file (`day_tokens.rs`): the week's limit as read at
 //! the day's first reading and after a refill (`week`), and every few minutes the tokens in all
-//! and per project with their share of the week (`spend`).
+//! and per project with their share of the week and their API-equivalent cost (`spend`).
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -18,8 +18,8 @@ use crate::claude::{SessionPhase, SessionState};
 use crate::clock::{day_name, local_midnight};
 
 /// Day files older than this are deleted when the app starts.
-const KEEP_DAYS: u64 = 90;
-const DAY_MS: u64 = 24 * 60 * 60 * 1000;
+pub(super) const KEEP_DAYS: u64 = 90;
+pub(super) const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 /// A wait longer than this was left alone rather than waited on; it counts up to here.
 const WAIT_LIMIT: u64 = 30 * 60 * 1000;
 /// Heartbeats come every few seconds; a longer silence is the Mac asleep, not time spent.
@@ -65,6 +65,10 @@ pub(super) struct Event {
     /// projects not listed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     projects: Option<BTreeMap<String, (u64, Option<f64>)>>,
+    /// spend: each project's API-equivalent cost in USD, by path as `projects` has them, for
+    /// those whose models have a price; a line written before it was kept has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    costs: Option<BTreeMap<String, f64>>,
 }
 
 impl Event {
@@ -83,6 +87,7 @@ impl Event {
             before: None,
             resets: None,
             projects: None,
+            costs: None,
         }
     }
 }
@@ -98,7 +103,7 @@ pub struct WeekMark {
 }
 
 /// A day's tokens as written down: in all and per project path (empty: projects not listed),
-/// each with its share of the week's limit.
+/// each with its share of the week's limit, and the projects' API-equivalent cost.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct SpendRecord {
     pub tokens: u64,
@@ -106,6 +111,22 @@ pub(super) struct SpendRecord {
     pub estimated: bool,
     pub used: Option<f64>,
     pub projects: BTreeMap<String, (u64, Option<f64>)>,
+    pub costs: BTreeMap<String, f64>,
+}
+
+/// One project's day of one agent, for a CSV export (`export.rs`): its working and waiting
+/// time and turns from the day's file, its tokens, share of the week and cost as the day's last
+/// count has them (none when nothing is known of them). An empty path: projects not listed.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct DayFigures {
+    pub path: String,
+    pub agent: Agent,
+    pub work: u64,
+    pub wait: u64,
+    pub turns: u32,
+    pub tokens: Option<u64>,
+    pub week: Option<f64>,
+    pub cost: Option<f64>,
 }
 
 /// What was last written down, so only changes are.
@@ -426,6 +447,7 @@ impl Core {
             week: record.week,
             used: record.used,
             projects: Some(record.projects.clone()),
+            costs: (!record.costs.is_empty()).then(|| record.costs.clone()),
             ..Event::new(t, "", agent.spend_kind(), state)
         });
     }
@@ -526,6 +548,55 @@ impl Core {
         projects.sort_by(|a, b| claude_time(b).cmp(&claude_time(a)).then(b.commits.len().cmp(&a.commits.len())).then(a.name.cmp(&b.name)));
 
         DaySummary { date: day_name(start), start, end, today, now, projects, spend, codex_spend }
+    }
+
+    /// A day's figures (`YYYY-MM-DD`, local) per project and agent, for a CSV export: from the
+    /// day's file alone, no git; today's tokens as the logs were last looked at, as the Today
+    /// page has them (`listed`: the listed projects' paths). Nothing for a day still to come.
+    pub(super) fn day_figures(&self, date: &str, listed: &[String]) -> Vec<DayFigures> {
+        let now = now_ms();
+        let Some((start, end)) = day_bounds(date).filter(|(start, _)| *start <= now) else {
+            return Vec::new();
+        };
+        let until = now.clamp(start, end);
+
+        let mut events = self.read_day(&day_name(start.saturating_sub(1)));
+        events.extend(self.read_day(&day_name(start)));
+        events.sort_by_key(|event| event.t);
+        let day = fold_day(&events, start, until);
+
+        let mut figures: Vec<DayFigures> = Vec::new();
+        fn of<'a>(figures: &'a mut Vec<DayFigures>, path: &str, agent: Agent) -> &'a mut DayFigures {
+            let at = figures.iter().position(|f| f.path == path && f.agent == agent).unwrap_or_else(|| {
+                figures.push(DayFigures { path: path.into(), agent, work: 0, wait: 0, turns: 0, tokens: None, week: None, cost: None });
+                figures.len() - 1
+            });
+            &mut figures[at]
+        }
+
+        for (path, built) in &day.projects {
+            for session in built.sessions.iter().filter(|s| s.work + s.wait > 0) {
+                let figure = of(&mut figures, path, session.agent);
+                figure.work += session.work;
+                figure.wait += session.wait;
+                figure.turns += session.turns;
+            }
+        }
+
+        let today = (start..end).contains(&now);
+        let owners: HashMap<String, String> =
+            day.projects.iter().flat_map(|(path, built)| built.sessions.iter().map(move |session| (session.id.clone(), path.clone()))).collect();
+        for agent in Agent::ALL {
+            let (_, parts) = if today { self.tokens_today_of(agent, &day_name(start), &owners, listed) } else { spend_of(&events, agent, start, end) };
+            for (path, part) in parts {
+                let figure = of(&mut figures, &path, agent);
+                figure.tokens = Some(part.tokens);
+                figure.week = part.week;
+                figure.cost = part.cost;
+            }
+        }
+
+        figures
     }
 }
 
@@ -646,7 +717,8 @@ fn spend_of(events: &[Event], agent: Agent, start: u64, end: u64) -> (Option<Day
     };
 
     let spend = DaySpend { tokens, week: event.week, estimated: event.state == "estimated" };
-    let parts = event.projects.iter().flatten().map(|(path, (tokens, week))| (path.clone(), ProjectSpend { tokens: *tokens, week: *week })).collect();
+    let cost = |path: &String| event.costs.as_ref().and_then(|costs| costs.get(path)).copied();
+    let parts = event.projects.iter().flatten().map(|(path, (tokens, week))| (path.clone(), ProjectSpend { tokens: *tokens, week: *week, cost: cost(path) })).collect();
     (Some(spend), parts)
 }
 

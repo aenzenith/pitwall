@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import Icon from "../../components/Icon.vue";
 import PeriodPicker from "../../components/PeriodPicker.vue";
@@ -9,6 +9,10 @@ import { flagOpening, openFlag } from "../../lib/flag";
 import { language, t } from "../../lib/i18n";
 import { dragRegion } from "../../lib/platform";
 import type { DaySummary } from "../../lib/types";
+import DayExportDialog from "./DayExportDialog.vue";
+
+/** The CSV export's dialog, over the day shown. */
+const exporting = ref(false);
 
 /** `day`: the summary shown, or the last one while the next loads. */
 const props = defineProps<{ day: DaySummary | null }>();
@@ -42,6 +46,15 @@ const subtitle = computed(() => {
       <span class="subtitle">{{ subtitle }}</span>
     </div>
     <PeriodPicker v-model="date" :all="false" />
+    <!-- The days as a CSV file (day/DayExportDialog), from the day shown. In a narrow bar it is its
+         glyph alone, as the flag is. Its dialog lives outside the bar, whose ground drags the
+         window. -->
+    <button type="button" class="export" :aria-label="t('day.export')" :title="t('day.export')" @click="exporting = true">
+      <Icon name="download" :size="14" /> <span class="export-text">{{ t("day.export") }}</span>
+    </button>
+    <Teleport to="body">
+      <DayExportDialog v-if="exporting" :day="shownName" @close="exporting = false" />
+    </Teleport>
     <!-- The chequered flag: what is still open (window/FlagDialog). It reads the projects' Git
          state again first, so the button spins until the dialog is up. In a narrow bar it is its
          glyph alone: its words stay its name and its tooltip. -->
@@ -92,7 +105,8 @@ const subtitle = computed(() => {
   text-overflow: ellipsis;
 }
 
-.flag {
+.flag,
+.export {
   position: relative;
   flex-shrink: 0;
   height: 30px;
@@ -103,8 +117,29 @@ const subtitle = computed(() => {
   font-size: 13px;
 }
 
-.flag:hover:not(:disabled) {
+.flag:hover:not(:disabled),
+.export:hover {
   background: var(--bg-control-hover);
+}
+
+.export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+/* The export's words go first: without them the title, the days and the flag's words still fit
+   (the flag's own 547 px below, and the longest export label's ~140 px). */
+@container (max-width: 700px) {
+  .export {
+    width: 30px;
+    padding: 0;
+  }
+
+  .export-text {
+    display: none;
+  }
 }
 
 .flag-label {

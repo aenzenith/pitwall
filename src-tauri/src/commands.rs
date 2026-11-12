@@ -925,6 +925,51 @@ pub async fn backup_export(app: AppHandle, parts: crate::core::BackupParts) -> R
     .map_err(|error| error.to_string())?
 }
 
+/* ---------- the Today page's CSV export (core/export.rs) ---------- */
+
+/// What a CSV export of the days `from`..=`to` (`YYYY-MM-DD`) would hold. It reads the day files,
+/// so it runs off the main thread.
+#[tauri::command]
+pub async fn day_export_preview(app: AppHandle, from: String, to: String) -> Result<crate::core::ExportPreview, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.export_preview(&from, &to)).await.map_err(|error| error.to_string())?
+}
+
+/// Asks where to save and writes the CSV export of `from`..=`to` there. The file's path, or None
+/// when the dialog was cancelled; it is kept in memory for `day_export_reveal`.
+#[tauri::command]
+pub async fn day_export(app: AppHandle, from: String, to: String) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut dialog = app
+            .dialog()
+            .file()
+            .set_title(t!("core.dialog.exportSave"))
+            .set_file_name(crate::core::export_file_name(&from, &to)?)
+            .add_filter(t!("core.dialog.csvFilter"), &["csv"]);
+        if let Some(downloads) = dirs::download_dir().filter(|dir| dir.is_dir()) {
+            dialog = dialog.set_directory(downloads);
+        }
+
+        let Some(file) = dialog.blocking_save_file().and_then(|file| file.into_path().ok()) else {
+            return Ok(None);
+        };
+        state.core.export_write(&file, &from, &to)?;
+        let shown = file.to_string_lossy().into_owned();
+        *state.export.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(file);
+        Ok(Some(shown))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// The CSV file saved last, in Finder (Explorer, the file manager); the page never names a path.
+#[tauri::command]
+pub fn day_export_reveal(state: State<'_, AppState>) -> bool {
+    let saved = state.export.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone();
+    saved.filter(|file| file.is_file()).is_some_and(|file| tauri_plugin_opener::reveal_item_in_dir(file).is_ok())
+}
+
 /// Asks for a backup file and says what it holds; None when the dialog was cancelled. The file
 /// is the one `backup_import` reads: the page never names a path.
 #[tauri::command]

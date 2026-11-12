@@ -72,6 +72,9 @@ pub struct AppState {
     pub update: update::Update,
     /// The backup file picked last (`commands::backup_pick`): the one an import reads.
     pub backup: std::sync::Mutex<Option<PathBuf>>,
+    /// The CSV file the Today page saved last (`commands::day_export`): the one "Show in Finder"
+    /// shows. In memory only.
+    pub export: std::sync::Mutex<Option<PathBuf>>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -335,6 +338,7 @@ pub fn run() {
                 sessions: sessions::Sessions::default(),
                 update,
                 backup: std::sync::Mutex::new(None),
+                export: std::sync::Mutex::new(None),
             });
             fuel::Fuel::start(app.handle());
             sessions::Sessions::start(app.handle());
@@ -597,6 +601,9 @@ pub fn run() {
             commands::resume_restore,
             commands::resume_dismiss,
             commands::backup_export,
+            commands::day_export_preview,
+            commands::day_export,
+            commands::day_export_reveal,
             commands::backup_pick,
             commands::backup_import,
             commands::missing_projects,

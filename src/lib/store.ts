@@ -9,6 +9,7 @@ import type {
   BoardColumn,
   Card,
   DaySummary,
+  ExportPreview,
   Discovery,
   ImportReport,
   MissingProject,
@@ -296,6 +297,11 @@ export const api = {
   clearProjectsDir: () => invoke("clear_projects_dir"),
   projectFolders: () => invoke<Folder[]>("project_folders"),
   daySummary: (date: string | null = null) => invoke<DaySummary>("day_summary", { date }),
+  /** The Today page's CSV export of the days `from`..`to` (`YYYY-MM-DD`): what it would hold; the
+   *  core's save dialog and the file's path once written (null: cancelled); that file in Finder. */
+  dayExportPreview: (from: string, to: string) => invoke<ExportPreview>("day_export_preview", { from, to }),
+  dayExport: (from: string, to: string) => invoke<string | null>("day_export", { from, to }),
+  dayExportReveal: () => invoke<boolean>("day_export_reveal"),
   playSound: (id: string) => invoke("play_sound", { id }),
   openUrl: (url: string) => invoke("open_url", { url }),
   copyText: (text: string) => invoke("copy_text", { text }),

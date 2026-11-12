@@ -629,7 +629,7 @@ fn a_past_days_tokens_come_from_its_file_split_by_project() {
     let past = fx.core.day_summary(Some(&yesterday));
     assert_eq!(past.spend, Some(DaySpend { tokens: 4_000_000, week: Some(6.0), estimated: false }));
     let project = past.projects.iter().find(|p| p.path == fx.project).expect("listed project");
-    assert_eq!(project.spend, Some(ProjectSpend { tokens: 3_000_000, week: Some(3.0) }));
+    assert_eq!(project.spend, Some(ProjectSpend { tokens: 3_000_000, week: Some(3.0), cost: Some(3.0) }));
     assert!(past.projects.iter().all(|p| !p.path.is_empty()), "the projects not listed are in the total alone");
 }
 
