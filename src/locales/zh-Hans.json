@@ -430,6 +430,8 @@
   "settings.autoUpdate": "自动检查并下载更新",
   "settings.autoUpdateHint": "查询版本时会访问 github.com，不会发送其他任何内容。关闭后，只有“关于”中的“立即检查”可用。",
   "settings.panelFoldOutside": "在终端面板外点击时收起面板",
+  "settings.files": "文件",
+  "settings.filesFoldOutside": "在文件窗口外点击时将其最小化",
   "settings.scriptHint": "项目未单独指定时要运行的 npm 脚本。",
   "settings.packageManager": "包管理器",
   "settings.packageManagerAuto": "自动（根据 lock 文件）",

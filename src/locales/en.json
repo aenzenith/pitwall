@@ -437,6 +437,8 @@
   "settings.autoUpdate": "Check for updates and download them automatically",
   "settings.autoUpdateHint": "To ask for the latest version Pitwall goes to github.com; nothing else is sent. When off, only Check now in About works.",
   "settings.panelFoldOutside": "Fold the terminal panel on a click outside it",
+  "settings.files": "Files",
+  "settings.filesFoldOutside": "Minimize the Files window on a click outside it",
   "settings.scriptHint": "npm script to run unless a project sets its own.",
   "settings.packageManager": "Package manager",
   "settings.packageManagerAuto": "Auto (from the lock file)",

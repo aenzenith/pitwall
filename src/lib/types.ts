@@ -192,6 +192,9 @@ export type Settings = {
   favouritesOnly?: boolean;
   /** A press on the page folds the open terminal panel (Settings › Terminal); on unless turned off. */
   panelFoldOutside?: boolean;
+  /** A press anywhere else in Pitwall folds the Files windows into their sidebar entries
+   * (Settings › Files); on unless turned off. */
+  filesFoldOutside?: boolean;
   /** Settings › Terminal's own choices (lib/terminalSettings), read leniently. */
   terminal?: { doubleClick?: string; unfold?: string };
   /** The terminal panel's height while it shows panes, as last left (lib/panes). */

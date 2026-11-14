@@ -437,6 +437,8 @@
   "settings.autoUpdate": "Automatisch nach Updates suchen und sie laden",
   "settings.autoUpdateHint": "Die Versionsabfrage geht an github.com, sonst wird nichts gesendet. Ist das aus, funktioniert nur „Jetzt prüfen“ unter Info.",
   "settings.panelFoldOutside": "Terminalbereich bei einem Klick außerhalb zuklappen",
+  "settings.files": "Dateien",
+  "settings.filesFoldOutside": "Dateien-Fenster bei einem Klick außerhalb minimieren",
   "settings.scriptHint": "npm-Skript, das ausgeführt wird, wenn ein Projekt kein eigenes festlegt.",
   "settings.packageManager": "Paketmanager",
   "settings.packageManagerAuto": "Automatisch (aus der Lock-Datei)",

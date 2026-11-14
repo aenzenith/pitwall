@@ -440,6 +440,8 @@
   "settings.autoUpdate": "Buscar actualizaciones y descargarlas automáticamente",
   "settings.autoUpdateHint": "Para consultar la versión se va a github.com; no se envía nada más. Si está desactivado, solo funciona Comprobar ahora, en Acerca de.",
   "settings.panelFoldOutside": "Plegar el panel de terminales al hacer clic fuera de él",
+  "settings.files": "Archivos",
+  "settings.filesFoldOutside": "Minimizar la ventana de archivos al hacer clic fuera de ella",
   "settings.scriptHint": "Script de npm que se ejecuta salvo que el proyecto defina el suyo.",
   "settings.packageManager": "Gestor de paquetes",
   "settings.packageManagerAuto": "Automático (según el lockfile)",

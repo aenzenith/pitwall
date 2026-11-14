@@ -35,7 +35,7 @@ import RadioSection from "./settings/RadioSection.vue";
 import TowerSection from "./settings/TowerSection.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
 
-type Tab = "general" | "projects" | "servers" | "editor" | "terminal" | "claude" | "notifications" | "about";
+type Tab = "general" | "projects" | "servers" | "editor" | "terminal" | "files" | "claude" | "notifications" | "about";
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's); `startPart`: a
  * part of it scrolled to the top (the first run's phone row asks for the phone's, the Fuel page's
@@ -50,13 +50,14 @@ const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNe
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others, and the
  * Agents tab's a pinned chip. */
-const tabs = computed<Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "terminal" | "claude" | "agents" | "bell" }>>(() => [
+const tabs = computed<Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "terminal" | "files" | "claude" | "agents" | "bell" }>>(() => [
   { id: "general", label: "settings.general", icon: "settings" },
   { id: "projects", label: "common.projects", icon: "grid" },
   { id: "servers", label: "settings.servers", icon: "server" },
   { id: "editor", label: "settings.editor", icon: "editor" },
   agentsTab.value ? { id: "claude", label: "settings.agents", icon: "agents" } : { id: "claude", label: "settings.claude", icon: "claude" },
   { id: "terminal", label: "settings.terminal", icon: "terminal" },
+  { id: "files", label: "settings.files", icon: "files" },
   { id: "notifications", label: "settings.notifications", icon: "bell" },
 ]);
 
@@ -1040,6 +1041,16 @@ function setTheme(theme: Theme): void {
                own command, never with the form. Claude's alone, so not shown while it is off, as
                under Claude's tab. -->
           <ChatSection v-if="claudeOn" />
+        </fieldset>
+
+        <!-- The Files windows' own ways (the user's word, 2026-11-14: a group of its own, to grow
+             later). -->
+        <fieldset v-show="tab === 'files'" :aria-label="t('settings.files')">
+          <!-- On unless turned off: a settings file from before it holds no value. -->
+          <label class="check">
+            <input type="checkbox" :checked="form.filesFoldOutside !== false" @change="form.filesFoldOutside = ($event.target as HTMLInputElement).checked" />
+            <span>{{ t("settings.filesFoldOutside") }}</span>
+          </label>
         </fieldset>
 
         <!-- Longer than the dialog: it scrolls in the tab's room, its later parts under their labels. -->

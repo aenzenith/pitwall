@@ -451,6 +451,8 @@
   "settings.autoUpdate": "Автоматически проверять и загружать обновления",
   "settings.autoUpdateHint": "Чтобы узнать версию, Pitwall обращается к github.com; больше ничего не отправляется. Если выключено, работает только «Проверить сейчас» в разделе «О программе».",
   "settings.panelFoldOutside": "Сворачивать панель терминалов при щелчке вне её",
+  "settings.files": "Файлы",
+  "settings.filesFoldOutside": "Сворачивать окно файлов при щелчке вне его",
   "settings.scriptHint": "npm-скрипт, который запускается, если в проекте не задан свой.",
   "settings.packageManager": "Менеджер пакетов",
   "settings.packageManagerAuto": "Авто (по lock-файлу)",

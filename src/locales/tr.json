@@ -435,6 +435,8 @@
   "settings.autoUpdate": "Güncellemeleri kendiliğinden denetle ve indir",
   "settings.autoUpdateHint": "Sürüm sormak için github.com'a gidilir, başka bir şey gönderilmez. Kapalıyken yalnız Hakkında'daki Şimdi denetle çalışır.",
   "settings.panelFoldOutside": "Dışarı tıklayınca terminal paneli daralsın",
+  "settings.files": "Dosyalar",
+  "settings.filesFoldOutside": "Dışarı tıklayınca Dosyalar penceresi küçülsün",
   "settings.scriptHint": "Bir projeye kendi script'i verilmediyse bu npm script'i çalışır.",
   "settings.packageManager": "Paket yöneticisi",
   "settings.packageManagerAuto": "Otomatik (lock dosyasından)",

@@ -105,6 +105,27 @@
         "ja": "設定に「ターミナル」タブができました。タブ列をダブルクリックしたときの動き、折りたたんだパネルの開き方、過去のセッションをターミナルとチャットのどちらで開くかを選べます。",
         "zh-Hans": "设置里新增了“终端”标签页。可以选择双击标签栏时做什么、收起的面板怎样展开，以及过去的会话在终端还是在对话中打开。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Keep the Files window open",
+        "tr": "Dosyalar penceresi açık kalabilir",
+        "de": "Das Dateien-Fenster bleibt offen",
+        "es": "La ventana de archivos se queda abierta",
+        "ru": "Окно файлов остаётся открытым",
+        "ja": "ファイルウィンドウを開いたままに",
+        "zh-Hans": "文件窗口可以一直开着"
+      },
+      "body": {
+        "en": "Settings has a Files tab now. Turn its switch off and the Files window stays open when you click somewhere else in Pitwall.",
+        "tr": "Ayarlar'da artık bir Dosyalar sekmesi var. Oradaki kutuyu kapatırsan Pitwall'da başka bir yere tıkladığında Dosyalar penceresi açık kalır.",
+        "de": "In den Einstellungen gibt es jetzt den Tab Dateien. Schaltest du ihn dort aus, bleibt das Dateien-Fenster offen, wenn du woanders in Pitwall klickst.",
+        "es": "Los ajustes tienen ahora una pestaña Archivos. Desmarca su casilla y la ventana de archivos sigue abierta aunque hagas clic en otra parte de Pitwall.",
+        "ru": "В настройках появилась вкладка «Файлы». Снимите там флажок, и окно файлов останется открытым, когда вы щёлкаете в другом месте Pitwall.",
+        "ja": "設定に「ファイル」タブができました。そこのチェックを外すと、Pitwall のほかの場所をクリックしてもファイルウィンドウが開いたままになります。",
+        "zh-Hans": "设置里新增了“文件”标签页。取消那里的勾选后，在 Pitwall 别处点击时，文件窗口会一直开着。"
+      }
     }
   ]
 }

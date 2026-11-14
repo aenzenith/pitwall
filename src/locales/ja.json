@@ -430,6 +430,8 @@
   "settings.autoUpdate": "アップデートを自動で確認してダウンロードする",
   "settings.autoUpdateHint": "バージョンの確認では github.com に接続します。ほかには何も送信しません。オフのときは「情報」の「今すぐ確認」だけが使えます。",
   "settings.panelFoldOutside": "パネルの外をクリックしたらターミナルパネルを折りたたむ",
+  "settings.files": "ファイル",
+  "settings.filesFoldOutside": "外をクリックしたらファイルウィンドウを最小化する",
   "settings.scriptHint": "プロジェクト側で指定がない場合に実行するnpmスクリプトです。",
   "settings.packageManager": "パッケージマネージャー",
   "settings.packageManagerAuto": "自動（ロックファイルから判定）",
