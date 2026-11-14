@@ -758,6 +758,28 @@ pub struct Settings {
     /// The chat's preferences (Settings › Claude › Sohbet), in backups like the others.
     #[serde(default)]
     pub chat: ChatSettings,
+    /// Settings › Terminal's own choices, in backups like the others; the window alone reads them.
+    #[serde(default)]
+    pub terminal: TerminalSettings,
+}
+
+/// What a double click on the terminal panel's tab row does and which click opens the folded
+/// panel (Settings › Terminal, `src/lib/terminalSettings.ts`). The window reads them leniently: a
+/// value it doesn't know is the default. Where an ended Claude session opens at a click is the
+/// chat's `open`, shown in the same tab.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TerminalSettings {
+    /// `none`, `claude`, `tab`, `newClaude`, `codex`, `chat`, `fill` or `stand`.
+    pub double_click: String,
+    /// `click` or `double`.
+    pub unfold: String,
+}
+
+impl Default for TerminalSettings {
+    fn default() -> Self {
+        Self { double_click: "none".into(), unfold: "click".into() }
+    }
 }
 
 /// How chats open and behave (`src/lib/chat/wire.ts` `ChatSettings`, its defaults
@@ -767,7 +789,8 @@ pub struct Settings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ChatSettings {
-    /// What a Claude button opens: `terminal` or `chat`.
+    /// What a Claude button opens, and where an ended Claude session clicked in the window opens
+    /// again: `terminal` or `chat`.
     pub open: String,
     /// What sends a message: `enter` or `mod-enter`.
     pub send_key: String,
@@ -867,6 +890,7 @@ impl Default for Settings {
             accounts: AccountSettings::default(),
             agents: AgentsSettings::default(),
             chat: ChatSettings::default(),
+            terminal: TerminalSettings::default(),
         }
     }
 }
@@ -1158,7 +1182,9 @@ mod tests {
         assert!(open("/c").is_empty(), "the Files window was no choice of its own");
 
         settings.save(&file);
-        assert!(!fs::read_to_string(&file).unwrap().contains("doubleClick"));
+        let saved: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        let projects = saved["projects"].as_object().unwrap();
+        assert!(projects.values().all(|project| project.get("doubleClick").is_none()));
         assert_eq!(Settings::load(&file), settings);
     }
 

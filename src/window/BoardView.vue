@@ -32,7 +32,9 @@ import { finishedWaits, originView, othersWaiting, sessionTerminal } from "../li
 import { agentName, agentOf, agentOn, agentsOn, multiAgent } from "../lib/agents";
 import { projectSettings, updateProjectSettings } from "../lib/projectSettings";
 import { agentChoiceOf, projectAgent, projectChoice, projectCodexChoice } from "../lib/start";
+import { startChat } from "../lib/chat/open";
 import { api, board, now, sessions, snapshot } from "../lib/store";
+import { sessionsOpenInChat } from "../lib/terminalSettings";
 import type { Agent, AgentStartChoice, BoardColumn, Card, CodexChoice, SessionRow, StartChoice, TerminalView } from "../lib/types";
 import BoardCard from "./board/BoardCard.vue";
 import BoardColumns from "./board/BoardColumns.vue";
@@ -527,7 +529,8 @@ watch(dragging, (id) => {
 
 /**
  * Brought up. In one of Pitwall's terminals: here, its tab in the terminal panel, the keyboard in
- * it and its project seen (the board stays on screen). Anywhere else: where its session runs.
+ * it and its project seen (the board stays on screen). Anywhere else: where its session runs. A
+ * Claude session that runs nowhere goes on in a chat while Settings › Terminal says so.
  */
 function reveal(id: string): void {
   const card = byId.value.get(id);
@@ -539,9 +542,16 @@ function reveal(id: string): void {
     opened.value = id;
     void api.markSeen(card.path).catch(() => undefined);
     revealTab(card.path, terminal.id);
-  } else if (session) void run(id, "reveal", () => api.revealClaude(card.path, session));
+  } else if (session && chatsInstead(card, session)) void run(id, "reveal", () => startChat(card.path, { session }));
+  else if (session) void run(id, "reveal", () => api.revealClaude(card.path, session));
   // Its terminal isn't among the project's yet: its details show it once it is.
   else selectedId.value = id;
+}
+
+/** A card's Claude session that runs nowhere, while Settings › Terminal opens such a one in a chat. */
+function chatsInstead(card: Card, session: string): boolean {
+  if (agentOf(card.start?.agent) !== "claude" || !sessionsOpenInChat()) return false;
+  return !(snapshot.value?.projects ?? []).some((project) => project.claudeSessions.some((each) => each.id === session));
 }
 
 /* ---------- dialogs ---------- */

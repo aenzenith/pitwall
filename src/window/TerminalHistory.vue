@@ -16,6 +16,7 @@ import { periodLabel } from "../lib/period";
 import { keys } from "../lib/platform";
 import { originView, statusLine } from "../lib/sessions";
 import { markOpened } from "../lib/sessionsMeta";
+import { sessionsOpenInChat } from "../lib/terminalSettings";
 import { api, now, sessions, snapshot, today } from "../lib/store";
 import type { Agent, PastSession, Project, Resumed, SessionRow } from "../lib/types";
 
@@ -27,7 +28,8 @@ import type { Agent, PastSession, Project, Resumed, SessionRow } from "../lib/ty
  * and dropped with it: Pitwall keeps no history of its own. Dragged onto the terminal, it opens where
  * it is let go (the panel works out where: `drag`, `drop`). `overlay`: a narrow panel's, over the
  * terminal's right side, gone once a session is picked. A past Claude session can go on in a chat
- * instead (its row's chat button, its menu, ⌥↵: `startChat` with the session).
+ * instead (its row's chat button, its menu, ⌥↵: `startChat` with the session), or at a click while
+ * Settings › Terminal says so, its button and ⌥↵ then opening it again in the terminal.
  */
 const props = defineProps<{ project: Project; overlay?: boolean }>();
 const emit = defineEmits<{
@@ -53,11 +55,17 @@ const failed = ref<Record<string, Resumed>>({});
 const field = ref<HTMLInputElement | null>(null);
 const listbox = ref<HTMLElement | null>(null);
 
-/** The project's sessions that are open now, by id: where they run and what Claude is at. */
+/** The project's sessions that are open now, by id: where they run and what Claude is at. A Claude
+ * session whose process is gone is not, though its row isn't ended yet (`running` null while its
+ * log was written in the last minutes: a chat Pitwall's restart cut, with no SessionEnd): the core
+ * takes it for stopped and opens it again (`liveness`), so a click opens it as Settings › Terminal
+ * says and it can be dragged, as one that ended. */
 const live = computed(() => {
   const open = new Map<string, SessionRow>();
   for (const row of sessions.value?.sessions ?? []) {
-    if (row.phase !== "ended" && row.path === props.project.path) open.set(row.id, row);
+    if (row.phase === "ended" || row.path !== props.project.path) continue;
+    if (row.agent === "claude" && row.running !== true) continue;
+    open.set(row.id, row);
   }
   return open;
 });
@@ -193,17 +201,18 @@ function chattable(session: PastSession): boolean {
   return session.agent === "claude" && agentOn("claude") && !live.value.has(session.id);
 }
 
-/** "Sohbette aç": the session in a chat in a new tab (lib/chat/open asks what it must first). */
-async function chat(id: string): Promise<void> {
+/** "Sohbette aç": the session in a chat in a new tab (lib/chat/open asks what it must first);
+ * whether its tab opened. */
+async function chat(id: string): Promise<boolean> {
   const session = shown.value?.find((each) => each.id === id);
-  if (!session || !chattable(session) || opening.value) return;
+  if (!session || !chattable(session) || opening.value) return false;
   picked.value = id;
   opening.value = id;
   try {
-    if (await startChat(props.project.path, { session: id })) {
-      void markOpened(id);
-      if (props.overlay) emit("close");
-    }
+    if (!(await startChat(props.project.path, { session: id }))) return false;
+    void markOpened(id);
+    if (props.overlay) emit("close");
+    return true;
   } finally {
     opening.value = null;
   }
@@ -286,8 +295,39 @@ function stopDrag(): void {
 
 onBeforeUnmount(stopDrag);
 
+/** An ended Claude session goes on in a chat at a click (↵) while Settings › Terminal says so; the
+ * row's button and ⌥↵ take it the other way. */
+const chatFirst = computed(() => sessionsOpenInChat());
+
+async function inChat(id: string): Promise<boolean> {
+  const session = shown.value?.find((each) => each.id === id);
+  if (!session || !chattable(session) || !chatFirst.value) return false;
+  if (sessions.value) return true;
+  // No page holds the sessions yet: whether it runs somewhere is asked of the core for this click.
+  const view = await api.claudeSessions().catch(() => null);
+  return !view?.sessions.some((row) => row.id === id && row.phase !== "ended");
+}
+
+/** A click or ↵: where Settings › Terminal says. */
+async function openFirst(id: string): Promise<void> {
+  void ((await inChat(id)) ? chat(id) : open(id));
+}
+
+/** A row let go on the terminals: where a click would open it (Settings › Terminal's "Claude
+ * açılınca"); whether its tab came up there. */
+async function openDropped(id: string): Promise<boolean> {
+  if (await inChat(id)) return chat(id);
+  const result = await open(id);
+  return result === "shown" || result === "opened";
+}
+
+/** The row's button or ⌥↵: the other way. */
+async function openOther(id: string): Promise<void> {
+  void ((await inChat(id)) ? open(id) : chat(id));
+}
+
 function clickRow(id: string): void {
-  if (!dragged) void open(id);
+  if (!dragged) void openFirst(id);
 }
 
 function rowId(id: string): string {
@@ -319,8 +359,8 @@ function onKey(event: KeyboardEvent): void {
     case "Enter": {
       event.preventDefault();
       const id = picked.value ?? list[0]?.session.id;
-      // ⌥↵: in a chat, when it can go on in one.
-      if (id) void (event.altKey ? chat(id) : open(id));
+      // ⌥↵: the other way, when it can go on in a chat.
+      if (id) void (event.altKey ? openOther : openFirst)(id);
       return;
     }
     case "Escape":
@@ -350,7 +390,7 @@ const title = computed(() => (multiAgent.value ? t("terminal.historyTitle.all") 
 /** ⌥↵, as this keyboard writes it. */
 const chatKeys = keys("alt+Enter");
 
-defineExpose({ focus, open });
+defineExpose({ focus, openDropped });
 </script>
 
 <template>
@@ -407,12 +447,12 @@ defineExpose({ focus, open });
               type="button"
               class="to-chat"
               tabindex="-1"
-              :aria-label="t('chatSurface.openInChat')"
-              :title="t('chatSurface.history.chatTitle', { keys: chatKeys })"
+              :aria-label="t(chatFirst ? 'sessions.action.reopenTerminal' : 'chatSurface.openInChat')"
+              :title="t(chatFirst ? 'terminal.history.terminalTitle' : 'chatSurface.history.chatTitle', { keys: chatKeys })"
               @pointerdown.stop
-              @click.stop="chat(item.session.id)"
+              @click.stop="openOther(item.session.id)"
             >
-              <Icon name="chat" :size="13" />
+              <Icon :name="chatFirst ? 'terminal' : 'chat'" :size="13" />
             </button>
           </template>
         </div>

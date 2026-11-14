@@ -48,9 +48,10 @@ function bringBack(): void {
   standPanel(snapshot.value?.settings.terminalPlace?.back === "float" ? "float" : "dock");
 }
 
-/** A chat's settings button: Settings › Claude, in Pitwall's window, which comes up for it. */
-function openClaudeSettings(): void {
-  void emitTo("main", "reveal-page", { page: "settings", tab: "claude" });
+/** A chat's `/config`: Settings › Terminal, where its settings are, in Pitwall's window, which
+ * comes up for it. */
+function openChatSettings(): void {
+  void emitTo("main", "reveal-page", { page: "settings", tab: "terminal" });
   void api.openWindow();
 }
 
@@ -111,7 +112,7 @@ onBeforeUnmount(() => {
       </button>
     </header>
     <main class="room">
-      <TerminalPanel v-if="project" ref="panel" :project="project" stand="window" @empty="bringBack" @open-settings="openClaudeSettings" />
+      <TerminalPanel v-if="project" ref="panel" :project="project" stand="window" @empty="bringBack" @open-settings="openChatSettings" />
       <p v-else class="none">{{ t("terminals.none") }}</p>
     </main>
     <!-- A chat's start asked from here (the panel's "+", an empty pane): its question, as the main

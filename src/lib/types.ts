@@ -190,8 +190,10 @@ export type Settings = {
   filesPreview?: boolean;
   /** The list shows the favourites and the projects at work only ("Only favourites and open"). */
   favouritesOnly?: boolean;
-  /** A press on the page folds the open terminal panel (Settings › General); on unless turned off. */
+  /** A press on the page folds the open terminal panel (Settings › Terminal); on unless turned off. */
   panelFoldOutside?: boolean;
+  /** Settings › Terminal's own choices (lib/terminalSettings), read leniently. */
+  terminal?: { doubleClick?: string; unfold?: string };
   /** The terminal panel's height while it shows panes, as last left (lib/panes). */
   panesHeight?: number;
   /** Where the terminal panel stands and the places it was left at; this Mac's own, changed

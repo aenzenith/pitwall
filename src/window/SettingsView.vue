@@ -11,13 +11,15 @@ import ThemeSwitch from "../components/ThemeSwitch.vue";
 import { askLoginEnds } from "../lib/accounts";
 import { useBackdropClose } from "../lib/dialog";
 import { clock } from "../lib/day";
-import { agentsTab, ago, agoDays, editorName, guideUrl, megabytes, shortcutLabel, updateError } from "../lib/format";
+import { chatSettings } from "../lib/chat/open";
+import { agentKey, agentsTab, ago, agoDays, editorName, guideUrl, megabytes, shortcutLabel, updateError } from "../lib/format";
 import { LANGUAGES, languageName, t, type Key } from "../lib/i18n";
 import { OPEN_LABELS, OPEN_TARGETS, type OpenFrom } from "../lib/open";
 import { isMac, keys, shortcutModifiers } from "../lib/platform";
 import { recordingEnded, recordingStarts } from "../lib/shortcutRecording";
 import { api, now, snapshot, update } from "../lib/store";
 import { tabKey } from "../lib/tabs";
+import { DOUBLE_CLICKS, doubleClickAgent, readTerminal, type DoubleClick, type TerminalSettings } from "../lib/terminalSettings";
 import { agentOn, agents } from "../lib/agents";
 import type { Agent, AgentDetail, ExtensionStatus, OpenTarget, Settings, Theme } from "../lib/types";
 import BackupSection from "./backup/BackupSection.vue";
@@ -33,7 +35,7 @@ import RadioSection from "./settings/RadioSection.vue";
 import TowerSection from "./settings/TowerSection.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
 
-type Tab = "general" | "projects" | "servers" | "editor" | "claude" | "notifications" | "about";
+type Tab = "general" | "projects" | "servers" | "editor" | "terminal" | "claude" | "notifications" | "about";
 
 /** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's); `startPart`: a
  * part of it scrolled to the top (the first run's phone row asks for the phone's, the Fuel page's
@@ -48,12 +50,13 @@ const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNe
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others, and the
  * Agents tab's a pinned chip. */
-const tabs = computed<Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "claude" | "agents" | "bell" }>>(() => [
+const tabs = computed<Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "terminal" | "claude" | "agents" | "bell" }>>(() => [
   { id: "general", label: "settings.general", icon: "settings" },
   { id: "projects", label: "common.projects", icon: "grid" },
   { id: "servers", label: "settings.servers", icon: "server" },
   { id: "editor", label: "settings.editor", icon: "editor" },
   agentsTab.value ? { id: "claude", label: "settings.agents", icon: "agents" } : { id: "claude", label: "settings.claude", icon: "claude" },
+  { id: "terminal", label: "settings.terminal", icon: "terminal" },
   { id: "notifications", label: "settings.notifications", icon: "bell" },
 ]);
 
@@ -215,6 +218,82 @@ const TERMINAL_PROJECTS: Array<{ id: string; label: Key }> = [
   { id: "all", label: "settings.barAll" },
   { id: "open", label: "window.scopeOpen" },
 ];
+
+/* ---------- Settings › Terminal ---------- */
+
+/** The tab's own choices as the form holds them, read as the panel reads them. */
+const terminal = computed(() => readTerminal(form.terminal));
+
+/** A pick into the form; a segment's click is no `change` for the form, so it saves here. */
+function setTerminal(patch: Partial<TerminalSettings>, saveNow = true): void {
+  form.terminal = { ...terminal.value, ...patch };
+  if (saveNow) void save();
+}
+
+/** The click that opens the folded panel. */
+const UNFOLDS: Array<{ id: TerminalSettings["unfold"]; label: Key }> = [
+  { id: "click", label: "settings.terminal.unfoldClick" },
+  { id: "double", label: "settings.terminal.unfoldDouble" },
+];
+
+/** What each double click is called; the new tabs as "+" names them. */
+const DOUBLE_LABELS: Record<DoubleClick, Key> = {
+  none: "settings.terminal.double.none",
+  claude: "settings.terminal.double.claude",
+  tab: "terminal.newTab",
+  newClaude: "terminal.newClaude",
+  codex: "terminal.newCodex",
+  chat: "chat.new",
+  fill: "settings.terminal.double.fill",
+  stand: "settings.terminal.double.stand",
+};
+
+/** The double click's menu: a choice whose agent is off stays in it, greyed and saying so. */
+const doubleChoices = computed(() =>
+  DOUBLE_CLICKS.map((id) => {
+    const agent = doubleClickAgent(id);
+    const off = agent !== null && !agentOn(agent);
+    const label = t(DOUBLE_LABELS[id]);
+    return { id, off, label: off && agent ? t(agentKey("settings.terminal.optionOff", agent), { option: label }) : label };
+  }),
+);
+
+/** The agent of the choice made, while it is off: the double click does nothing until it is on. */
+const doubleOff = computed(() => {
+  const agent = doubleClickAgent(terminal.value.doubleClick);
+  return agent && !agentOn(agent) ? agent : null;
+});
+
+function pickDouble(value: string): void {
+  const choice = DOUBLE_CLICKS.find((each) => each === value);
+  if (choice) setTerminal({ doubleClick: choice }, false);
+}
+
+/** "Claude açılınca" (Settings › Claude › Sohbet's until 2026-11-14): the chat's own setting, saved
+ * by its own command; shown as clicked until the core's answer comes back. It also says where an
+ * ended Claude session opens at a click (`sessionsOpenInChat`). */
+const CHAT_OPENS: Array<{ id: "terminal" | "chat"; label: Key }> = [
+  { id: "terminal", label: "chatSurface.settings.openTerminal" },
+  { id: "chat", label: "chatSurface.settings.openChat" },
+];
+const chatOpenPicked = ref<"terminal" | "chat" | null>(null);
+watch(
+  () => snapshot.value?.settings.chat?.open,
+  () => (chatOpenPicked.value = null),
+);
+const chatOpen = computed(() => chatOpenPicked.value ?? chatSettings.value.open);
+
+async function setChatOpen(choice: "terminal" | "chat"): Promise<void> {
+  if (chatOpen.value === choice) return;
+  error.value = "";
+  chatOpenPicked.value = choice;
+  try {
+    await api.setChatSettings({ open: choice });
+  } catch (reason) {
+    chatOpenPicked.value = null;
+    error.value = String(reason);
+  }
+}
 
 /** Where a project opens from each place unless it chose its own (lib/open); `hint` says what
  * opens it there. */
@@ -827,8 +906,6 @@ function setTheme(theme: Theme): void {
             </button>
           </div>
           <p v-if="hookError" class="error">{{ hookError }}</p>
-          <!-- The chat's own (Sohbet): saved by its own command, never with the form. -->
-          <ChatSection />
           <RadioSection :stacked="agentsTab" />
           <AccountsSection :start-add="startPart === 'addAccount' && (!agentsTab || agentPicked === 'claude')" />
           </template>
@@ -910,6 +987,61 @@ function setTheme(theme: Theme): void {
           </div>
         </fieldset>
 
+        <!-- The terminal panel's own ways (General's fold until 2026-11-14), where Claude's tabs
+             and ended sessions open ("Claude açılınca" was Claude › Sohbet's) and, since
+             2026-11-15, the chat's own (Sohbet, under Claude until then). Where the panel
+             stands has no row: every start puts it along the bottom, and its row's icons move it
+             for the rest of the run (the user's word, 14 Nov). -->
+        <fieldset v-show="tab === 'terminal'" :aria-label="t('settings.terminal')">
+          <div class="hook">
+            <div class="hook-text">
+              <span id="terminal-unfold">{{ t("settings.terminal.unfold") }}</span>
+              <small>{{ t(terminal.unfold === "double" ? "settings.terminal.unfoldHintDouble" : "settings.terminal.unfoldHint") }}</small>
+            </div>
+            <span class="seg" role="group" aria-labelledby="terminal-unfold">
+              <button v-for="choice in UNFOLDS" :key="choice.id" type="button" :aria-pressed="terminal.unfold === choice.id" @click="terminal.unfold !== choice.id && setTerminal({ unfold: choice.id })">
+                {{ t(choice.label) }}
+              </button>
+            </span>
+          </div>
+          <!-- On unless turned off: a settings file from before it holds no value. -->
+          <label class="check">
+            <input type="checkbox" :checked="form.panelFoldOutside !== false" @change="form.panelFoldOutside = ($event.target as HTMLInputElement).checked" />
+            <span>{{ t("settings.panelFoldOutside") }}</span>
+          </label>
+
+          <div class="section section-label">{{ t("settings.terminal.row") }}</div>
+          <div class="hook">
+            <div class="hook-text">
+              <span id="terminal-double">{{ t("settings.terminal.double") }}</span>
+              <small>{{ t("settings.terminal.doubleHint") }}</small>
+              <small v-if="doubleOff" class="warn-line">{{ t(agentKey("settings.terminal.doubleOff", doubleOff)) }}</small>
+            </div>
+            <!-- Its `change` reaches the form, which saves it. -->
+            <select class="double" aria-labelledby="terminal-double" :value="terminal.doubleClick" @change="pickDouble(($event.target as HTMLSelectElement).value)">
+              <option v-for="choice in doubleChoices" :key="choice.id" :value="choice.id" :disabled="choice.off">{{ choice.label }}</option>
+            </select>
+          </div>
+
+          <div class="section section-label">{{ t("settings.terminal.sessions") }}</div>
+          <!-- Claude's own: dimmed while it is off, as nothing of it opens then. -->
+          <div :class="['hook', { off: !claudeOn }]">
+            <div class="hook-text">
+              <span id="terminal-chat-open">{{ t("chatSurface.settings.open") }}</span>
+              <small>{{ t("chatSurface.settings.openHint") }}</small>
+            </div>
+            <span class="seg" role="group" aria-labelledby="terminal-chat-open">
+              <button v-for="choice in CHAT_OPENS" :key="choice.id" type="button" :disabled="!claudeOn" :aria-pressed="chatOpen === choice.id" @click="setChatOpen(choice.id)">
+                {{ t(choice.label) }}
+              </button>
+            </span>
+          </div>
+          <!-- The chat's own (Sohbet, Claude's tab's until 2026-11-15, the user's word): saved by its
+               own command, never with the form. Claude's alone, so not shown while it is off, as
+               under Claude's tab. -->
+          <ChatSection v-if="claudeOn" />
+        </fieldset>
+
         <!-- Longer than the dialog: it scrolls in the tab's room, its later parts under their labels. -->
         <fieldset v-show="tab === 'general'" :aria-label="t('settings.general')">
           <div id="settings-appearance" class="section-label">{{ t("settings.appearance") }}</div>
@@ -961,11 +1093,6 @@ function setTheme(theme: Theme): void {
             </label>
             <small>{{ t("settings.autoUpdateHint") }}</small>
           </div>
-          <!-- On unless turned off: a settings file from before it holds no value. -->
-          <label class="check">
-            <input type="checkbox" :checked="form.panelFoldOutside !== false" @change="form.panelFoldOutside = ($event.target as HTMLInputElement).checked" />
-            <span>{{ t("settings.panelFoldOutside") }}</span>
-          </label>
 
           <div class="section section-label">{{ t("settings.startup") }}</div>
           <div class="hook">
@@ -1362,6 +1489,26 @@ code {
 
 .hook small.quiet-line {
   color: var(--warn-text);
+}
+
+/* Settings › Terminal: the double click's menu at its row's end, as wide in every language; the
+   line under its name when the agent of the choice made is off. */
+select.double {
+  flex: none;
+  width: 230px;
+}
+
+.hook small.warn-line {
+  color: var(--warn-text);
+}
+
+/* A row of Claude's while Claude is off. */
+.hook.off .hook-text > span {
+  color: var(--text-faint);
+}
+
+.hook.off .seg {
+  opacity: 0.5;
 }
 
 .folder {

@@ -18,6 +18,7 @@ import { useOutputStream, type OutputLine } from "../lib/outputStream";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { openOrAtWork } from "../lib/pages";
 import {
+  cardGrown,
   cardRect,
   chooseTab,
   chosenTab,
@@ -95,6 +96,7 @@ import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
+import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
 import { peekChat } from "../lib/chat/store";
 import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../lib/types";
@@ -120,7 +122,7 @@ const REQUEST_MS = 5_000;
  */
 const props = withDefaults(defineProps<{ project: Project; stand?: PanelStand }>(), { stand: "dock" });
 /** `empty`: in its own window, ⌘W with nothing left to close: the window goes (TerminalsApp).
- * `openSettings`: a chat asked for Settings › Claude (its composer's settings button). */
+ * `openSettings`: a chat asked for Settings › Terminal, where its settings are (`/config`). */
 const emit = defineEmits<{ empty: []; openSettings: [] }>();
 
 /** Along the window's bottom, as a card over the page, or in a window of its own (lib/panel:
@@ -1514,8 +1516,9 @@ function sessionDragged(drag: { id: string; name: string; agent: Agent; x: numbe
   incoming.value = drag ? { kind: "session", ...drag } : null;
 }
 
-/** A session let go on the terminals: it opens there (`resume_claude` in the history), a tab of
- * Pitwall's it runs in coming there. Let go elsewhere, nothing happens. */
+/** A session let go on the terminals: it opens there as a click on its row would (a chat while
+ * Settings › Terminal's "Claude açılınca" says Sohbet, else `resume_claude`), a tab of Pitwall's it
+ * runs in coming there. Let go elsewhere, nothing happens. */
 function sessionDropped(id: string): void {
   const at = landing.value;
   incoming.value = null;
@@ -1523,8 +1526,8 @@ function sessionDropped(id: string): void {
   const place = placeOf(at);
   dropPlace = place ? { place, at: Date.now() } : null;
   const history = side.value ?? over.value;
-  void history?.open(id).then((result) => {
-    if (result !== "shown" && result !== "opened") dropPlace = null;
+  void history?.openDropped(id).then((opened) => {
+    if (!opened) dropPlace = null;
   });
 }
 
@@ -1883,30 +1886,109 @@ function outputsMenu(event: MouseEvent): void {
   );
 }
 
+/** The click that brought the folded panel up, until the next one begins. */
+let unfoldedBy = false;
+
 /**
  * The tab row's empty part, and the handle: a click on a collapsed panel brings it up at once (the
- * user's word: no need to find the button). A double click on the row's empty part opens a Claude
- * tab, as "New Claude" does, and one on the handle takes the panel up to the page's bar and back
- * (the user's word), only on a panel open all the way: folded or still coming up, a double click is
- * no more than the click that opens it (the user's word). A tab's own double click renames it, and
- * the project's name and the buttons keep theirs.
+ * user's word: no need to find the button), or a double click while Settings › Terminal says so
+ * (`unfold`). A double click on the row's empty part does what Settings › Terminal picked
+ * (`doubleClick`, nothing by default), and one on the handle takes the panel up to the page's bar
+ * and back (the user's word), only on a panel open all the way: folded or still coming up, a double
+ * click is no more than the click that opens it (the user's word). A tab's own double click renames
+ * it, and the project's name and the buttons keep theirs.
  */
 function onRowClick(event: MouseEvent): void {
+  // A double click begins with a click: one that brought the panel up is all its double click does,
+  // however slow its second press (`unfoldedBy`).
+  if (event.detail <= 1) unfoldedBy = false;
   if (justMoved) return;
   const empty = emptyPart(event);
   const grip = (event.currentTarget as HTMLElement).classList.contains("grip");
+  const unfoldsOnDouble = terminalSettings.value.unfold === "double";
   if (event.detail >= 2) {
-    if (collapsed.value || animating.value) return;
+    if (animating.value || unfoldedBy) return;
+    if (collapsed.value) {
+      if (unfoldsOnDouble && event.detail === 2 && (empty || grip)) toggleCollapsed();
+      return;
+    }
+    if (event.detail !== 2) return;
     if (grip) {
-      if (event.detail === 2) {
-        resizer.fill();
-        slide();
-      }
-    } else if (empty) openAgent();
+      resizer.fill();
+      slide();
+    } else if (empty) onRowDouble();
     return;
   }
-  if (!collapsed.value || !(empty || grip)) return;
+  if (!collapsed.value || !(empty || grip) || unfoldsOnDouble) return;
+  unfoldedBy = true;
   toggleCollapsed();
+}
+
+/** A double click on the open panel's row, as Settings › Terminal says: nothing while the agent its
+ * choice needs is off. */
+function onRowDouble(): void {
+  const choice = terminalSettings.value.doubleClick;
+  const agent = doubleClickAgent(choice);
+  if (agent && !agentOn(agent)) return;
+  if (choice === "claude") void openClaude();
+  else if (choice === "tab") void openTerminal();
+  else if (choice === "newClaude") void openTerminal(true);
+  else if (choice === "codex") void openTerminal(true, projectCodexChoice(props.project));
+  else if (choice === "chat") void openChat();
+  else if (choice === "fill") growPanel();
+  else if (choice === "stand") standTo(props.stand === "dock" ? "float" : props.stand === "float" ? "dock" : (snapshot.value?.settings.terminalPlace?.back ?? "dock"));
+}
+
+/** The panel grown and back, as the handle's double click does along the bottom; the card to the
+ * page's whole room, a margin in, and back; a window has the system's own zoom. */
+function growPanel(): void {
+  if (windowed.value) return;
+  if (!floating.value) {
+    resizer.fill();
+    slide();
+    return;
+  }
+  const { w, h } = area.value;
+  const full = { left: SNAP_INSET, top: SNAP_INSET, width: Math.max(cardLeast().w, w - 2 * SNAP_INSET), height: Math.max(cardLeast().h, h - 2 * SNAP_INSET) };
+  const box = cardBox.value;
+  const kept = cardRect.value;
+  // Grown by the last double click (the window resized since, too), or found at the page's size
+  // with nothing to go back to (Pitwall started again): back to where it was, else its default.
+  const ours = kept !== null && kept === cardGrown.to;
+  const grown = ours || (Math.abs(box.left - full.left) <= 1 && Math.abs(box.top - full.top) <= 1 && Math.abs(box.width - full.width) <= 1 && Math.abs(box.height - full.height) <= 1);
+  const from = panel.value?.getBoundingClientRect();
+  if (grown) {
+    cardRect.value = ours ? cardGrown.from : null;
+    cardGrown.to = null;
+  } else {
+    cardGrown.from = kept;
+    setCard(full);
+    cardGrown.to = cardRect.value;
+  }
+  keepCard();
+  if (from && !collapsed.value && !stillMotion()) glideCard(from);
+  else if (active.value && !panesOn.value) void nextTick(() => active.value && fitView(active.value.id));
+}
+
+/** The card glides from `from` to the box it was just given, rather than being there at once (the
+ * user's word, 2026-11-14: "animasyonlu olacak"). Its end is known from `cardBox`, not measured: the
+ * height's own transition would still show the old one. The shell keeps its size meanwhile and is
+ * fitted at the end (`slide`). */
+function glideCard(from: DOMRect): void {
+  cancelAnimationFrame(morphFrame);
+  clearTimeout(morphTimer);
+  const box = cardBox.value;
+  const { x, y } = area.value;
+  const to = new DOMRect(x + box.left, y + box.top, box.width, shownHeight.value);
+  slide(MORPH_MS);
+  morph.value = { ...onWindow(from), transition: "none" };
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const ease = `${MORPH_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+      morph.value = { ...onWindow(to), transition: ["left", "top", "width", "height"].map((what) => `${what} ${ease}`).join(", ") };
+    }),
+  );
+  morphTimer = setTimeout(() => (morph.value = null), MORPH_MS + 60);
 }
 
 

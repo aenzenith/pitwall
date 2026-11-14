@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// Settings › Claude › Sohbet. Its own: each change goes to the core by its own command
+// Settings › Terminal › Sohbet (Settings › Claude's until 2026-11-15). Its own: each change goes
+// to the core by its own command
 // (`set_chat_settings`, a patch of the fields changed), never with the form (`@change.stop`).
 //
 // Every value is the snapshot's (`settings.chat` over CHAT_DEFAULTS, lib/chat/open), shown at once
 // as clicked until the core's answer comes back; one the core refuses goes back to what is stored.
+// "Claude açılınca" (`open`) is in Settings › Terminal since 2026-11-14.
 import { computed, ref, watch } from "vue";
 
 import { chatSettings } from "../../lib/chat/open";
@@ -23,11 +25,6 @@ const SWITCHES: Array<{ id: Switch; name: Key; hint?: Key }> = [
   { id: "continueInterrupted", name: "chatSurface.settings.continueInterrupted", hint: "chatSurface.settings.continueInterruptedHint" },
   { id: "attachFile", name: "chatSurface.settings.attachFile", hint: "chatSurface.settings.attachFileHint" },
   { id: "attachSelection", name: "chatSurface.settings.attachSelection", hint: "chatSurface.settings.attachSelectionHint" },
-];
-
-const OPEN: Array<{ id: ChatSettings["open"]; name: Key }> = [
-  { id: "terminal", name: "chatSurface.settings.openTerminal" },
-  { id: "chat", name: "chatSurface.settings.openChat" },
 ];
 
 /** The mode a new chat starts in, named as the chat's mode dialog names it. */
@@ -66,8 +63,8 @@ function flip(id: Switch, event: Event): void {
 }
 
 /** A click on a segment: saved here, never twice for the one already picked. */
-function pick<K extends "open" | "sendKey">(key: K, value: ChatSettings[K]): void {
-  if (shown.value[key] !== value) void set({ [key]: value } as Partial<ChatSettings>);
+function pick(value: ChatSettings["sendKey"]): void {
+  if (shown.value.sendKey !== value) void set({ sendKey: value });
 }
 
 function pickMode(value: ChatSettings["mode"]): void {
@@ -95,20 +92,11 @@ const disabled = (id: Switch): boolean => id === "attachSelection" && !shown.val
     <div class="rows" role="group" aria-labelledby="chat-part">
       <div class="row boxed">
         <span class="name">
-          <span id="chat-open">{{ t("chatSurface.settings.open") }}</span>
-          <small>{{ t("chatSurface.settings.openHint") }}</small>
-        </span>
-        <span class="seg" role="group" aria-labelledby="chat-open">
-          <button v-for="choice in OPEN" :key="choice.id" type="button" :aria-pressed="shown.open === choice.id" @click="pick('open', choice.id)">{{ t(choice.name) }}</button>
-        </span>
-      </div>
-      <div class="row boxed">
-        <span class="name">
           <span id="chat-send">{{ t("chatSurface.settings.sendKey") }}</span>
           <small>{{ sendHint }}</small>
         </span>
         <span class="seg keys" role="group" aria-labelledby="chat-send">
-          <button v-for="choice in SEND_KEYS" :key="choice.id" type="button" :aria-pressed="shown.sendKey === choice.id" @click="pick('sendKey', choice.id)">{{ choice.label }}</button>
+          <button v-for="choice in SEND_KEYS" :key="choice.id" type="button" :aria-pressed="shown.sendKey === choice.id" @click="pick(choice.id)">{{ choice.label }}</button>
         </span>
       </div>
       <div class="row boxed">

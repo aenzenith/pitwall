@@ -39,7 +39,7 @@ use super::reveal::is_session_id;
 use super::*;
 use crate::chat::meta::{self, SessionsMeta};
 use crate::registry::{base36, write_durable};
-use crate::settings::{ChatSettings, CustomCommand, FlagSettings, OpenSettings, Sounds, Team};
+use crate::settings::{ChatSettings, CustomCommand, FlagSettings, OpenSettings, Sounds, Team, TerminalSettings};
 
 const FORMAT: &str = "pitwall-backup";
 const VERSION: u64 = 1;
@@ -150,6 +150,8 @@ struct General {
     open: OpenSettings,
     /// A backup of a version before chats has none: the chat's preferences here stay.
     chat: ChatSettings,
+    /// Nor of one before Settings › Terminal: its choices here stay.
+    terminal: TerminalSettings,
 }
 
 impl General {
@@ -159,7 +161,7 @@ impl General {
         let Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open, chat,
+            theme, resume, suggest_projects, flag, open, chat, terminal,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, update_told: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
@@ -182,7 +184,7 @@ impl General {
         Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open, chat,
+            theme, resume, suggest_projects, flag, open, chat, terminal,
         }
     }
 
@@ -207,13 +209,13 @@ impl General {
         let Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open, chat,
+            theme, resume, suggest_projects, flag, open, chat, terminal,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open, chat,
+            theme, resume, suggest_projects, flag, open, chat, terminal,
             ..settings.clone()
         })
     }

@@ -84,6 +84,27 @@
         "ja": "ターミナルの + メニューからチャットを開けるようになりました。Claude のコマンドとファイルの変更は横に並び、質問や許可にはワンクリックで答えられます。",
         "zh-Hans": "现在可以从终端的 + 菜单打开对话。Claude 的命令和文件改动就在一旁，它的提问和权限请求点一下就能回复。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Terminal settings",
+        "tr": "Terminal ayarları",
+        "de": "Terminal-Einstellungen",
+        "es": "Ajustes de la terminal",
+        "ru": "Настройки терминала",
+        "ja": "ターミナルの設定",
+        "zh-Hans": "终端设置"
+      },
+      "body": {
+        "en": "Settings has a Terminal tab now: pick what a double click on the tab row does, how the folded panel opens, and whether a past session opens in the terminal or in a chat.",
+        "tr": "Ayarlar'da artık bir Terminal sekmesi var. Sekme çubuğuna çift tıklayınca ne olacağını, katlı panelin nasıl açılacağını ve eski bir oturumun terminalde mi sohbette mi açılacağını oradan seçersin.",
+        "de": "In den Einstellungen gibt es jetzt den Tab „Terminal“. Dort legst du fest, was ein Doppelklick auf die Tab-Leiste tut, wie der eingeklappte Bereich aufgeht und ob eine alte Sitzung im Terminal oder im Chat weiterläuft.",
+        "es": "Los ajustes tienen ahora una pestaña Terminal. Ahí eliges qué hace un doble clic en la fila de pestañas, cómo se abre el panel plegado y si una sesión pasada se abre en la terminal o en un chat.",
+        "ru": "В настройках появилась вкладка «Терминал». В ней можно выбрать, что делает двойной щелчок по строке вкладок, как открывается свёрнутая панель и где открывается прошлая сессия: в терминале или в чате.",
+        "ja": "設定に「ターミナル」タブができました。タブ列をダブルクリックしたときの動き、折りたたんだパネルの開き方、過去のセッションをターミナルとチャットのどちらで開くかを選べます。",
+        "zh-Hans": "设置里新增了“终端”标签页。可以选择双击标签栏时做什么、收起的面板怎样展开，以及过去的会话在终端还是在对话中打开。"
+      }
     }
   ]
 }

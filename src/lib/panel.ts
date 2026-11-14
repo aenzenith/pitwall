@@ -35,6 +35,11 @@ export const panelStand = ref<PanelStand>("dock");
 export type CardRect = { right: number; bottom: number; width: number; height: number };
 export const cardRect = ref<CardRect | null>(null);
 
+/** The card a double click grew to the page (`to`, as it was given) and its place before (`from`),
+ * for the next double click to bring it back; kept beside the card's place, which outlives the
+ * panel's page. */
+export const cardGrown: { from: CardRect | null; to: CardRect | null } = { from: null, to: null };
+
 /** The panel stands in its own window, and this is the main window's page: what a page asks of the
  * panel goes to that window (`panelAsk`), where it is done as it would be here (TerminalsApp). */
 export function panelAway(): boolean {
@@ -306,8 +311,10 @@ export function useResizer(height: Ref<number>, max: () => number, least: () => 
    * to the height it had. */
   function fill(): void {
     const top = limit();
-    if (height.value >= top - 1 && before !== null) {
-      height.value = Math.min(top, Math.max(least(), before));
+    if (height.value >= top - 1) {
+      // Up there with nothing to go back to (the page came again, Pitwall started again): the
+      // height a panel opens at.
+      height.value = Math.min(top, Math.max(least(), before ?? PANEL_DEFAULT));
       before = null;
       return;
     }

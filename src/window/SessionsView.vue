@@ -37,6 +37,7 @@ import { bringKeys, FILTERS, finishedWaits, keepOrder, layout, matches, othersWa
 import { addGroup, archivedIds, groupOf, loadSessionsMeta, markOpened, patchSessionsMeta, sessionGroups, sessionsMeta, unreadIds } from "../lib/sessionsMeta";
 import { api, loadSessions, now, sessions, snapshot, today, visible } from "../lib/store";
 import { tabKey } from "../lib/tabs";
+import { sessionsOpenInChat } from "../lib/terminalSettings";
 import type { SessionRow, SessionsView } from "../lib/types";
 import GroupNameDialog from "./sessions/GroupNameDialog.vue";
 import SessionDetail from "./sessions/SessionDetail.vue";
@@ -306,6 +307,14 @@ async function openInChat(id: string): Promise<void> {
     if (rest > 0) await new Promise((resolve) => window.setTimeout(resolve, rest));
     chatting.value = null;
   }
+}
+
+/** A double click or ↵ on a row: an ended Claude session goes on in a chat while Settings ›
+ * Terminal says so; any other is brought up where it runs, or opened again in the terminal. */
+function openRow(id: string): void {
+  const row = byId.value.get(id);
+  if (row && chattable(row) && sessionsOpenInChat()) void openInChat(id);
+  else void bringUp(id);
 }
 
 /** Seen is kept per project: what Claude finished there counts as seen; an open question or
@@ -627,7 +636,7 @@ onMounted(() => {
               :plain="period !== null"
               :unread="unreadIds"
               @select="selectedId = $event"
-              @bring-up="bringUp"
+              @bring-up="openRow"
               @mark-seen="markSeen"
               @open-project="openProject"
               @copy="copyResume"

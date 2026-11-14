@@ -188,14 +188,16 @@ const settingsOpen = ref(false);
 /** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's, the popover's
  * "Quiet hours…" on Notifications'. The first run's phone row opens it on Notifications' too, at
  * the phone's part (`settingsPart`); the Fuel page's account panel on Claude's, at its accounts
- * (with the add dialog open for "Add account"). */
-const settingsTab = ref<"claude" | "notifications" | undefined>(undefined);
+ * (with the add dialog open for "Add account"); a chat's `/config` on Terminal's, where its own
+ * settings are. */
+type SettingsTab = "claude" | "notifications" | "terminal";
+const settingsTab = ref<SettingsTab | undefined>(undefined);
 type SettingsPart = "phone" | "accounts" | "addAccount";
 const settingsPart = ref<SettingsPart | undefined>(undefined);
 /** With the tab Agents, whose part it opens on: the Fuel page asks for Codex's with Codex picked. */
 const settingsAgent = ref<Agent | undefined>(undefined);
 
-function openSettings(tab?: "claude" | "notifications", part?: SettingsPart, agent?: Agent): void {
+function openSettings(tab?: SettingsTab, part?: SettingsPart, agent?: Agent): void {
   settingsTab.value = tab;
   settingsPart.value = part;
   settingsAgent.value = agent;
@@ -778,7 +780,7 @@ let unlistenPage: UnlistenFn | null = null;
 
 /** From the switcher (`/`): that page of the window. Settings opens over the page shown and "Add
  * project" asks for the folder; any other page closes Settings, which would cover it. */
-function revealPage(page: Page, tab?: "claude" | "notifications"): void {
+function revealPage(page: Page, tab?: SettingsTab): void {
   if (page === "settings") openSettings(tab);
   else if (page === "add") void api.pickFolder();
   else {
@@ -931,7 +933,7 @@ onMounted(async () => {
   // lap's session waits on, the Turlar page with that run's dialog open (lib/laps: `lapAsked`).
   // A new version that waits (its notification, the popover's line, the tray's menu): its dialog.
   // A chat's settings button in the terminals' own window: Settings › Claude.
-  unlistenPage = await listen<{ page: Page | "update"; tab?: "claude" | "notifications"; agent?: Agent; run?: string }>("reveal-page", (event) => {
+  unlistenPage = await listen<{ page: Page | "update"; tab?: SettingsTab; agent?: Agent; run?: string }>("reveal-page", (event) => {
     if (event.payload.page === "update") return void (updateAsked.value = true);
     if (event.payload.agent) fuelPicked.value = agentOf(event.payload.agent);
     if (event.payload.run) lapAsked.value = event.payload.run;
@@ -1353,7 +1355,7 @@ function server(project: Project): string {
          up where it stands, rather than going or coming at once (the user's word; TerminalPanel's
          `stand-*` styles). -->
     <Transition name="stand">
-      <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" :stand="panelStand" @open-settings="openSettings('claude')" />
+      <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" :stand="panelStand" @open-settings="openSettings('terminal')" />
     </Transition>
     </div>
 

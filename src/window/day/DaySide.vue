@@ -7,8 +7,10 @@ import { bounds, clock, clockRange, duration, projectTiles, sessionShare, type L
 import { turnLine } from "../../lib/format";
 import { t } from "../../lib/i18n";
 import { dragRegion } from "../../lib/platform";
+import { startChat } from "../../lib/chat/open";
 import { api, now, snapshot } from "../../lib/store";
-import type { DayProject, DaySpend } from "../../lib/types";
+import { sessionsOpenInChat } from "../../lib/terminalSettings";
+import type { DayProject, DaySession, DaySpend } from "../../lib/types";
 
 /** `selected`: the project shown; `spend`: Claude's tokens that day, in all projects, `codexSpend`
  * Codex's, apart; `agents`: the day names its agents (lib/day: namesAgents), each session with its mark. */
@@ -24,6 +26,17 @@ const liveSessions = computed(() => {
   }
   return found;
 });
+
+/** Claude's sessions that run now, by id, idle ones too. */
+const running = computed(() => new Set((snapshot.value?.projects ?? []).flatMap((p) => p.claudeSessions.map((s) => s.id))));
+
+/** A session clicked: one of Claude's that runs nowhere goes on in a chat while Settings ›
+ * Terminal says so; any other is brought up where it runs, or opened again in the terminal. */
+function openSession(path: string, session: DaySession): void {
+  const listed = snapshot.value?.projects.some((p) => p.path === path);
+  if (session.agent === "claude" && listed && !running.value.has(session.id) && sessionsOpenInChat()) void startChat(path, { session: session.id });
+  else void api.revealClaude(path, session.id);
+}
 
 const selectedSpan = computed(() => {
   const span = props.selected ? bounds([props.selected]) : null;
@@ -65,9 +78,9 @@ const commits = computed(() => [...(props.selected?.commits ?? [])].reverse());
             role="button"
             tabindex="0"
             :title="t('day.sessionTitle')"
-            @click="api.revealClaude(selected.path, session.id)"
-            @keydown.enter.prevent="api.revealClaude(selected.path, session.id)"
-            @keydown.space.prevent="api.revealClaude(selected.path, session.id)"
+            @click="openSession(selected.path, session)"
+            @keydown.enter.prevent="openSession(selected.path, session)"
+            @keydown.space.prevent="openSession(selected.path, session)"
           >
             <span class="mark"><ClaudeDot :live="liveSessions.get(session.id)" /></span>
             <div class="session-body">
