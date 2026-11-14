@@ -12,8 +12,12 @@ import type { Agent } from "./types";
  */
 /** Room for two terminal rows: tabs and a prompt stay usable. */
 export const PANEL_MIN = 120;
+/** The least an unfolded panel opens at, along the bottom or as a card, where there is room for it:
+ * one dragged low opens this tall again (the user's word, 14 Nov: "dar açılıyor"). Open, it can
+ * still be dragged down to `PANEL_MIN`. */
+export const PANEL_OPEN = 520;
 /** Room for a Claude session. */
-const PANEL_DEFAULT = 300;
+const PANEL_DEFAULT = PANEL_OPEN;
 
 export const terminalHeight = ref(PANEL_DEFAULT);
 export const terminalCollapsed = ref(true);

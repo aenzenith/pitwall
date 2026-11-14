@@ -49,6 +49,7 @@ import {
   terminalRequest,
   useResizer,
   PANEL_MIN,
+  PANEL_OPEN,
   type PanelStand,
 } from "../lib/panel";
 import { keepCard, standPanel } from "../lib/panelStand";
@@ -148,7 +149,7 @@ const HEADER = 56;
 const area = ref({ w: 0, h: 0, x: 0, y: 0, side: 0 });
 /** Where the card stands until it is moved: the page's bottom right corner, this far in. */
 const CARD_INSET = 16;
-const CARD_DEFAULT = { width: 820, height: 440 };
+const CARD_DEFAULT = { width: 820, height: PANEL_OPEN };
 const CARD_LEAST = { width: 420, height: 160 };
 /** A card let go this near a line 12 px in from the page's edges, or the window's left edge over
  * the sidebar, goes onto it. */
@@ -274,6 +275,18 @@ const collapsed = computed({
   get: () => !windowed.value && terminalCollapsed.value,
   set: (folded: boolean) => (terminalCollapsed.value = folded),
 });
+// Unfolded, the panel opens at least `PANEL_OPEN` tall where there is room, along the bottom or as
+// a card: one left low by a drag opens tall enough again. Synchronous, so that it opens at that
+// height rather than growing to it.
+watch(
+  collapsed,
+  (folded) => {
+    if (folded) return;
+    const want = Math.min(PANEL_OPEN, tallest());
+    if (want > 0 && height.value < want) height.value = want;
+  },
+  { flush: "sync" },
+);
 
 const panel = ref<HTMLElement | null>(null);
 const body = ref<HTMLElement | null>(null);
