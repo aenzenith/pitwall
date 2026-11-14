@@ -206,12 +206,34 @@ fn present<R: Runtime>(app: &AppHandle<R>, label: &str) {
 #[derive(Clone, serde::Serialize)]
 struct Visibility {
     visible: bool,
+    /// Out of sight because it was minimised, not put away: what it holds is still open.
+    minimized: bool,
 }
 
 /// Tells a window's page whether Pitwall has it on screen, so it can pause animations and timers
 /// while hidden.
 pub fn tell<R: Runtime>(app: &AppHandle<R>, label: &str, visible: bool) {
-    let _ = app.emit_to(label, "visibility", Visibility { visible });
+    let _ = app.emit_to(label, "visibility", Visibility { visible, minimized: false });
+}
+
+/// Tells the main window's page when the window was minimised or brought back, on Windows, where
+/// its page isn't told of it: wry passes over WebView2's `SIZE_MINIMIZED`, so the page would go on
+/// drawing what nothing shows. Asked at the window's own events (it moves, is resized or takes the
+/// keyboard), and told only when that changed, never while its edge is dragged.
+#[cfg(windows)]
+pub fn main_minimized<R: Runtime>(window: &tauri::Window<R>) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static MINIMIZED: AtomicBool = AtomicBool::new(false);
+    let Ok(minimized) = window.is_minimized() else {
+        return;
+    };
+    if MINIMIZED.swap(minimized, Ordering::Relaxed) == minimized {
+        return;
+    }
+    // Unanswered, it is taken as shown: better a clock that ticks unseen than one that stands still.
+    let visible = !minimized && window.is_visible().unwrap_or(true);
+    let _ = window.app_handle().emit_to(MAIN, "visibility", Visibility { visible, minimized });
 }
 
 /// Shows a window and tells its page.

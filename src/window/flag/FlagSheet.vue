@@ -365,9 +365,9 @@ watch(() => props.mode, shown);
 
 /** The core hid the window (its close button, ⌘W): a held quit is given up rather than answered
  * out of sight. By the core's own word, not the page's: a window still on its way up for the
- * dialog isn't visible yet either. */
-function onVisibility(visible: boolean): void {
-  if (!visible && props.mode === "quit") close();
+ * dialog isn't visible yet either. Minimised, the window is still there to answer it. */
+function onVisibility(visible: boolean, minimized = false): void {
+  if (!visible && !minimized && props.mode === "quit") close();
 }
 
 onMounted(async () => {
@@ -378,7 +378,7 @@ onMounted(async () => {
   const win = getCurrentWindow();
   const stops = await Promise.all([
     win.listen("board", soon),
-    win.listen<{ visible: boolean }>("visibility", (event) => onVisibility(event.payload.visible)),
+    win.listen<{ visible: boolean; minimized?: boolean }>("visibility", (event) => onVisibility(event.payload.visible, event.payload.minimized)),
     ...REVEALS.map((name) => listen(name, close)),
   ]);
   if (gone) stops.forEach((stop) => stop());

@@ -434,12 +434,17 @@ pub fn run() {
             }
             // Nor does it stay up behind Pitwall's window once that window has the keyboard.
             WindowEvent::Focused(true) if window.label() == MAIN => {
+                #[cfg(windows)]
+                windows::main_minimized(window);
                 if let Some(switcher) = window.app_handle().get_webview_window(SWITCHER) {
                     if switcher.is_visible().unwrap_or(false) {
                         let _ = windows::hide(&switcher);
                     }
                 }
             }
+            // Minimised or brought back, its page is told so on Windows, where WebView2 isn't.
+            #[cfg(windows)]
+            WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == MAIN => windows::main_minimized(window),
             // Closing the window only hides it; the app lives in the menu bar.
             WindowEvent::CloseRequested { api, .. } if window.label() == MAIN => {
                 api.prevent_close();
