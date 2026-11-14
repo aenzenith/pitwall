@@ -29,6 +29,7 @@ import {
   HISTORY_MIN,
   HISTORY_WIDTH,
   historyWidth,
+  keyboardAsks,
   openRequest,
   outputErrorsOnly,
   panelAsks,
@@ -2324,6 +2325,31 @@ watch(terminals, async (list) => {
   await nextTick();
   if (active.value) focusTab(active.value.id);
   else panel.value?.querySelector<HTMLElement>(".action")?.focus();
+});
+
+// ⌘T (lib/panel: `keyboardAsks`): the keyboard into the panel, opened if it was folded or
+// minimised: the tab shown (with panes, the focused pane's; an output shown gives way to the
+// terminal it was opened from), else the empty panel's box (the focused pane's). No tab is opened
+// for it. Pressed with the keyboard in the open panel already, it folds it again, a card into its
+// sidebar entry (the user's word, 2026-11-14: "toggle olsun, tekrar basışta küçültür"); the panel
+// in its own window only takes it.
+watch(keyboardAsks, async () => {
+  const typing = panel.value?.contains(document.activeElement) ?? false;
+  if (typing && !collapsed.value && !windowed.value) {
+    (document.activeElement as HTMLElement | null)?.blur();
+    toggleCollapsed();
+    return;
+  }
+  if (collapsed.value) {
+    toggleCollapsed();
+    await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
+    // Folded again meanwhile (a press outside it): the keyboard stays where it is.
+    if (collapsed.value) return;
+  }
+  // An output shown gives way to what it covers.
+  if (showsOutput.value) closeOutput();
+  await nextTick();
+  focusShown();
 });
 
 // A tab closed with ⌘W (`closing`): with none left, the keyboard goes to the empty panel's box

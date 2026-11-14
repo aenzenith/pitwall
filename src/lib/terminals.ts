@@ -246,7 +246,7 @@ function create(id: number): View {
 
   // The panel's own keys; everything else goes to the shell. Returning false keeps a key from
   // the shell: it bubbles to the window, its default (copy, paste) left to the web view.
-  //  - macOS: ⌘T and ⌘W belong to the window (new tab, close tab); ⌘K clears, like Terminal.app;
+  //  - macOS: ⌘T and ⌘W belong to the window (the keyboard into the panel, close tab); ⌘K clears, like Terminal.app;
   //    ⌘C and ⌘V copy and paste through the web view.
   //  - The search's keys (`findKey`) are the search's, here and nowhere else.
   //  - Windows, Linux: Ctrl+letter is the shell's (Ctrl+C, Ctrl+D, Ctrl+K, Ctrl+R, Ctrl+T…), so

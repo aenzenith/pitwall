@@ -6,7 +6,6 @@ import Icon from "../components/Icon.vue";
 import { accountName, accounts, severalAccounts } from "../lib/accounts";
 import { agentOn } from "../lib/agents";
 import { t } from "../lib/i18n";
-import { isMac } from "../lib/platform";
 import { SHELL_LABELS, shellIcon } from "../lib/shells";
 import { CODEX_MODE_LABELS, CODEX_MODELS, CODEX_MODES, MODE_LABELS, MODEL_LABELS, MODELS, MODES, projectChoice, projectCodexChoice } from "../lib/start";
 import { codexAccountName, codexAccounts, severalCodexAccounts } from "../lib/terminals";
@@ -72,7 +71,6 @@ let keyedOpen = false;
 let leaving: ReturnType<typeof setTimeout> | undefined;
 
 const MAIN_WIDTH = 240;
-const newTabKeys = isMac ? "⌘T" : "Ctrl+Shift+T";
 
 function head(key: string, label: string): SubEntry {
   return { kind: "head", key, label };
@@ -168,7 +166,7 @@ function shellSub(): SubEntry[] {
 // changed since.
 const rows = computed<Row[]>(() => {
   void open.value;
-  const made: Row[] = [{ id: "shell", label: t("terminal.newTab"), keys: newTabKeys, sub: props.shells.length ? shellSub() : null, run: () => emit("shell", null) }];
+  const made: Row[] = [{ id: "shell", label: t("terminal.newTab"), keys: null, sub: props.shells.length ? shellSub() : null, run: () => emit("shell", null) }];
   // A chat is Claude's (O15: Codex's comes later, shown greyed and not picked); second, over the
   // agents' tabs (the user's word, 2026-11-14).
   if (agentOn("claude")) {

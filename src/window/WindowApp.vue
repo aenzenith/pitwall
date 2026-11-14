@@ -23,7 +23,7 @@ import { onBoard } from "../lib/board";
 import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
-import { askAway, cardRequest, COLLAPSED_HEIGHT, foldPanel, followProject, openInPanel, panelAway, panelOver, panelPath, panelStand, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
+import { askAway, cardRequest, COLLAPSED_HEIGHT, focusPanel, foldPanel, followProject, openInPanel, panelAway, panelOver, panelPath, panelStand, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
 import { followStand, listenPanelState, standPanel } from "../lib/panelStand";
 import { shellRequest } from "../lib/flag";
 import { closeChord, dragRegion, isMac, isWindows, keys, terminalChord } from "../lib/platform";
@@ -728,19 +728,16 @@ const terminalPanel = ref<InstanceType<typeof TerminalPanel> | null>(null);
 /** A row's title: what a double click on it opens (lib/open; the list never opens a project in itself). */
 const ROW_TITLES = { terminal: "window.rowTitleTerminal", files: "window.rowTitleFiles", editor: "window.rowTitle", list: "window.rowTitle" } as const;
 
-/** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) opens a new terminal in the
- * terminal panel's project, on whatever page; ⌘W closes what is in front (`closeFront`). */
+/** ⌘T (Ctrl+Shift+T on Windows and Linux, lib/platform: terminalChord) puts the keyboard in the
+ * terminal panel, on whatever page, wherever the panel stands, and pressed again folds it (lib/panel:
+ * `focusPanel`); ⌘W closes what is in front (`closeFront`). */
 function onKey(event: KeyboardEvent): void {
   // Under the first run's steps nothing of the window takes a key.
   if (setupOpen.value) return;
-  const terminals = terminalPanel.value;
-  if (terminalChord(event) && event.code === "KeyT" && terminals) {
+  if (terminalChord(event) && event.code === "KeyT" && (terminalPanel.value || (panelElsewhere.value && panelProject.value))) {
     event.preventDefault();
-    void terminals.openTerminal();
-  } else if (terminalChord(event) && event.code === "KeyT" && panelElsewhere.value && panelProject.value) {
-    // The panel in its own window: the new tab opens there.
-    event.preventDefault();
-    openInPanel(panelProject.value.path, false);
+    // Held down, once; under a dialog (the panel's own too), not at all.
+    if (!event.repeat && !document.querySelector("dialog[open]")) focusPanel();
   } else if (closeChord(event)) {
     closeFront(event);
   } else if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyE" && shown.value) {

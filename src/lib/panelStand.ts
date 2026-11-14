@@ -6,6 +6,7 @@ import { shellRequest } from "./flag";
 import {
   cardRect,
   chosenTab,
+  focusPanel,
   followProject,
   followTab,
   historyWidth,
@@ -202,6 +203,8 @@ function doAsk(ask: PanelAsk): void {
     case "shell":
       shellRequest.value = { path: ask.path, at: Date.now() };
       return;
+    case "focus":
+      return focusPanel();
   }
 }
 

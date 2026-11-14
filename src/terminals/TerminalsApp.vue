@@ -6,7 +6,7 @@ import Icon from "../components/Icon.vue";
 import { connectAccounts } from "../lib/accounts";
 import { chatAsks } from "../lib/chat/open";
 import { t } from "../lib/i18n";
-import { panelPath, revealTab, terminalCollapsed } from "../lib/panel";
+import { focusPanel, panelPath, revealTab, terminalCollapsed } from "../lib/panel";
 import { followStand, keepPanelState, listenPanelAsks, standPanel, takePanelState } from "../lib/panelStand";
 import { closeChord, dragRegion, terminalChord } from "../lib/platform";
 import { api, connectDeps, connectSessions, snapshot } from "../lib/store";
@@ -55,11 +55,13 @@ function openChatSettings(): void {
   void api.openWindow();
 }
 
-/** ⌘T opens a new terminal here; ⌘W closes the tab shown, and with none left the window. */
+/** ⌘T puts the keyboard in the panel here (lib/panel: `focusPanel`); ⌘W closes the tab shown, and
+ * with none left the window. */
 function onKey(event: KeyboardEvent): void {
   if (terminalChord(event) && event.code === "KeyT") {
     event.preventDefault();
-    if (panel.value) void panel.value.openTerminal();
+    // Held down, once; under a dialog, not at all.
+    if (!event.repeat && !document.querySelector("dialog[open]")) focusPanel();
     return;
   }
   if (!closeChord(event) || event.defaultPrevented || document.querySelector("dialog[open]")) return;

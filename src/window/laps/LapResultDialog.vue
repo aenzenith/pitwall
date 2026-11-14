@@ -348,7 +348,7 @@ async function switchTo(next: Body): Promise<void> {
 /* ---------- the keys ---------- */
 
 /** ⌘W closes the dialog and nothing behind it (the window's Close Window, WindowApp: `closeFront`);
- * ⌘T opens no tab in the panel while it is up. */
+ * ⌘T takes no keyboard to the panel while it is up. */
 function onKey(event: KeyboardEvent): void {
   if (closeChord(event)) {
     event.preventDefault();

@@ -54,7 +54,9 @@ export type PanelAsk =
   | { kind: "open"; path: string }
   | { kind: "reveal"; path: string; id: number }
   | { kind: "new"; path: string; claude: boolean; account: string | null; agent: Agent }
-  | { kind: "shell"; path: string };
+  | { kind: "shell"; path: string }
+  /** ⌘T in the main window: the keyboard into the panel there (`focusPanel`). */
+  | { kind: "focus" };
 
 /** Sent to the terminals' window; `show`: it comes up with the keyboard (a page's selection that it
  * follows does not). */
@@ -179,6 +181,17 @@ export function usePanelFollow(target: () => { path: string; tab: number | null 
 /** Something asked the panel to show a tab of its, open (an output, a session, a new tab): counted,
  * so that the press that asked doesn't fold it (TerminalPanel: a press outside). */
 export const panelAsks = ref(0);
+
+/** ⌘T, on any page: the keyboard into the panel, or with it there already, the panel folded again
+ * (TerminalPanel), counted. No tab is opened for it (the user's word, 2026-11-14: "yeni sekme değil
+ * terminali odaklasın"). */
+export const keyboardAsks = ref(0);
+
+/** The keyboard into the panel; in its own window, that window comes up with it. */
+export function focusPanel(): void {
+  if (panelAway()) return askAway({ kind: "focus" }, true);
+  keyboardAsks.value++;
+}
 
 /** An output asked for (a command's row, the switcher's ⌘↵, the Garage page): its
  * project and tab in the panel, open. */
