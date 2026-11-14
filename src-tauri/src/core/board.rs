@@ -1469,7 +1469,9 @@ impl Core {
                 links.insert(terminal, (session.clone(), *began));
             }
         }
-        cards.iter().filter(|(terminal, _, _)| !links.contains_key(terminal) && self.agent_may_run_in(*terminal)).map(|(terminal, _, _)| *terminal).collect()
+        // One process table for all the cards, read once one needs it.
+        let mut pass = None;
+        cards.iter().filter(|(terminal, _, _)| !links.contains_key(terminal) && self.agent_may_run_with(*terminal, &mut pass)).map(|(terminal, _, _)| *terminal).collect()
     }
 
     /// When Codex's session `id` began, as the `session_meta` of the rollout Codex's watch read

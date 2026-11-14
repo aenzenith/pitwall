@@ -692,8 +692,15 @@ impl Core {
     /// Unix the shell itself still does until the agent ends there and it becomes the plain login
     /// shell (`resume_command`, `codex_resume_command`; `cmd.exe` keeps `/K claude` in its line for
     /// good). A tab just opened, or one whose processes can't be told, may be such a tab too.
-    /// Command lines are only tested, as `read_running` tests them.
+    /// Command lines are only tested, as `read_running` tests them. The process table is read
+    /// afresh; a pass that asks of several tabs gives them one (`agent_may_run_with`).
     pub(super) fn agent_may_run_in(&self, id: u64) -> bool {
+        self.agent_may_run_with(id, &mut None)
+    }
+
+    /// `agent_may_run_in` with the pass's process table, read here if the pass hasn't yet; a tab
+    /// just opened or without a shell needs none.
+    pub(super) fn agent_may_run_with(&self, id: u64, pass: &mut process::PassTable) -> bool {
         let agent = self.lock().terminal_list.iter().find(|t| t.id == id).and_then(|t| Agent::of_tab(&t.kind)).unwrap_or_default();
         let Some((shell, opened)) = self.terminal_sessions().get(&id).map(|session| (session.pid, session.opened)) else {
             return false;
@@ -701,13 +708,16 @@ impl Core {
         if opened.elapsed() < STARTING {
             return true;
         }
-        let (Some(shell), Some(table)) = (shell, process::process_table()) else {
+        let Some(shell) = shell else {
+            return true;
+        };
+        let Some(table) = process::pass_table(pass) else {
             return true;
         };
 
         let word = agent.tab_kind();
         table.iter().any(|(&pid, process)| {
-            let under = || if pid == shell { cfg!(unix) } else { super::sessions::lineage(&table, pid).contains(&shell) };
+            let under = || if pid == shell { cfg!(unix) } else { super::sessions::lineage(table, pid).contains(&shell) };
             process.line.to_lowercase().contains(word) && under()
         })
     }
@@ -725,10 +735,12 @@ impl Core {
 
     /// Something other than its shell runs in tab `id`: on Unix what holds its foreground
     /// (`terminal_foreground`); on Windows, which has no foreground group, a process its shell
-    /// started. A tab whose shell or processes can't be told holds something.
-    pub(super) fn terminal_busy(&self, id: u64) -> bool {
+    /// started, told from the pass's process table (read here if the pass hasn't yet; Unix needs
+    /// none). A tab whose shell or processes can't be told holds something.
+    pub(super) fn terminal_busy(&self, id: u64, pass: &mut process::PassTable) -> bool {
         #[cfg(unix)]
         {
+            let _ = pass;
             self.terminal_foreground(id).is_some() || !self.terminal_sessions().get(&id).is_some_and(|session| session.pid.is_some())
         }
         #[cfg(not(unix))]
@@ -736,7 +748,7 @@ impl Core {
             let Some(shell) = self.terminal_sessions().get(&id).and_then(|session| session.pid) else {
                 return true;
             };
-            process::process_table().is_none_or(|table| table.values().any(|process| process.parent == shell))
+            process::pass_table(pass).is_none_or(|table| table.values().any(|process| process.parent == shell))
         }
     }
 

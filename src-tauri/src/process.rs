@@ -617,6 +617,16 @@ pub fn process_table() -> Option<HashMap<u32, ProcessInfo>> {
     (!table.is_empty()).then_some(table)
 }
 
+/// `process_table` for one pass (a sweep of tabs, a look at the board's cards), read the first
+/// time the pass needs it and never again: `None` until then. Every decision of the pass looks at
+/// that one moment, and nothing keeps it past the pass, so the next one reads afresh.
+pub type PassTable = Option<Option<HashMap<u32, ProcessInfo>>>;
+
+/// The table `pass` holds, read now if the pass hasn't needed it yet; `None` when it can't be read.
+pub fn pass_table(pass: &mut PassTable) -> Option<&HashMap<u32, ProcessInfo>> {
+    pass.get_or_insert_with(process_table).as_ref()
+}
+
 /// For a test that starts a stand-in process: waits until the table shows `pid` with `word` in
 /// its command line. A process just started is listed before its arguments can be read, and a
 /// test that looked at once took it for another program now and then.

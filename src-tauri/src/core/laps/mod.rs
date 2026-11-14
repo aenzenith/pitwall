@@ -1057,7 +1057,7 @@ impl Core {
             }));
         }
         // The run's own tab, its agent still there: the session goes on in it.
-        if let Some(id) = last.filter(|&tab| self.terminal_sessions().contains_key(&tab) && self.lap_tab_holds(tab)) {
+        if let Some(id) = last.filter(|&tab| self.terminal_sessions().contains_key(&tab) && self.lap_tab_holds(tab, &mut None)) {
             return Ok(LapTerminal::Tab { id });
         }
         let liveness = match agent {
@@ -1131,13 +1131,13 @@ impl Core {
         }
         match loose {
             Some(last) => {
-                if self.lap_tab_done(&last) {
+                if self.lap_tab_done(&last, &mut None) {
                     self.laps().loose.remove(&id);
                     self.close_terminal(id);
                 }
             }
             None => {
-                if !self.lap_tab_holds(id) {
+                if !self.lap_tab_holds(id, &mut None) {
                     self.close_terminal(id);
                 }
             }
@@ -1145,9 +1145,10 @@ impl Core {
     }
 
     /// Something runs in the laps' tab `id` beyond its shell: what holds its foreground, or its
-    /// agent, which may still be on its way there (`agent_may_run_in`).
-    fn lap_tab_holds(&self, id: u64) -> bool {
-        self.terminal_busy(id) || self.agent_may_run_in(id)
+    /// agent, which may still be on its way there (`agent_may_run_in`). Both look at the pass's
+    /// one process table (`None` for a pass of this tab alone).
+    fn lap_tab_holds(&self, id: u64, pass: &mut process::PassTable) -> bool {
+        self.terminal_busy(id, pass) || self.agent_may_run_with(id, pass)
     }
 
     /// The questions and permissions the laps' sessions wait with (`held`: what the scan set

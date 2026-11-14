@@ -800,7 +800,7 @@ impl Core {
             return;
         }
         let shown = self.laps().shown.contains(&last.tab);
-        if !shown && self.lap_tab_done(&last) {
+        if !shown && self.lap_tab_done(&last, &mut None) {
             self.close_terminal(last.tab);
         } else {
             self.laps().loose.insert(last.tab, last);
@@ -808,17 +808,18 @@ impl Core {
     }
 
     /// The agent in the laps' tab `last` is done: its session's turn is over, or it ended, by the
-    /// board's rule; with nothing to tell it by, nothing but the tab's shell runs there.
-    pub(super) fn lap_tab_done(&self, last: &LastTab) -> bool {
+    /// board's rule; with nothing to tell it by, nothing but the tab's shell runs there, as the
+    /// pass's process table says (`lap_tab_holds`).
+    pub(super) fn lap_tab_done(&self, last: &LastTab, pass: &mut process::PassTable) -> bool {
         let Some(session) = &last.session else {
-            return !self.lap_tab_holds(last.tab);
+            return !self.lap_tab_holds(last.tab, pass);
         };
         let running = self.running_of(last.agent);
         let scanned = self.lap_state(session);
         match stand(session, scanned.as_ref(), running.as_ref(), true) {
             Stand::Over(_) | Stand::Interrupted | Stand::Ended => true,
             Stand::Busy => false,
-            Stand::Unknown => !self.lap_tab_holds(last.tab),
+            Stand::Unknown => !self.lap_tab_holds(last.tab, pass),
         }
     }
 
@@ -833,8 +834,10 @@ impl Core {
             return;
         }
         let open: HashSet<u64> = self.terminal_shells().iter().map(|(_, id, _)| *id).collect();
+        // One process table for the whole sweep, read once a tab needs it.
+        let mut pass = None;
         for last in loose {
-            if open.contains(&last.tab) && !self.lap_tab_done(&last) {
+            if open.contains(&last.tab) && !self.lap_tab_done(&last, &mut pass) {
                 continue;
             }
             let closed = {
