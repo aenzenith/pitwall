@@ -90,6 +90,11 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     // edges, shadow, corners and resizing stay the system's (the shadow is on by default).
     #[cfg(windows)]
     let config = if label == MAIN { tauri::utils::config::WindowConfig { decorations: false, ..config } } else { config };
+    // No window opens the Web Inspector, a dev build's neither: no "Inspect Element" in the
+    // browser menu of a text field or selectable text, no F12 or Ctrl+Shift+I on Windows, nothing
+    // for Safari's Develop menu. Tauri's own ⌥⌘I goes through `internal_toggle_devtools`, which
+    // the capability denies (`capabilities/default.json`).
+    let config = tauri::utils::config::WindowConfig { devtools: Some(false), ..config };
     // A new page, should an earlier window of this label have gone: not listening yet.
     pages().ready.retain(|l| l != label);
     let dev = app.config().build.dev_url.clone();
