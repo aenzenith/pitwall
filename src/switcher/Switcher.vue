@@ -16,7 +16,8 @@ import { byRank, fuzzy, searchProjects, type ProjectMatch } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
 import { generalOpen, openFolderFromOutside, openFromOutside, openTarget } from "../lib/open";
 import { pages, type Page, type PageEntry } from "../lib/pages";
-import { keys, primary } from "../lib/platform";
+import { isLinux, keys, primary } from "../lib/platform";
+import { GROW, stillMotion } from "../lib/slide";
 import { projectAgent } from "../lib/start";
 import { api, now, snapshot } from "../lib/store";
 import type { CommandView, Folder, Project, ProjectLink } from "../lib/types";
@@ -443,16 +444,57 @@ function hasSelection(): boolean {
   return !!el && el.selectionStart !== el.selectionEnd;
 }
 
-async function fitWindow(): Promise<void> {
+/** How tall the panel is drawn (px); null until first measured, when it fills the window. */
+const panelHeight = ref<number | null>(null);
+/** How tall the window was last made: the panel never stands taller than it. */
+let windowHeight = window.innerHeight;
+/** The latest fitting, so an earlier one still under way leaves the sizes to it. */
+let fitting = 0;
+let shrinking: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * The window as tall as what it shows. While the panel is up, its height glides to the new one
+ * (`GROW`, as a box's does in the window): a taller window comes first and the panel grows into
+ * it; a shorter one comes once the panel has shrunk, so it never cuts the panel short. The rest
+ * of the window meanwhile is see-through. Hidden, the system asking for less motion, or on Linux
+ * (whose window may not be see-through: the page paints it whole), both change at once.
+ */
+async function fitWindow(glide = true): Promise<void> {
+  const mine = ++fitting;
   await nextTick();
   const el = panel.value;
-  if (!el) return;
+  if (!el || mine !== fitting) return;
   const parts = Array.from(el.children) as HTMLElement[];
   // What scrolls inside (the list, a card's note) counts with all it holds.
   const natural = Math.ceil(parts.reduce((sum, part) => sum + (part === list.value || part.dataset.scrolls !== undefined ? part.scrollHeight : part.offsetHeight), 2));
   // The note's open project list hangs over what is under it, and may need more.
   const wanted = Math.max(natural, noteView.value?.reach() ?? 0);
-  await getCurrentWindow().setSize(new LogicalSize(WIDTH, Math.min(wanted, MAX_HEIGHT)));
+  const height = Math.min(wanted, MAX_HEIGHT);
+  const win = getCurrentWindow();
+  clearTimeout(shrinking);
+
+  if (!glide || !shown.value || isLinux || stillMotion()) {
+    panelHeight.value = height;
+    windowHeight = height;
+    await win.setSize(new LogicalSize(WIDTH, height));
+    return;
+  }
+
+  if (height > windowHeight) {
+    windowHeight = height;
+    await win.setSize(new LogicalSize(WIDTH, height));
+    if (mine === fitting) panelHeight.value = height;
+    return;
+  }
+
+  panelHeight.value = height;
+  if (height < windowHeight) {
+    shrinking = setTimeout(() => {
+      if (mine !== fitting) return;
+      windowHeight = height;
+      void win.setSize(new LogicalSize(WIDTH, height));
+    }, GROW.duration + 20);
+  }
 }
 
 watch(query, (text) => {
@@ -501,11 +543,11 @@ onMounted(async () => {
     query.value = "";
     select(0);
     void loadFolders();
-    await fitWindow();
+    await fitWindow(false);
     reveal();
     input.value?.focus();
   });
-  void fitWindow();
+  void fitWindow(false);
   void loadFolders();
   input.value?.focus();
   // Listening for `switcher-opened` now: on its first opening the window comes up with this.
@@ -520,7 +562,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="panel" :class="['panel', { shown }]" @mousedown="onPress">
+  <div ref="panel" :class="['panel', { shown }]" :style="panelHeight === null ? undefined : { height: `${panelHeight}px` }" @mousedown="onPress">
     <div class="search">
       <PitwallGlyph :size="20" lamps="var(--run)" class="glyph" />
       <!-- A card is written: the `+` that began it, before its title. -->
@@ -688,7 +730,7 @@ onBeforeUnmount(() => {
     <p v-if="capturing && captureError" class="refusal" role="alert">{{ captureError }}</p>
 
     <!-- A card's keys: in its note, and in its title over the projects. -->
-    <footer v-if="noting" class="foot foot-note">
+    <footer v-if="noting" class="foot">
       <span><kbd>{{ keys("Shift+Enter") }}</kbd> {{ t("capture.add") }}</span>
       <span><kbd>{{ keys("mod+Enter") }}</kbd> {{ addGive }}</span>
       <span><kbd>{{ keys("mod+V") }}</kbd> {{ t("capture.pasteImage") }}</span>
@@ -760,16 +802,23 @@ onBeforeUnmount(() => {
   border-radius: 0;
 }
 
+/* Its height glides as slide.ts's GROW does (fitWindow), but where the window changes at once. */
 .panel.shown {
   opacity: 1;
   transform: none;
   transition:
     opacity 160ms ease-out,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height var(--glide, 240ms) cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root[data-platform="linux"] .panel {
+  --glide: 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .panel {
+    --glide: 0s;
     transform: none;
   }
 }
@@ -1096,8 +1145,11 @@ kbd {
   font-weight: 700;
 }
 
+/* At the panel's foot, also while the panel is taller than what it shows: as it shrinks to fit,
+   or while a card's open project list makes it taller than the note. */
 .foot {
   flex-shrink: 0;
+  margin-top: auto;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -1113,12 +1165,6 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-/* Under a card's note it stays at the window's foot while the note's open project list makes the
-   window taller than the note. */
-.foot-note {
-  margin-top: auto;
 }
 
 /* Windows and Linux spell the keys out (Ctrl+Enter), which takes room: each hint stays on one

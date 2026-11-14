@@ -6,8 +6,9 @@ const SLIDE = { duration: 180, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
 
 /** How long a box takes to reach its new height (ms), and how. Slower than a slide and gentle at
  * its start: a height changes by far more than a row's step, and a slide's curve would cover
- * most of it within two frames, which reads as the jump it is there to replace. */
-const GROW = { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" };
+ * most of it within two frames, which reads as the jump it is there to replace. The quick
+ * switcher's panel grows and shrinks with it too. */
+export const GROW = { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" };
 
 /** The system asks for less motion: everything takes its place at once. */
 export function stillMotion(): boolean {
