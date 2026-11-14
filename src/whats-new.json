@@ -42,6 +42,27 @@
         "ja": "ファイルウィンドウの検索ボックスで、名前だけでなくプロジェクトのファイルの中の言葉も見つかるようになりました。行をクリックすると、その行でファイルが開きます。",
         "zh-Hans": "“文件”窗口的搜索框现在不只搜名字，还能找到项目文件里的文字。点一行，文件就在那一行打开。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Terminals that float",
+        "tr": "Terminaller artık yüzebiliyor",
+        "de": "Terminals, die schweben",
+        "es": "Terminales flotantes",
+        "ru": "Плавающие терминалы",
+        "ja": "ターミナルを浮かせて使える",
+        "zh-Hans": "终端可以浮动了"
+      },
+      "body": {
+        "en": "The terminal panel can float as a card you move and resize over any page, or open in a window of its own. Drag its tab row up, or pick the spot from the icons at the row's end.",
+        "tr": "Terminal paneli artık her sayfanın üstünde taşıyıp boyutlandırabileceğin bir kart olarak yüzebiliyor ya da kendi penceresinde açılabiliyor. Sekme satırını yukarı sürükle ya da satırın sonundaki simgelerden yerini seç.",
+        "de": "Der Terminalbereich kann jetzt als Karte über jeder Seite schweben, die du verschiebst und größer ziehst, oder in einem eigenen Fenster aufgehen. Zieh seine Tab-Leiste nach oben oder wähl den Platz über die Symbole am Ende.",
+        "es": "El panel de terminales ahora puede flotar como una tarjeta que mueves y ajustas sobre cualquier página, o abrirse en su propia ventana. Arrastra su fila de pestañas hacia arriba o elige el sitio con los iconos del final.",
+        "ru": "Панель терминалов теперь можно сделать плавающей карточкой поверх любой страницы, которую легко двигать и растягивать, или открыть в отдельном окне. Потяните строку вкладок вверх или выберите место значками в её конце.",
+        "ja": "ターミナルパネルを、どのページの上でも動かしたり大きさを変えたりできるカードとして浮かせたり、専用のウィンドウで開いたりできるようになりました。タブの列を上へドラッグするか、列の端のアイコンで置き場所を選べます。",
+        "zh-Hans": "终端面板现在可以变成一张浮在任何页面上的卡片，随意移动、调整大小，也可以在单独的窗口里打开。把标签栏往上拖，或者用栏尾的图标选位置就行。"
+      }
     }
   ]
 }

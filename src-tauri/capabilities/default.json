@@ -6,7 +6,8 @@
     "popover",
     "main",
     "switcher",
-    "tower"
+    "tower",
+    "terminals"
   ],
   "permissions": [
     "core:default",

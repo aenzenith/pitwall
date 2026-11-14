@@ -5,16 +5,18 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "./styles/tokens.css";
 
+import { holdWhileWindowMoves } from "./lib/holding";
 import { language } from "./lib/i18n";
 import { isWindows, platform } from "./lib/platform";
 import { connect, visible } from "./lib/store";
 import { followTheme } from "./lib/theme";
 import Popover from "./popover/Popover.vue";
 import Switcher from "./switcher/Switcher.vue";
+import TerminalsApp from "./terminals/TerminalsApp.vue";
 import Tower from "./tower/Tower.vue";
 import WindowApp from "./window/WindowApp.vue";
 
-// Both windows load the same page; the window label picks the surface.
+// Every window loads the same page; the window label picks the surface.
 const label = getCurrentWindow().label;
 
 document.documentElement.dataset.surface = label;
@@ -44,6 +46,10 @@ if (isWindows) {
   });
 }
 
+// A window dragged by its bar selects no text on the way, nor after it while the page still thinks
+// the button is down.
+holdWhileWindowMoves();
+
 // Screen readers, hyphenation and `text-transform` (the Turkish İ) follow the page language.
 watchEffect(() => (document.documentElement.lang = language.value));
 
@@ -56,7 +62,7 @@ document.addEventListener("contextmenu", (event) => {
     event.preventDefault();
   }
 });
-const surfaces = { popover: Popover, switcher: Switcher, tower: Tower } as const;
+const surfaces = { popover: Popover, switcher: Switcher, tower: Tower, terminals: TerminalsApp } as const;
 
 createApp(surfaces[label as keyof typeof surfaces] ?? WindowApp).mount("#app");
 void connect();

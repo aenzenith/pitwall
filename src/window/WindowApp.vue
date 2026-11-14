@@ -23,7 +23,9 @@ import { onBoard } from "../lib/board";
 import { headKey, hintKey, parseKey, rowKey, useGroupReorder } from "../lib/groupReorder";
 import { useReorder } from "../lib/reorder";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
-import { cardRequest, COLLAPSED_HEIGHT, foldPanel, followProject, openInPanel, panelOver, panelPath, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
+import { askAway, cardRequest, COLLAPSED_HEIGHT, foldPanel, followProject, openInPanel, panelAway, panelOver, panelPath, panelStand, panelTyping, revealTab, showOutput, terminalCollapsed } from "../lib/panel";
+import { followStand, listenPanelState, standPanel } from "../lib/panelStand";
+import { shellRequest } from "../lib/flag";
 import { closeChord, dragRegion, isMac, isWindows, keys, terminalChord } from "../lib/platform";
 import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
 import { focusTerminal, listRequest, openInWindow, openTarget, pickOnPage, pickRequest } from "../lib/open";
@@ -401,8 +403,16 @@ function zone(project: Project): string | undefined {
  * the first project. None before there is a project, and none for the first run's steps.
  */
 const panelProject = computed(() => projects.value.find((p) => p.path === panelPath.value) ?? selected.value ?? projects.value[0] ?? null);
-/** The panel is drawn: the page keeps its tab row's height free for it, and no more. */
-const panelShown = computed(() => panelProject.value !== null && !setupOpen.value);
+/** There is a panel to show: a project, and no first run's steps over the pages. */
+const panelHere = computed(() => panelProject.value !== null && !setupOpen.value);
+/** Where the panel stands, as the core says (lib/panelStand); in its own window, this one shows
+ * nothing in its place. */
+followStand();
+const panelElsewhere = computed(() => panelAway());
+/** The panel is drawn in this window, along the bottom or as a card. */
+const panelShown = computed(() => panelHere.value && !panelElsewhere.value);
+/** Along the bottom, the page keeps the panel's tab row's height free for it, and no more. */
+const panelDocked = computed(() => panelShown.value && panelStand.value === "dock");
 
 // The list's selection is the panel's project, on the Projects page: picked there, its terminal
 // takes the keyboard (the panel open), as it always did; coming back to the page, the panel shows
@@ -452,12 +462,14 @@ watch(teams, (list) => {
 
 /**
  * Another page taken from the sidebar or the switcher: the open terminal panel folds to its tab
- * row, as a press on the page does (TerminalPanel), so the page comes up whole (the user's word,
+ * row (a card into its sidebar entry), as a press on the page does (TerminalPanel), so the page comes up whole (the user's word,
  * 2026-11-02); not while Settings › General keeps the panel open on a press outside it. The list's
  * filters and teams are one page: going among them leaves the panel as it is.
  */
 function turnTo(page: "projects" | View): void {
-  if (view.value !== page && snapshot.value?.settings.panelFoldOutside !== false) foldPanel();
+  // A card folds into its sidebar entry as well; a window of its own stays as it is (the user's
+  // word, 2026-11-14).
+  if (view.value !== page && panelStand.value !== "window" && snapshot.value?.settings.panelFoldOutside !== false) foldPanel();
   view.value = page;
 }
 
@@ -636,6 +648,20 @@ const openFiles = computed(() =>
     .map((win) => ({ win, name: snapshot.value?.projects.find((p) => p.path === win.path)?.name ?? win.path.slice(win.path.lastIndexOf("/") + 1) })),
 );
 
+/** The floating terminal card's entry in the sidebar, while the panel floats: its project's name; a
+ * click brings the minimised card back, or minimises it (TerminalPanel: `foldCard`). */
+const cardEntry = computed(() => (panelShown.value && panelStand.value === "float" && panelProject.value ? { name: panelProject.value.name } : null));
+
+/** Right-click on the card's entry: minimise it, or put the panel along the bottom or in its window. */
+function cardEntryMenu(at: MenuPoint): void {
+  void menu.popup(at, [
+    { text: t("terminal.minimize"), enabled: !terminalCollapsed.value, action: () => (terminalCollapsed.value = true) },
+    "separator",
+    { text: t("terminal.standDock"), action: () => standPanel("dock") },
+    { text: t("terminal.standWindow"), action: () => standPanel("window") },
+  ]);
+}
+
 /** A Files window's sidebar entry pressed: a folded window comes up, the one in front folds back,
  * one that is up behind another comes in front. */
 function pressEntry(win: FilesWin): void {
@@ -707,6 +733,10 @@ function onKey(event: KeyboardEvent): void {
   if (terminalChord(event) && event.code === "KeyT" && terminals) {
     event.preventDefault();
     void terminals.openTerminal();
+  } else if (terminalChord(event) && event.code === "KeyT" && panelElsewhere.value && panelProject.value) {
+    // The panel in its own window: the new tab opens there.
+    event.preventDefault();
+    openInPanel(panelProject.value.path, false);
   } else if (closeChord(event)) {
     closeFront(event);
   } else if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyE" && shown.value) {
@@ -834,7 +864,8 @@ function revealOutput(path: string, job: string): void {
  */
 async function revealTerminal(path: string, id: number): Promise<void> {
   settingsOpen.value = false;
-  revealTab(path, id);
+  // In its own window, the panel hears it itself; the core brought that window up.
+  if (!panelElsewhere.value) revealTab(path, id);
   pickOnPage(path);
   if (view.value !== "board") return;
   // The board's cards, to know whether one runs in that terminal.
@@ -898,6 +929,8 @@ onMounted(async () => {
     if (event.payload.run) lapAsked.value = event.payload.run;
     revealPage(event.payload.page, event.payload.tab);
   });
+  // The panel back from its own window: as that window left it, open.
+  unlistenPanelState = await listenPanelState(() => (terminalCollapsed.value = false));
   // Listening now: on its first opening the window comes up, with what the switcher sent meanwhile.
   void api.windowReady();
   const win = getCurrentWindow();
@@ -919,6 +952,17 @@ onBeforeUnmount(() => {
   unlistenFocus?.();
   unlistenPage?.();
   unlistenResize?.();
+  unlistenPanelState?.();
+});
+
+let unlistenPanelState: (() => void) | null = null;
+
+// The chequered flag's "Open in terminal" while the panel is in its own window: the new tab opens
+// there (lib/flag: shellRequest).
+watch(shellRequest, (request) => {
+  if (!request || !panelElsewhere.value) return;
+  shellRequest.value = null;
+  askAway({ kind: "shell", path: request.path }, true);
 });
 
 /** How many of the project's commands started with its server and wait for the user. */
@@ -1054,6 +1098,21 @@ function server(project: Project): string {
         </div>
         <!-- The Files windows open, under Garage: a click brings a folded one up and in front, and
              folds one that is up back into its entry (files/FilesWindow); closed, it leaves the list. -->
+        <!-- The floating terminal card, as a Files window: its entry while the panel floats, where a
+             minimised card waits, by the terminal's mark and its project's name. -->
+        <nav v-if="cardEntry" :aria-label="t('terminal.cardEntry', { name: cardEntry.name })" class="nav files-nav card-nav">
+          <button
+            type="button"
+            data-terminal-card
+            :aria-label="t('terminal.cardEntry', { name: cardEntry.name })"
+            :title="t('terminal.cardEntry', { name: cardEntry.name })"
+            @click="terminalCollapsed = !terminalCollapsed"
+            @contextmenu.prevent="cardEntryMenu($event)"
+          >
+            <Icon name="terminal" /> <span class="nav-label">{{ cardEntry.name }}</span>
+            <Icon name="arrow-right" :size="13" :class="['files-go', { up: !terminalCollapsed }]" />
+          </button>
+        </nav>
         <nav v-if="openFiles.length" :aria-label="t('files.openWindows')" class="nav files-nav">
           <button
             v-for="entry in openFiles"
@@ -1080,10 +1139,10 @@ function server(project: Project): string {
     <!-- The page shown, and along its bottom the terminal panel, the same on every page: the page
          keeps the panel's tab row free (`COLLAPSED_HEIGHT`); open, the panel lies over it. -->
     <div class="pages" :inert="setupOpen">
-    <div class="page" :style="{ marginBottom: panelShown ? `${COLLAPSED_HEIGHT}px` : undefined, '--panel-over': `${panelOver}px` }">
+    <div class="page" :style="{ marginBottom: panelDocked ? `${COLLAPSED_HEIGHT}px` : undefined, '--panel-over': `${panelOver}px` }">
     <DayView v-if="view === 'day'" />
     <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
-    <FuelView v-else-if="view === 'fuel'" :terminal-project="panelShown ? (panelProject?.path ?? null) : null" @open-settings="(part, agent) => openSettings('claude', part, agent)" />
+    <FuelView v-else-if="view === 'fuel'" :terminal-project="panelHere ? (panelProject?.path ?? null) : null" @open-settings="(part, agent) => openSettings('claude', part, agent)" />
     <SessionsView
       v-else-if="view === 'sessions'"
       :claude-project="selected?.name ?? null"
@@ -1282,8 +1341,12 @@ function server(project: Project): string {
     </div>
 
     <!-- The panel's project's outputs and terminals; not before there is a project, nor under the
-         first run's steps. -->
-    <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" />
+         first run's steps. Going into a window of its own it fades away, and coming back it comes
+         up where it stands, rather than going or coming at once (the user's word; TerminalPanel's
+         `stand-*` styles). -->
+    <Transition name="stand">
+      <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" :stand="panelStand" />
+    </Transition>
     </div>
 
     <!-- The first run's steps, over the sidebar and the pages, which take nothing while they are up. -->
@@ -1510,6 +1573,11 @@ function server(project: Project): string {
 /* The Files windows open, under the pages. */
 .files-nav {
   margin-top: 12px;
+}
+
+/* The card's entry and the Files windows' read as one list. */
+.card-nav + .files-nav {
+  margin-top: 0;
 }
 
 .files-go {

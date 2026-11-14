@@ -554,6 +554,13 @@ textarea,
   user-select: text;
 }
 
+/* Something moves or is resized under the pointer (lib/holding): no text is selected on the way. */
+body.holding,
+body.holding * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -627,6 +634,12 @@ select:disabled,
 input:disabled,
 [aria-disabled="true"] {
   cursor: default;
+}
+
+/* While a card is moved by its bar (lib/holding: `moving`), the open hand its bar shows, everywhere. */
+body.moving,
+body.moving * {
+  cursor: grab !important;
 }
 
 /* While a row is dragged into place, the closed hand everywhere. */

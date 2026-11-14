@@ -1,6 +1,7 @@
 //! The Sessions page's data (`core::SessionsView`): built when the page asks (`claude_sessions`),
 //! and once the main window's page has asked, sent to it as `sessions` when it changes, at most
-//! once a second, while that window is up. Nobody asking, nothing is built.
+//! once a second, while that window (or the terminals' window, which shows them too) is up.
+//! Nobody asking, nothing is built.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -10,7 +11,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::core::SessionsView;
-use crate::{AppState, MAIN};
+use crate::{AppState, MAIN, TERMINALS};
 
 /// How often the page's data is looked at while it is wanted.
 const EVERY: Duration = Duration::from_secs(1);
@@ -69,16 +70,14 @@ impl Sessions {
         });
     }
 
-    /// Sends the view when it changed, while the main window's page wants it and is up: shown and
-    /// not minimized (Windows calls a minimized window visible).
+    /// Sends the view when it changed, while a page wants it and the main window or the
+    /// terminals' window is up (shown, not minimised).
     fn send_changes(&self, app: &AppHandle) {
         if !self.asked.load(Ordering::SeqCst) {
             return;
         }
-        let visible = app.get_webview_window(MAIN).is_some_and(|main| {
-            main.is_visible().unwrap_or(false) && !main.is_minimized().unwrap_or(false)
-        });
-        if !visible {
+        let up = |label: &str| app.get_webview_window(label).is_some_and(|window| window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false));
+        if !up(MAIN) && !up(TERMINALS) {
             return;
         }
 
@@ -93,6 +92,9 @@ impl Sessions {
             *sent = Sent { whole, shape, at: Some(Instant::now()) };
         }
 
+        if app.get_webview_window(TERMINALS).is_some() {
+            let _ = app.emit_to(TERMINALS, "sessions", &view);
+        }
         let _ = app.emit_to(MAIN, "sessions", view);
     }
 }

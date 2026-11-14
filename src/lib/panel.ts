@@ -1,5 +1,7 @@
 import { ref, watch, type Ref } from "vue";
 
+import { holding } from "./holding";
+import { api } from "./store";
 import type { Agent } from "./types";
 
 /**
@@ -18,6 +20,42 @@ export const terminalCollapsed = ref(true);
 
 /** A collapsed panel keeps only its handle and tab row; its height waits for its return. */
 export const COLLAPSED_HEIGHT = 42;
+
+/**
+ * Where the panel stands (Settings › General, the row's buttons, a drag): along the window's
+ * bottom (`dock`), as a card over the page (`float`), or in a window of its own (`window`). As the
+ * core holds it (`settings.terminalPlace`), and a step ahead of it while a change is on its way
+ * (lib/panelStand).
+ */
+export type PanelStand = "dock" | "float" | "window";
+export const panelStand = ref<PanelStand>("dock");
+
+/** The floating card's place, as it was last left: its right and bottom edges' distance from the
+ * page's, its width and height (CSS px). None until it is first moved: the default place. */
+export type CardRect = { right: number; bottom: number; width: number; height: number };
+export const cardRect = ref<CardRect | null>(null);
+
+/** The panel stands in its own window, and this is the main window's page: what a page asks of the
+ * panel goes to that window (`panelAsk`), where it is done as it would be here (TerminalsApp). */
+export function panelAway(): boolean {
+  return panelStand.value === "window" && document.documentElement.dataset.surface !== "terminals";
+}
+
+/** What a page of the main window asks of the panel in its own window. */
+export type PanelAsk =
+  | { kind: "follow"; path: string }
+  | { kind: "followTab"; path: string; id: number }
+  | { kind: "output"; path: string; job: string | null }
+  | { kind: "open"; path: string }
+  | { kind: "reveal"; path: string; id: number }
+  | { kind: "new"; path: string; claude: boolean; account: string | null; agent: Agent }
+  | { kind: "shell"; path: string };
+
+/** Sent to the terminals' window; `show`: it comes up with the keyboard (a page's selection that it
+ * follows does not). */
+export function askAway(ask: PanelAsk, show: boolean): void {
+  void api.panelAsk(JSON.stringify(ask), show).catch(() => undefined);
+}
 
 /** How far the panel, open, lies over the page (its height as drawn, less its tab row's, which the
  * page keeps free): the page's lists keep that much room under their end, so every row can be
@@ -82,6 +120,7 @@ export const followedTab = ref<number | null>(null);
  */
 export function followProject(path: string, focus = false): void {
   if (panelTyping.value) return;
+  if (panelAway() && panelPath.value !== path) askAway({ kind: "follow", path }, false);
   panelFocus.value = focus ? path : null;
   panelPath.value = path;
 }
@@ -90,6 +129,7 @@ export function followProject(path: string, focus = false): void {
  * the keyboard. Not while the keyboard is in the panel. */
 export function followTab(path: string, id: number): void {
   if (panelTyping.value) return;
+  if (panelAway()) askAway({ kind: "followTab", path, id }, false);
   const chosen = chosenTab.value[path];
   if (chosen?.kind !== "terminal" || chosen.id !== id) {
     followedTab.value = id;
@@ -138,6 +178,7 @@ export const panelAsks = ref(0);
 /** An output asked for (a command's row, the switcher's ⌘↵, the Garage page): its
  * project and tab in the panel, open. */
 export function showOutput(path: string, job: string | null): void {
+  if (panelAway()) return askAway({ kind: "output", path, job }, true);
   panelAsks.value++;
   chooseTab(path, { kind: "output", job });
   panelPath.value = path;
@@ -147,14 +188,17 @@ export function showOutput(path: string, job: string | null): void {
 /** The panel on `path`'s project, open, showing what it shows there (a project opened where its
  * terminal is the choice, with no terminal: no tab is opened for it). */
 export function openPanelOn(path: string): void {
+  if (panelAway()) return askAway({ kind: "open", path }, true);
   panelAsks.value++;
   panelPath.value = path;
   terminalCollapsed.value = false;
 }
 
-/** The panel folds to its tab row (a press outside it, TerminalPanel). Not while a tab is opening. */
+/** The panel folds to its tab row (a press outside it, TerminalPanel). Not while a tab is opening,
+ * nor under one of the panel's own dialogs (a tab's name, a card from an output): a card folded
+ * into its sidebar entry would hide it while it holds the window. */
 export function foldPanel(): void {
-  if (!panelOpening.value) terminalCollapsed.value = true;
+  if (!panelOpening.value && !document.querySelector(".term-panel dialog[open]")) terminalCollapsed.value = true;
 }
 
 /**
@@ -165,6 +209,7 @@ export function foldPanel(): void {
 export const terminalRequest = ref<{ path: string; id: number; at: number } | null>(null);
 
 export function revealTab(path: string, id: number): void {
+  if (panelAway()) return askAway({ kind: "reveal", path, id }, true);
   panelAsks.value++;
   panelPath.value = path;
   terminalRequest.value = { path, id, at: Date.now() };
@@ -177,6 +222,7 @@ export function revealTab(path: string, id: number): void {
 export const openRequest = ref<{ path: string; claude: boolean; account: string | null; agent?: Agent; at: number } | null>(null);
 
 export function openInPanel(path: string, claude: boolean, account: string | null = null, agent: Agent = "claude"): void {
+  if (panelAway()) return askAway({ kind: "new", path, claude, account, agent }, true);
   panelAsks.value++;
   panelPath.value = path;
   openRequest.value = { path, claude, account, agent, at: Date.now() };
@@ -228,6 +274,9 @@ export function useResizer(height: Ref<number>, max: () => number, least: () => 
     drag = { startY: event.clientY, startHeight: Math.min(height.value, top), max: top };
     dragging.value = true;
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    // No text is selected on the way (a chat's would be).
+    event.preventDefault();
+    holding(true);
   }
 
   function move(event: PointerEvent): void {
@@ -238,6 +287,7 @@ export function useResizer(height: Ref<number>, max: () => number, least: () => 
   function end(): void {
     drag = null;
     dragging.value = false;
+    holding(false);
   }
 
   /** Arrow keys on the handle, for keyboard users. */

@@ -34,6 +34,7 @@ mod mcp;
 mod flag;
 mod shortcuts;
 mod tower;
+mod terminals;
 mod cli;
 mod start;
 mod files;
@@ -65,6 +66,8 @@ pub use crate::core::uninstall::uninstall_mode;
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";
 pub const SWITCHER: &str = "switcher";
+/// The terminal panel's own window, while it stands there (`terminals.rs`).
+pub const TERMINALS: &str = "terminals";
 
 pub struct AppState {
     pub core: Arc<Core>,
@@ -143,10 +146,15 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         CoreEvent::TerminalExit { id } => {
             let _ = app.emit_to(MAIN, "terminal-exit", id);
         }
-        // Held for the main window's page until it listens (`windows::FOR_MAIN`).
+        // Held for the main window's page until it listens (`windows::FOR_MAIN`). With the panel
+        // in its own window, that window comes up instead, and its page hears it once it listens.
         CoreEvent::RevealTerminal { path, id } => {
-            tray::show_main(app);
-            let _ = app.emit("reveal-terminal", TerminalReveal { path, id });
+            if terminals::out(app) {
+                terminals::reveal(app, &TerminalReveal { path, id });
+            } else {
+                tray::show_main(app);
+                let _ = app.emit("reveal-terminal", TerminalReveal { path, id });
+            }
         }
         // Only the window shows the board.
         CoreEvent::Board(cards) => {
@@ -156,7 +164,11 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         CoreEvent::Laps(state) => {
             let _ = app.emit_to(MAIN, "laps", state);
         }
+        // The terminals' window shows them too, beside its terminals.
         CoreEvent::Deps(reports) => {
+            if app.get_webview_window(TERMINALS).is_some() {
+                let _ = app.emit_to(TERMINALS, "deps", &reports);
+            }
             let _ = app.emit_to(MAIN, "deps", reports);
         }
         // From a notification or the popover's list of what was missed: held for the main
@@ -445,13 +457,21 @@ pub fn run() {
             // Minimised or brought back, its page is told so on Windows, where WebView2 isn't.
             #[cfg(windows)]
             WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == MAIN => windows::main_minimized(window),
-            // Closing the window only hides it; the app lives in the menu bar.
+            // Closing the window only hides it; the app lives in the menu bar. The Dock icon stays
+            // while the terminals' window is up.
             WindowEvent::CloseRequested { api, .. } if window.label() == MAIN => {
                 api.prevent_close();
                 let _ = window.hide();
                 windows::tell(window.app_handle(), MAIN, false);
-                tray::set_dock_visible(window.app_handle(), false);
+                if !terminals::up(window.app_handle()) {
+                    tray::set_dock_visible(window.app_handle(), false);
+                }
             }
+            // The terminals' window closes as asked, and the panel goes back where it stood.
+            WindowEvent::CloseRequested { .. } if window.label() == TERMINALS => terminals::closing(window.app_handle()),
+            WindowEvent::Destroyed if window.label() == TERMINALS => windows::forget(TERMINALS),
+            // Where it is left is where it comes back.
+            WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == TERMINALS => terminals::frame_changed(window.app_handle()),
             // Where the mini tower is left is where it comes back (`tower.rs`).
             WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == tower::LABEL => tower::frame_changed(window.app_handle()),
             // Folders dropped on the window become projects. On the window only: the mini tower
@@ -496,6 +516,12 @@ pub fn run() {
             commands::rename_terminal,
             commands::set_terminal_layout,
             commands::set_panes_height,
+            commands::set_terminal_place,
+            commands::set_terminal_card,
+            commands::panel_state,
+            commands::keep_panel_state,
+            commands::panel_ask,
+            commands::set_terminals_on_top,
             commands::write_terminal,
             commands::resize_terminal,
             commands::close_terminal,
@@ -687,8 +713,10 @@ pub fn run() {
     app.run(|app, event| match event {
         RunEvent::Exit => {
             if let Some(state) = app.try_state::<AppState>() {
-                // Where the mini tower was left, should that not be written yet.
+                // Where the mini tower and the terminals' window were left, should that not be
+                // written yet.
                 tower::flush(&state.core);
+                terminals::flush(&state.core);
                 // What is open, for the next start; then every server goes.
                 state.core.save_last_session();
                 state.core.dispose();

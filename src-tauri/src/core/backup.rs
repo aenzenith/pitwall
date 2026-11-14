@@ -168,8 +168,8 @@ impl General {
             // This Mac's own too: Claude Code's configuration here is what names this app.
             radio: _,
             // This Mac's own as well: where its small window stands, the command installed here,
-            // how tall its terminal panel is for panes.
-            tower: _, cli: _, panes_height: _,
+            // how tall its terminal panel is for panes and where that panel stands.
+            tower: _, cli: _, panes_height: _, terminal_place: _,
             // This Mac's own: Claude's accounts are folders and Keychain items here.
             accounts: _,
             // This Mac's own: which agents are installed and followed here, and their accounts.

@@ -139,6 +139,8 @@ impl Core {
                 flag: kept.flag,
                 tower: kept.tower,
                 cli: kept.cli,
+                // Where the terminal panel stands: by its own commands (`layout.rs`).
+                terminal_place: kept.terminal_place,
                 // Claude's accounts: by their own commands (`core/accounts.rs`).
                 accounts: kept.accounts,
                 // The agents: by their own commands (`agents.rs`).

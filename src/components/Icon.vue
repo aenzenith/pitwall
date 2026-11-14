@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex" | "laps" | "pause" | "zap";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex" | "laps" | "pause" | "zap" | "panel-dock" | "panel-float" | "panel-window" | "pin";
     size?: number;
   }>(),
   { size: 15 },
@@ -90,6 +90,13 @@ withDefaults(
     <!-- A lap: round and round again (the Turlar page). -->
     <path v-else-if="name === 'pause'" d="M9 6v12M15 6v12" />
     <path v-else-if="name === 'zap'" d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />
+    <!-- Where the terminal panel stands: along the window's bottom, as a card over the page, in a
+         window of its own. -->
+    <g v-else-if="name === 'panel-dock'"><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M3.5 14h17" /></g>
+    <g v-else-if="name === 'panel-float'"><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><rect x="10.5" y="10.5" width="7" height="5.5" rx="1.2" /></g>
+    <g v-else-if="name === 'panel-window'"><rect x="3.5" y="8.5" width="12.5" height="11" rx="2" /><path d="M8 5.5h10.5a2 2 0 0 1 2 2V15" /></g>
+    <!-- A pin: a window kept above the others. -->
+    <g v-else-if="name === 'pin'"><path d="M9.5 4h5l-.8 5.5 3.3 3.3H7l3.3-3.3z" /><path d="M12 12.8V20" /></g>
     <g v-else-if="name === 'laps'"><path d="M17 3l3 3-3 3" /><path d="M4 11v-1a4 4 0 0 1 4-4h12" /><path d="M7 21l-3-3 3-3" /><path d="M20 13v1a4 4 0 0 1-4 4H4" /></g>
   </svg>
 </template>

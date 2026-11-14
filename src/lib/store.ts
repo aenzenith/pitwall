@@ -357,6 +357,19 @@ export const api = {
   /** How the panel lays a project's terminals out; null: one at a time. */
   setTerminalLayout: (path: string, layout: TerminalLayout | null) => invoke("set_terminal_layout", { path, layout }),
   terminalBuffer: (id: number) => invoke<{ data: string; seq: number }>("terminal_buffer", { id }),
+  /** The panel to `mode` (lib/panelStand): the core opens or closes the terminals' window. `panel`,
+   * the panel's state handed to the page that shows it next; `at`, where on the screen the card
+   * was let go (the window's place). */
+  setTerminalPlace: (mode: "dock" | "float" | "window", panel: string | null, at: [number, number] | null) => invoke("set_terminal_place", { mode, panel, at }),
+  /** The floating card's place, kept for the next start: right, bottom, width, height. */
+  setTerminalCard: (card: [number, number, number, number] | null) => invoke("set_terminal_card", { card }),
+  /** The panel's state the main window handed over, for the terminals' window as it opens. */
+  panelState: () => invoke<string | null>("panel_state"),
+  /** The terminals' window's panel as it is now, for the main window when it goes back there. */
+  keepPanelState: (panel: string) => invoke("keep_panel_state", { panel }),
+  /** Something the main window's pages ask of the panel while it is in its own window. */
+  panelAsk: (ask: string, show: boolean) => invoke("panel_ask", { ask, show }),
+  setTerminalsOnTop: (on: boolean) => invoke("set_terminals_on_top", { on }),
   setFavourite: (path: string, on: boolean) => invoke("set_favourite", { path, on }),
   /** "Remove from Pitwall": no added project and no favourite any more. */
   removeProject: (path: string) => invoke("remove_project", { path }),

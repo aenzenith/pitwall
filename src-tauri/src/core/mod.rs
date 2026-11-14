@@ -363,6 +363,11 @@ impl Core {
         let ran_before = cfg.settings_file.parent().is_some_and(|dir| fs::read_dir(dir.join("activity")).is_ok_and(|mut days| days.next().is_some()));
         let first_start = !cfg.settings_file.exists() && !ran_before;
         let mut settings = Settings::load(&cfg.settings_file);
+        // Every start puts the terminal panel along the window's bottom: a card or a window of its
+        // own lasts until the quit (the user's word, 14 Nov). Where the card and the window were
+        // left is kept for the next time the panel goes there.
+        settings.terminal_place.mode = "dock".into();
+        settings.terminal_place.back = "dock".into();
         if first_start && settings.seen_version.is_none() {
             settings.seen_version = Some(crate::whatsnew::CURRENT.to_string());
         }

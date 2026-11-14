@@ -227,6 +227,85 @@ impl Core {
         self.save_settings();
     }
 
+    /// The terminal panel goes to `mode` (`dock`, `float` or `window`): to its window from the
+    /// page, it goes back where it came from when that window closes. Written and told to every
+    /// window. Where it stood before; an error for a place it can't stand.
+    pub fn set_terminal_place(&self, mode: &str) -> Result<&'static str, String> {
+        let Some(mode) = ["dock", "float", "window"].into_iter().find(|known| *known == mode) else {
+            return Err(format!("unknown place: {mode}"));
+        };
+        let from = {
+            let mut inner = self.lock();
+            let place = &mut inner.settings.terminal_place;
+            let from = place.mode();
+            match mode {
+                "window" if from != "window" => place.back = from.into(),
+                "window" => {}
+                _ => place.back = mode.into(),
+            }
+            place.mode = mode.into();
+            from
+        };
+        self.save_settings();
+        self.notify();
+        Ok(from)
+    }
+
+    /// The terminals' window closed: the panel goes back where it stood before it, when it was
+    /// still in that window. Whether it went.
+    pub fn terminals_closed(&self) -> bool {
+        {
+            let mut inner = self.lock();
+            let place = &mut inner.settings.terminal_place;
+            if place.mode() != "window" {
+                return false;
+            }
+            place.mode = place.back().into();
+        }
+        self.save_settings();
+        self.notify();
+        true
+    }
+
+    /// Where the floating card stands and how large it is, as the UI last had it; none, where it
+    /// goes by itself. No page draws from it but the one that gave it, so no window is told.
+    pub fn set_terminal_card(&self, card: Option<[i32; 4]>) {
+        let card = card.map(|[right, bottom, width, height]| [right.clamp(0, 10_000), bottom.clamp(0, 10_000), width.clamp(200, 10_000), height.clamp(200, 10_000)]);
+        {
+            let mut inner = self.lock();
+            if inner.settings.terminal_place.card == card {
+                return;
+            }
+            inner.settings.terminal_place.card = card;
+        }
+        self.save_settings();
+    }
+
+    /// Where the terminals' window was left (`terminals.rs`). No page draws from it.
+    pub fn set_terminals_frame(&self, frame: [i32; 4]) {
+        {
+            let mut inner = self.lock();
+            if inner.settings.terminal_place.window == Some(frame) {
+                return;
+            }
+            inner.settings.terminal_place.window = Some(frame);
+        }
+        self.save_settings();
+    }
+
+    /// The terminals' window stays above other windows, or not: written and told to the windows.
+    pub fn set_terminals_on_top(&self, on: bool) {
+        {
+            let mut inner = self.lock();
+            if inner.settings.terminal_place.on_top == on {
+                return;
+            }
+            inner.settings.terminal_place.on_top = on;
+        }
+        self.save_settings();
+        self.notify();
+    }
+
     /// A layout put back after a quit or an update, under a `rev` the UI hasn't seen.
     pub(super) fn lay_terminals(&self, path: &str, saved: SavedLayout, terminal: impl Fn(usize) -> Option<u64>) -> bool {
         let Some(layout) = saved.restored(terminal, now_ms()) else {

@@ -191,6 +191,9 @@ export type Settings = {
   panelFoldOutside?: boolean;
   /** The terminal panel's height while it shows panes, as last left (lib/panes). */
   panesHeight?: number;
+  /** Where the terminal panel stands and the places it was left at; this Mac's own, changed
+   * through its own commands only (lib/panelStand). */
+  terminalPlace?: TerminalPlace;
   /** The Track page's own settings (lib/track: TrackSettings), read leniently. */
   track?: { circuit?: string; labels?: string; motion?: string; glow?: boolean };
   /** How the app is drawn (lib/theme). */
@@ -222,6 +225,18 @@ export type Settings = {
   open?: Partial<OpenSettings>;
   /** The coding agents, this Mac's own; changed through their own commands only. */
   agents?: AgentsSettings;
+};
+
+/** Where the terminal panel stands: along the window's bottom (`dock`), as a card over the page
+ * (`float`) or in a window of its own (`window`); where it goes back to when that window closes
+ * (`back`); the card's place (right and bottom from the page's edges, width, height, in CSS px) and
+ * the window's frame (the core's own), and whether that window stays above the others. */
+export type TerminalPlace = {
+  mode: "dock" | "float" | "window";
+  back: "dock" | "float";
+  card?: [number, number, number, number];
+  window?: [number, number, number, number];
+  onTop: boolean;
 };
 
 /** The chequered flag: a quit from Pitwall's own menus shows what is still open first. */

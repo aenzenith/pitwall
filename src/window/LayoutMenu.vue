@@ -22,6 +22,8 @@ const props = defineProps<{
   fits: (id: PresetId) => boolean;
   /** Equalize means something: panes are on. */
   panes: boolean;
+  /** A narrow row (a small card, a narrow window): the mark and the count alone. */
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{ pick: [id: PresetId]; even: [] }>();
@@ -192,7 +194,7 @@ onBeforeUnmount(hide);
       @keydown.down.prevent="show"
     >
       <Icon name="layout" :size="13" />
-      <span class="lmenu-text">{{ t("panes.layout") }}</span>
+      <span v-if="!compact" class="lmenu-text">{{ t("panes.layout") }}</span>
       <!-- One width whatever it says: the widest it can say sets it. -->
       <span class="lmenu-count">
         <span class="lmenu-sizer" aria-hidden="true">{{ t("panes.single") }}</span>

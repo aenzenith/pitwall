@@ -26,7 +26,8 @@ import type { Agent, Project, Turn } from "../lib/types";
  * The terminal panel's (window/TerminalPanel) is `plain`, its name alone on the panel's tab row,
  * and offers no "every project" (`every` false); its list also gives a project Claude works in
  * Claude's breathing ring (`working`), the one shown too, unless Claude waits on you there. A
- * picker in the window's lower half opens its list above it.
+ * picker in the window's lower half opens its list above it; the panel's always opens from its
+ * name's left edge, and no list ever runs past the window's edges.
  */
 const props = withDefaults(
   defineProps<{
@@ -92,7 +93,7 @@ const list = ref<HTMLElement | null>(null);
 const open = ref(false);
 /** The option under the pointer or the keyboard. */
 const active = ref(0);
-/** Under the picker, their right edges level; no taller than the window leaves. */
+/** Above or under the picker; no taller than the window leaves. */
 const place = ref<Record<string, string>>({});
 
 function optionId(index: number): string {
@@ -104,29 +105,40 @@ function move(index: number): void {
   void nextTick(() => list.value?.querySelector(".on")?.scrollIntoView({ block: "nearest" }));
 }
 
+/** How far in from the window's edges a list stays. */
+const EDGE = 8;
+
 function show(): void {
   const box = button.value?.getBoundingClientRect();
   if (!box || open.value) return;
   const above = box.top > window.innerHeight / 2;
-  place.value = above
-    ? {
-        bottom: `${window.innerHeight - box.top + 4}px`,
-        left: `${box.left}px`,
-        minWidth: `${box.width}px`,
-        maxHeight: `${Math.max(120, box.top - 16)}px`,
-      }
-    : {
-        top: `${box.bottom + 4}px`,
-        right: `${window.innerWidth - box.right}px`,
-        minWidth: `${box.width}px`,
-        maxHeight: `${Math.max(120, window.innerHeight - box.bottom - 16)}px`,
-      };
+  // The terminal panel's opens from its name's left edge, rightward, wherever the panel stands
+  // (the user's word); a page's under its picker, their right edges level.
+  const side: Record<string, string> = above || props.plain ? { left: `${box.left}px` } : { right: `${window.innerWidth - box.right}px` };
+  place.value = {
+    ...(above ? { bottom: `${window.innerHeight - box.top + 4}px` } : { top: `${box.bottom + 4}px` }),
+    ...side,
+    minWidth: `${box.width}px`,
+    maxHeight: `${Math.max(120, above ? box.top - 16 : window.innerHeight - box.bottom - 16)}px`,
+  };
   open.value = true;
   move(Math.max(0, options.value.findIndex((option) => option.path === props.scope)));
   window.addEventListener("pointerdown", onOutside, true);
   window.addEventListener("blur", hide);
   window.addEventListener("resize", hide);
-  void nextTick(() => list.value?.focus());
+  void nextTick(() => {
+    fit();
+    list.value?.focus();
+  });
+}
+
+/** A list that would run past the window's left or right edge comes in, whole, never cut. */
+function fit(): void {
+  const at = list.value?.getBoundingClientRect();
+  if (!at || (at.left >= EDGE && at.right <= window.innerWidth - EDGE)) return;
+  const next: Record<string, string> = { ...place.value, left: `${Math.max(EDGE, Math.min(at.left, window.innerWidth - EDGE - at.width))}px` };
+  delete next.right;
+  place.value = next;
 }
 
 function hide(): void {

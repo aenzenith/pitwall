@@ -12,7 +12,7 @@ use std::time::Duration;
 use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow, WebviewWindowBuilder};
 
-use crate::{tray, MAIN, SWITCHER};
+use crate::{tray, MAIN, SWITCHER, TERMINALS};
 
 /// Should a page never say it is ready, its window comes up after this anyway.
 const FALLBACK: Duration = Duration::from_secs(3);
@@ -23,6 +23,9 @@ const FALLBACK: Duration = Duration::from_secs(3);
 /// again once it is.
 const FOR_MAIN: [&str; 7] = ["reveal-project", "reveal-files", "reveal-output", "reveal-fuel", "reveal-terminal", "focus-terminal", "reveal-page"];
 
+/// The most events kept for another window's page (`wait_for`): past it, the oldest go.
+const MAX_KEPT: usize = 32;
+
 struct Pages {
     /// Windows whose page is up and listening.
     ready: Vec<String>,
@@ -30,9 +33,12 @@ struct Pages {
     waiting: Vec<String>,
     /// One of `FOR_MAIN` with its payload, sent before the main window's page was listening.
     held: Option<(&'static str, String)>,
+    /// Events for another window's page (the terminals' window's), with their payloads as JSON,
+    /// in the order they came, kept until that page listens (`wait_for`).
+    kept: Vec<(String, &'static str, String)>,
 }
 
-static PAGES: Mutex<Pages> = Mutex::new(Pages { ready: Vec::new(), waiting: Vec::new(), held: None });
+static PAGES: Mutex<Pages> = Mutex::new(Pages { ready: Vec::new(), waiting: Vec::new(), held: None, kept: Vec::new() });
 
 fn pages() -> std::sync::MutexGuard<'static, Pages> {
     PAGES.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -172,23 +178,51 @@ fn take_waiting(label: &str) -> bool {
     pages.waiting.len() != before
 }
 
+/// Keeps `event` for the page of the window `label` while that page isn't listening yet, and
+/// sends it once it is (`ready`), after those kept before it. Whether it was kept: a page that
+/// listens already is the caller's to send it to. `payload` is JSON.
+pub fn wait_for(label: &str, event: &'static str, payload: &str) -> bool {
+    let mut pages = pages();
+    if is_ready(&pages, label) {
+        return false;
+    }
+    if pages.kept.iter().filter(|(to, _, _)| to == label).count() >= MAX_KEPT {
+        if let Some(oldest) = pages.kept.iter().position(|(to, _, _)| to == label) {
+            pages.kept.remove(oldest);
+        }
+    }
+    pages.kept.push((label.to_string(), event, payload.to_string()));
+    true
+}
+
+/// The window `label` is gone, or no longer wanted: its page listens no more, and nothing waits
+/// for it.
+pub fn forget(label: &str) {
+    let mut pages = pages();
+    pages.ready.retain(|l| l != label);
+    pages.waiting.retain(|l| l != label);
+    pages.kept.retain(|(to, _, _)| to != label);
+}
+
 /// A page is up and listening: what it missed is sent again, and its window comes up if it was
 /// asked for meanwhile.
 pub fn ready<R: Runtime>(app: &AppHandle<R>, label: &str) {
-    let held = {
+    let (held, kept) = {
         let mut pages = pages();
         if !is_ready(&pages, label) {
             pages.ready.push(label.to_string());
         }
-        if label == MAIN {
-            pages.held.take()
-        } else {
-            None
-        }
+        let held = if label == MAIN { pages.held.take() } else { None };
+        let (kept, others): (Vec<_>, Vec<_>) = std::mem::take(&mut pages.kept).into_iter().partition(|(to, _, _)| to == label);
+        pages.kept = others;
+        (held, kept)
     };
 
     if let Some((event, payload)) = held {
         let _ = app.emit_str_to(MAIN, event, payload);
+    }
+    for (_, event, payload) in kept {
+        let _ = app.emit_str_to(label, event, payload);
     }
     if take_waiting(label) {
         present(app, label);
@@ -199,6 +233,7 @@ fn present<R: Runtime>(app: &AppHandle<R>, label: &str) {
     match label {
         MAIN => tray::present_main(app),
         SWITCHER => tray::present_switcher(app),
+        TERMINALS => crate::terminals::present(app),
         _ => {}
     }
 }

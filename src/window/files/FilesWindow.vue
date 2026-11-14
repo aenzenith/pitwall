@@ -5,6 +5,7 @@ import Icon from "../../components/Icon.vue";
 import StatusIcon from "../../components/StatusIcon.vue";
 import { absolutePath, changesOf, closeFiles, closeShownTab, COMMIT_TAB, forgetFiles, minimizeFiles, peekFiles, raiseFiles, refreshFiles, type FilesWin, type Rect } from "../../lib/explorer";
 import { gitLine } from "../../lib/format";
+import { holding, moving } from "../../lib/holding";
 import { t } from "../../lib/i18n";
 import { useNativeMenu, type MenuEntry, type MenuPoint } from "../../lib/nativeMenu";
 import { closeChord, isMac, isWindows, TITLE_BAR } from "../../lib/platform";
@@ -88,6 +89,8 @@ function begin(event: PointerEvent, kind: "move" | Edge): void {
   drag = { kind, x: event.clientX, y: event.clientY, from: { ...rect.value } };
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   event.preventDefault();
+  holding(true);
+  if (kind === "move") moving(true);
 }
 
 function move(event: PointerEvent): void {
@@ -115,6 +118,8 @@ function move(event: PointerEvent): void {
 
 function end(): void {
   drag = null;
+  holding(false);
+  moving(false);
 }
 
 const onResize = () => {
@@ -131,6 +136,12 @@ function beginSplit(event: PointerEvent): void {
   split = { x: event.clientX, from: win.tree };
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   event.preventDefault();
+  holding(true);
+}
+
+function endSplit(): void {
+  split = null;
+  holding(false);
 }
 
 function moveSplit(event: PointerEvent): void {
@@ -345,8 +356,8 @@ function winLeave(el: Element, done: () => void): void {
           :aria-valuenow="win.tree"
           @pointerdown="beginSplit"
           @pointermove="moveSplit"
-          @pointerup="split = null"
-          @pointercancel="split = null"
+          @pointerup="endSplit"
+          @pointercancel="endSplit"
           @keydown="splitKey"
         ></div>
         <FileViewer ref="viewer" :files="files" :reveal-label="revealLabel" @menu="(event, file, head) => itemMenu(event, file, false, head)" />

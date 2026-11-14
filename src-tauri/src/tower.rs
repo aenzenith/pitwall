@@ -40,16 +40,16 @@ pub struct Rect {
 }
 
 impl Rect {
-    fn of([x, y, w, h]: [i32; 4]) -> Self {
+    pub(crate) fn of([x, y, w, h]: [i32; 4]) -> Self {
         Self { x: f64::from(x), y: f64::from(y), w: f64::from(w), h: f64::from(h) }
     }
 
-    fn rounded(self) -> [i32; 4] {
+    pub(crate) fn rounded(self) -> [i32; 4] {
         [self.x.round() as i32, self.y.round() as i32, self.w.round() as i32, self.h.round() as i32]
     }
 
     /// Moved as little as it takes to lie inside `area`; one larger than it starts at its top left.
-    fn within(self, area: Rect) -> Self {
+    pub(crate) fn within(self, area: Rect) -> Self {
         let x = self.x.min(area.x + area.w - self.w).max(area.x);
         let y = self.y.min(area.y + area.h - self.h).max(area.y);
         Self { x, y, ..self }
@@ -63,7 +63,7 @@ impl Rect {
     }
 
     /// It and `other` cover some of the same ground (touching edges don't).
-    fn overlaps(self, other: Rect) -> bool {
+    pub(crate) fn overlaps(self, other: Rect) -> bool {
         let (wide, tall) = self.shared(other);
         wide > 0.0 && tall > 0.0
     }
@@ -99,7 +99,7 @@ fn rooms(area: Rect, dock: Rect) -> [Rect; 4] {
 /// into the nearest of the rooms beside it (`rooms`) that it fits in, as little as it takes. One
 /// that fits in none (a list as tall as the screen over a Dock at its bottom) goes into the room
 /// that keeps most of it, cut to that room's size.
-fn clear(rect: Rect, area: Rect, dock: Option<Rect>) -> Rect {
+pub(crate) fn clear(rect: Rect, area: Rect, dock: Option<Rect>) -> Rect {
     let Some(dock) = dock.filter(|dock| rect.overlaps(*dock)) else {
         return rect;
     };
@@ -135,6 +135,21 @@ impl Hold {
     }
 }
 
+/// The screen that holds most of `rect`, of those it lies on enough to be taken hold of there
+/// (`HOLD`); none when it lies on no screen any more (a display taken away, the layout changed).
+pub(crate) fn screen_of(rect: Rect, screens: &[Screen]) -> Option<Screen> {
+    let held = |screen: &&Screen| {
+        let (wide, tall) = rect.shared(screen.frame);
+        wide >= HOLD.min(rect.w) && tall >= HOLD.min(rect.h) && wide > 0.0 && tall > 0.0
+    };
+    let most = |screen: &&Screen| {
+        let (wide, tall) = rect.shared(screen.frame);
+        (wide * tall) as i64
+    };
+    // Of two that hold as much, the first: `max_by_key` would take the last.
+    screens.iter().filter(held).rev().max_by_key(most).copied()
+}
+
 /// Where a tower of `size` stands, given where it stood (`from`: where it is, or where it was
 /// left before the last quit) and the screens there are now, the main one first. Always wholly
 /// inside one screen's free area and off its Dock, beside which it may stand (`clear`):
@@ -156,18 +171,7 @@ pub fn settle(from: Option<Rect>, size: (f64, f64), screens: &[Screen], margin: 
     let sized = |area: Rect| (size.0.round().max(1.0).min(area.w), size.1.round().max(1.0).min(area.h));
     let whole = |rect: Rect| Rect { x: rect.x.round(), y: rect.y.round(), ..rect };
 
-    let home = from.and_then(|from| {
-        let held = |screen: &&Screen| {
-            let (wide, tall) = from.shared(screen.frame);
-            wide >= HOLD.min(from.w) && tall >= HOLD.min(from.h) && wide > 0.0 && tall > 0.0
-        };
-        let most = |screen: &&Screen| {
-            let (wide, tall) = from.shared(screen.frame);
-            (wide * tall) as i64
-        };
-        // Of two that hold as much, the first: `max_by_key` would take the last.
-        screens.iter().filter(held).rev().max_by_key(most).map(|screen| (*screen, from))
-    });
+    let home = from.and_then(|from| screen_of(from, screens).map(|screen| (screen, from)));
 
     Some(match home {
         Some((Screen { area, dock, .. }, from)) => {
@@ -326,7 +330,7 @@ fn arrange<R: Runtime>(window: &WebviewWindow<R>, size: (f64, f64), left_at: Opt
 /// Every screen in physical pixels, the main one first. The taskbar's whole band stays out of
 /// the free area: its own rectangle isn't asked for.
 #[cfg(not(target_os = "macos"))]
-fn screens<R: Runtime>(app: &AppHandle<R>) -> Vec<Screen> {
+pub(crate) fn screens<R: Runtime>(app: &AppHandle<R>) -> Vec<Screen> {
     let rect = |x: i32, y: i32, w: u32, h: u32| Rect { x: f64::from(x), y: f64::from(y), w: f64::from(w), h: f64::from(h) };
     let screen = |monitor: &tauri::Monitor| {
         let (at, size, area) = (monitor.position(), monitor.size(), monitor.work_area());
@@ -342,9 +346,9 @@ fn screens<R: Runtime>(app: &AppHandle<R>) -> Vec<Screen> {
     all
 }
 
-/// Where the tower stands now.
+/// Where the tower (or another of Pitwall's windows) stands now. On the main thread on macOS.
 #[cfg(target_os = "macos")]
-fn frame<R: Runtime>(window: &WebviewWindow<R>) -> Option<Rect> {
+pub(crate) fn frame<R: Runtime>(window: &WebviewWindow<R>) -> Option<Rect> {
     let mtm = objc2::MainThreadMarker::new()?;
     let ns_window = window.ns_window().ok()? as *const objc2_app_kit::NSWindow;
     // SAFETY: as in `tray::focus_alone`: this window's NSWindow, on the main thread (the marker).
@@ -353,7 +357,7 @@ fn frame<R: Runtime>(window: &WebviewWindow<R>) -> Option<Rect> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn frame<R: Runtime>(window: &WebviewWindow<R>) -> Option<Rect> {
+pub(crate) fn frame<R: Runtime>(window: &WebviewWindow<R>) -> Option<Rect> {
     let (at, size) = (window.outer_position().ok()?, window.outer_size().ok()?);
     Some(Rect { x: f64::from(at.x), y: f64::from(at.y), w: f64::from(size.width), h: f64::from(size.height) })
 }
@@ -441,7 +445,7 @@ fn spaces<R: Runtime>(window: &WebviewWindow<R>, all: bool) {
 /// AppKit's screens and frames in the tower's own space: points, the top counted downwards
 /// from the main screen's top (AppKit counts upwards from its bottom).
 #[cfg(target_os = "macos")]
-mod mac {
+pub(crate) mod mac {
     use std::ffi::CStr;
 
     use objc2::MainThreadMarker;

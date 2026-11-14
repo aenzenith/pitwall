@@ -300,6 +300,49 @@ pub fn set_panes_height(state: State<'_, AppState>, height: u32) {
     state.core.set_panes_height(height);
 }
 
+/// Where the terminal panel stands: `dock`, `float` or `window`, taking `panel` (its page's
+/// state, the UI's own) along; `at`, a point of the screen it was let go at, places its window
+/// there. Async, as is every command that can make a window.
+#[tauri::command]
+pub async fn set_terminal_place(app: AppHandle, mode: String, panel: Option<String>, at: Option<[i32; 2]>) -> Result<(), String> {
+    crate::terminals::set_place(&app, &mode, panel, at)
+}
+
+/// Where the floating terminal card stands and how large it is: right, bottom, width, height.
+#[tauri::command]
+pub fn set_terminal_card(state: State<'_, AppState>, card: Option<[i32; 4]>) {
+    state.core.set_terminal_card(card);
+}
+
+/// The panel's state its window's page starts from; none when nothing was handed over.
+#[tauri::command]
+pub fn panel_state() -> Option<String> {
+    crate::terminals::panel()
+}
+
+/// The terminals' window's page leaves its panel's state, for a reload and for the main window
+/// when the panel goes back. Only that page may.
+#[tauri::command]
+pub fn keep_panel_state(window: tauri::WebviewWindow, panel: String) {
+    if window.label() == crate::TERMINALS {
+        crate::terminals::keep_panel(panel);
+    }
+}
+
+/// Passes something the main window asks of the panel on to the terminals' window (`ask`,
+/// JSON), which comes up with the keyboard when `show`. Async: it can make that window.
+#[tauri::command]
+pub async fn panel_ask(app: AppHandle, ask: String, show: bool) {
+    crate::terminals::ask(&app, &ask, show);
+}
+
+/// The terminals' window stays above other windows, or not.
+#[tauri::command]
+pub fn set_terminals_on_top(app: AppHandle, state: State<'_, AppState>, on: bool) {
+    state.core.set_terminals_on_top(on);
+    crate::terminals::apply_on_top(&app, on);
+}
+
 /// How the panel lays a project's terminals out; none: one at a time.
 #[tauri::command]
 pub fn set_terminal_layout(state: State<'_, AppState>, path: String, layout: Option<crate::core::TerminalLayout>) {
@@ -598,10 +641,16 @@ pub async fn open_window(app: AppHandle) {
     tray::show_main(&app);
 }
 
-/// A window's page is up and listening; a window made on first use comes up now.
+/// A window's page is up and listening; a window made on first use comes up now. The main
+/// window's brings the terminals' window along when the panel stands there, made off this
+/// thread: made from a synchronous command, WebView2 deadlocks (wry#583).
 #[tauri::command]
 pub fn window_ready(window: tauri::WebviewWindow) {
     crate::windows::ready(window.app_handle(), window.label());
+    if window.label() == crate::MAIN {
+        let app = window.app_handle().clone();
+        std::thread::spawn(move || crate::terminals::main_ready(&app));
+    }
 }
 
 /// The Fuel page: Claude's plan limits and today's tokens, as last read.

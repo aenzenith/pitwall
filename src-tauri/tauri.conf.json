@@ -74,6 +74,19 @@
         "focus": false,
         "focusable": false,
         "acceptFirstMouse": true
+      },
+      {
+        "label": "terminals",
+        "create": false,
+        "title": "Pitwall",
+        "width": 900,
+        "height": 560,
+        "minWidth": 520,
+        "minHeight": 300,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

@@ -9,12 +9,15 @@ import { agentOn } from "../lib/agents";
 import { depJobName, depJobs } from "../lib/deps";
 import { commandFaded } from "../lib/format";
 import { shellRequest } from "../lib/flag";
+import { holding, moving as movingCard } from "../lib/holding";
 import { t } from "../lib/i18n";
 import { plainText, shownLines } from "../lib/outputLines";
 import { useOutputSearch } from "../lib/outputSearch";
 import { useOutputStream, type OutputLine } from "../lib/outputStream";
+import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { openOrAtWork } from "../lib/pages";
 import {
+  cardRect,
   chooseTab,
   chosenTab,
   foldPanel,
@@ -43,7 +46,9 @@ import {
   terminalRequest,
   useResizer,
   PANEL_MIN,
+  type PanelStand,
 } from "../lib/panel";
+import { keepCard, standPanel } from "../lib/panelStand";
 import {
   canAddPane,
   canSplit,
@@ -110,19 +115,156 @@ const REQUEST_MS = 5_000;
  * row. Its project is the one the page shown follows (lib/panel: `followProject`), or the one
  * picked at the row's start. One height and one collapsed state for every page (lib/panel).
  */
-const props = defineProps<{ project: Project }>();
+const props = withDefaults(defineProps<{ project: Project; stand?: PanelStand }>(), { stand: "dock" });
+/** In its own window, ⌘W with nothing left to close: the window goes (TerminalsApp). */
+const emit = defineEmits<{ empty: [] }>();
+
+/** Along the window's bottom, as a card over the page, or in a window of its own (lib/panel:
+ * `panelStand`). */
+const docked = computed(() => props.stand === "dock");
+const floating = computed(() => props.stand === "float");
+const windowed = computed(() => props.stand === "window");
+/** The margins around the terminal: the docked panel's are the page's, the card's and the window's
+ * narrower. */
+const edge = computed(() => (docked.value ? 20 : 12));
 
 /** Room above the panel that always stays: the page's bar. */
 const HEADER = 56;
-/** One height for one terminal at a time, another for panes (lib/panes). */
+
+/* ---------- the floating card ---------- */
+
+/** The page's room the card stands in (the panel's parent), as last measured: its size, where it
+ * is in the window (the card is drawn there, over the sidebar too), and how far the sidebar left of
+ * it reaches, which the card may go over as a Files window does (the user's word). */
+const area = ref({ w: 0, h: 0, x: 0, y: 0, side: 0 });
+/** Where the card stands until it is moved: the page's bottom right corner, this far in. */
+const CARD_INSET = 16;
+const CARD_DEFAULT = { width: 820, height: 440 };
+const CARD_LEAST = { width: 420, height: 160 };
+/** A card let go this near a line 12 px in from the page's edges, or the window's left edge over
+ * the sidebar, goes onto it. */
+const SNAP = 8;
+const SNAP_INSET = 12;
+/** Folded, the card keeps its row alone, where it stands. */
+const CARD_ROW = 36;
+/** Of a card taken past the window's edges, what stays in sight: this much of its width. */
+const CARD_SHOWS = 120;
+/** Of the row's empty part, what stays in sight past the window's left edge, to take it back by. */
+const CARD_GRAB = 40;
+/** How far in from the card's left the row's empty part ends, as last measured; 0 when it is too
+ * narrow to take the card by. */
+const grabEnd = ref(0);
+
+/** The least the card can be: with panes, what they need. */
+function cardLeast(): { w: number; h: number } {
+  const tree = layout.value?.tree;
+  return { w: CARD_LEAST.width, h: tree ? Math.max(CARD_LEAST.height, minSize(tree).h + PANES_CHROME) : CARD_LEAST.height };
+}
+
+function clamp(value: number, least: number, most: number): number {
+  return Math.min(Math.max(value, least), Math.max(least, most));
+}
+
+/**
+ * Where a card `width` wide may stand, as a Files window may: past the window's left, right and
+ * bottom edges too (the user's word), as long as `CARD_SHOWS` of it and its row stay in sight, and
+ * something to take it back by: past the right, its handle on the left; past the left, the end of
+ * the row's empty part (`grabEnd`), or nothing past it when that is too narrow. Never above the
+ * page.
+ */
+function cardRoom(width: number): { left: [number, number]; top: [number, number] } {
+  const { w, h, side } = area.value;
+  const pastLeft = grabEnd.value > 0 ? Math.min(grabEnd.value - CARD_GRAB, width - CARD_SHOWS) : 0;
+  return { left: [-side - Math.max(0, pastLeft), w - Math.min(CARD_SHOWS, width)], top: [0, h - CARD_ROW - 8] };
+}
+
+/** Where the row's empty part ends in the card (`grabEnd`), measured as the row is laid out. */
+function measureGrab(): void {
+  const grow = tabsRow.value?.querySelector<HTMLElement>(":scope > .grow")?.getBoundingClientRect();
+  const card = panel.value?.getBoundingClientRect();
+  grabEnd.value = grow && card && grow.width >= CARD_GRAB ? Math.round(grow.right - card.left) : 0;
+}
+
+/** The card's box in the page's room, from its place (lib/panel: `cardRect`) kept where it may
+ * stand (`cardRoom`; a left below 0 is over the sidebar). */
+const cardBox = computed(() => {
+  const { w, h, side } = area.value;
+  const kept = cardRect.value;
+  const least = cardLeast();
+  const width = clamp(kept?.width ?? CARD_DEFAULT.width, least.w, w + side);
+  const height = clamp(kept?.height ?? CARD_DEFAULT.height, least.h, h);
+  const room = cardRoom(width);
+  const left = clamp(w - (kept?.right ?? CARD_INSET) - width, ...room.left);
+  const top = clamp(h - (kept?.bottom ?? CARD_INSET) - height, ...room.top);
+  return { left, top, width, height };
+});
+
+/** The card to `box`, kept by its distance from the page's right and bottom edges, so that it keeps
+ * its corner as the window is resized; below 0 past those edges (the core keeps 0 for the next
+ * start, which shows it whole). */
+function setCard(box: { left: number; top: number; width: number; height: number }): void {
+  const { w, h } = area.value;
+  cardRect.value = { right: w - box.left - box.width, bottom: h - box.top - box.height, width: box.width, height: box.height };
+}
+
+/** How wide a card may open: the page, 12 px in from its edges; over the sidebar too only where the
+ * page is narrower than the least card. */
+function cardOpenRoom(): { start: number; end: number } {
+  const { w, side } = area.value;
+  const start = w - 2 * SNAP_INSET >= cardLeast().w ? SNAP_INSET : SNAP_INSET - side;
+  return { start, end: w - SNAP_INSET };
+}
+
+/**
+ * A card opened (the panel set floating, or Pitwall's page coming up with it) stands whole in the
+ * page, never cut by the window's edges: no wider or taller than the page, moved in where it would
+ * go past it (the user's word, 14 Nov: "kesilmiş açılmasını istemiyorum"). Only a drag takes it
+ * past the edges (`cardRoom`). Its place is kept as it ends.
+ */
+function fitCard(): void {
+  const { w, h } = area.value;
+  if (w <= 0 || h <= 0) return;
+  const box = cardBox.value;
+  const least = cardLeast();
+  const { start, end } = cardOpenRoom();
+  const width = Math.max(least.w, Math.min(box.width, end - start));
+  const tall = Math.max(least.h, Math.min(box.height, h - 2 * SNAP_INSET));
+  const left = clamp(box.left, start, end - width);
+  const top = clamp(box.top, SNAP_INSET, h - SNAP_INSET - tall);
+  if (left === box.left && top === box.top && width === box.width && tall === box.height) return;
+  setCard({ left, top, width, height: tall });
+  keepCard();
+}
+
+/** The panel's own height in its window, as last measured. */
+const ownHeight = ref(0);
+
+/** One height for one terminal at a time, another for panes (lib/panes), along the window's bottom;
+ * the card's own, or the window's. */
 const height = computed({
-  get: () => (paneLayouts.value[props.project.path] ? panesHeight.value : terminalHeight.value),
+  get: () => {
+    if (floating.value) return cardBox.value.height;
+    if (windowed.value) return ownHeight.value;
+    return paneLayouts.value[props.project.path] ? panesHeight.value : terminalHeight.value;
+  },
   set: (value: number) => {
-    if (paneLayouts.value[props.project.path]) panesHeight.value = value;
+    if (floating.value) {
+      // A card grows up from its bottom edge, which stays where it stands, and down only past the
+      // page's top.
+      const box = cardBox.value;
+      const { h } = area.value;
+      const tall = Math.min(value, h);
+      setCard({ ...box, top: clamp(box.top + box.height - tall, 0, h - tall), height: tall });
+    } else if (windowed.value) return;
+    else if (paneLayouts.value[props.project.path]) panesHeight.value = value;
     else terminalHeight.value = value;
   },
 });
-const collapsed = terminalCollapsed;
+/** In its own window the panel never folds. */
+const collapsed = computed({
+  get: () => !windowed.value && terminalCollapsed.value,
+  set: (folded: boolean) => (terminalCollapsed.value = folded),
+});
 
 const panel = ref<HTMLElement | null>(null);
 const body = ref<HTMLElement | null>(null);
@@ -146,6 +288,20 @@ const layout = computed(() => paneLayouts.value[props.project.path] ?? null);
 const panesOn = computed(() => layout.value !== null);
 /** The panes' room, as they last measured it. */
 const paneRoom = ref({ w: 0, h: 0 });
+/** The panel's height for its panes: the docked panel keeps one of its own for them, the card and
+ * the window theirs. */
+const panesTall = computed({
+  get: () => (docked.value ? panesHeight.value : height.value),
+  set: (value: number) => {
+    if (docked.value) panesHeight.value = value;
+    else height.value = value;
+  },
+});
+/** How tall panes would have it: as tall as the window is; elsewhere at least their default, the
+ * panel growing for them. */
+function panesWant(): number {
+  return windowed.value ? height.value : Math.max(panesTall.value, PANES_HEIGHT);
+}
 
 /** The tabs the row shows: every terminal, or with panes those in none of them, waiting there to
  * be clicked or dragged into one. */
@@ -232,14 +388,88 @@ const resizer = useResizer(
 );
 const dragging = resizer.dragging;
 
-/** Collapsed, only the tab row shows; the chosen height comes back on expanding. */
-const shownHeight = computed(() => (collapsed.value ? COLLAPSED_HEIGHT : height.value));
+/** Collapsed, only the tab row shows; the chosen height comes back on expanding. A card minimised
+ * keeps its size: it is in the sidebar (`tucked`). */
+const shownHeight = computed(() => (collapsed.value && !floating.value ? COLLAPSED_HEIGHT : height.value));
+/** Where the panel is drawn: along the bottom at its height, the card in its box, the window whole. */
+const panelStyle = computed(() => {
+  if (windowed.value) return {};
+  if (!floating.value) return { height: `${shownHeight.value}px` };
+  const box = cardBox.value;
+  const { x, y } = area.value;
+  return { left: `${x + box.left}px`, top: `${y + box.top}px`, width: `${box.width}px`, height: `${shownHeight.value}px` };
+});
 /** While the panel animates, the shell keeps its size: no resize per frame, no squeeze. */
 const animating = ref(false);
 let settle: ReturnType<typeof setTimeout> | undefined;
 
 function toggleCollapsed(): void {
+  if (windowed.value) return;
   collapsed.value = !collapsed.value;
+}
+
+/* ---------- a card minimised into the sidebar ---------- */
+
+/** A card minimised goes into its entry in the sidebar, as a Files window does, and grows back out
+ * of it (the user's word, 14 Nov: "dosya pencerelerindeki gibi sidebara küçültsün"); its place and
+ * size stay as they were. Meanwhile it is hidden, not taken down: its terminals stay attached. */
+const cardMotion = ref<"in" | "out" | null>(null);
+let cardAnimation: Animation | null = null;
+const tucked = computed(() => floating.value && collapsed.value && cardMotion.value !== "in");
+
+/** The card's entry in the sidebar (WindowApp: `data-terminal-card`), where it folds into. */
+function cardEntry(): DOMRect {
+  const drawn = document.querySelector<HTMLElement>("[data-terminal-card]");
+  return drawn?.offsetWidth ? drawn.getBoundingClientRect() : new DOMRect(16, innerHeight / 2, 200, 32);
+}
+
+/** The card's box drawn as `to`: moved and scaled from its top left corner. */
+function toward(from: DOMRect, to: DOMRect): string {
+  return `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width}, ${to.height / from.height})`;
+}
+
+function foldCard(into: boolean): void {
+  const el = panel.value;
+  cardAnimation?.cancel();
+  cardAnimation = null;
+  if (!el || stillMotion()) {
+    cardMotion.value = null;
+    return;
+  }
+  cardMotion.value = into ? "in" : "out";
+  const run = (): void => {
+    const box = el.getBoundingClientRect();
+    const entry = toward(box, cardEntry());
+    const motion = into
+      ? el.animate(
+          [
+            { transformOrigin: "0 0", transform: "none", opacity: 1 },
+            { transformOrigin: "0 0", transform: entry, opacity: 0.5, offset: 0.85 },
+            { transformOrigin: "0 0", transform: entry, opacity: 0 },
+          ],
+          { duration: 260, easing: "cubic-bezier(0.5, 0, 0.75, 0)", fill: "forwards" },
+        )
+      : el.animate(
+          [
+            { transformOrigin: "0 0", transform: entry, opacity: 0 },
+            { transformOrigin: "0 0", transform: entry, opacity: 0.6, offset: 0.15 },
+            { transformOrigin: "0 0", transform: "none", opacity: 1 },
+          ],
+          { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+        );
+    cardAnimation = motion;
+    const end = (): void => {
+      if (cardAnimation !== motion) return;
+      cardAnimation = null;
+      cardMotion.value = null;
+      // Hidden first (the next render), then the animation's last frame let go.
+      void nextTick(() => motion.cancel());
+    };
+    motion.onfinish = end;
+  };
+  // Folding, from where it stands now; growing, once it is drawn again.
+  if (into) run();
+  else void nextTick(run);
 }
 
 // Collapsed or expanded, from here or from a page (lib/panel: `foldPanel`, an output asked for):
@@ -250,19 +480,99 @@ watch(
   (folded) => {
     if (folded && body.value?.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     slide();
+    if (floating.value) foldCard(folded);
   },
   { flush: "sync" },
 );
 
-/** The panel's height animates (folding, a double click on the handle): the shell is told the size
- * it ends at. */
-function slide(): void {
+/** The panel's height animates (folding, a double click on the handle), or its box (going to another
+ * stand): the shell is told the size it ends at. */
+function slide(ms = COLLAPSE_MS): void {
   animating.value = true;
   clearTimeout(settle);
   settle = setTimeout(() => {
     animating.value = false;
     if (!collapsed.value && active.value && !panesOn.value) fitView(active.value.id);
-  }, COLLAPSE_MS + 40);
+  }, ms + 40);
+}
+
+/* ---------- from the bottom to a card and back ---------- */
+
+/** How long the panel takes to glide from one stand's box to the other's. */
+const MORPH_MS = 280;
+/** While it glides: its box on the window, from where it was to where it goes. */
+const morph = ref<Record<string, string> | null>(null);
+let morphTimer: ReturnType<typeof setTimeout> | undefined;
+
+function onWindow(box: DOMRect): Record<string, string> {
+  return { position: "fixed", left: `${box.left}px`, top: `${box.top}px`, right: "auto", bottom: "auto", width: `${box.width}px`, height: `${box.height}px`, maxHeight: "none" };
+}
+
+/** How long a card pulled up off the bottom takes to come from the panel's box to its own. */
+const LIFT_MS = 260;
+let morphFrame = 0;
+
+function stillMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// Docked, then a card (its button, Settings, the right-click menu), or a card back along the
+// bottom (those, or let go in the band): the panel glides from the box it had to its new one rather
+// than jumping there (the user's word). Pulled up by the pointer, it glides as `liftGlide` says.
+watch(
+  () => props.stand,
+  (to, from) => {
+    // A card opened stands whole in the page (`fitCard`), not one pulled up by the pointer.
+    if (to === "float" && !move) fitCard();
+    const el = panel.value;
+    if (!el || !settled.value || to === "window" || from === "window" || move?.moving || sizing) return;
+    if (stillMotion()) return;
+    cancelAnimationFrame(morphFrame);
+    const before = el.getBoundingClientRect();
+    void nextTick(() => {
+      const after = panel.value?.getBoundingClientRect();
+      if (!after) return;
+      clearTimeout(morphTimer);
+      slide(MORPH_MS);
+      morph.value = { ...onWindow(before), transition: "none" };
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const ease = `${MORPH_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+          morph.value = { ...onWindow(after), transition: ["left", "top", "width", "height", "border-radius"].map((what) => `${what} ${ease}`).join(", ") };
+        }),
+      );
+      morphTimer = setTimeout(() => (morph.value = null), MORPH_MS + 60);
+    });
+  },
+  { flush: "pre" },
+);
+
+/**
+ * Pulled up off the bottom: the panel comes from its box along the bottom (`from`) to the card's
+ * under the pointer frame by frame, rather than being a card at once (the user's word). Each frame
+ * goes toward where the card is then, so a pointer that goes on moving takes it along, and it ends
+ * exactly under the pointer.
+ */
+function liftGlide(from: DOMRect): void {
+  cancelAnimationFrame(morphFrame);
+  clearTimeout(morphTimer);
+  slide(LIFT_MS);
+  const start = performance.now();
+  const step = (): void => {
+    const done = Math.min(1, (performance.now() - start) / LIFT_MS);
+    if (done >= 1 || props.stand === "window") {
+      morph.value = null;
+      return;
+    }
+    const eased = 1 - (1 - done) ** 3;
+    const mix = (a: number, b: number): number => a + (b - a) * eased;
+    const box = cardBox.value;
+    const { x, y } = area.value;
+    const at = new DOMRect(mix(from.left, x + box.left), mix(from.top, y + box.top), mix(from.width, box.width), mix(from.height, shownHeight.value));
+    morph.value = { ...onWindow(at), transition: "none" };
+    morphFrame = requestAnimationFrame(step);
+  };
+  step();
 }
 
 /* ---------- the outputs ---------- */
@@ -463,12 +773,12 @@ const sliding = ref(false);
  * panel's width, measured) without moving, so coming to the page shows it as it was. */
 const settled = ref(false);
 /** What the terminal keeps beside the history, however wide that is dragged; and the margins
- * around the two (20 left, 12 between, 20 right). */
+ * around the two (the edge left, 12 between, the edge right). */
 const TERMINAL_ROOM = 320;
-const MARGINS = 52;
+const margins = computed(() => edge.value * 2 + 12);
 const panelWidth = ref(0);
 /** The history's width as the panel allows it: what it was dragged to, the terminal's room kept. */
-const widest = computed(() => Math.max(HISTORY_MIN, panelWidth.value - TERMINAL_ROOM - MARGINS));
+const widest = computed(() => Math.max(HISTORY_MIN, panelWidth.value - TERMINAL_ROOM - margins.value));
 const historyShown = computed(() => Math.min(historyWidth.value, widest.value));
 /** The room opens in this long; closing, it waits as long again for the list to fade (CSS). */
 const SLIDE_MS = COLLAPSE_MS + 120;
@@ -526,6 +836,8 @@ function startWidth(event: PointerEvent): void {
   widthDrag = { x: event.clientX, width: historyShown.value };
   resizing.value = true;
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  event.preventDefault();
+  holding(true);
 }
 
 function moveWidth(event: PointerEvent): void {
@@ -535,6 +847,7 @@ function moveWidth(event: PointerEvent): void {
 function endWidth(): void {
   widthDrag = null;
   resizing.value = false;
+  holding(false);
 }
 
 function nudgeWidth(event: KeyboardEvent): void {
@@ -710,15 +1023,18 @@ function openAgent(agent: Agent | null = null, account: string | null = null): v
 const fresh = new Set<number>();
 
 /** The stage's width: the panel's, less its margins and the history beside it. */
-const stageWidth = computed(() => Math.max(0, panelWidth.value - 20 - (beside.value ? historyShown.value + 32 : 20)));
+const stageWidth = computed(() => Math.max(0, panelWidth.value - edge.value - (beside.value ? historyShown.value + 12 + edge.value : edge.value)));
 
 /** The room panes would have with the panel `tall` px high. */
 function roomAt(tall: number): { w: number; h: number } {
   return { w: stageWidth.value, h: tall - PANES_CHROME };
 }
 
-/** How tall the panel can get: up to the page's bar. */
+/** How tall the panel can get: along the bottom, up to the page's bar; the card, the page's whole
+ * room; in its window, as tall as it is. */
 function tallest(): number {
+  if (floating.value) return area.value.h || window.innerHeight;
+  if (windowed.value) return ownHeight.value || window.innerHeight;
   return (panel.value?.parentElement?.clientHeight ?? window.innerHeight) - HEADER;
 }
 
@@ -904,7 +1220,7 @@ watch(
   (least) => {
     if (!least) return;
     const need = least + PANES_CHROME;
-    if (panesHeight.value < need) panesHeight.value = Math.min(need, Math.max(PANEL_MIN, tallest()));
+    if (panesTall.value < need) panesTall.value = Math.min(need, Math.max(PANEL_MIN, tallest()));
   },
   { immediate: true },
 );
@@ -922,7 +1238,7 @@ const layoutCount = computed(() => {
   const zoomed = filling ? panes.findIndex((pane) => pane.key === filling) : -1;
   return zoomed >= 0 ? `${zoomed + 1}/${panes.length}` : String(panes.length);
 });
-const menuRoom = computed(() => roomAt(Math.max(panesHeight.value, PANES_HEIGHT)));
+const menuRoom = computed(() => roomAt(panesWant()));
 
 /** A layout fits the panel at its tallest, with the terminals it would hold. */
 function fitsPreset(id: PresetId): boolean {
@@ -956,10 +1272,10 @@ function pickLayout(id: PresetId): void {
   }
   const order = presetOrder(PRESETS.find((each) => each.id === id)?.count ?? 2);
   const top = tallest();
-  const tall = Math.min(Math.max(panesHeight.value, PANES_HEIGHT), top);
+  const tall = Math.min(panesWant(), top);
   const tree = preset(id, order, stageWidth.value, tall - PANES_CHROME) ?? preset(id, order, stageWidth.value, top - PANES_CHROME);
   if (!tree) return;
-  panesHeight.value = Math.min(top, Math.max(tall, minSize(tree).h + PANES_CHROME));
+  panesTall.value = Math.min(top, Math.max(tall, minSize(tree).h + PANES_CHROME));
   const panes = leaves(tree);
   const focus = panes.find((pane) => pane.terminal === shown) ?? panes[0];
   setPanes(path, { tree, focus: focus.key, zoom: null, rev: layout.value?.rev ?? 0 });
@@ -1034,7 +1350,7 @@ function onPanelKey(event: KeyboardEvent): void {
       const rect = panesAsIs() ? placedNow()?.panes.find((pane) => pane.leaf.key === now.focus) : undefined;
       if (rect && canAddPane(now.tree) && canSplit(rect, dir, [kindOf(rect.leaf), "shell"])) void openTerminal(false, null, { kind: "split", key: now.focus, dir });
     } else if (active.value) {
-      const room = roomAt(Math.min(Math.max(panesHeight.value, PANES_HEIGHT), tallest()));
+      const room = roomAt(Math.min(panesWant(), tallest()));
       if (canSplit({ x: 0, y: 0, ...room }, dir, [kindOfTerminal(active.value.id), "shell"])) void openTerminal(false, null, { kind: "split", key: "", dir });
     }
     return;
@@ -1086,7 +1402,7 @@ function landingAt(drag: Incoming): Landing | null {
   ];
   const side = near.sort((a, b) => a[1] - b[1])[0][0];
   const middle = rx > 0.3 && rx < 0.7 && ry > 0.3 && ry < 0.7;
-  const room = roomAt(Math.min(Math.max(panesHeight.value, PANES_HEIGHT), tallest()));
+  const room = roomAt(Math.min(panesWant(), tallest()));
   const coming: PaneKind = drag.kind === "session" || drag.agent ? "claude" : "shell";
   if (!middle && canSplit({ x: 0, y: 0, ...room }, side === "left" || side === "right" ? "row" : "col", [kindOfTerminal(shown.id), coming])) return { pane: null, side };
   return drag.kind === "tab" ? null : { pane: null, side: null };
@@ -1221,10 +1537,287 @@ const tabElsewhere = {
   },
 };
 
-/** The tab row's empty part (between and after the tabs), not a tab, a name or a button. */
+/** The tab row's empty part (between and after the tabs), not a tab, a name or a button; the
+ * card's handle is part of it. */
 function emptyPart(event: MouseEvent): boolean {
   const target = event.target as HTMLElement;
-  return target === event.currentTarget || target === tablist.value || target.classList.contains("grow") || target.classList.contains("outlist");
+  return target === event.currentTarget || target === tablist.value || target.classList.contains("grow") || target.classList.contains("outlist") || !!target.closest(".mover");
+}
+
+/* ---------- the panel's stand: the row's buttons and menu, the card moved and resized ---------- */
+
+const STANDS: { id: PanelStand; icon: "panel-dock" | "panel-float" | "panel-window"; label: "terminal.standDock" | "terminal.standFloat" | "terminal.standWindow" }[] = [
+  { id: "dock", icon: "panel-dock", label: "terminal.standDock" },
+  { id: "float", icon: "panel-float", label: "terminal.standFloat" },
+  { id: "window", icon: "panel-window", label: "terminal.standWindow" },
+];
+
+/** The panel to another stand (the row's buttons, its menu): a card comes up open. */
+function standTo(stand: PanelStand): void {
+  if (stand === props.stand) return;
+  if (stand === "float") collapsed.value = false;
+  standPanel(stand);
+}
+
+const { popup } = useNativeMenu();
+
+/** A narrow row's one stand button: the three stands, as a menu under it. */
+function standsMenu(event: MouseEvent): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  void popup(
+    { clientX: box.left, clientY: box.bottom + 4 },
+    STANDS.map((each) => ({ text: t(each.label), checked: props.stand === each.id, action: () => standTo(each.id) })),
+  );
+}
+
+const standIcon = computed(() => STANDS.find((each) => each.id === props.stand)?.icon ?? "panel-dock");
+
+/** A right click on the row's empty part: the stands, folding, and the card's place put back. */
+function rowMenu(event: MouseEvent): void {
+  if (!emptyPart(event)) return;
+  event.preventDefault();
+  const entries: MenuEntry[] = STANDS.map((each) => ({ text: t(each.label), checked: props.stand === each.id, action: () => standTo(each.id) }));
+  if (!windowed.value) entries.push("separator", { text: t(floating.value ? "terminal.minimize" : collapsed.value ? "common.expand" : "common.collapse"), action: toggleCollapsed });
+  if (floating.value) entries.push({ text: t("terminal.cardReset"), action: resetCard });
+  void popup(event, entries);
+}
+
+/** The card back to its default place and size, in the page's bottom right corner. */
+function resetCard(): void {
+  cardRect.value = null;
+  keepCard();
+}
+
+/** A drag of the row's empty part or of the card's handle, under way, until it has gone far enough
+ * to be one (`moving`). Along the bottom, the row pulled up lifts the panel off as a card. */
+type Move = { id: number; x: number; y: number; left: number; top: number; moving: boolean; grab: { x: number; y: number }; before: typeof cardRect.value };
+let move: Move | null = null;
+/** The card follows the pointer (or its edge does), its height not sliding meanwhile. */
+const moving = ref(false);
+/** Where the card let go now would go: along the bottom (the band shows), or into a window of its
+ * own (the pointer is out of Pitwall's window). */
+const dropTo = ref<"dock" | "window" | null>(null);
+/** The page's room on the screen while the card moves: the band is drawn there. */
+const areaBox = ref<DOMRect | null>(null);
+/** A drag just ended: the click that ends it is no click. */
+let justMoved = false;
+
+/** How far a press goes before it moves the card, and how far up the docked row is pulled to lift it. */
+const MOVE_AFTER = 4;
+const LIFT_AFTER = 40;
+/** A card let go in this band along the page's bottom goes along the bottom again. */
+const DOCK_BAND = 56;
+
+function startMove(event: PointerEvent): void {
+  if (event.button !== 0 || windowed.value || !emptyPart(event)) return;
+  const row = tabsRow.value;
+  if (!row) return;
+  const at = row.getBoundingClientRect();
+  const box = cardBox.value;
+  move = { id: event.pointerId, x: event.clientX, y: event.clientY, left: box.left, top: box.top, moving: false, grab: { x: event.clientX - at.left, y: event.clientY - at.top }, before: cardRect.value };
+  row.setPointerCapture(event.pointerId);
+  // No text is selected on the way (a chat's would be).
+  event.preventDefault();
+  holding(true);
+  measureGrab();
+}
+
+/** The row pulled up off the bottom: the panel becomes a card under the pointer, held where it was
+ * taken, and the drag goes on moving it. */
+function lift(event: PointerEvent, held: Move): void {
+  const parent = panel.value?.parentElement?.getBoundingClientRect();
+  if (!parent) return;
+  const along = panel.value?.getBoundingClientRect();
+  const { h } = area.value;
+  // No wider or taller than the page holds it whole (`fitCard`).
+  const { start, end } = cardOpenRoom();
+  const width = clamp(cardRect.value?.width ?? CARD_DEFAULT.width, CARD_LEAST.width, end - start);
+  const tall = clamp(cardRect.value?.height ?? CARD_DEFAULT.height, cardLeast().h, h - 2 * SNAP_INSET);
+  // Where the card would be with its row under the pointer, where it may stand (`cardRoom`).
+  const left = event.clientX - parent.left - Math.min(held.grab.x, width - 60);
+  const top = event.clientY - parent.top - held.grab.y - 6;
+  const room = cardRoom(width);
+  setCard({ left: clamp(left, ...room.left), top: clamp(top, ...room.top), width, height: tall });
+  collapsed.value = false;
+  standPanel("float");
+  Object.assign(held, { x: event.clientX, y: event.clientY, left, top });
+  if (along && settled.value && !stillMotion()) liftGlide(along);
+}
+
+/** Where the card's start (`at`) goes when it, or its end, is near enough to one of the lines:
+ * `starts` for its start, `end` for its end. */
+function snapTo(at: number, size: number, starts: number[], end: number): number | null {
+  const start = starts.find((line) => Math.abs(at - line) <= SNAP);
+  if (start !== undefined) return start;
+  if (Math.abs(end - (at + size)) <= SNAP) return end - size;
+  return null;
+}
+
+/** The lines a card's left edge goes onto: 12 px in from the page's left and, with a sidebar
+ * beside it, from the window's left. */
+function leftLines(): number[] {
+  const { side } = area.value;
+  return side > 0 ? [SNAP_INSET, SNAP_INSET - side] : [SNAP_INSET];
+}
+
+function onMove(event: PointerEvent): void {
+  const held = move;
+  if (!held || event.pointerId !== held.id) return;
+  const dx = event.clientX - held.x;
+  const dy = event.clientY - held.y;
+  if (!held.moving) {
+    if (docked.value) {
+      if (dy > -LIFT_AFTER) return;
+      lift(event, held);
+    } else if (Math.hypot(dx, dy) < MOVE_AFTER) return;
+    held.moving = true;
+    moving.value = true;
+    movingCard(true);
+    areaBox.value = panel.value?.parentElement?.getBoundingClientRect() ?? null;
+    window.addEventListener("keydown", onMoveKey, true);
+    return;
+  }
+  const { w, h } = area.value;
+  const box = cardBox.value;
+  const may = cardRoom(box.width);
+  let left = clamp(held.left + dx, ...may.left);
+  let top = clamp(held.top + dy, ...may.top);
+  const sx = snapTo(left, box.width, leftLines(), w - SNAP_INSET);
+  const sy = snapTo(top, box.height, [SNAP_INSET], h - SNAP_INSET);
+  if (sx !== null) left = sx;
+  if (sy !== null) top = sy;
+  setCard({ left, top, width: box.width, height: box.height });
+  const room = areaBox.value;
+  const out = event.clientX < 0 || event.clientY < 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight;
+  dropTo.value = out ? "window" : room && event.clientY >= room.bottom - DOCK_BAND ? "dock" : null;
+}
+
+function endMove(event: PointerEvent): void {
+  const held = move;
+  if (!held || event.pointerId !== held.id) return;
+  const to = event.type === "pointercancel" ? null : dropTo.value;
+  stopMove();
+  if (!held.moving) return;
+  justMoved = true;
+  window.setTimeout(() => (justMoved = false), 0);
+  // Let go along the bottom or out of the window: the card keeps the place it had before.
+  if (to) {
+    cardRect.value = held.before;
+    keepCard();
+    standPanel(to, to === "window" ? [Math.round(event.screenX), Math.round(event.screenY)] : null);
+    return;
+  }
+  keepCard();
+  if (active.value && !panesOn.value) fitView(active.value.id);
+}
+
+function stopMove(): void {
+  move = null;
+  moving.value = false;
+  dropTo.value = null;
+  holding(false);
+  movingCard(false);
+  window.removeEventListener("keydown", onMoveKey, true);
+}
+
+/** Esc while the card moves: it goes back where it was, and stays a card. */
+function onMoveKey(event: KeyboardEvent): void {
+  if (event.key !== "Escape" || !move) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const held = move;
+  if (tabsRow.value?.hasPointerCapture(held.id)) tabsRow.value.releasePointerCapture(held.id);
+  stopMove();
+  cardRect.value = held.before;
+}
+
+/** The card's edges and corners resize it, each edge snapping to its line as the card's do. */
+type Edge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+const EDGES: Edge[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+let sizing: { id: number; edge: Edge; x: number; y: number; box: { left: number; top: number; width: number; height: number } } | null = null;
+
+function startResize(event: PointerEvent, side: Edge): void {
+  if (event.button !== 0) return;
+  sizing = { id: event.pointerId, edge: side, x: event.clientX, y: event.clientY, box: { ...cardBox.value } };
+  moving.value = true;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  event.preventDefault();
+  holding(true);
+}
+
+function onResize(event: PointerEvent): void {
+  const held = sizing;
+  if (!held || event.pointerId !== held.id) return;
+  const { w, h, side } = area.value;
+  const least = cardLeast();
+  let { left, top, width, height: tall } = held.box;
+  const dx = event.clientX - held.x;
+  const dy = event.clientY - held.y;
+  if (held.edge.includes("e")) {
+    width = clamp(width + dx, least.w, w + side);
+    if (Math.abs(w - SNAP_INSET - (left + width)) <= SNAP && w - SNAP_INSET - left >= least.w) width = w - SNAP_INSET - left;
+  }
+  if (held.edge.includes("w")) {
+    const right = left + width;
+    left = clamp(left + dx, right - (w + side), right - least.w);
+    const line = leftLines().find((each) => Math.abs(left - each) <= SNAP && right - each >= least.w);
+    if (line !== undefined) left = line;
+    width = right - left;
+  }
+  if (held.edge.includes("s")) {
+    tall = clamp(tall + dy, least.h, h);
+    if (Math.abs(h - SNAP_INSET - (top + tall)) <= SNAP && h - SNAP_INSET - top >= least.h) tall = h - SNAP_INSET - top;
+  }
+  if (held.edge.includes("n")) {
+    const bottom = top + tall;
+    top = clamp(top + dy, 0, bottom - least.h);
+    if (Math.abs(top - SNAP_INSET) <= SNAP && bottom - SNAP_INSET >= least.h) top = SNAP_INSET;
+    tall = bottom - top;
+  }
+  setCard({ left, top, width, height: tall });
+}
+
+function endResize(event: PointerEvent): void {
+  if (!sizing || event.pointerId !== sizing.id) return;
+  sizing = null;
+  moving.value = false;
+  holding(false);
+  keepCard();
+  if (active.value && !panesOn.value) fitView(active.value.id);
+}
+
+/** Where the band is drawn: along the bottom of the page's room, on the screen. */
+const bandStyle = computed(() => {
+  const room = areaBox.value;
+  return room ? { left: `${room.left}px`, top: `${room.bottom - DOCK_BAND}px`, width: `${room.width}px`, height: `${DOCK_BAND}px` } : {};
+});
+
+/* ---------- a narrow row ---------- */
+
+/** The row's width, as last measured. */
+const rowWidth = ref(0);
+/** A card or a window narrower than the bottom's row (the card as it first comes too): "Layout" and
+ * "History" are their marks alone, and the outputs, two or more, are one button, so the tabs keep
+ * their names. Along the bottom only once the row is narrow (`compact`). */
+const snug = computed(() => rowWidth.value > 0 && rowWidth.value < (props.stand === "dock" ? 640 : 960));
+/** A narrow row (a small card, a narrow window): what `snug` gives, and the three stands are one
+ * button. */
+const compact = computed(() => rowWidth.value > 0 && rowWidth.value < 640);
+const gathered = computed(() => snug.value && outputs.value.length > 1);
+/** That button: the output shown, else how many there are, and the state that tells most. */
+const gatheredLabel = computed(() => {
+  const shown = showsOutput.value ? outputs.value.find((item) => item.id === job.value) : undefined;
+  return shown?.name ?? t("terminal.outputs", { count: outputs.value.length });
+});
+const gatheredState = computed(() => (outputs.value.some((item) => item.state === "bad") ? "bad" : outputs.value.some((item) => item.state === "on") ? "on" : null));
+
+/** The outputs, as a menu under their button. */
+function outputsMenu(event: MouseEvent): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  void popup(
+    { clientX: box.left, clientY: box.bottom + 4 },
+    outputs.value.map((item) => ({ text: item.name, checked: showsOutput.value && job.value === item.id, action: () => openOutput(item.id) })),
+  );
 }
 
 /**
@@ -1236,6 +1829,7 @@ function emptyPart(event: MouseEvent): boolean {
  * the project's name and the buttons keep theirs.
  */
 function onRowClick(event: MouseEvent): void {
+  if (justMoved) return;
   const empty = emptyPart(event);
   const grip = (event.currentTarget as HTMLElement).classList.contains("grip");
   if (event.detail >= 2) {
@@ -1295,7 +1889,7 @@ function closeShown(): void {
   const pane = now ? findLeaf(now.tree, now.focus) : undefined;
   if (pane && pane.terminal === null) return takeOut(pane.key);
   const id = active.value?.id;
-  if (id === undefined) return foldPanel();
+  if (id === undefined) return windowed.value ? emit("empty") : foldPanel();
   closing = id;
   close(id);
 }
@@ -1591,7 +2185,7 @@ function onFocusAnywhere(event: FocusEvent): void {
 
 /**
  * A press anywhere on the page (its bar, its lists, the Track page's stage), the panel open, folds
- * it to its tab row as soon as the press is over: on something a double click opens (`data-dblopen`:
+ * it to its tab row (a card into its sidebar entry) as soon as the press is over: on something a double click opens (`data-dblopen`:
  * a project on the Track and Today pages, a session, a card's state) only once a double click is out
  * of the question (the Track page's rule, every page's since the user's
  * word, 2026-10-22), unless Settings › General turns it off. The sidebar, dialogs, floating
@@ -1601,7 +2195,9 @@ function onFocusAnywhere(event: FocusEvent): void {
  * `panelAsks`): it stays open for that.
  */
 function onPressAnywhere(event: PointerEvent): void {
-  if (collapsed.value || event.button !== 0 || snapshot.value?.settings.panelFoldOutside === false) return;
+  // A card folds into its sidebar entry, as a Files window does (the user's word, 2026-11-14); a
+  // window of its own stays open.
+  if (!(docked.value || floating.value) || collapsed.value || event.button !== 0 || snapshot.value?.settings.panelFoldOutside === false) return;
   const target = event.target instanceof Element ? event.target : null;
   if (!target?.closest(".page") || panel.value?.contains(target)) return;
   // A project picked (the list's row, the Track page's standings and tags): the panel turns to it
@@ -1628,7 +2224,9 @@ const FOLD_AFTER_MS = 300;
  * card to Claude at it (lib/panel: `panelMeasure`). */
 function newTabSize(): { cols: number; rows: number } | null {
   const room = viewport.value?.clientWidth || TAB_ROOM.width;
-  const tall = Math.min(height.value, (panel.value?.parentElement?.clientHeight ?? window.innerHeight) - HEADER) - TAB_CHROME;
+  // The card and the window have no handle (9) and narrower margins: 6 above the row, the edge under.
+  const chrome = docked.value ? TAB_CHROME : TAB_CHROME - 9 + 6 - (20 - edge.value);
+  const tall = Math.min(height.value, tallest()) - chrome;
   const host = document.createElement("div");
   host.style.cssText = `position: fixed; left: -10000px; top: 0; width: ${room}px; height: ${Math.max(tall, 40)}px; visibility: hidden`;
   document.body.appendChild(host);
@@ -1644,6 +2242,10 @@ function newTabSize(): { cols: number; rows: number } | null {
 let observer: ResizeObserver | null = null;
 /** How wide the panel is: room for the history beside the terminal or not. */
 let panelObserver: ResizeObserver | null = null;
+/** The page's room, for the card. */
+let areaObserver: ResizeObserver | null = null;
+/** The row's width: a narrow one gathers its outputs into one button. */
+let rowObserver: ResizeObserver | null = null;
 /** A row that narrows (the window, the panel) keeps the shown tab in sight too. */
 let tabsObserver: ResizeObserver | null = null;
 watch(tablist, (list, old) => {
@@ -1661,12 +2263,32 @@ onMounted(() => {
   const measure = (): void => {
     panelWidth.value = panel.value?.clientWidth ?? 0;
     narrow.value = panelWidth.value < HISTORY_ROOM;
-    // As it slides too, frame by frame: the page's room under its lists follows.
-    panelOver.value = Math.max(0, (panel.value?.offsetHeight ?? 0) - COLLAPSED_HEIGHT);
+    if (windowed.value) ownHeight.value = panel.value?.clientHeight ?? 0;
+    // As it slides too, frame by frame: the page's room under its lists follows. A card and a
+    // window take none of the page's.
+    panelOver.value = docked.value ? Math.max(0, (panel.value?.offsetHeight ?? 0) - COLLAPSED_HEIGHT) : 0;
   };
   panelObserver = new ResizeObserver(measure);
   if (panel.value) panelObserver.observe(panel.value);
   measure();
+  // The page's room, which the card stands in.
+  const parent = panel.value?.parentElement;
+  const measureArea = (): void => {
+    const at = parent?.getBoundingClientRect();
+    const x = (at?.left ?? 0) + (parent?.clientLeft ?? 0);
+    const y = (at?.top ?? 0) + (parent?.clientTop ?? 0);
+    // The sidebar is what lies between the window's left edge and the page's room.
+    area.value = { w: parent?.clientWidth ?? 0, h: parent?.clientHeight ?? 0, x, y, side: Math.max(0, Math.round(x)) };
+  };
+  areaObserver = new ResizeObserver(measureArea);
+  if (parent) areaObserver.observe(parent);
+  measureArea();
+  if (floating.value) fitCard();
+  rowObserver = new ResizeObserver(() => {
+    rowWidth.value = tabsRow.value?.clientWidth ?? 0;
+    measureGrab();
+  });
+  if (tabsRow.value) rowObserver.observe(tabsRow.value);
   requestAnimationFrame(() => requestAnimationFrame(() => (settled.value = true)));
   panelMeasure.size = newTabSize;
   // The panes' keys are the panel's, not the shell's: splitting from one terminal at a time too.
@@ -1680,6 +2302,14 @@ onMounted(() => {
   document.addEventListener("pointerdown", onPressAnywhere, true);
 });
 
+// Another stand: the page's room under its lists follows at once (a card takes none of it).
+watch(
+  () => props.stand,
+  () => {
+    if (!docked.value) panelOver.value = 0;
+  },
+);
+
 // Wide again, the column is as it was; narrow again or collapsed, the history over the terminal
 // waits for its button.
 watch([narrow, collapsed], () => {
@@ -1690,8 +2320,16 @@ onBeforeUnmount(() => {
   observer?.disconnect();
   tabsObserver?.disconnect();
   panelObserver?.disconnect();
+  areaObserver?.disconnect();
+  rowObserver?.disconnect();
+  window.removeEventListener("keydown", onMoveKey, true);
+  holding(false);
+  movingCard(false);
   clearTimeout(settle);
   clearTimeout(slid);
+  clearTimeout(morphTimer);
+  cardAnimation?.cancel();
+  cancelAnimationFrame(morphFrame);
   window.clearTimeout(copiedTimer);
   panelMeasure.size = () => null;
   paneKeys.claim = () => false;
@@ -1707,14 +2345,15 @@ defineExpose({ openTerminal, closeShown });
 <template>
   <section
     ref="panel"
-    :class="['term-panel', { animated: !dragging, collapsed }]"
-    :style="{ height: `${shownHeight}px` }"
+    :class="['term-panel', stand, { animated: !dragging && !moving, collapsed, leaving: dropTo === 'window', tucked }]"
+    :style="{ ...panelStyle, ...morph, '--edge': `${edge}px` }"
     :aria-label="t('terminal.panel', { name: project.name })"
     @focusin="onFocusIn"
     @focusout="onFocusOut"
     @keydown="onPanelKey"
   >
     <div
+      v-if="docked"
       class="grip"
       role="separator"
       aria-orientation="horizontal"
@@ -1728,7 +2367,18 @@ defineExpose({ openTerminal, closeShown });
       @keydown="resizer.nudge"
       @click="onRowClick"
     ></div>
-    <div ref="tabsRow" class="tabs" @click="onRowClick">
+    <div
+      ref="tabsRow"
+      :class="['tabs', { compact, snug }]"
+      @click="onRowClick"
+      @pointerdown="startMove"
+      @pointermove="onMove"
+      @pointerup="endMove"
+      @pointercancel="endMove"
+      @contextmenu="rowMenu"
+    >
+      <!-- The card's handle: it moves the card, as the row's empty part does. -->
+      <span v-if="floating" class="mover" :title="t('terminal.move')" aria-hidden="true"><Icon name="grip" :size="12" /></span>
       <!-- The panel's project: the page's, or another picked here. -->
       <div class="where">
         <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain working @pick="pickProject" />
@@ -1813,7 +2463,13 @@ defineExpose({ openTerminal, closeShown });
       />
       <span class="grow"></span>
       <!-- The outputs, always at the right end: the dev server's, then the commands' that ran. -->
-      <div class="outlist" role="tablist" :aria-label="t('detail.output')">
+      <!-- A narrow row: the outputs are one button, with a menu of them. -->
+      <button v-if="gathered" type="button" :class="['out-tab', 'gathered', { on: showsOutput }]" aria-haspopup="menu" :title="t('detail.output')" @click="outputsMenu">
+        <span v-if="gatheredState" :class="['out-state', gatheredState]" aria-hidden="true"></span>
+        <span class="tab-name">{{ gatheredLabel }}</span>
+        <Icon name="chevron-down" :size="11" />
+      </button>
+      <div v-else class="outlist" role="tablist" :aria-label="t('detail.output')">
         <!-- A command's tab comes as a terminal's does, growing to its width. -->
         <TransitionGroup :key="project.path" :css="false" @enter="tabEnter" @leave="tabLeave">
         <button
@@ -1857,7 +2513,7 @@ defineExpose({ openTerminal, closeShown });
         </button>
       </div>
       </Transition>
-      <LayoutMenu :current="presetNow" :count="layoutCount" :room="menuRoom" :fits="fitsPreset" :panes="panesOn" @pick="pickLayout" @even="evenPanes" />
+      <LayoutMenu :current="presetNow" :count="layoutCount" :room="menuRoom" :fits="fitsPreset" :panes="panesOn" :compact="snug" @pick="pickLayout" @even="evenPanes" />
       <button
         type="button"
         :class="['action', 'history-toggle', { on: historyOpen }]"
@@ -1867,15 +2523,46 @@ defineExpose({ openTerminal, closeShown });
       >
         <Icon name="clock" :size="13" /> <span class="action-text">{{ t("terminal.history") }}</span>
       </button>
+      <!-- Where the panel stands: along the bottom, as a card, in a window of its own; a narrow row
+           has one button for them, with a menu. -->
       <button
+        v-if="compact"
         type="button"
-        :class="['icon', 'collapse', { up: collapsed }]"
+        class="icon stand on"
+        aria-haspopup="menu"
+        :aria-label="t('terminal.stand')"
+        :title="t('terminal.stand')"
+        @click="standsMenu"
+      >
+        <Icon :name="standIcon" :size="13" />
+      </button>
+      <span v-else class="stands" role="group" :aria-label="t('terminal.stand')">
+        <button
+          v-for="each in STANDS"
+          :key="each.id"
+          type="button"
+          :class="['icon', 'stand', { on: stand === each.id }]"
+          :aria-pressed="stand === each.id"
+          :aria-label="t(each.label)"
+          :title="t(each.label)"
+          @click="standTo(each.id)"
+        >
+          <Icon :name="each.icon" :size="13" />
+        </button>
+      </span>
+      <button
+        v-if="!windowed"
+        type="button"
+        :class="['icon', 'collapse', { up: collapsed, card: floating }]"
         :aria-expanded="!collapsed"
-        :aria-label="t(collapsed ? 'terminal.expand' : 'terminal.collapse')"
-        :title="t(collapsed ? 'common.expand' : 'common.collapse')"
+        :aria-label="t(floating ? 'terminal.minimize' : collapsed ? 'terminal.expand' : 'terminal.collapse')"
+        :title="t(floating ? 'terminal.minimize' : collapsed ? 'common.expand' : 'common.collapse')"
         @click="toggleCollapsed"
       >
-        <Icon name="chevron" :size="13" />
+        <!-- The card's is a window's: minimise into the sidebar (the user's word); along the bottom,
+             the arrow. -->
+        <Icon v-if="floating" name="minus" :size="13" />
+        <Icon v-else name="chevron" :size="13" />
       </button>
       <!-- A pane dragged over the row: where it goes in among the tabs. -->
       <span v-if="rowMarkLeft !== null" class="row-mark" :style="{ left: `${rowMarkLeft}px` }" aria-hidden="true"></span>
@@ -1951,7 +2638,7 @@ defineExpose({ openTerminal, closeShown });
       </div>
       <!-- The history's room beside the terminal: the panel's right margin alone while it is
            hidden; shown, it grows to the left and the terminal gives up that width as it goes. -->
-      <div :class="['side', { open: beside, resizing, still: !settled }]" :style="beside ? { width: `${historyShown + 32}px` } : undefined">
+      <div :class="['side', { open: beside, resizing, still: !settled }]" :style="beside ? { width: `${historyShown + 12 + edge}px` } : undefined">
         <Transition name="fade">
           <div
             v-if="beside"
@@ -1994,6 +2681,28 @@ defineExpose({ openTerminal, closeShown });
       </div>
     </Transition>
 
+    <!-- The card's edges and corners, which resize it. -->
+    <template v-if="floating && !collapsed">
+      <div
+        v-for="side in EDGES"
+        :key="side"
+        :class="['edge', side]"
+        aria-hidden="true"
+        @pointerdown="startResize($event, side)"
+        @pointermove="onResize"
+        @pointerup="endResize"
+        @pointercancel="endResize"
+      ></div>
+    </template>
+    <!-- The card moving: the band along the bottom it docks in, and what letting it go out of the
+         window does. Near the page's edges it snaps to them, with no line drawn (the user's word). -->
+    <div v-if="dropTo === 'dock'" class="drop-band" :style="bandStyle" aria-hidden="true">
+      <span>{{ t("terminal.dropDock") }}</span>
+    </div>
+    <div v-if="dropTo === 'window'" class="drop-out" aria-hidden="true">
+      <Icon name="panel-window" :size="13" /> {{ t("terminal.dropWindow") }}
+    </div>
+
     <div v-if="incoming" class="ghost" :style="{ left: `${incoming.x + 12}px`, top: `${incoming.y + 10}px` }" aria-hidden="true">
       <AgentMark v-if="incoming.agent" :agent="incoming.agent" :size="11" />
       <Icon v-else name="terminal" :size="11" />
@@ -2026,9 +2735,101 @@ defineExpose({ openTerminal, closeShown });
   box-shadow: var(--shadow-rise);
 }
 
+/* A card over the page (lib/panel: `panelStand`): its own box, wherever it was left, over what the
+   page draws and the sidebar beside it, placed on the window (so no page's clip cuts it); folded,
+   its row alone. */
+.term-panel.float {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  max-height: none;
+  border: 1px solid var(--line-dialog);
+  border-radius: 10px;
+  box-shadow: var(--shadow-dialog);
+}
+
+/* Let go now, it would open in a window of its own. */
+.term-panel.float.leaving {
+  opacity: 0.6;
+}
+
+/* In a window of its own: the window's whole room under its bar (TerminalsApp). */
+.term-panel.window {
+  top: 0;
+  max-height: none;
+  border-top: 0;
+  box-shadow: none;
+}
+
+.term-panel.float .tabs,
+.term-panel.window .tabs {
+  margin-top: 6px;
+}
+
+.term-panel.float .tabs {
+  padding-left: 6px;
+}
+
+/* The card's handle, before its project. */
+.mover {
+  flex-shrink: 0;
+  width: 16px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2px;
+  border-radius: 5px;
+  color: var(--text-faint);
+  cursor: grab;
+}
+
+.mover:hover {
+  color: var(--text-muted);
+}
+
+/* A card's row moves it, as a Files window's bar does: the open hand where a press moves it (the
+   row's empty part, `emptyPart`; its tabs and buttons keep their own), and everywhere while it
+   moves (lib/holding: `moving`). */
+.term-panel.float:not(.collapsed) .tabs {
+  cursor: grab;
+}
+
+.term-panel.float:not(.collapsed) .tabs > :where(:not(.tablist, .grow, .outlist, .mover, button, [role="button"])) {
+  cursor: default;
+}
+
 /* Collapsing and expanding slide (COLLAPSE_MS in lib/panel); a drag follows the pointer. */
 .term-panel.animated {
   transition: height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* A card minimised into the sidebar: hidden where it stood, its terminals still attached. */
+.term-panel.float.tucked {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Going into a window of its own, or coming back from it (WindowApp's Transition): the panel fades,
+   a little smaller, rather than going or coming at once. */
+.term-panel.stand-enter-active,
+.term-panel.stand-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.term-panel.stand-enter-from,
+.term-panel.stand-leave-to {
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-panel.stand-enter-active,
+  .term-panel.stand-leave-active {
+    transition: none;
+  }
 }
 
 /* Collapsed, the handle and the row's empty part bring it up with a click. */
@@ -2437,6 +3238,155 @@ defineExpose({ openTerminal, closeShown });
   }
 }
 
+/* The three stands, set off from what is before them, the one in force lit. */
+.stands {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding-left: 4px;
+  border-left: 1px solid var(--line);
+}
+
+.stand.on,
+.stand.on:hover:not(:disabled) {
+  color: var(--text-lit);
+}
+
+/* A narrow row: "History" is its clock alone, and the outputs one button. */
+.tabs.snug .action.history-toggle {
+  width: 24px;
+  padding: 0;
+  justify-content: center;
+}
+
+.tabs.snug .history-toggle .action-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.out-tab.gathered {
+  flex: 0 1 auto;
+  max-width: 160px;
+  gap: 5px;
+}
+
+.out-tab.gathered .tab-name {
+  min-width: 0;
+}
+
+/* The card's edges and corners: thin strips over its border, a resize cursor on each. */
+.edge {
+  position: absolute;
+  z-index: 4;
+}
+
+.edge.n,
+.edge.s {
+  left: 10px;
+  right: 10px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.edge.e,
+.edge.w {
+  top: 10px;
+  bottom: 10px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.edge.n {
+  top: -1px;
+}
+
+.edge.s {
+  bottom: -1px;
+}
+
+.edge.e {
+  right: -1px;
+}
+
+.edge.w {
+  left: -1px;
+}
+
+.edge.ne,
+.edge.nw,
+.edge.se,
+.edge.sw {
+  width: 12px;
+  height: 12px;
+}
+
+.edge.ne {
+  top: -1px;
+  right: -1px;
+  cursor: nesw-resize;
+}
+
+.edge.sw {
+  bottom: -1px;
+  left: -1px;
+  cursor: nesw-resize;
+}
+
+.edge.nw {
+  top: -1px;
+  left: -1px;
+  cursor: nwse-resize;
+}
+
+.edge.se {
+  bottom: -1px;
+  right: -1px;
+  cursor: nwse-resize;
+}
+
+/* Where a card let go docks: the page's bottom band, its top edge dashed as the docked panel's top
+   line would be, saying so. */
+.drop-band {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-top: 1.5px dashed var(--line-heavy);
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  pointer-events: none;
+}
+
+.drop-band span,
+.drop-out {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--bg-lit);
+  font-size: 12px;
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+/* Out of the window: what letting go does, over the card's middle. */
+.drop-out {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--shadow-menu);
+  pointer-events: none;
+}
+
 /* Points down while open (collapse), up while collapsed (expand). */
 .collapse :deep(svg) {
   transform: rotate(90deg);
@@ -2445,6 +3395,11 @@ defineExpose({ openTerminal, closeShown });
 
 .collapse.up :deep(svg) {
   transform: rotate(-90deg);
+}
+
+/* The card's minimise and restore marks stand as they are drawn. */
+.collapse.card :deep(svg) {
+  transform: none;
 }
 
 /* The terminal, and the history beside it or over it. */
@@ -2461,7 +3416,7 @@ defineExpose({ openTerminal, closeShown });
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  margin: 6px 0 20px 20px;
+  margin: 6px 0 var(--edge) var(--edge);
   display: flex;
   transition: opacity 160ms ease;
 }
@@ -2485,7 +3440,7 @@ defineExpose({ openTerminal, closeShown });
 .side {
   position: relative;
   flex-shrink: 0;
-  width: 20px;
+  width: var(--edge);
   overflow: hidden;
   transition:
     width 220ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms,
@@ -2509,7 +3464,7 @@ defineExpose({ openTerminal, closeShown });
 .width-grip {
   position: absolute;
   top: 6px;
-  bottom: 20px;
+  bottom: var(--edge);
   left: 0;
   width: 12px;
   cursor: col-resize;
@@ -2749,7 +3704,7 @@ defineExpose({ openTerminal, closeShown });
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  margin: -8px 20px 12px;
+  margin: -8px var(--edge) 12px;
   padding: 9px 8px 9px 12px;
   border-radius: 7px;
   border: 1px solid var(--warn-line);

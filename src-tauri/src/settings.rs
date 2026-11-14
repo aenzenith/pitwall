@@ -447,6 +447,53 @@ impl Default for TowerSettings {
     }
 }
 
+/// Where the terminal panel stands (`terminals.rs`): under the main window's pages (`dock`), as a
+/// card over them (`float`) or in a window of its own (`window`). Changed through its own commands
+/// only. This Mac's own: it goes with its screens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TerminalPlace {
+    /// `dock`, `float` or `window` (anything else reads as `dock`: `mode`).
+    pub mode: String,
+    /// Where the panel goes back to when its window closes: `dock` or `float` (`back`).
+    pub back: String,
+    /// The floating card: right and bottom (from the page area's right and bottom edges), width
+    /// and height, in CSS pixels. Written by the UI; none until it is first moved or resized.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card: Option<[i32; 4]>,
+    /// Where the terminals' window was left and how large it was there: left, top, width,
+    /// height, as the mini tower's place is kept (`TowerSettings::place`). None until it moved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<[i32; 4]>,
+    /// The terminals' window stays above other windows.
+    pub on_top: bool,
+}
+
+impl Default for TerminalPlace {
+    fn default() -> Self {
+        Self { mode: "dock".into(), back: "dock".into(), card: None, window: None, on_top: false }
+    }
+}
+
+impl TerminalPlace {
+    /// Where the panel stands, a value not known being the dock, as the window reads it.
+    pub fn mode(&self) -> &'static str {
+        match self.mode.as_str() {
+            "float" => "float",
+            "window" => "window",
+            _ => "dock",
+        }
+    }
+
+    /// Where it goes back to from its window, a value not known being the dock.
+    pub fn back(&self) -> &'static str {
+        match self.back.as_str() {
+            "float" => "float",
+            _ => "dock",
+        }
+    }
+}
+
 /// The command line (`cli.rs`, `core/cli`): the `pitwall` command and `pitwall://` links.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -649,6 +696,9 @@ pub struct Settings {
     /// dragged or grown to; none until it first changes. This Mac's own: it goes with its screens.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub panes_height: Option<u32>,
+    /// Where the terminal panel stands: docked, floating or in a window of its own.
+    #[serde(default)]
+    pub terminal_place: TerminalPlace,
     /// The Track page's own settings. None until one is changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<TrackSettings>,
@@ -735,6 +785,7 @@ impl Default for Settings {
             favourites_only: false,
             panel_fold_outside: true,
             panes_height: None,
+            terminal_place: TerminalPlace::default(),
             track: None,
             theme: "system".into(),
             teams: Vec::new(),
