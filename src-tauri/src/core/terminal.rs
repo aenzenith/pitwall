@@ -47,8 +47,11 @@ pub struct TerminalView {
     /// The tab's title; the user can rename it.
     pub name: String,
     /// `shell` | `claude` | `codex`: a session of that agent started from its own button
-    /// (`Agent::tab_kind`).
+    /// (`Agent::tab_kind`); `chat`: a Claude chat drawn by the window (`chat.rs`).
     pub kind: String,
+    /// A chat tab's session, state and title; none for every other tab.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat: Option<crate::chat::ChatView>,
     /// The shell of the list a shell tab runs on Windows (`shells.rs`); none elsewhere and for a
     /// Claude tab.
     pub shell: Option<Shell>,
@@ -380,7 +383,7 @@ impl Core {
                 None => format!("{base} {}", same + 1),
             };
             let account = account.map(|(id, _)| id);
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), shell, elevated, renamed, unasked, account, apart };
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), chat: None, shell, elevated, renamed, unasked, account, apart };
             inner.terminal_list.push(view.clone());
             view
         };
@@ -533,6 +536,7 @@ impl Core {
     /// the same way first (`name_codex_terminals`).
     pub(super) fn name_terminals(&self) {
         self.name_codex_terminals();
+        self.name_chats();
         let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == "claude" && !t.renamed && !t.apart).map(|t| t.id).collect();
         if open.is_empty() {
             return;
@@ -592,7 +596,7 @@ impl Core {
     }
 
     /// Each tab of `names` takes its new title, unless the user renamed it meanwhile.
-    fn give_names(&self, names: Vec<(u64, String)>) {
+    pub(super) fn give_names(&self, names: Vec<(u64, String)>) {
         if names.is_empty() {
             return;
         }
@@ -640,6 +644,9 @@ impl Core {
     /// Closes a tab: the pseudo-terminal goes (the shell and its jobs get SIGHUP), then the
     /// shell's process group is ended for good.
     pub fn close_terminal(&self, id: u64) {
+        if self.close_chat(id) {
+            return;
+        }
         let Some(mut session) = self.terminal_sessions().remove(&id) else {
             return;
         };
@@ -683,8 +690,11 @@ impl Core {
     }
 
     /// Every terminal's shell: its pid, the terminal's id and its project.
+    /// A chat's Claude stands where a tab's shell does (`chat_shells`): it is its tab's process.
     pub(super) fn terminal_shells(&self) -> Vec<(u32, u64, String)> {
-        self.terminal_sessions().iter().filter_map(|(id, session)| Some((session.pid?, *id, session.path.clone()))).collect()
+        let mut shells: Vec<(u32, u64, String)> = self.terminal_sessions().iter().filter_map(|(id, session)| Some((session.pid?, *id, session.path.clone()))).collect();
+        shells.extend(self.chat_shells());
+        shells
     }
 
     /// Whether its agent may still run in terminal `id`, one a session was opened again in: a
@@ -701,6 +711,10 @@ impl Core {
     /// `agent_may_run_in` with the pass's process table, read here if the pass hasn't yet; a tab
     /// just opened or without a shell needs none.
     pub(super) fn agent_may_run_with(&self, id: u64, pass: &mut process::PassTable) -> bool {
+        // A chat's Claude runs in it until its process has ended, the tab closed or not.
+        if let Some(running) = self.chat_alive(id) {
+            return running;
+        }
         let agent = self.lock().terminal_list.iter().find(|t| t.id == id).and_then(|t| Agent::of_tab(&t.kind)).unwrap_or_default();
         let Some((shell, opened)) = self.terminal_sessions().get(&id).map(|session| (session.pid, session.opened)) else {
             return false;

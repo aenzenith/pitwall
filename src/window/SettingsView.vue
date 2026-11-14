@@ -26,6 +26,7 @@ import AccountsSection from "./settings/AccountsSection.vue";
 import AgentHead from "./settings/AgentHead.vue";
 import AgentList from "./settings/AgentList.vue";
 import CodexDetail from "./settings/CodexDetail.vue";
+import ChatSection from "./settings/ChatSection.vue";
 import CliSection from "./settings/CliSection.vue";
 import FlagSection from "./settings/FlagSection.vue";
 import RadioSection from "./settings/RadioSection.vue";
@@ -829,6 +830,8 @@ function setTheme(theme: Theme): void {
             </button>
           </div>
           <p v-if="hookError" class="error">{{ hookError }}</p>
+          <!-- The chat's own (Sohbet): saved by its own command, never with the form. -->
+          <ChatSection />
           <RadioSection :stacked="agentsTab" />
           <AccountsSection :start-add="startPart === 'addAccount' && (!agentsTab || agentPicked === 'claude')" />
           </template>

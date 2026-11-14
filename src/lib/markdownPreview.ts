@@ -133,6 +133,12 @@ function disarm(node: Element): void {
   if (style && FETCHING_STYLE.test(style)) node.removeAttribute("style");
 }
 
+/** A link to a file with its line (`main.rs:10`, `src/app.ts:3:7`) or to a Windows path
+ * (`C:/work/app.ts`): DOMPurify reads the part before the colon as an unknown scheme and drops the
+ * address, so the chat's file links would open nothing. Kept, for the view to follow (it goes to
+ * `data-href` as every link's does); never a script's (`javascript:1` has that shape). */
+const FILE_LINK = /^(?!(?:javascript|vbscript|data|blob|file|about):)(?:[\w.@~%+-]+(?:\/[\w.@~%+-]+)*:\d+(?::\d+)?|[a-z]:[\\/][^\s:]*(?::\d+(?::\d+)?)?)$/i;
+
 let purify: ReturnType<typeof DOMPurify> | null = null;
 
 function cleaner(): ReturnType<typeof DOMPurify> {
@@ -143,6 +149,9 @@ function cleaner(): ReturnType<typeof DOMPurify> {
     if (data.tagName === "annotation" && node instanceof Element && node.getAttribute("encoding") === "application/x-tex") {
       node.closest(".katex")?.setAttribute("data-tex", node.textContent ?? "");
     }
+  });
+  purify.addHook("uponSanitizeAttribute", (node, data) => {
+    if (data.attrName === "href" && node instanceof Element && node.localName === "a" && FILE_LINK.test(data.attrValue)) data.forceKeepAttr = true;
   });
   purify.addHook("afterSanitizeAttributes", (node) => {
     if (!(node instanceof Element)) return;

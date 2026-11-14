@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 
 import Icon from "../../components/Icon.vue";
 import StatusIcon from "../../components/StatusIcon.vue";
+import { agentOn } from "../../lib/agents";
+import { attachToChat, useChatLink } from "../../lib/chat/filesLink";
 import { absolutePath, changesOf, closeFiles, closeShownTab, COMMIT_TAB, forgetFiles, minimizeFiles, peekFiles, raiseFiles, refreshFiles, type FilesWin, type Rect } from "../../lib/explorer";
 import { gitLine } from "../../lib/format";
 import { holding, moving } from "../../lib/holding";
@@ -192,6 +194,7 @@ function itemMenu(at: MenuPoint, file: string, dir: boolean, head: MenuEntry[] =
   if (file.startsWith(COMMIT_TAB)) return void menu.popup(at, entries);
   if (entries.length) entries.push("separator");
   if (!dir) entries.push({ text: t("common.openInEditor"), action: () => void api.openReference(path, file, 1, null, true) });
+  if (!dir && agentOn("claude")) entries.push({ text: t("chatSurface.files.attach"), action: () => attachToChat(path, file) });
   entries.push({ text: revealLabel.value, action: () => void api.explorerReveal(path, file) });
   entries.push("separator", { text: t("files.copyPath"), action: () => void api.copyText(absolutePath(path, file)) }, { text: t("files.copyRelative"), action: () => void api.copyText(file) });
   void menu.popup(at, entries);
@@ -200,7 +203,12 @@ function itemMenu(at: MenuPoint, file: string, dir: boolean, head: MenuEntry[] =
 const tree = ref<InstanceType<typeof FileTree> | null>(null);
 const viewer = ref<InstanceType<typeof FileViewer> | null>(null);
 
+/** The window's link to the chat (lib/chat/filesLink): its file and lines, "Sohbete ekle", ⌥K. */
+const root = ref<HTMLElement | null>(null);
+const chat = useChatLink(win, root);
+
 function onKey(event: KeyboardEvent): void {
+  if (chat.key(event)) return;
   const mod = isMac ? event.metaKey : event.ctrlKey;
   if (!mod || event.altKey || event.defaultPrevented) return;
   // VS Code's keys for its quick open and its search; here one box does both.
@@ -317,10 +325,12 @@ function winLeave(el: Element, done: () => void): void {
   <Transition :css="false" appear @enter="winEnter" @leave="winLeave">
     <section
       v-if="shown && project && files"
+      ref="root"
       :class="['files-win', { max: win.maximized, zooming }]"
       :style="[style, { zIndex: win.z }]"
       :aria-label="t('files.window', { name: project.name })"
       @keydown="onKey"
+      @contextmenu="chat.menu"
       @pointerdown.capture="raiseFiles(win)"
       @focusin="raiseFiles(win)"
     >

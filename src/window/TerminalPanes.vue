@@ -36,6 +36,7 @@ import { CODEX_MODELS, MODEL_LABELS, MODELS, projectChoice, projectCodexChoice }
 import { attach, fitView, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { AgentStartChoice, Project, Shell, ShellChoice, TerminalView } from "../lib/types";
 
+import ChatView from "./chat/ChatView.vue";
 import TerminalFind from "./TerminalFind.vue";
 
 /**
@@ -83,6 +84,10 @@ const emit = defineEmits<{
   toRow: [key: string, x: number];
   /** The room the panes have. */
   room: [w: number, h: number];
+  /** A new chat, put there. */
+  openChat: [place: Place];
+  /** A chat asked for Settings › Claude. */
+  settings: [];
 }>();
 
 const stage = ref<HTMLElement | null>(null);
@@ -426,7 +431,7 @@ const movingAgent = computed(() => {
   const key = moving.value?.key;
   const terminal = key ? leaves(props.layout.tree).find((pane) => pane.key === key)?.terminal : null;
   const kind = terminal != null ? views.value.get(terminal)?.kind : undefined;
-  return kind && kind !== "shell" ? kind : null;
+  return kind && kind !== "shell" ? (kind === "chat" ? "claude" : kind) : null;
 });
 
 const DROP_LABELS: Record<Side, "panes.moveLeft" | "panes.moveRight" | "panes.moveUp" | "panes.moveDown"> = { left: "panes.moveLeft", right: "panes.moveRight", top: "panes.moveUp", bottom: "panes.moveDown" };
@@ -498,7 +503,7 @@ defineExpose({ placed, shown, rectOf, dropAt });
           @mouseup.middle="emit('close', pane.leaf.terminal)"
           @contextmenu.prevent="paneMenu($event, pane.leaf.key, pane.leaf.terminal)"
         >
-          <AgentMark v-if="views.get(pane.leaf.terminal) && views.get(pane.leaf.terminal)?.kind !== 'shell'" :agent="views.get(pane.leaf.terminal)!.kind as 'claude' | 'codex'" :size="11" />
+          <AgentMark v-if="views.get(pane.leaf.terminal) && views.get(pane.leaf.terminal)?.kind !== 'shell'" :agent="views.get(pane.leaf.terminal)!.kind === 'codex' ? 'codex' : 'claude'" :size="11" />
           <Icon v-else :name="shellIcon(views.get(pane.leaf.terminal)?.shell)" :size="11" />
           <span class="name">{{ nameOf(pane.leaf.terminal) }}</span>
           <span v-if="tabAccountLabel(views.get(pane.leaf.terminal))" class="account">{{ tabAccountLabel(views.get(pane.leaf.terminal)) }}</span>
@@ -544,8 +549,14 @@ defineExpose({ placed, shown, rectOf, dropAt });
           </span>
           <button type="button" class="x" tabindex="-1" :aria-label="t('common.close')" :title="t('common.close')" @click.stop="emit('close', pane.leaf.terminal)" @dblclick.stop>×</button>
         </div>
-        <div :ref="(el) => hostRef(pane.leaf.key, el as Element | null)" class="host" :data-pane="pane.leaf.key"></div>
-        <TerminalFind :id="pane.leaf.terminal" />
+        <!-- A chat draws itself where a terminal's xterm would go (no PTY, nothing to size). A tab
+             the core's list doesn't show yet (just opened) waits for it: until then nobody knows
+             whether it is a chat, and a chat's id must never get an xterm. -->
+        <ChatView v-if="views.get(pane.leaf.terminal)?.kind === 'chat'" :key="pane.leaf.terminal" class="chat-pane" :view="views.get(pane.leaf.terminal)!" @settings="emit('settings')" />
+        <template v-else-if="views.has(pane.leaf.terminal)">
+          <div :ref="(el) => hostRef(pane.leaf.key, el as Element | null)" class="host" :data-pane="pane.leaf.key"></div>
+          <TerminalFind :id="pane.leaf.terminal" />
+        </template>
       </template>
       <div v-else class="cell" :aria-label="t('panes.empty')" role="group">
         <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, false, null, null)">
@@ -556,6 +567,9 @@ defineExpose({ placed, shown, rectOf, dropAt });
         </button>
         <button v-if="agentOn('codex')" type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, projectCodexChoice(project), null)">
           <AgentMark agent="codex" :size="12" /> {{ t("terminal.newCodex") }}
+        </button>
+        <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="emit('openChat', { kind: 'cell', key: pane.leaf.key })">
+          <Icon name="chat" :size="12" /> {{ t("chat.new") }}
         </button>
       </div>
       <div v-if="dropping?.key === pane.leaf.key" :class="['drop', dropping.side ?? 'swap']">
@@ -766,6 +780,12 @@ body.grabbing .head {
   min-height: 0;
   margin: 6px 4px 6px 10px;
   overflow: clip;
+}
+
+/* A chat in a pane: under the head, the whole of the pane's room. */
+.chat-pane {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .host :deep(.terminal-host),

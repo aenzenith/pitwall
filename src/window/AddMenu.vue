@@ -18,7 +18,9 @@ import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../li
  * "New Codex"); a click on a row opens it at once as the project's settings say. The `›` at a
  * row's end (hovered, or → from the keyboard) opens its details to the right: an agent's model,
  * mode and, with more than one, account, each opening at once with that one change; on Windows
- * the shells, then each as an administrator's. Its look is the board's give menu's.
+ * the shells, then each as an administrator's. Its last row, "Yeni sohbet", opens a chat with
+ * Claude (docs/SOHBET.md): its details name the agents a chat can be with, Codex's greyed until
+ * it comes. Its look is the board's give menu's.
  */
 const props = defineProps<{
   project: Project;
@@ -32,6 +34,8 @@ const emit = defineEmits<{
   /** An agent's tab, with its start (none: Claude as the project's settings say, as today) and,
    * when one was picked, its account. */
   agent: [start: AgentStartChoice | null, account: string | null];
+  /** A chat with Claude (lib/chat/open: `startChat`). */
+  chat: [];
 }>();
 
 type SubItem = {
@@ -41,12 +45,14 @@ type SubItem = {
   mono?: boolean;
   icon?: "terminal" | "powershell" | "shield";
   tone?: "nav" | "link" | "warn";
+  /** A word after the label, in a tag ("çok yakında"). */
+  tag?: string;
   checked: boolean;
   enabled: boolean;
   run: () => void;
 };
 type SubEntry = { kind: "head"; key: string; label: string } | { kind: "sep"; key: string } | SubItem;
-type Row = { id: "shell" | Agent; label: string; keys: string | null; sub: SubEntry[] | null; run: () => void };
+type Row = { id: "shell" | Agent | "chat"; label: string; keys: string | null; sub: SubEntry[] | null; run: () => void };
 
 const open = ref(false);
 /** The row under the pointer or the keyboard. */
@@ -134,6 +140,14 @@ function codexSub(): SubEntry[] {
   return entries;
 }
 
+/** The chat's details: Claude Code, checked; Codex greyed, "çok yakında". */
+function chatSub(): SubEntry[] {
+  return [
+    { kind: "item", key: "chat-claude", label: t("chat.agent.claude"), checked: true, enabled: true, run: () => emit("chat") },
+    { kind: "item", key: "chat-codex", label: t("chat.agent.codex"), tag: t("chat.agent.soon"), checked: false, enabled: false, run: () => undefined },
+  ];
+}
+
 /** On Windows the shells installed (the one a new tab opens checked), then each as an
  * administrator's under its own head. */
 function shellSub(): SubEntry[] {
@@ -155,7 +169,10 @@ function shellSub(): SubEntry[] {
 const rows = computed<Row[]>(() => {
   void open.value;
   const made: Row[] = [{ id: "shell", label: t("terminal.newTab"), keys: newTabKeys, sub: props.shells.length ? shellSub() : null, run: () => emit("shell", null) }];
+  // A chat is Claude's (O15: Codex's comes later, shown greyed and not picked); second, over the
+  // agents' tabs (the user's word, 2026-11-14).
   if (agentOn("claude")) {
+    made.push({ id: "chat", label: t("chat.new"), keys: null, sub: chatSub(), run: () => emit("chat") });
     made.push({ id: "claude", label: t("terminal.newClaude"), keys: null, sub: claudeSub(), run: () => emit("agent", null, null) });
   }
   if (agentOn("codex")) {
@@ -357,6 +374,7 @@ onBeforeUnmount(hide);
           @click="pick(i)"
         >
           <Icon v-if="row.id === 'shell'" name="terminal" :size="14" class="mark-shell" />
+          <Icon v-else-if="row.id === 'chat'" name="chat" :size="14" class="mark-shell" />
           <AgentMark v-else :agent="row.id" :size="14" />
           <span class="lb">{{ row.label }}</span>
           <span v-if="row.keys" class="kb">{{ row.keys }}</span>
@@ -393,6 +411,7 @@ onBeforeUnmount(hide);
             <span class="ck"><Icon v-if="entry.checked" name="check" :size="13" /></span>
             <Icon v-if="entry.icon" :name="entry.icon" :size="14" :class="`tone-${entry.tone}`" />
             <span :class="['lb', { mono: entry.mono }]">{{ entry.label }}</span>
+            <span v-if="entry.tag" class="tag">{{ entry.tag }}</span>
           </div>
         </template>
       </div>
@@ -514,6 +533,16 @@ onBeforeUnmount(hide);
 
 .si {
   padding-left: 8px;
+}
+
+/* A greyed item's word ("çok yakında"), in a tag at its end, readable through the greying. */
+.tag {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--text-soft);
 }
 
 .ck {

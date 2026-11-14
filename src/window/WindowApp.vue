@@ -27,7 +27,7 @@ import { askAway, cardRequest, COLLAPSED_HEIGHT, foldPanel, followProject, openI
 import { followStand, listenPanelState, standPanel } from "../lib/panelStand";
 import { shellRequest } from "../lib/flag";
 import { closeChord, dragRegion, isMac, isWindows, keys, terminalChord } from "../lib/platform";
-import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, raiseFiles, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
+import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, openFile, projectFiles, raiseFiles, revealInTree, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
 import { focusTerminal, listRequest, openInWindow, openTarget, pickOnPage, pickRequest } from "../lib/open";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
@@ -58,6 +58,8 @@ import TeamHead from "./team/TeamHead.vue";
 import TeamNameDialog from "./team/TeamNameDialog.vue";
 import TitleBar from "./TitleBar.vue";
 import AgentFound from "./settings/AgentFound.vue";
+import StartChatDialog from "./chat/StartChatDialog.vue";
+import { chatAsks } from "../lib/chat/open";
 
 const filter = ref<Filter>("all");
 /** The project list, the track they run on, the day's timeline, Claude's sessions, the board of
@@ -776,7 +778,7 @@ let unlistenPage: UnlistenFn | null = null;
 
 /** From the switcher (`/`): that page of the window. Settings opens over the page shown and "Add
  * project" asks for the folder; any other page closes Settings, which would cover it. */
-function revealPage(page: Page, tab?: "notifications"): void {
+function revealPage(page: Page, tab?: "claude" | "notifications"): void {
   if (page === "settings") openSettings(tab);
   else if (page === "add") void api.pickFolder();
   else {
@@ -810,11 +812,15 @@ function showInList(path: string): void {
   if (project && !drawn(project)) setFavouritesOnly(false);
 }
 
-/** From outside the window: the project's Files window, over the page shown; Settings, which
- * would cover it, closes. */
-function revealFiles(path: string): void {
+/** From outside the window: the project's Files window, over the page shown, with `file` (a path
+ * of the project's) open in it when one is named; Settings, which would cover it, closes. */
+function revealFiles(path: string, file?: string): void {
   settingsOpen.value = false;
   showFiles(path);
+  if (typeof file !== "string" || !file) return;
+  const files = projectFiles(path);
+  revealInTree(files, file);
+  openFile(files, file, true);
 }
 
 // A page's double click where its project opens in the list (lib/open).
@@ -903,8 +909,9 @@ onMounted(async () => {
   window.addEventListener("focus", lookForAgents);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
   unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
-  // Opened from the popover, the switcher or the mini tower where Settings › Projects says Files.
-  unlistenFiles = await listen<{ path: string }>("reveal-files", (event) => revealFiles(event.payload.path));
+  // Opened from the popover, the switcher or the mini tower where Settings › Projects says Files;
+  // a chat's "Show in Files" in the terminals' own window, on its file.
+  unlistenFiles = await listen<{ path: string; file?: string }>("reveal-files", (event) => revealFiles(event.payload.path, event.payload.file));
   // A click on the 90 % notification: the Fuel page.
   // Codex's alert opens it on Codex.
   unlistenFuelReveal = await listen<{ agent?: Agent } | null>("reveal-fuel", (event) => {
@@ -923,7 +930,8 @@ onMounted(async () => {
   // A fuel alert's line in the list of what was missed opens the Fuel page on its agent; what a
   // lap's session waits on, the Turlar page with that run's dialog open (lib/laps: `lapAsked`).
   // A new version that waits (its notification, the popover's line, the tray's menu): its dialog.
-  unlistenPage = await listen<{ page: Page | "update"; tab?: "notifications"; agent?: Agent; run?: string }>("reveal-page", (event) => {
+  // A chat's settings button in the terminals' own window: Settings › Claude.
+  unlistenPage = await listen<{ page: Page | "update"; tab?: "claude" | "notifications"; agent?: Agent; run?: string }>("reveal-page", (event) => {
     if (event.payload.page === "update") return void (updateAsked.value = true);
     if (event.payload.agent) fuelPicked.value = agentOf(event.payload.agent);
     if (event.payload.run) lapAsked.value = event.payload.run;
@@ -1345,7 +1353,7 @@ function server(project: Project): string {
          up where it stands, rather than going or coming at once (the user's word; TerminalPanel's
          `stand-*` styles). -->
     <Transition name="stand">
-      <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" :stand="panelStand" />
+      <TerminalPanel v-if="panelShown && panelProject" ref="terminalPanel" :project="panelProject" :stand="panelStand" @open-settings="openSettings('claude')" />
     </Transition>
     </div>
 
@@ -1377,6 +1385,9 @@ function server(project: Project): string {
     <TeamNameDialog v-if="teamAsk?.kind === 'create'" :name="null" :choices="teamChoices" :picked="teamAsk.projects" @save="saveTeamName" @close="teamAsk = null" />
     <TeamNameDialog v-else-if="teamAsk?.kind === 'rename'" :name="teamAsk.team.name" @save="saveTeamName" @close="teamAsk = null" />
     <TeamDeleteDialog v-else-if="teamAsk?.kind === 'delete'" :team="teamAsk.team" @remove="removeAskedTeam" @close="teamAsk = null" />
+    <!-- A chat's start: the project's first chat asked once, a session open elsewhere, a failure
+         (lib/chat/open: chatAsks), one at a time. -->
+    <StartChatDialog v-if="chatAsks.length" :key="chatAsks[0].id" :ask="chatAsks[0]" />
   </div>
 </template>
 

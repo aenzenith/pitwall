@@ -69,6 +69,9 @@ mod tower;
 mod cli;
 pub use cli::CliState;
 mod capture;
+mod chat;
+pub use chat::{ChatBuffer, ChatInterruptReceipt, ChatOpen};
+pub(crate) use restore::write_private;
 mod agents;
 mod codex_state;
 mod codex_past;
@@ -151,6 +154,12 @@ pub enum CoreEvent {
     /// Show the Turlar page with this run's dialog open, its terminal there (a click on the banner
     /// of what a lap's session waits on, `lap_waits`).
     RevealLap(String),
+    /// What a chat tab's process said (`core/chat.rs`), batched: `seq` is the number of the last
+    /// of `frames`, which are numbered one after another.
+    Chat { id: u64, seq: u64, frames: Vec<serde_json::Value> },
+    /// A chat tab's process ended, after its last frames: its exit code, why, and the end of what
+    /// it wrote on stderr when that wasn't a close.
+    ChatExit { id: u64, code: Option<i32>, reason: crate::chat::ChatExitReason, stderr: Option<String> },
 }
 
 pub type Sink = Arc<dyn Fn(CoreEvent) + Send + Sync>;
@@ -299,6 +308,9 @@ pub struct Core {
     inner: Mutex<Inner>,
     /// Project terminals' processes; apart from `inner` so typing never waits on it.
     terminals: Mutex<HashMap<u64, terminal::Session>>,
+    /// The chat tabs (`chat.rs`), by terminal id; never held while one of them is
+    /// (`ChatTab::shared` is a leaf).
+    chat_tabs: Mutex<HashMap<u64, Arc<chat::ChatTab>>>,
     /// What the day's timeline has written down last.
     activity: Mutex<activity::Recorder>,
     /// The day's Claude tokens as last looked at, and what of them was written down.
@@ -408,6 +420,7 @@ impl Core {
                 ..Inner::default()
             }),
             terminals: Mutex::new(HashMap::new()),
+            chat_tabs: Mutex::new(HashMap::new()),
             activity: Mutex::new(activity::Recorder::default()),
             day_tokens: Mutex::new(day_tokens::DayTokens::default()),
             sessions: Mutex::new(sessions::SessionsCache::new(claude_off)),
@@ -449,6 +462,8 @@ impl Core {
         self.board_quit();
         // What a lap runs is let go of here, its records cut, before the processes go.
         self.laps_quit();
+        // The chats end their turns and write their transcripts, a moment at most.
+        self.quit_chats();
 
         let mut pids: Vec<u32> = {
             let mut inner = self.lock();
@@ -457,6 +472,7 @@ impl Core {
             inner.runs.values().map(|run| run.pid).chain(inner.jobs.values().map(|job| job.pid())).chain(lingering).collect()
         };
         pids.extend(self.terminal_pids());
+        pids.extend(self.chat_groups().into_iter().map(|entry| entry.pid));
         pids.sort_unstable();
         pids.dedup();
         // The tabs' jobs go with their shells. On Windows a tab's whole tree is in a job of its

@@ -9,7 +9,7 @@ import { computed, reactive, watch } from "vue";
 import { accountLabel, accountName, codexAccounts } from "./accounts";
 import { t } from "./i18n";
 import { isLinux, isMac, isWindows, keys, primary, terminalChord } from "./platform";
-import { api } from "./store";
+import { api, snapshot } from "./store";
 import { resolvedTheme, themeAt, type ResolvedTheme } from "./theme";
 import type { ClaudeAccount, TerminalView } from "./types";
 
@@ -332,6 +332,11 @@ function create(id: number): View {
  * shell isn't squeezed to its tab row.
  */
 export function attach(id: number, host: HTMLElement, fit = true, focus = true): void {
+  // A chat has no xterm and no PTY: it draws itself (ChatView), and only takes the keyboard.
+  if (isChatTab(id)) {
+    if (focus) chatHosts.get(id)?.focus();
+    return;
+  }
   const view = views.get(id) ?? create(id);
   if (view.element.parentElement !== host) {
     host.replaceChildren(view.element);
@@ -342,11 +347,14 @@ export function attach(id: number, host: HTMLElement, fit = true, focus = true):
 }
 
 export function focusView(id: number): void {
-  views.get(id)?.term.focus();
+  const chat = chatHosts.get(id);
+  if (chat) chat.focus();
+  else views.get(id)?.term.focus();
 }
 
 /** Sizes the terminal to its host and tells the shell. */
 export function fitView(id: number, tell = true): void {
+  if (isChatTab(id)) return;
   const view = views.get(id);
   if (!view || !view.element.isConnected) return;
   view.fit.fit();
@@ -361,12 +369,50 @@ export function fitView(id: number, tell = true): void {
 }
 
 export function dispose(id: number): void {
+  if (chatHosts.has(id)) finds.delete(id);
   const view = views.get(id);
   if (!view) return;
   finds.delete(id);
   view.term.dispose();
   view.element.remove();
   views.delete(id);
+}
+
+/* ---------- chat tabs ---------- */
+
+/**
+ * A chat tab (`kind: "chat"`, window/chat/ChatView) has no xterm and no PTY: nothing is sized,
+ * written or read for it. Its view registers here while it is up, so the panel's calls (the
+ * keyboard, ⌘F and the search bar) reach it as they reach a terminal.
+ */
+export type ChatHost = {
+  focus: () => void;
+  /** The text selected in the conversation, on one line, or "". */
+  selection: () => string;
+  /** Looks for `query`; `step` moves from where the search stands (none: stays). */
+  search: (query: string, options: { caseSensitive: boolean; wholeWord: boolean; regex: boolean }, step: FindStep | null) => { index: number; count: number; invalid: boolean };
+  clear: () => void;
+};
+const chatHosts = new Map<number, ChatHost>();
+
+/** The chat tabs the snapshot lists. */
+const chatTabs = computed(() => {
+  const ids = new Set<number>();
+  for (const project of snapshot.value?.projects ?? []) for (const view of project.terminals ?? []) if (view.kind === "chat") ids.add(view.id);
+  return ids;
+});
+
+export function isChatTab(id: number): boolean {
+  return chatHosts.has(id) || chatTabs.value.has(id);
+}
+
+/** A chat's view comes up (its host) or goes (null). */
+export function hostChat(id: number, host: ChatHost | null): void {
+  if (host) chatHosts.set(id, host);
+  else {
+    chatHosts.delete(id);
+    finds.delete(id);
+  }
 }
 
 /* ---------- ⌘F: a terminal's search ---------- */
@@ -444,9 +490,17 @@ function asked(query: string): { term: string; options: ISearchOptions; edged: b
 
 /** Looks for the query from the match the search stands on (the selection), up (`previous`, to
  * older lines) or down, round at the ends; with none, from the newest line up. */
-function look(id: number, step: FindStep): void {
-  const view = views.get(id);
+function look(id: number, step: FindStep | null): void {
+  const chat = chatHosts.get(id);
   const find = finds.get(id);
+  if (chat && find) {
+    const found = chat.search(find.query, findOptions, step);
+    find.index = found.index;
+    find.count = found.count;
+    find.invalid = found.invalid;
+    return;
+  }
+  const view = views.get(id);
   if (!view || !find) return;
   const ask = find.query ? asked(find.query) : null;
   find.invalid = !!find.query && !ask;
@@ -473,6 +527,7 @@ function look(id: number, step: FindStep): void {
 /** Marks drawn anew where the search stands: the theme or a choice changed, or the terminal was
  * cleared. */
 function relook(id: number): void {
+  if (chatHosts.has(id)) return look(id, null);
   const view = views.get(id);
   if (!view || !finds.get(id)?.query) return;
   view.search.clearDecorations();
@@ -482,6 +537,19 @@ function relook(id: number): void {
 /** ⌘F: the terminal's search bar, its field taking the keyboard. Text selected in the terminal,
  * on one line, is what it looks for. */
 export function openFind(id: number): void {
+  const chat = chatHosts.get(id);
+  if (chat) {
+    const seed = chat.selection() || null;
+    const find = finds.get(id);
+    if (!find) finds.set(id, { query: seed ?? "", index: -1, count: 0, invalid: false, focus: true });
+    else {
+      find.focus = true;
+      if (seed === null || seed === find.query) return;
+      find.query = seed;
+    }
+    if (seed !== null) look(id, "previous");
+    return;
+  }
   const view = views.get(id);
   if (!view) return;
   const picked = view.term.hasSelection() ? view.term.getSelection() : "";
@@ -502,6 +570,12 @@ export function openFind(id: number): void {
  * keyboard goes back to the terminal. */
 export function closeFind(id: number): void {
   finds.delete(id);
+  const chat = chatHosts.get(id);
+  if (chat) {
+    chat.clear();
+    chat.focus();
+    return;
+  }
   const view = views.get(id);
   if (!view) return;
   view.asked = null;

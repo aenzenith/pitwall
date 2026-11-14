@@ -9,6 +9,11 @@ import type { Agent } from "../lib/types";
 const filter = ref<Filter>("all");
 const scope = ref<string | null>(null);
 const agentScope = ref<Agent | null>(null);
+
+/** Which of the user's shelves the list shows (O10): every session but the archived ones, the
+ * unread, the archived, or one group's. Kept while the app runs, never stored. */
+type Shelf = "all" | "unread" | "archived" | `group:${string}`;
+const shelf = ref<Shelf>("all");
 </script>
 
 <script setup lang="ts">
@@ -20,17 +25,20 @@ import PeriodPicker from "../components/PeriodPicker.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
 import Spinner from "../components/Spinner.vue";
 import { agentName, agentOn, agentsOn, multiAgent } from "../lib/agents";
+import { opensChat, startChat } from "../lib/chat/open";
 import { agentsTab } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
-import { useNativeMenu } from "../lib/nativeMenu";
+import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import { openInPanel, panelTyping, usePanelFollow } from "../lib/panel";
 import { dragRegion } from "../lib/platform";
 import { messageState, useLastMessage } from "../lib/lastMessage";
 import { ALL, dayLong, type Period } from "../lib/period";
 import { bringKeys, FILTERS, finishedWaits, keepOrder, layout, matches, othersWaiting, resumeCommand, sectionOf, sessionTerminal, sessionWaits, type Layout } from "../lib/sessions";
+import { addGroup, archivedIds, groupOf, loadSessionsMeta, markOpened, patchSessionsMeta, sessionGroups, sessionsMeta, unreadIds } from "../lib/sessionsMeta";
 import { api, loadSessions, now, sessions, snapshot, today, visible } from "../lib/store";
 import { tabKey } from "../lib/tabs";
 import type { SessionRow, SessionsView } from "../lib/types";
+import GroupNameDialog from "./sessions/GroupNameDialog.vue";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionList from "./sessions/SessionList.vue";
 import SessionNotice from "./sessions/SessionNotice.vue";
@@ -149,10 +157,35 @@ function agentMenu(event: MouseEvent): void {
 const query = ref("");
 const q = computed(() => query.value.trim().toLowerCase());
 /** The sessions the project and the agent picked and the search leave, the listed projects' alone
- * (a folder outside them has none here); the tabs pick from these. */
-const pool = computed(() =>
+ * (a folder outside them has none here); the shelves pick from these. */
+const scoped = computed(() =>
   all.value.filter((row) => (scope.value ? row.path === scope.value : row.path !== null) && (!agentShown.value || row.agent === agentShown.value) && matches(row, q.value)),
 );
+
+/** The group the shelf shows, while it is there. */
+const shelfGroup = computed(() => (shelf.value.startsWith("group:") ? (sessionGroups.value.find((group) => `group:${group.id}` === shelf.value) ?? null) : null));
+
+// A group deleted (here or from another page) leaves its shelf for every session.
+watch(
+  [sessionsMeta, shelf],
+  () => {
+    if (sessionsMeta.value && shelf.value.startsWith("group:") && !shelfGroup.value) shelf.value = "all";
+  },
+  { immediate: true },
+);
+
+/** On `on`'s shelf: an archived session only on the archive's. */
+function onShelf(row: SessionRow, on: Shelf): boolean {
+  const archived = archivedIds.value.has(row.id);
+  if (on === "archived") return archived;
+  if (archived) return false;
+  if (on === "unread") return unreadIds.value.has(row.id);
+  if (on === "all") return true;
+  return sessionGroups.value.some((group) => `group:${group.id}` === on && group.sessions.includes(row.id));
+}
+
+/** The sessions of the shelf shown; the tabs pick from these. */
+const pool = computed(() => scoped.value.filter((row) => onShelf(row, shelf.value)));
 
 const counts = computed(() => {
   const found: Record<Filter, number> = { all: pool.value.length, waiting: 0, working: 0, ended: 0 };
@@ -166,7 +199,8 @@ const counts = computed(() => {
 const current = computed(() => FILTERS.find((f) => f.id === filter.value) ?? FILTERS[0]);
 /** A tab's name; looking back, the ended ones didn't end today. */
 const filterLabel = (f: (typeof FILTERS)[number]): string => t(f.id === "ended" && period.value !== null ? "sessions.filter.endedPast" : f.label);
-const fresh = computed(() => layout(pool.value, current.value.sections));
+/** The user's groups are sections of their own, before the states, but on a group's own shelf. */
+const fresh = computed(() => layout(pool.value, current.value.sections, shelf.value === "all" || shelf.value === "unread" ? sessionGroups.value : []));
 
 /**
  * While the pointer or the keyboard is on the list, rows keep their places (lib/sessions:
@@ -186,8 +220,9 @@ function hold(by: keyof typeof held, on: boolean): void {
   frozen.value = holding.value ? (frozen.value ?? fresh.value) : null;
 }
 
-// A new filter, project, agent or search is a new list: its order is taken as it stands.
-watch([filter, q, scope, agentShown], () => {
+// A new filter, project, agent, shelf or search is a new list: its order is taken as it stands. So
+// is a session archived, marked or moved into a group: what the user did shows at once.
+watch([filter, q, scope, agentShown, shelf, sessionsMeta], () => {
   if (holding.value) frozen.value = fresh.value;
 });
 
@@ -238,10 +273,39 @@ async function bringUp(id: string): Promise<void> {
   if (!row || pending.value) return;
   pending.value = id;
   const started = Date.now();
-  await api.revealClaude(row.path ?? row.folder, row.id).catch(() => undefined);
+  const opened = await api.revealClaude(row.path ?? row.folder, row.id).then(
+    () => true,
+    () => false,
+  );
+  if (opened) void markOpened(id);
   const rest = MIN_SPIN_MS - (Date.now() - started);
   if (rest > 0) await new Promise((resolve) => window.setTimeout(resolve, rest));
   pending.value = null;
+}
+
+/** A Claude session of a listed project that runs nowhere can go on in a chat: ended, or its process
+ * gone while its row isn't ended yet (`running` not true; the core opens it again, `liveness`). */
+function chattable(row: SessionRow): boolean {
+  return row.agent === "claude" && row.path !== null && agentOn("claude") && (row.phase === "ended" || row.running !== true);
+}
+
+/** The session whose chat is on its way. */
+const chatting = ref<string | null>(null);
+
+/** "Sohbette aç": the session goes on in a chat in Pitwall's terminal panel (lib/chat/open asks
+ * what it must first: the project's trust, where it runs when it runs after all). */
+async function openInChat(id: string): Promise<void> {
+  const row = byId.value.get(id);
+  if (!row?.path || !chattable(row) || chatting.value) return;
+  chatting.value = id;
+  const started = Date.now();
+  try {
+    if (await startChat(row.path, { session: row.id })) void markOpened(id);
+  } finally {
+    const rest = MIN_SPIN_MS - (Date.now() - started);
+    if (rest > 0) await new Promise((resolve) => window.setTimeout(resolve, rest));
+    chatting.value = null;
+  }
 }
 
 /** Seen is kept per project: what Claude finished there counts as seen; an open question or
@@ -267,13 +331,96 @@ const menu = useNativeMenu();
 function rowMenu(event: MouseEvent, id: string): void {
   const row = byId.value.get(id);
   if (!row) return;
+  const unread = unreadIds.value.has(id);
+  const archived = archivedIds.value.has(id);
+  const inGroup = groupOf(id);
+  const chat: MenuEntry[] = chattable(row) ? [{ text: t("chatSurface.openInChat"), enabled: !chatting.value, action: () => void openInChat(id) }] : [];
   void menu.popup(event, [
     { text: t(bringKeys(row).label), action: () => void bringUp(id) },
+    ...chat,
     { text: t("sessions.menu.markSeen", { project: row.project }), enabled: finishedWaits(row, all.value), action: () => markSeen(id) },
     { text: t("sessions.copyResume"), action: () => copyResume(id) },
     "separator",
+    { text: t(unread ? "chatSurface.sessions.markRead" : "chatSurface.sessions.markUnread"), action: () => void patchSessionsMeta({ unread: [id], on: !unread }) },
+    { text: t(archived ? "chatSurface.sessions.unarchive" : "chatSurface.sessions.archive"), action: () => void patchSessionsMeta({ archive: [id], on: !archived }) },
+    {
+      text: t("chatSurface.groups.moveTo"),
+      items: [
+        ...sessionGroups.value.map((group) => ({ text: group.name, checked: inGroup?.id === group.id, action: () => void patchSessionsMeta({ move: [id], to: group.id }) })),
+        ...(sessionGroups.value.length ? ["separator" as const] : []),
+        { text: t("chatSurface.groups.new"), action: () => (naming.value = { group: null, take: [id] }) },
+        { text: t("chatSurface.groups.takeOut"), enabled: !!inGroup, action: () => void patchSessionsMeta({ move: [id], to: null }) },
+      ],
+    },
+    "separator",
     { text: t("sessions.openProject"), action: () => openProject(id) },
   ]);
+}
+
+/* ---------- the user's shelves and groups ---------- */
+
+/** A shelf's name, as its button and menu say it. */
+function shelfName(on: Shelf): string {
+  if (on === "all") return t("chatSurface.shelf.all");
+  if (on === "unread") return t("chatSurface.shelf.unread");
+  if (on === "archived") return t("chatSurface.shelf.archived");
+  return sessionGroups.value.find((group) => `group:${group.id}` === on)?.name ?? "";
+}
+
+/** The shelf's menu, under its button: every shelf with how many sessions it holds of the project,
+ * agent and search picked; then a new group, and the group shown's own. */
+function shelfMenu(event: MouseEvent): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const entry = (on: Shelf): MenuEntry => {
+    const count = on === "all" ? 0 : scoped.value.filter((row) => onShelf(row, on)).length;
+    const name = shelfName(on);
+    return { text: count ? t("chatSurface.shelf.counted", { name, count }) : name, checked: shelf.value === on, action: () => (shelf.value = on) };
+  };
+  const group = shelfGroup.value;
+  void menu.popup({ clientX: box.left, clientY: box.bottom + 4 }, [
+    entry("all"),
+    entry("unread"),
+    entry("archived"),
+    ...(sessionGroups.value.length ? ["separator" as const, ...sessionGroups.value.map((each) => entry(`group:${each.id}`))] : []),
+    "separator",
+    { text: t("chatSurface.groups.new"), action: () => (naming.value = { group: null, take: [] }) },
+    ...(group
+      ? [
+          { text: t("chatSurface.groups.rename", { name: group.name }), action: () => (naming.value = { group: { id: group.id, name: group.name }, take: [] }) },
+          { text: t("chatSurface.groups.delete", { name: group.name }), action: () => void patchSessionsMeta({ ungroup: group.id }) },
+        ]
+      : []),
+  ]);
+}
+
+/** A right-click on a group's name in the list: its shelf, its name, its end (the sessions stay). */
+function groupMenu(event: MouseEvent, id: string): void {
+  const group = sessionGroups.value.find((each) => each.id === id);
+  if (!group) return;
+  void menu.popup(event, [
+    { text: t("chatSurface.groups.showOnly"), action: () => (shelf.value = `group:${id}`) },
+    "separator",
+    { text: t("chatSurface.groups.rename", { name: group.name }), action: () => (naming.value = { group: { id, name: group.name }, take: [] }) },
+    { text: t("chatSurface.groups.delete", { name: group.name }), action: () => void patchSessionsMeta({ ungroup: id }) },
+  ]);
+}
+
+/** The group being named: a new one (`group` null, `take` the sessions it takes in at once) or one
+ * renamed. */
+const naming = ref<{ group: { id: string; name: string } | null; take: string[] } | null>(null);
+
+async function saveGroup(name: string): Promise<void> {
+  const asked = naming.value;
+  if (!asked) return;
+  if (asked.group) {
+    await patchSessionsMeta({ group: { id: asked.group.id, name } });
+    return;
+  }
+  const id = await addGroup(name);
+  if (!id) return;
+  if (asked.take.length) await patchSessionsMeta({ move: asked.take, to: id });
+  // Made from the shelf's menu, it is the shelf shown: an empty one says how it fills.
+  else shelf.value = `group:${id}`;
 }
 
 /* ---------- text ---------- */
@@ -314,6 +461,11 @@ const emptyTitle = computed<Key>(() => whoseKey(period.value === null ? "session
 
 const noneText = computed(() => {
   if (q.value) return t("sessions.none.search");
+  if (shelf.value !== "all" && filter.value === "all") {
+    if (shelf.value === "unread") return t("chatSurface.shelf.noneUnread");
+    if (shelf.value === "archived") return t("chatSurface.shelf.noneArchived");
+    return t("chatSurface.shelf.noneGroup");
+  }
   switch (filter.value) {
     case "waiting":
       return t("sessions.none.waiting");
@@ -373,6 +525,7 @@ function openClaude(): void {
 // opening, a fresh look (back on screen, the window asks: WindowApp).
 onMounted(() => {
   void loadSessions();
+  void loadSessionsMeta();
 });
 </script>
 
@@ -410,6 +563,19 @@ onMounted(() => {
             <span v-if="view" :class="['tab-count', { hot: f.id === 'waiting' && counts.waiting > 0, total: f.id === 'all' }]">{{ counts[f.id] }}</span>
           </button>
         </div>
+        <!-- The user's shelves beside the states: the archive, the unread, a group. Its mark alone
+             while every session shows. -->
+        <button
+          type="button"
+          :class="['shelf-pick', { on: shelf !== 'all' }]"
+          aria-haspopup="menu"
+          :aria-label="t('chatSurface.shelf.label')"
+          :title="shelf === 'all' ? t('chatSurface.shelf.label') : shelfName(shelf)"
+          @click="shelfMenu"
+        >
+          <Icon name="filter" :size="12" />
+          <span v-if="shelf !== 'all'" class="shelf-text">{{ shelfName(shelf) }}</span>
+        </button>
         <!-- Beside the projects: whose sessions, while more than one agent is on. -->
         <button v-if="multiAgent" type="button" class="agent-pick" aria-haspopup="menu" :aria-label="t('sessions.filter.agentLabel')" :title="t('sessions.filter.agentLabel')" @click="agentMenu">
           <AgentMark v-if="agentShown" :agent="agentShown" :size="12" />
@@ -438,8 +604,14 @@ onMounted(() => {
           <SessionNotice v-else-if="!all.length" :tag="t('sessions.empty.tag')" :title="t(emptyTitle)">
             {{ t(whoseKey(period === null ? "sessions.empty.body" : "sessions.empty.bodyPast")) }}
             <template v-if="(panelName || claudeProject) && period === null" #action>
-              <button type="button" class="control" :title="t('sessions.empty.openClaudeTitle', { project: panelName ?? claudeProject ?? '' })" @click="openClaude">
-                {{ t("sessions.empty.openClaude") }}
+              <!-- A chat while Settings › Claude says Claude opens in one (TerminalPanel: openAgent). -->
+              <button
+                type="button"
+                class="control"
+                :title="t(opensChat() ? 'chatSurface.sessions.openChatTitle' : 'sessions.empty.openClaudeTitle', { project: panelName ?? claudeProject ?? '' })"
+                @click="openClaude"
+              >
+                {{ t(opensChat() ? "chatSurface.sessions.openChat" : "sessions.empty.openClaude") }}
               </button>
             </template>
           </SessionNotice>
@@ -453,12 +625,14 @@ onMounted(() => {
               :now="now"
               :label="filterLabel(current)"
               :plain="period !== null"
+              :unread="unreadIds"
               @select="selectedId = $event"
               @bring-up="bringUp"
               @mark-seen="markSeen"
               @open-project="openProject"
               @copy="copyResume"
               @menu="rowMenu"
+              @group-menu="groupMenu"
               @hold="hold('list', $event)"
             />
             <p v-else class="none">{{ noneText }}</p>
@@ -478,10 +652,15 @@ onMounted(() => {
       :others="others"
       :last-message="lastMessage"
       :period="period"
+      :chat="chattable(selected)"
+      :chat-busy="chatting === selected.id"
       @mark-seen="markSeen(selected.id)"
+      @chat="openInChat(selected.id)"
     />
     <!-- Nothing to show: the panel stays blank but keeps its place, so the layout never jumps. -->
     <section v-else class="detail-empty" :aria-label="t('sessions.details')"></section>
+
+    <GroupNameDialog v-if="naming" :name="naming.group?.name ?? null" :count="naming.take.length" @save="saveGroup" @close="naming = null" />
   </div>
 </template>
 
@@ -685,6 +864,69 @@ input[type="search"]::placeholder {
   background: var(--claude-well);
   color: var(--claude-text);
   font-weight: 600;
+}
+
+/* The shelves' button, one more of the tabs (their size, their look), but a menu: closer to them
+   than the pickers are. A shelf's name gives way before a tab's does. */
+.shelf-pick {
+  flex-shrink: 1000;
+  min-width: 28px;
+  height: 28px;
+  margin-left: -8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.shelf-pick svg {
+  flex-shrink: 0;
+}
+
+.shelf-pick:hover:not(.on) {
+  background: var(--bg-row-hover);
+  color: var(--text-muted);
+}
+
+.shelf-pick.on {
+  max-width: 160px;
+  padding: 0 10px 0 8px;
+  background: var(--bg-lit);
+  color: var(--text-strong);
+}
+
+.shelf-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Where the tabs are their marks, the shelf is its mark too (lit while one is picked; its name in
+   the tooltip). */
+@container (max-width: 584px) {
+  .shelf-text {
+    display: none;
+  }
+
+  .shelf-pick.on {
+    padding: 0 8px;
+  }
+}
+
+/* At the window's narrowest with the agent filter too, it closes up so that "All" keeps its name. */
+@container (max-width: 300px) {
+  .filters.paired .shelf-pick {
+    min-width: 20px;
+    margin: 0 -4px 0 -8px;
+    padding: 0 4px;
+  }
 }
 
 /* The project picker, at the row's end: a long project name gives way before a tab's does, so

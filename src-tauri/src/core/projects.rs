@@ -145,6 +145,8 @@ impl Core {
                 accounts: kept.accounts,
                 // The agents: by their own commands (`agents.rs`).
                 agents: kept.agents,
+                // The chat's: by its own command (`set_chat_settings`).
+                chat: kept.chat,
                 ..form
             };
             unnamed
@@ -282,9 +284,11 @@ impl Core {
         project.work_dir(path)
     }
 
-    pub fn set_project_settings(self: &Arc<Self>, path: &str, project: ProjectSettings) {
+    pub fn set_project_settings(self: &Arc<Self>, path: &str, mut project: ProjectSettings) {
         let moved = {
             let mut inner = self.lock();
+            // Whether its chats were allowed is `chat_trust`'s alone: a form never takes it away.
+            project.chat_trusted = inner.settings.project(path).chat_trusted;
             // Its lock file is looked for again where it runs now (`detect_managers`).
             let moved = inner.settings.project(path).folder != project.folder;
             if moved {

@@ -6,6 +6,7 @@ import ClaudeDot from "../components/ClaudeDot.vue";
 import Icon from "../components/Icon.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
 import { agentOn } from "../lib/agents";
+import { opensChat, startChat } from "../lib/chat/open";
 import { depJobName, depJobs } from "../lib/deps";
 import { commandFaded } from "../lib/format";
 import { shellRequest } from "../lib/flag";
@@ -94,9 +95,11 @@ import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames, tabKey } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
+import { peekChat } from "../lib/chat/store";
 import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
+import ChatView from "./chat/ChatView.vue";
 import CardDialog from "./board/CardDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
@@ -116,8 +119,9 @@ const REQUEST_MS = 5_000;
  * picked at the row's start. One height and one collapsed state for every page (lib/panel).
  */
 const props = withDefaults(defineProps<{ project: Project; stand?: PanelStand }>(), { stand: "dock" });
-/** In its own window, ⌘W with nothing left to close: the window goes (TerminalsApp). */
-const emit = defineEmits<{ empty: [] }>();
+/** `empty`: in its own window, ⌘W with nothing left to close: the window goes (TerminalsApp).
+ * `openSettings`: a chat asked for Settings › Claude (its composer's settings button). */
+const emit = defineEmits<{ empty: []; openSettings: [] }>();
 
 /** Along the window's bottom, as a card over the page, or in a window of its own (lib/panel:
  * `panelStand`). */
@@ -362,6 +366,14 @@ const live = computed(() => {
     // Two in one terminal (one left running in the background): the one that waits on you tells.
     if (row.phase === "working" && states.get(row.origin.terminal)?.phase === "waiting") continue;
     states.set(row.origin.terminal, { phase: row.phase, text: statusLine(row, now.value).text });
+  }
+  // A chat tells its own state (its frames), where no session row of the hook's tells it.
+  for (const term of props.project.terminals) {
+    if (term.kind !== "chat" || states.has(term.id)) continue;
+    const chat = peekChat(term.id);
+    const state = chat?.state ?? term.chat?.state;
+    if (state === "running") states.set(term.id, { phase: "working", text: t("chat.tab.working") });
+    else if (state === "requires_action" || (chat?.pending.length ?? 0) > 0) states.set(term.id, { phase: "waiting", text: t("chat.tab.waiting") });
   }
   return states;
 });
@@ -924,6 +936,32 @@ async function openTerminal(claude = false, start: AgentStartChoice | null = nul
   }
 }
 
+/** A new chat tab (the "+" menu's Yeni sohbet, an empty pane's button): opened as every chat is,
+ * through `startChat` (lib/chat/open: the trust question first), placed as a new tab is. */
+async function openChat(where: Place | null = null): Promise<void> {
+  if (opening.value) return;
+  opening.value = true;
+  try {
+    if (collapsed.value) {
+      toggleCollapsed();
+      await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
+    }
+    const opened = await startChat(props.project.path);
+    if (!opened) return;
+    if (opened.kind !== "tab") {
+      notice.value = opened.kind;
+      return;
+    }
+    const view = opened.view;
+    asked = view.id;
+    if (!terminals.value.some((term) => term.id === view.id)) fresh.add(view.id);
+    if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, "claude");
+    chooseTab(props.project.path, { kind: "terminal", id: view.id });
+  } finally {
+    opening.value = false;
+  }
+}
+
 function show(id: number): void {
   asked = id;
   chooseTab(props.project.path, { kind: "terminal", id });
@@ -1014,7 +1052,32 @@ const addLabel = computed(() => {
 /** A new agent's tab as the project's settings say: Claude's, or Codex's while Claude is off. */
 function openAgent(agent: Agent | null = null, account: string | null = null): void {
   const which = agent ?? (agentOn("claude") || !agentOn("codex") ? "claude" : "codex");
+  if (which === "claude") return void openClaude(null, null, account);
   void openTerminal(true, which === "codex" ? projectCodexChoice(props.project) : null, null, null, account);
+}
+
+/**
+ * A Claude tab asked for anywhere but "+"'s Yeni Claude row (the empty panel's and an empty pane's
+ * buttons, a pane's split menu, a page's request): Claude Code's terminal, or while Settings ›
+ * Claude says "Sohbet" (Claude açılınca), a chat (lib/chat/open) with the same start and account,
+ * placed as the terminal would be. "+" keeps both, Yeni Claude and Yeni sohbet, as rows of their own.
+ */
+async function openClaude(start: AgentStartChoice | null = null, where: Place | null = null, account: string | null = null): Promise<void> {
+  if (!opensChat()) return openTerminal(true, start, where, null, account);
+  if (opening.value) return;
+  opening.value = true;
+  try {
+    // The trust question (once per project) may come first; the tab is shown once it opens.
+    const opened = await startChat(props.project.path, { start, account });
+    if (opened?.kind !== "tab") return;
+    const id = opened.view.id;
+    asked = id;
+    if (!terminals.value.some((term) => term.id === id)) fresh.add(id);
+    if (where || layout.value) placeTerminal(id, where ?? { kind: "auto" });
+    chooseTab(props.project.path, { kind: "terminal", id });
+  } finally {
+    opening.value = false;
+  }
 }
 
 /* ---------- the panes ---------- */
@@ -1519,7 +1582,7 @@ const tabElsewhere = {
       return false;
     }
     const term = terminals.value.find((each) => each.id === id);
-    incoming.value = { kind: "tab", id, name: names.value.get(id) ?? term?.name ?? "", agent: term && term.kind !== "shell" ? term.kind : null, x, y };
+    incoming.value = { kind: "tab", id, name: names.value.get(id) ?? term?.name ?? "", agent: term && term.kind !== "shell" ? (term.kind === "chat" ? "claude" : term.kind) : null, x, y };
     return true;
   },
   drop(id: number): boolean {
@@ -2416,7 +2479,7 @@ defineExpose({ openTerminal, closeShown });
             aria-describedby="terminal-tab-keys"
             @keydown="onTabKey($event, term.id)"
           >
-            <AgentMark v-if="term.kind !== 'shell'" :agent="term.kind" :size="11" />
+            <AgentMark v-if="term.kind !== 'shell'" :agent="term.kind === 'chat' ? 'claude' : term.kind" :size="11" />
             <Icon v-else :name="shellIcon(term.shell)" :size="11" />
             <span class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
             <span v-if="tabAccountLabel(term)" class="tab-account">{{ tabAccountLabel(term) }}</span>
@@ -2460,6 +2523,7 @@ defineExpose({ openTerminal, closeShown });
         :shells="shells"
         @shell="(choice) => openTerminal(false, null, null, choice)"
         @agent="(start, account) => openTerminal(true, start, null, null, account)"
+        @chat="openChat()"
       />
       <span class="grow"></span>
       <!-- The outputs, always at the right end: the dev server's, then the commands' that ran. -->
@@ -2572,8 +2636,10 @@ defineExpose({ openTerminal, closeShown });
            at its end, following); collapsed, out of the keyboard's way. -->
       <div ref="stageEl" class="stage">
         <div v-show="!panesOn" :class="['screen', { away: showsOutput }]">
-          <div ref="viewport" class="viewport" @pointerdown="pressScreen"></div>
-          <TerminalFind v-if="active && !panesOn" :key="active.id" :id="active.id" />
+          <div ref="viewport" :class="['viewport', { covered: active?.kind === 'chat' }]" @pointerdown="pressScreen"></div>
+          <!-- A chat has no xterm: drawn over the viewport, which keeps its size to be measured. -->
+          <ChatView v-if="active?.kind === 'chat' && !panesOn" :key="active.id" class="chat-host" :view="active" @pointerdown="pressScreen" @settings="emit('openSettings')" />
+          <TerminalFind v-if="active && !panesOn && active.kind !== 'chat'" :key="active.id" :id="active.id" />
           <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
             <span>{{ t("terminal.none", { name: project.name }) }}</span>
             <!-- The "+" menu's rows, at hand where there is nothing yet. -->
@@ -2586,6 +2652,9 @@ defineExpose({ openTerminal, closeShown });
               </button>
               <button v-if="agentOn('codex')" type="button" class="control" :disabled="opening" @click="openAgent('codex')">
                 <AgentMark agent="codex" :size="12" /> {{ t("terminal.newCodex") }}
+              </button>
+              <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="openChat()">
+                <Icon name="chat" :size="12" /> {{ t("chat.new") }}
               </button>
             </div>
           </div>
@@ -2608,7 +2677,9 @@ defineExpose({ openTerminal, closeShown });
           :quiet="sliding"
           :opening="opening"
           :shells="shells"
-          @open="(where, claude, start, shell) => openTerminal(claude, start, where, shell)"
+          @open="(where, claude, start, shell) => (claude && start?.agent !== 'codex' ? openClaude(start, where) : openTerminal(claude, start, where, shell))"
+          @open-chat="(where) => openChat(where)"
+          @settings="emit('openSettings')"
           @close="close"
           @rename="renameTerminal"
           @focus="focusPane"
@@ -3652,6 +3723,18 @@ defineExpose({ openTerminal, closeShown });
 /* xterm paints its scroll area black; below the last row it would show as a strip. */
 .viewport :deep(.xterm-viewport) {
   background-color: var(--bg-log) !important;
+}
+
+/* A chat shown: the terminal under it (the last one shown) is out of sight and out of reach. */
+.viewport.covered {
+  visibility: hidden;
+}
+
+.chat-host {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  overflow: clip;
 }
 
 /* No terminal open: over the viewport, so the viewport always keeps its size and can be measured. */

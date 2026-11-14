@@ -6,7 +6,7 @@ import { namesAgent } from "../../lib/format";
 import { language, t } from "../../lib/i18n";
 import { keys, primary } from "../../lib/platform";
 import { rowKeys } from "../../lib/rows";
-import { SECTION_LABELS, sessionTitle, spendText, statusLine, type Layout } from "../../lib/sessions";
+import { SECTION_LABELS, sectionKey, sectionOf, sessionTitle, spendText, statusLine, type Layout } from "../../lib/sessions";
 import type { SessionRow } from "../../lib/types";
 import OriginLabel from "./OriginLabel.vue";
 
@@ -16,9 +16,11 @@ import OriginLabel from "./OriginLabel.vue";
  * (Ctrl+C) copies the command that resumes it. `hold` says when the pointer or the keyboard is on
  * the list, so the page keeps its order still meanwhile. `plain`: the rows without their tokens
  * (today's alone, so left out when the page looks back). While more than one agent is on, each
- * row's project starts with its agent's mark.
+ * row's project starts with its agent's mark. `unread`: the sessions the user marked unread (their
+ * names in bold, a dot before them); a group of the user's is a section under its name, its menu
+ * (`groupMenu`) on a right-click on that name.
  */
-const props = defineProps<{ layout: Layout; rows: Map<string, SessionRow>; selected: string | null; now: number; label: string; plain?: boolean }>();
+const props = defineProps<{ layout: Layout; rows: Map<string, SessionRow>; selected: string | null; now: number; label: string; plain?: boolean; unread?: Set<string> }>();
 const emit = defineEmits<{
   select: [id: string];
   bringUp: [id: string];
@@ -26,6 +28,7 @@ const emit = defineEmits<{
   openProject: [id: string];
   copy: [id: string];
   menu: [event: MouseEvent, id: string];
+  groupMenu: [event: MouseEvent, id: string];
   hold: [on: boolean];
 }>();
 
@@ -79,15 +82,28 @@ function onFocusIn(): void {
 /** The sections as drawn: each session with its name, status and spend worked out once. */
 const groups = computed(() =>
   props.layout.map((group) => ({
-    section: group.section,
-    // Looking back, the ended ones didn't end today.
-    label: `${t(props.plain && group.section === "ended" ? "sessions.filter.endedPast" : SECTION_LABELS[group.section])} · ${group.ids.length}`,
+    key: sectionKey(group),
+    group: group.section === "group" ? group.group.id : null,
+    // A group's name as the user wrote it; looking back, the ended ones didn't end today.
+    label:
+      group.section === "group"
+        ? `${group.group.name} · ${group.ids.length}`
+        : `${t(props.plain && group.section === "ended" ? "sessions.filter.endedPast" : SECTION_LABELS[group.section])} · ${group.ids.length}`,
     items: group.ids.flatMap((id) => {
       const row = props.rows.get(id);
-      return row ? [{ id, row, title: sessionTitle(row), status: statusLine(row, props.now), spend: spendText(row.spend, language.value) }] : [];
+      // In a group, each row's look is its own state's.
+      const section = group.section === "group" && row ? sectionOf(row) : group.section;
+      return row ? [{ id, row, section, unread: !!props.unread?.has(id), title: sessionTitle(row), status: statusLine(row, props.now), spend: spendText(row.spend, language.value) }] : [];
     }),
   })),
 );
+
+/** A right-click on a group's name: its own menu (rename, delete). */
+function onGroupMenu(event: MouseEvent, id: string | null): void {
+  if (!id) return;
+  event.preventDefault();
+  emit("groupMenu", event, id);
+}
 
 /** Right-click: the row is selected first, so the menu is about what the details show. */
 function onMenu(event: MouseEvent, id: string): void {
@@ -111,8 +127,8 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
       @focusin="onFocusIn"
       @focusout="onFocusOut"
     >
-      <template v-for="group in groups" :key="group.section">
-        <div class="section" role="row">
+      <template v-for="group in groups" :key="group.key">
+        <div :class="['section', { mine: group.group }]" role="row" @contextmenu="onGroupMenu($event, group.group)">
           <span role="columnheader" class="section-label">{{ group.label }}</span>
         </div>
         <div
@@ -122,7 +138,7 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
           :data-path="item.id"
           :tabindex="item.id === selected ? 0 : -1"
           :aria-selected="item.id === selected"
-          :class="['srow', group.section, { selected: item.id === selected }]"
+          :class="['srow', item.section, { selected: item.id === selected, unread: item.unread }]"
           :title="t('sessions.rowTitle')"
           @click="emit('select', item.id)"
           @dblclick="emit('bringUp', item.id)"
@@ -131,7 +147,7 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
         >
           <span :class="['mark', item.row.phase]" aria-hidden="true"></span>
           <span class="names" role="gridcell">
-            <span :class="['title', { untitled: !item.row.title }]">{{ item.title }}</span>
+            <span :class="['title', { untitled: !item.row.title }]"><span v-if="item.unread" class="unread-dot" :title="t('chatSurface.sessions.unreadMark')" :aria-label="t('chatSurface.sessions.unreadMark')" role="img"></span>{{ item.title }}</span>
             <span class="meta">
               <AgentMark v-if="namesAgent" :agent="item.row.agent" :size="12" />
               <span class="project">{{ item.row.project }}</span>
@@ -257,6 +273,28 @@ const keyHint = (): string => t("sessions.rowKeys", { open: keys("mod+Enter"), c
 
 .srow.ended .title {
   color: var(--text-subtle);
+}
+
+/* Marked unread by the user: its name in bold, a dot before it, whatever its state. */
+.srow.unread .title {
+  font-weight: 650;
+  color: var(--text-strong);
+}
+
+.unread-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: var(--text-strong);
+  vertical-align: middle;
+}
+
+/* A group's name, as the user wrote it: no capitals forced on it. */
+.section.mine .section-label {
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .meta {

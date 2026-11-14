@@ -1590,11 +1590,19 @@ pub struct StartChoice {
     agent: Option<String>,
     model: Option<String>,
     mode: Option<String>,
+    /// A chat's effort (`start::Effort`); a terminal's start has none.
+    #[serde(default)]
+    effort: Option<String>,
 }
 
 impl StartChoice {
     fn gated(&self) -> crate::start::Start {
         crate::start::Start::chosen(self.agent.as_deref(), self.model.as_deref(), self.mode.as_deref())
+    }
+
+    /// A chat's start, each word of its list (`ChatStart::of`); a chat is Claude's.
+    fn chat(&self) -> crate::start::ChatStart {
+        crate::start::ChatStart::of(self.model.as_deref(), self.mode.as_deref(), self.effort.as_deref())
     }
 }
 
@@ -1844,4 +1852,193 @@ pub fn lap_read(state: State<'_, AppState>, run: String) -> Result<(), String> {
 #[tauri::command]
 pub fn lap_reorder(state: State<'_, AppState>, ids: Vec<String>) -> Result<(), String> {
     state.core.lap_reorder(&ids)
+}
+
+/* ---------- chats (core/chat.rs) ---------- */
+
+/// A session a chat forks: its id, and the entry it is cut after.
+#[derive(serde::Deserialize)]
+pub struct ForkChoice {
+    session: String,
+    #[serde(default)]
+    at: Option<String>,
+}
+
+/// A chat tab in the project at `path` (`Core::open_chat`): a new session, one going on
+/// (`session`) or forked (`fork`); fails with `untrusted` before the project's first chat was
+/// allowed and `elsewhere` while the session runs elsewhere. It starts a process: off the main
+/// thread.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn open_chat(
+    app: AppHandle,
+    path: String,
+    start: Option<StartChoice>,
+    account: Option<String>,
+    session: Option<String>,
+    fork: Option<ForkChoice>,
+    prompt: Option<crate::chat::wire::ChatOutgoing>,
+    worktree: Option<bool>,
+) -> Result<crate::core::TerminalOpened, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    let open = crate::core::ChatOpen {
+        start: start.as_ref().map(StartChoice::chat),
+        account,
+        session,
+        fork: fork.map(|fork| (fork.session, fork.at)),
+        prompt,
+        worktree: worktree.unwrap_or(false),
+    };
+    tauri::async_runtime::spawn_blocking(move || core.open_chat(&path, open).map(|view| crate::core::TerminalOpened::Tab { view })).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn chat_send(state: State<'_, AppState>, id: u64, message: crate::chat::wire::ChatOutgoing) -> Result<String, String> {
+    state.core.chat_send(id, message)
+}
+
+#[tauri::command]
+pub fn chat_answer(state: State<'_, AppState>, id: u64, request_id: String, answer: crate::chat::control::ChatAnswer) -> Result<(), String> {
+    state.core.chat_answer(id, &request_id, &answer)
+}
+
+/// Waits for the process's reply: off the main thread.
+#[tauri::command]
+pub async fn chat_interrupt(app: AppHandle, id: u64, cancel_queued: bool) -> Result<crate::core::ChatInterruptReceipt, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.chat_interrupt(id, cancel_queued)).await.map_err(|error| error.to_string())?
+}
+
+/// The CLI's reply to one of the window's controls, made fit for the window. Off the main thread.
+#[tauri::command]
+pub async fn chat_control(app: AppHandle, id: u64, control: crate::chat::control::ChatControl) -> Result<serde_json::Value, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.chat_control(id, &control)).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn chat_buffer(state: State<'_, AppState>, id: u64, since: u64) -> Result<crate::core::ChatBuffer, String> {
+    state.core.chat_buffer(id, since)
+}
+
+/// Ends the chat (up to its close ladder) and opens its session in the terminal: off the main
+/// thread.
+#[tauri::command]
+pub async fn chat_to_terminal(app: AppHandle, id: u64) -> Result<crate::core::TerminalOpened, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.chat_to_terminal(id).map(|view| crate::core::TerminalOpened::Tab { view })).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn chat_restart(app: AppHandle, id: u64) -> Result<(), String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.chat_restart(id)).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn chat_shell(state: State<'_, AppState>, id: u64, line: String) -> Result<String, String> {
+    state.core.chat_shell(id, &line)
+}
+
+#[tauri::command]
+pub fn chat_shell_stop(state: State<'_, AppState>, id: u64, run: String) -> Result<(), String> {
+    state.core.chat_shell_stop(id, &run)
+}
+
+/// The most text an export writes.
+const CHAT_EXPORT_MAX: usize = 64 * 1024 * 1024;
+
+/// An export's file name as the window offers it: a name alone, no folder, nothing hidden.
+fn export_name(name: &str) -> String {
+    let name: String = name.chars().filter(|c| !c.is_control() && !matches!(c, '/' | '\\' | ':')).collect();
+    let name = name.trim().trim_start_matches('.').chars().take(120).collect::<String>();
+    match name.is_empty() {
+        true => "chat.txt".into(),
+        false if std::path::Path::new(&name).extension().is_none() => format!("{name}.txt"),
+        false => name,
+    }
+}
+
+/// Asks where to save chat `id`'s export (`export_conversation`'s text, as the window has it) and
+/// writes it there, once: nothing of it is kept. The file's path, or None when the dialog was
+/// cancelled.
+#[tauri::command]
+pub async fn chat_export(app: AppHandle, id: u64, text: String, name: String) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        if !state.core.chat_exists(id) || text.len() > CHAT_EXPORT_MAX {
+            return Err(t!("chatCore.error.refused"));
+        }
+        let mut dialog = app.dialog().file().set_title(t!("chatCore.dialog.export")).set_file_name(export_name(&name));
+        if let Some(downloads) = dirs::download_dir().filter(|dir| dir.is_dir()) {
+            dialog = dialog.set_directory(downloads);
+        }
+        let Some(file) = dialog.blocking_save_file().and_then(|file| file.into_path().ok()) else {
+            return Ok(None);
+        };
+        std::fs::write(&file, text.as_bytes()).map_err(|error| t!("chatCore.error.write", error = error))?;
+        Ok(Some(file.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Asks for a folder Claude works in too (`/add-dir`) and hands it to chat `id`'s process: the
+/// folder, or None when the dialog was cancelled.
+#[tauri::command]
+pub async fn chat_pick_dir(app: AppHandle, id: u64) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        if !state.core.chat_exists(id) {
+            return Err(t!("chatCore.error.gone"));
+        }
+        let Some(folder) = app.dialog().file().set_title(t!("chatCore.dialog.addDir")).blocking_pick_folder().and_then(|folder| folder.into_path().ok()) else {
+            return Ok(None);
+        };
+        state.core.chat_add_dir(id, &folder)?;
+        Ok(Some(folder.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn chat_trust(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    state.core.chat_trust(&path)
+}
+
+#[tauri::command]
+pub fn chat_bookmarks(state: State<'_, AppState>, session: String) -> Vec<String> {
+    state.core.chat_bookmarks(&session)
+}
+
+#[tauri::command]
+pub fn chat_bookmark(state: State<'_, AppState>, session: String, message: String, on: bool) -> Result<(), String> {
+    state.core.chat_bookmark(&session, &message, on)
+}
+
+#[tauri::command]
+pub fn chat_terminal_text(state: State<'_, AppState>, id: u64) -> String {
+    state.core.chat_terminal_text(id)
+}
+
+#[tauri::command]
+pub fn set_chat_settings(state: State<'_, AppState>, patch: serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+    state.core.set_chat_settings(&patch)
+}
+
+/// The empty chat's ready prompts, as the window left them.
+#[tauri::command]
+pub fn set_chat_examples(state: State<'_, AppState>, examples: Vec<String>) {
+    state.core.set_chat_examples(examples);
+}
+
+#[tauri::command]
+pub fn sessions_meta(state: State<'_, AppState>) -> crate::chat::meta::SessionsMeta {
+    state.core.sessions_meta()
+}
+
+#[tauri::command]
+pub fn set_sessions_meta(state: State<'_, AppState>, patch: crate::chat::meta::SessionsMetaPatch) -> Result<crate::chat::meta::SessionsMeta, String> {
+    state.core.set_sessions_meta(patch)
 }

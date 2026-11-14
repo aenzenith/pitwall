@@ -56,11 +56,14 @@ watchEffect(() => (document.documentElement.lang = language.value));
 // Off screen, every CSS animation stands still (tokens.css: html.paused).
 watchEffect(() => document.documentElement.classList.toggle("paused", !visible.value));
 
-// No browser context menu (Reload, Inspect…) outside text fields and selectable output.
+// No browser context menu but a text field's (Paste…) and selected text's in selectable output
+// (Copy, Look Up; a right-click on a word selects it first). So never Reload, which WebKit offers
+// wherever nothing is selected, nor a link's Open and Download.
 document.addEventListener("contextmenu", (event) => {
-  if (!(event.target instanceof HTMLElement && event.target.closest("input, textarea, .selectable"))) {
-    event.preventDefault();
-  }
+  const target = event.target instanceof Element ? event.target : null;
+  const field = target?.closest("input, textarea, [contenteditable]:not([contenteditable='false'])");
+  const selected = !!target?.closest(".selectable") && !target.closest("a") && !(getSelection()?.isCollapsed ?? true);
+  if (!field && !selected) event.preventDefault();
 });
 const surfaces = { popover: Popover, switcher: Switcher, tower: Tower, terminals: TerminalsApp } as const;
 

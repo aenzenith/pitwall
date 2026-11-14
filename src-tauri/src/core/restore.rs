@@ -91,6 +91,10 @@ pub(super) struct Tab {
     /// account); none: the main one (`accounts/`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) account: Option<String>,
+    /// `chat` for a chat tab (`chat.rs`), which comes back as a chat on its session; none for
+    /// every other tab, as every record before chats has it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) kind: Option<String>,
     /// That session was at work, or (without one) a command was running.
     cut: bool,
     cols: u16,
@@ -152,7 +156,7 @@ fn replay(scrollback: &str, cut: bool, at: u64) -> String {
 /// beside it first, synced to the disk and moved over it whole, so a quit in between leaves the
 /// one before and a power cut no file of NULs (`registry::write_durable`; the phone's channel,
 /// the laps and the radio's endpoint are kept this way too).
-pub(super) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
+pub(crate) fn write_private(file: &Path, json: &str) -> std::io::Result<()> {
     use std::io::Write;
 
     if let Some(parent) = file.parent() {
@@ -223,6 +227,8 @@ impl Core {
             HashSet::new()
         };
         let states = self.terminal_tabs();
+        // A chat is held by its session alone: one that sent nothing has none, and isn't kept.
+        let chats = self.chat_records();
 
         let inner = self.lock();
         // One Windows refused has no shell left: nothing of it is lost.
@@ -234,6 +240,25 @@ impl Core {
         let tabs = kept()
             .filter(|view| !view.elevated)
             .filter_map(|view| {
+                if view.kind == super::chat::CHAT {
+                    let (session, cut) = chats.get(&view.id)?.clone();
+                    return Some(Tab {
+                        id: view.id,
+                        path: view.path.clone(),
+                        name: view.name.clone(),
+                        renamed: view.renamed,
+                        session: Some(session),
+                        agent: Agent::Claude,
+                        shell: None,
+                        account: view.account.clone(),
+                        kind: Some(super::chat::CHAT.into()),
+                        cut,
+                        cols: 0,
+                        rows: 0,
+                        // The chat reads its earlier turns from the session's log again.
+                        scrollback: String::new(),
+                    });
+                }
                 let state = states.iter().find(|state| state.id == view.id)?;
                 let session = sessions.get(&view.id);
                 let running = state.foreground || state.pid.is_some_and(|pid| parents.contains(&pid));
@@ -247,6 +272,7 @@ impl Core {
                     agent,
                     shell: view.shell,
                     account: tab_account(view, agent),
+                    kind: None,
                     cut: session.map_or(running, |(_, busy, _)| *busy),
                     cols: state.cols,
                     rows: state.rows,
@@ -384,7 +410,11 @@ impl Core {
             let name: String = tab.name.trim().chars().take(TAB_NAME_MAX).collect();
             let size = (tab.cols > 0 && tab.rows > 0).then_some((tab.cols, tab.rows));
             let account = self.account_back_for(&launch, tab.account.as_deref());
-            let open = || self.open_terminal_with(&tab.path, &launch, (!name.is_empty()).then_some(name), tab.renamed, size, false, Some(&account));
+            let chat = tab.kind.as_deref() == Some(super::chat::CHAT);
+            let open = || match (&launch, chat) {
+                (Launch::Resume { session }, true) => self.chat_back(&tab.path, session, (!name.is_empty()).then(|| name.clone()), tab.renamed, &account),
+                _ => self.open_terminal_with(&tab.path, &launch, (!name.is_empty()).then_some(name.clone()), tab.renamed, size, false, Some(&account)),
+            };
             let id = match &session {
                 // Once, whoever opens it first: a click on it may come before its agent lists its
                 // process.
@@ -469,7 +499,7 @@ mod tests {
 
     #[cfg(unix)]
     fn tab(path: &str, session: Option<&str>) -> Tab {
-        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), agent: Agent::Claude, shell: None, account: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
+        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), agent: Agent::Claude, shell: None, account: None, kind: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
     }
 
     fn write(core: &Core, at: u64, servers: Vec<String>, tabs: Vec<Tab>) {

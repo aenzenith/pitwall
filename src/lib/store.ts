@@ -46,6 +46,7 @@ import { trackSettings, type TrackSettings } from "./track";
 import type { PhoneConfig, PhoneView } from "./types";
 import type { CalendarDay, DayRow, Lap, LapKind, LapResult, LapRun, LapsState, LapTerminal, LapWhen } from "./laps";
 import type { Found } from "./explorer";
+import type { ChatAnswer, ChatBuffer, ChatControl, ChatInterruptReceipt, ChatOutgoing, ChatSettings, SessionsMeta, SessionsMetaPatch } from "./chat/wire";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -370,6 +371,39 @@ export const api = {
   /** Something the main window's pages ask of the panel while it is in its own window. */
   panelAsk: (ask: string, show: boolean) => invoke("panel_ask", { ask, show }),
   setTerminalsOnTop: (on: boolean) => invoke("set_terminals_on_top", { on }),
+  // ---- chat (docs/SOHBET.md)
+  openChat: (
+    path: string,
+    opts: { start?: AgentStartChoice | null; account?: string | null; session?: string | null; fork?: { session: string; at?: string } | null; prompt?: ChatOutgoing | null; worktree?: boolean } = {},
+  ) =>
+    invoke<TerminalOpened>("open_chat", {
+      path,
+      start: opts.start ?? undefined,
+      account: opts.account ?? undefined,
+      session: opts.session ?? undefined,
+      fork: opts.fork ?? undefined,
+      prompt: opts.prompt ?? undefined,
+      worktree: opts.worktree ?? undefined,
+    }),
+  chatSend: (id: number, message: ChatOutgoing) => invoke<string>("chat_send", { id, message }),
+  chatAnswer: (id: number, requestId: string, answer: ChatAnswer) => invoke("chat_answer", { id, requestId, answer }),
+  chatInterrupt: (id: number, cancelQueued = false) => invoke<ChatInterruptReceipt>("chat_interrupt", { id, cancelQueued }),
+  chatControl: <T = unknown>(id: number, control: ChatControl) => invoke<T>("chat_control", { id, control }),
+  chatBuffer: (id: number, since = 0) => invoke<ChatBuffer>("chat_buffer", { id, since }),
+  chatToTerminal: (id: number) => invoke<TerminalOpened>("chat_to_terminal", { id }),
+  chatRestart: (id: number) => invoke("chat_restart", { id }),
+  chatShell: (id: number, line: string) => invoke<string>("chat_shell", { id, line }),
+  chatShellStop: (id: number, run: string) => invoke("chat_shell_stop", { id, run }),
+  chatExport: (id: number, text: string, name: string) => invoke<string | null>("chat_export", { id, text, name }),
+  chatPickDir: (id: number) => invoke<string | null>("chat_pick_dir", { id }),
+  chatTrust: (path: string) => invoke("chat_trust", { path }),
+  chatBookmarks: (session: string) => invoke<string[]>("chat_bookmarks", { session }),
+  chatBookmark: (session: string, message: string, on: boolean) => invoke("chat_bookmark", { session, message, on }),
+  chatTerminalText: (id: number) => invoke<string>("chat_terminal_text", { id }),
+  setChatSettings: (patch: Partial<ChatSettings>) => invoke("set_chat_settings", { patch }),
+  setChatExamples: (examples: string[]) => invoke("set_chat_examples", { examples }),
+  sessionsMeta: () => invoke<SessionsMeta>("sessions_meta"),
+  setSessionsMeta: (patch: SessionsMetaPatch) => invoke<SessionsMeta>("set_sessions_meta", { patch }),
   setFavourite: (path: string, on: boolean) => invoke("set_favourite", { path, on }),
   /** "Remove from Pitwall": no added project and no favourite any more. */
   removeProject: (path: string) => invoke("remove_project", { path }),

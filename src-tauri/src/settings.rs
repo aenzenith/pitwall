@@ -86,6 +86,10 @@ pub struct ProjectSettings {
     /// window): read from an older file into `open` (`ProjectSettings::upgraded`), never written.
     #[serde(skip_serializing, deserialize_with = "editor_or_none")]
     pub double_click: Option<String>,
+    /// The user allowed the project's chats (O6: its hooks and MCP servers run in them): asked
+    /// once, before its first chat (`Core::chat_trust`). This Mac's own: never in a backup.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub chat_trusted: bool,
 }
 
 /// A project's own choice of where it opens from each place (`OpenSettings`'s places and
@@ -751,6 +755,65 @@ pub struct Settings {
     /// only. This Mac's own.
     #[serde(default)]
     pub agents: AgentsSettings,
+    /// The chat's preferences (Settings › Claude › Sohbet), in backups like the others.
+    #[serde(default)]
+    pub chat: ChatSettings,
+}
+
+/// How chats open and behave (`src/lib/chat/wire.ts` `ChatSettings`, its defaults
+/// `CHAT_DEFAULTS`). The window reads them; the core reads `open` (a board card given while it
+/// says `chat`), `mode` (what a chat starts in, `Core::chat_made`), `suggestions`, `hook_rows`
+/// and `continue_interrupted` (`chat_args`, the chat's environment).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ChatSettings {
+    /// What a Claude button opens: `terminal` or `chat`.
+    pub open: String,
+    /// What sends a message: `enter` or `mod-enter`.
+    pub send_key: String,
+    /// The mode a chat starts in where nothing else names one (its start's mode `default`):
+    /// `auto` (the default, the user's word, 14 Nov; Claude Code itself starts in its default
+    /// mode where auto mode isn't to be had) or `default`, read as `start::ChatMode`; any other
+    /// word is `default`.
+    pub mode: String,
+    pub suggestions: bool,
+    pub scroll_on_send: bool,
+    pub timestamps: bool,
+    pub hook_rows: bool,
+    pub continue_interrupted: bool,
+    pub focus_view: bool,
+    pub attach_file: bool,
+    pub attach_selection: bool,
+    /// The empty chat's ready prompts, as the user left them (added, edited, removed by a
+    /// right-click or its add button); none until a chat first shows them, which writes the three
+    /// of the language Pitwall showed then, so they stay in it (`src/lib/chat/examples.ts`).
+    pub examples: Option<Vec<String>>,
+}
+
+impl Default for ChatSettings {
+    fn default() -> Self {
+        Self {
+            open: "terminal".into(),
+            send_key: "enter".into(),
+            mode: "auto".into(),
+            suggestions: true,
+            scroll_on_send: true,
+            timestamps: false,
+            hook_rows: false,
+            continue_interrupted: false,
+            focus_view: false,
+            attach_file: true,
+            attach_selection: true,
+            examples: None,
+        }
+    }
+}
+
+impl ChatSettings {
+    /// A Claude button opens a chat.
+    pub fn opens_chat(&self) -> bool {
+        self.open == "chat"
+    }
 }
 
 impl Default for Settings {
@@ -803,6 +866,7 @@ impl Default for Settings {
             open: OpenSettings::default(),
             accounts: AccountSettings::default(),
             agents: AgentsSettings::default(),
+            chat: ChatSettings::default(),
         }
     }
 }

@@ -318,7 +318,7 @@ const BACKGROUND_TOOLS: &str = "Read,Grep,Glob";
 
 /// A UUID as written (hex digits and dashes, 8-4-4-4-12): the only session id that reaches a
 /// command line.
-fn is_uuid(id: &str) -> bool {
+pub fn is_uuid(id: &str) -> bool {
     id.len() == 36 && id.char_indices().all(|(i, c)| if matches!(i, 8 | 13 | 18 | 23) { c == '-' } else { c.is_ascii_hexdigit() })
 }
 
@@ -347,6 +347,210 @@ pub fn new_uuid() -> String {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
     format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
+}
+
+/// How hard Claude thinks in a chat (`--effort`, and `apply_flag_settings {effortLevel}` inside
+/// one): one of Claude Code's levels, nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
+}
+
+impl Effort {
+    pub const ALL: [Self; 5] = [Self::Low, Self::Medium, Self::High, Self::Xhigh, Self::Max];
+
+    /// What `--effort` is given.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Xhigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+
+    /// One of the list, or nothing.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|effort| effort.word() == text)
+    }
+}
+
+/// The permission mode of a chat: Claude Code's own (`default`), edits made without asking,
+/// plan first, or Claude Code's auto mode, any of which a chat starts in; `dontAsk` (whatever
+/// would ask is turned down) only as a switch inside a chat. Never `bypassPermissions`: no word
+/// of this list names it, so nothing a window or a file says can reach it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ChatMode {
+    #[default]
+    Default,
+    AcceptEdits,
+    Plan,
+    Auto,
+    DontAsk,
+}
+
+impl ChatMode {
+    pub const ALL: [Self; 5] = [Self::Default, Self::AcceptEdits, Self::Plan, Self::Auto, Self::DontAsk];
+
+    /// Claude Code's word for it (`--permission-mode`, `set_permission_mode`, `setMode`).
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::AcceptEdits => "acceptEdits",
+            Self::Plan => "plan",
+            Self::Auto => "auto",
+            Self::DontAsk => "dontAsk",
+        }
+    }
+
+    /// One of the list (the TUI start's `normal` is `default`), or nothing.
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "normal" => Some(Self::Default),
+            _ => Self::ALL.into_iter().find(|mode| mode.word() == text),
+        }
+    }
+
+    /// One a chat may start in: every one but `dontAsk`.
+    pub fn at_start(self) -> bool {
+        self != Self::DontAsk
+    }
+}
+
+/// How a chat starts: Claude's model, its mode and its effort, each one of its list; none is
+/// Claude Code's own choice (no flag).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChatStart {
+    pub model: Option<Model>,
+    pub mode: ChatMode,
+    pub effort: Option<Effort>,
+}
+
+impl ChatStart {
+    /// From what was said in text (the window's choice): each one of its list, or its default;
+    /// `dontAsk` is no mode to start in.
+    pub fn of(model: Option<&str>, mode: Option<&str>, effort: Option<&str>) -> Self {
+        Self {
+            model: model.and_then(Model::parse),
+            mode: mode.and_then(ChatMode::parse).filter(|mode| mode.at_start()).unwrap_or_default(),
+            effort: effort.and_then(Effort::parse),
+        }
+    }
+
+    /// A TUI start's model and mode (a project's settings, a board card's).
+    pub fn from_start(start: Start) -> Self {
+        let mode = match start.mode {
+            Mode::Normal => ChatMode::Default,
+            Mode::Plan => ChatMode::Plan,
+            Mode::AcceptEdits => ChatMode::AcceptEdits,
+        };
+        Self { model: start.model, mode, effort: None }
+    }
+}
+
+/// Which session a chat's process runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChatSession {
+    /// A new one, under the id Pitwall made (`new_uuid`).
+    New(String),
+    /// One with a log, going on (`--resume`).
+    Resume(String),
+    /// A copy of `from` under the new id `id`, cut after the entry `at` when one is named.
+    Fork { from: String, at: Option<String>, id: String },
+}
+
+impl ChatSession {
+    /// The session the process writes.
+    pub fn id(&self) -> &str {
+        match self {
+            Self::New(id) | Self::Resume(id) | Self::Fork { id, .. } => id,
+        }
+    }
+}
+
+/// The name of a git worktree a chat asks Claude Code for (O12): Pitwall's own, never the
+/// window's: `chat-` and 8 hex digits of a new UUID.
+pub fn worktree_name() -> String {
+    format!("chat-{}", &new_uuid()[..8])
+}
+
+/// A worktree name as `worktree_name` makes them.
+fn is_worktree_name(name: &str) -> bool {
+    name.strip_prefix("chat-").is_some_and(|hex| hex.len() == 8 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
+}
+
+/// The whole line a chat's `claude` runs with after its program's name (`chat/process.rs`):
+/// print mode over stream-json both ways, partial messages, the permission prompts to Pitwall
+/// (`--permission-prompt-tool stdio`), the user's messages echoed; then the model, the mode and
+/// the effort of `start`, Claude Code's prompt suggestions (`suggestions`) and hook events
+/// (`hook_events`) as Settings › Claude says, the session, and the worktree Pitwall named.
+///
+/// Every word is a constant of this file, a word of its lists or a UUID: a session id that isn't
+/// one gives no line at all, and a worktree name that isn't Pitwall's is left out. Never
+/// `bypassPermissions`, a `--dangerously-*` flag, `--allow-dangerously-skip-permissions`,
+/// `--settings`, `--mcp-config`, `--system-prompt`, `--agent` or `--add-dir`. A new session's id
+/// goes with `--session-id`; a fork's too, beside `--resume --fork-session`, so its id is known
+/// before it starts.
+pub fn chat_args(start: ChatStart, session: &ChatSession, suggestions: bool, hook_events: bool, worktree: Option<&str>) -> Option<Vec<String>> {
+    let mut args: Vec<&str> = vec![
+        "-p",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--include-partial-messages",
+        "--permission-prompt-tool",
+        "stdio",
+        "--replay-user-messages",
+    ];
+    if let Some(model) = start.model {
+        args.extend(["--model", model.alias()]);
+    }
+    if start.mode.at_start() && start.mode != ChatMode::Default {
+        args.extend(["--permission-mode", start.mode.word()]);
+    }
+    if let Some(effort) = start.effort {
+        args.extend(["--effort", effort.word()]);
+    }
+    if suggestions {
+        args.push("--prompt-suggestions");
+    }
+    if hook_events {
+        args.push("--include-hook-events");
+    }
+    match session {
+        ChatSession::New(id) => {
+            if !is_uuid(id) {
+                return None;
+            }
+            args.extend(["--session-id", id]);
+        }
+        ChatSession::Resume(id) => {
+            if !is_uuid(id) {
+                return None;
+            }
+            args.extend(["--resume", id]);
+        }
+        ChatSession::Fork { from, at, id } => {
+            if !is_uuid(from) || !is_uuid(id) || at.as_deref().is_some_and(|at| !is_uuid(at)) {
+                return None;
+            }
+            args.extend(["--resume", from, "--fork-session", "--session-id", id]);
+            if let Some(at) = at {
+                args.extend(["--resume-session-at", at]);
+            }
+        }
+    }
+    if let Some(name) = worktree.filter(|name| is_worktree_name(name)) {
+        args.extend(["--worktree", name]);
+    }
+    Some(args.into_iter().map(str::to_string).collect())
 }
 
 #[cfg(test)]
@@ -500,5 +704,114 @@ mod tests {
         assert_eq!(serde_json::to_value(Start::claude(Some(Model::Opus), Mode::Plan)).unwrap(), serde_json::json!({ "model": "opus", "mode": "plan" }));
         assert_eq!(Start::chosen(None, Some("opus"), Some("plan")), Start::claude(Some(Model::Opus), Mode::Plan));
         assert_eq!(Start::chosen(Some("claude"), Some("gpt-6.1-sol"), Some("readOnly")), Start::default());
+    }
+
+    /// A chat's command line (Test 1): only fixed words, words of the lists and UUIDs, whatever the
+    /// window or a file names; never a word that skips Claude Code's permissions or replaces its
+    /// settings, servers or prompt; a session id that isn't a UUID gives no line at all, and a
+    /// worktree name that isn't Pitwall's never reaches it.
+    #[test]
+    fn a_chat_line_holds_fixed_words_list_words_and_uuids_only() {
+        let hostile = [
+            "",
+            "bypassPermissions",
+            "--dangerously-skip-permissions",
+            "--allow-dangerously-skip-permissions",
+            "dangerously-skip-permissions",
+            "--settings",
+            "--system-prompt",
+            "--mcp-config",
+            "dontAsk",
+            "Default",
+            "AUTO",
+            "plan --settings x",
+            "opus; touch /tmp/pwned",
+            "$(touch /tmp/pwned)",
+            "high\n--dangerously-skip-permissions",
+            "XHIGH",
+            "auto ",
+        ];
+        for text in hostile {
+            let start = ChatStart::of(Some(text), Some(text), Some(text));
+            assert_eq!(start, ChatStart::default(), "{text:?}");
+        }
+        // `dontAsk` is a switch inside a chat, never a start.
+        assert_eq!(ChatStart::of(None, Some("dontAsk"), None).mode, ChatMode::Default);
+        assert_eq!(ChatMode::parse("bypassPermissions"), None);
+        assert!(ChatMode::ALL.iter().all(|mode| mode.word() != "bypassPermissions"));
+
+        let id = new_uuid();
+        let other = new_uuid();
+        let fixed = [
+            "-p",
+            "--input-format",
+            "stream-json",
+            "--output-format",
+            "--verbose",
+            "--include-partial-messages",
+            "--permission-prompt-tool",
+            "stdio",
+            "--replay-user-messages",
+            "--model",
+            "--permission-mode",
+            "--effort",
+            "--prompt-suggestions",
+            "--include-hook-events",
+            "--session-id",
+            "--resume",
+            "--fork-session",
+            "--resume-session-at",
+            "--worktree",
+        ];
+        let words: Vec<&str> = Model::ALL
+            .iter()
+            .map(|model| model.alias())
+            .chain(ChatMode::ALL.iter().map(|mode| mode.word()))
+            .chain(Effort::ALL.iter().map(|effort| effort.word()))
+            .collect();
+        let forbidden = ["bypassPermissions", "--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "--settings", "--system-prompt", "--mcp-config", "--agent", "--add-dir", "--strict-mcp-config"];
+        let name = worktree_name();
+        assert!(is_worktree_name(&name), "{name}");
+        let sessions = [
+            ChatSession::New(id.clone()),
+            ChatSession::Resume(id.clone()),
+            ChatSession::Fork { from: other.clone(), at: None, id: id.clone() },
+            ChatSession::Fork { from: other.clone(), at: Some(new_uuid()), id: id.clone() },
+        ];
+        for model in std::iter::once(None).chain(Model::ALL.into_iter().map(Some)) {
+            for mode in ChatMode::ALL {
+                for effort in std::iter::once(None).chain(Effort::ALL.into_iter().map(Some)) {
+                    for session in &sessions {
+                        for (suggestions, hooks) in [(false, false), (true, true)] {
+                            for worktree in [None, Some(name.as_str()), Some("../../etc"), Some("chat-zzzzzzzz"), Some("--settings")] {
+                                let start = ChatStart { model, mode, effort };
+                                let args = chat_args(start, session, suggestions, hooks, worktree).unwrap();
+                                for arg in &args {
+                                    let uuid = is_uuid(arg);
+                                    assert!(fixed.contains(&arg.as_str()) || words.contains(&arg.as_str()) || uuid || *arg == name, "{arg:?} in {args:?}");
+                                    assert!(!forbidden.contains(&arg.as_str()), "{arg:?}");
+                                }
+                                // `dontAsk` never starts a chat.
+                                assert!(!args.iter().any(|arg| arg == "dontAsk"), "{args:?}");
+                                assert_eq!(args.iter().any(|arg| arg == "--worktree"), worktree == Some(name.as_str()), "{args:?}");
+                                assert_eq!(args.iter().any(|arg| arg == "--prompt-suggestions"), suggestions);
+                                assert_eq!(args.iter().any(|arg| arg == "--include-hook-events"), hooks);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // A session id that isn't a UUID gives no line: no `--resume` with anything else.
+        for bad in ["", "abc", "../x", "--settings", "11111111-1111-1111-1111-11111111111", "11111111-1111-1111-1111-1111111111111", "g1111111-1111-1111-1111-111111111111"] {
+            let start = ChatStart::default();
+            assert_eq!(chat_args(start, &ChatSession::Resume(bad.into()), false, false, None), None, "{bad:?}");
+            assert_eq!(chat_args(start, &ChatSession::New(bad.into()), false, false, None), None, "{bad:?}");
+            assert_eq!(chat_args(start, &ChatSession::Fork { from: bad.into(), at: None, id: id.clone() }, false, false, None), None, "{bad:?}");
+            assert_eq!(chat_args(start, &ChatSession::Fork { from: other.clone(), at: Some(bad.into()), id: id.clone() }, false, false, None), None, "{bad:?}");
+        }
+        let fork = chat_args(ChatStart::default(), &ChatSession::Fork { from: other.clone(), at: None, id: id.clone() }, false, false, None).unwrap();
+        assert_eq!(fork[fork.len() - 5..], ["--resume".to_string(), other.clone(), "--fork-session".into(), "--session-id".into(), id.clone()]);
     }
 }

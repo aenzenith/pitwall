@@ -63,6 +63,27 @@
         "ja": "ターミナルパネルを、どのページの上でも動かしたり大きさを変えたりできるカードとして浮かせたり、専用のウィンドウで開いたりできるようになりました。タブの列を上へドラッグするか、列の端のアイコンで置き場所を選べます。",
         "zh-Hans": "终端面板现在可以变成一张浮在任何页面上的卡片，随意移动、调整大小，也可以在单独的窗口里打开。把标签栏往上拖，或者用栏尾的图标选位置就行。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Chat with Claude",
+        "tr": "Claude ile sohbet",
+        "de": "Mit Claude chatten",
+        "es": "Chatea con Claude",
+        "ru": "Чат с Claude",
+        "ja": "Claude とチャット",
+        "zh-Hans": "与 Claude 对话"
+      },
+      "body": {
+        "en": "Open a chat from the terminal's + menu. Claude's commands and file changes stay on the side, and you answer its questions and permissions with a click.",
+        "tr": "Terminaldeki + menüsünden bir sohbet açabilirsin. Claude'un komutları ve dosya değişiklikleri yanda durur, sorularını ve izinlerini tek tıkla yanıtlarsın.",
+        "de": "Über das +-Menü im Terminal öffnest du jetzt einen Chat. Claudes Befehle und Dateiänderungen stehen daneben, und Fragen oder Freigaben beantwortest du mit einem Klick.",
+        "es": "Abre un chat desde el menú + de la terminal. Los comandos de Claude y los cambios en tus archivos quedan a un lado, y respondes a sus preguntas y permisos con un clic.",
+        "ru": "Откройте чат из меню + в терминале. Команды Claude и изменения файлов видны сбоку, а на его вопросы и запросы разрешений вы отвечаете одним щелчком.",
+        "ja": "ターミナルの + メニューからチャットを開けるようになりました。Claude のコマンドとファイルの変更は横に並び、質問や許可にはワンクリックで答えられます。",
+        "zh-Hans": "现在可以从终端的 + 菜单打开对话。Claude 的命令和文件改动就在一旁，它的提问和权限请求点一下就能回复。"
+      }
     }
   ]
 }

@@ -1,3 +1,4 @@
+import type { ChatSettings, ChatView } from "./chat/wire";
 // Mirrors the Rust `Snapshot` (src-tauri/src/core.rs).
 
 import type { Language } from "./i18n";
@@ -38,6 +39,8 @@ export type NotifyAccess = "allowed" | "off" | "notAsked" | "borrowed" | "unknow
 export type LinkSuggestion = { name: string; url: string; source: string };
 
 export type ProjectSettings = {
+  /** The user allowed the project's first chat (its hooks and MCP servers run in it). */
+  chatTrusted?: boolean;
   /** The folder inside the project its dev server and commands run in, written from the
    * project's folder (`apps/web`); unset: the project's own. */
   folder?: string;
@@ -223,6 +226,8 @@ export type Settings = {
   cli?: CliSettings;
   /** Where a project opens from each place, unless it chose its own. Read leniently (lib/open). */
   open?: Partial<OpenSettings>;
+  /** The chat's preferences (Settings › Claude › Sohbet); read leniently (CHAT_DEFAULTS). */
+  chat?: Partial<ChatSettings>;
   /** The coding agents, this Mac's own; changed through their own commands only. */
   agents?: AgentsSettings;
 };
@@ -265,7 +270,10 @@ export type TerminalView = {
   id: number;
   path: string;
   name: string;
-  kind: "shell" | Agent;
+  /** `chat`: a Claude chat over stream-json (docs/SOHBET.md), drawn by ChatView instead of xterm. */
+  kind: "shell" | Agent | "chat";
+  /** A chat tab's own state; absent for every other tab. */
+  chat?: ChatView;
   /** The shell of the list a shell tab runs on Windows; null elsewhere and for a Claude tab. */
   shell: Shell | null;
   /** An administrator's shell (Windows, through sudo): no record puts it back. */

@@ -197,6 +197,7 @@ impl Core {
         };
         entries.extend(self.terminal_sessions().values().filter_map(|session| session.pid_entry()));
         entries.extend(self.lap_groups());
+        entries.extend(self.chat_groups());
         self.registry.record_pids(&entries);
     }
 }

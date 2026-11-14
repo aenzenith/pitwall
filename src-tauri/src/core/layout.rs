@@ -183,6 +183,31 @@ impl TerminalLayout {
     }
 }
 
+impl PaneNode {
+    /// Every pane of `from` holds `to` instead.
+    fn swap(&mut self, from: u64, to: u64) {
+        match self {
+            PaneNode::Pane { terminal } if *terminal == Some(from) => *terminal = Some(to),
+            PaneNode::Pane { .. } => {}
+            PaneNode::Split { kids, .. } => kids.iter_mut().for_each(|kid| kid.swap(from, to)),
+        }
+    }
+}
+
+impl TerminalLayout {
+    /// Terminal `to` takes `from`'s pane, its keyboard and its zoom (a chat that went on in a
+    /// terminal, `chat_to_terminal`), under a `rev` the UI hasn't seen.
+    pub(super) fn swap(&mut self, from: u64, to: u64, rev: u64) {
+        self.tree.swap(from, to);
+        for held in [&mut self.focus, &mut self.zoom] {
+            if *held == Some(from) {
+                *held = Some(to);
+            }
+        }
+        self.rev = rev;
+    }
+}
+
 impl SavedLayout {
     /// Put back with the tabs that came back (`terminal`: the terminal a place came back as;
     /// none for one that stayed away, whose pane goes). Fewer than two panes: no layout.

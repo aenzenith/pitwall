@@ -39,6 +39,9 @@ struct OpenTab {
     /// The account it ran with, by id, its session's agent's; none: the main one (`accounts/`).
     #[serde(skip_serializing_if = "Option::is_none")]
     account: Option<String>,
+    /// `chat` for a chat tab, which comes back as a chat on its session; none for every other.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -156,7 +159,7 @@ impl Core {
         }
         for tab in &standing.tabs {
             let name = tab.renamed.then(|| tab.name.clone());
-            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), agent: tab.agent, shell: tab.shell, account: tab.account.clone() })));
+            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), agent: tab.agent, shell: tab.shell, account: tab.account.clone(), kind: tab.kind.clone() })));
         }
         let elevated: Vec<usize> = standing.elevated.iter().map(|(path, _)| entry(path)).collect();
         for (at, server, command, tab) in filled {
@@ -234,6 +237,7 @@ impl Core {
                 project.commands.retain(|id| known.iter().any(|command| &command.id == id && command.keep_running && !command.confirm));
                 for tab in &mut project.tabs {
                     tab.session = tab.session.take().filter(|id| is_session_id(id));
+                    tab.kind = tab.kind.take().filter(|kind| kind == super::chat::CHAT && tab.session.is_some());
                     tab.name = tab.name.take().map(|name| name.trim().chars().take(TAB_NAME_MAX).collect::<String>()).filter(|name| !name.is_empty());
                 }
                 project
@@ -314,7 +318,11 @@ impl Core {
                     continue;
                 };
                 let account = self.account_back_for(&launch, tab.account.as_deref());
-                let open = || self.open_terminal_with(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false, Some(&account));
+                let chat = tab.kind.as_deref() == Some(super::chat::CHAT);
+                let open = || match (&launch, chat) {
+                    (Launch::Resume { session }, true) => self.chat_back(&project.path, session, tab.name.clone(), tab.name.is_some(), &account),
+                    _ => self.open_terminal_with(&project.path, &launch, tab.name.clone(), tab.name.is_some(), None, false, Some(&account)),
+                };
                 let id = match &launch {
                     // Once, whoever opens it first: a click in the terminals' history may have
                     // opened it since the start, before its agent lists its process.

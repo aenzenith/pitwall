@@ -35,6 +35,7 @@ mod flag;
 mod shortcuts;
 mod tower;
 mod terminals;
+mod chat;
 mod cli;
 mod start;
 mod files;
@@ -145,6 +146,14 @@ fn handle_event(app: &AppHandle, event: CoreEvent) {
         }
         CoreEvent::TerminalExit { id } => {
             let _ = app.emit_to(MAIN, "terminal-exit", id);
+        }
+        // A chat is drawn where its terminal is: sent as a terminal's output is, it reaches the
+        // terminals' own window too.
+        CoreEvent::Chat { id, seq, frames } => {
+            let _ = app.emit_to(MAIN, "chat", serde_json::json!({ "id": id, "seq": seq, "frames": frames }));
+        }
+        CoreEvent::ChatExit { id, code, reason, stderr } => {
+            let _ = app.emit_to(MAIN, "chat-exit", serde_json::json!({ "id": id, "code": code, "reason": reason, "stderr": stderr }));
         }
         // Held for the main window's page until it listens (`windows::FOR_MAIN`). With the panel
         // in its own window, that window comes up instead, and its page hears it once it listens.
@@ -525,6 +534,26 @@ pub fn run() {
             commands::write_terminal,
             commands::resize_terminal,
             commands::close_terminal,
+            commands::open_chat,
+            commands::chat_send,
+            commands::chat_answer,
+            commands::chat_interrupt,
+            commands::chat_control,
+            commands::chat_buffer,
+            commands::chat_to_terminal,
+            commands::chat_restart,
+            commands::chat_shell,
+            commands::chat_shell_stop,
+            commands::chat_export,
+            commands::chat_pick_dir,
+            commands::chat_trust,
+            commands::chat_bookmarks,
+            commands::chat_bookmark,
+            commands::chat_terminal_text,
+            commands::set_chat_settings,
+            commands::set_chat_examples,
+            commands::sessions_meta,
+            commands::set_sessions_meta,
             commands::terminal_buffer,
             commands::board_state,
             commands::laps_state,

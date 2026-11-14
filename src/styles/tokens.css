@@ -24,6 +24,12 @@
   /* A control under the pointer, and one that is on (an open picker, the option the keys are on). */
   --bg-control-hover: #2c3039;
   --bg-control-on: #2c3039;
+  /* Your message's box in a chat: a notch over a control's ground (the user's word, 15 Nov). */
+  --bg-user: #22262d;
+  /* Its edge, the line in it and its chips' edges, over that lighter ground. */
+  --line-user: #2e323b;
+  /* A skill a message names, there and in the composer: Claude's orange, faint (the user's word, 16 Nov). */
+  --bg-skill: rgba(240, 136, 62, 0.16);
   /* A row under the pointer (a project, a session, a link, a tab). */
   --bg-row-hover: #1b1e24;
   /* The Files window's code (window/files): the picked line, what ⌘F found (the one it is at
@@ -201,6 +207,8 @@
   /* Shadows: what floats over the window casts one, and a bottom panel on what is above it. */
   --shadow-popover: 0 24px 60px rgba(0, 0, 0, 0.55);
   --shadow-dialog: 0 24px 60px rgba(0, 0, 0, 0.5);
+  /* Over the chat while its right column lies over it (ChatView's `.scrim`): a light dim only. */
+  --scrim-soft: rgba(8, 9, 11, 0.4);
   --shadow-menu: 0 16px 32px -12px rgba(0, 0, 0, 0.75);
   --shadow-tip: 0 10px 24px rgba(0, 0, 0, 0.45);
   --shadow-rise: 0 -12px 24px rgba(0, 0, 0, 0.22);
@@ -297,6 +305,9 @@
   --bg-control: #ffffff;
   --bg-control-hover: #eaedf0;
   --bg-control-on: #e1e4e8;
+  --bg-user: #ffffff;
+  --line-user: #dde0e4;
+  --bg-skill: rgba(234, 88, 12, 0.1);
   --bg-row-hover: #eff1f3;
   --bg-code-line: #f2f4f6;
   --bg-code-hit: #f6ecc2;
@@ -429,6 +440,7 @@
 
   --shadow-popover: 0 24px 60px rgba(15, 17, 20, 0.2);
   --shadow-dialog: 0 24px 60px rgba(15, 17, 20, 0.18);
+  --scrim-soft: rgba(15, 17, 20, 0.22);
   --shadow-menu: 0 16px 32px -12px rgba(15, 17, 20, 0.28);
   --shadow-tip: 0 10px 24px rgba(15, 17, 20, 0.14);
   --shadow-rise: 0 -12px 24px rgba(15, 17, 20, 0.05);

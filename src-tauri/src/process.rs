@@ -371,6 +371,29 @@ pub fn contain(pid: u32) {
 #[cfg(not(windows))]
 pub fn contain(_pid: u32) {}
 
+/// Starts `command` (made by `command`) so that stopping it takes everything it starts down with
+/// it: the leader of a process group of its own, or on Windows suspended, put in a job of its own
+/// and only then let run, so nothing it starts (the `node` under a `claude.cmd`) slips out, as
+/// `spawn_shell_with` does. A child that can't be let run is stopped and is an error.
+#[cfg(unix)]
+pub fn spawn_contained(command: &mut Command) -> std::io::Result<Child> {
+    std::os::unix::process::CommandExt::process_group(command, 0);
+    command.spawn()
+}
+
+#[cfg(windows)]
+pub fn spawn_contained(command: &mut Command) -> std::io::Result<Child> {
+    use std::os::windows::process::CommandExt;
+
+    let mut child = command.creation_flags(win::CREATE_NO_WINDOW | win::CREATE_SUSPENDED).spawn()?;
+    if let Err(error) = win::start_in_job(&child) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error);
+    }
+    Ok(child)
+}
+
 /// A pid that can name a process group we started: never 0 (our own group) or 1 (launchd's),
 /// and never one that turns negative as a `pid_t` (which would signal a single process).
 #[cfg(unix)]

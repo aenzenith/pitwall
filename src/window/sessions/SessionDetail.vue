@@ -5,6 +5,7 @@ import AgentMark from "../../components/AgentMark.vue";
 import ClaudeSpark from "../../components/ClaudeSpark.vue";
 import Icon from "../../components/Icon.vue";
 import Markdown from "../../components/Markdown.vue";
+import Spinner from "../../components/Spinner.vue";
 import { agentName } from "../../lib/agents";
 import { clock, duration } from "../../lib/day";
 import { agentsKey, ago, editorName, namesAgent } from "../../lib/format";
@@ -35,7 +36,9 @@ import SessionNotice from "./SessionNotice.vue";
  * a board card's note, shown once its work is over, with `images`, the images it names;
  * `lastMessage`: what Claude last said in it (Markdown); `period`: the days the page shows (left
  * out: today), whose hours its day is, and looking back its tokens, today's alone, are left out.
- * A Codex session's reads the same, under Codex's name and mark, in Codex's words.
+ * A Codex session's reads the same, under Codex's name and mark, in Codex's words. `chat`: it
+ * can be continued in a chat (a Claude session that runs nowhere), "Sohbette aç" beside its other
+ * ways (`chatBusy` while that chat opens).
  */
 const props = defineProps<{
   row: SessionRow;
@@ -48,8 +51,10 @@ const props = defineProps<{
   images?: Shot[];
   lastMessage?: string;
   period?: Period;
+  chat?: boolean;
+  chatBusy?: boolean;
 }>();
-const emit = defineEmits<{ markSeen: [] }>();
+const emit = defineEmits<{ markSeen: []; chat: [] }>();
 
 const title = computed(() => sessionTitle(props.row));
 /** Only Pitwall's own terminals are shown from here; a session running anywhere else stays a summary. */
@@ -215,6 +220,9 @@ const fuel = computed(() => {
         </div>
         <p v-if="seenHint" id="session-seen-hint" class="hint">{{ seenHint }}</p>
         <button v-if="ownTerminal" type="button" class="text-button to-terminal" @click="showTerminal"><Icon name="terminal" :size="12" />{{ t("sessions.showTerminal") }}</button>
+        <button v-if="chat" type="button" class="text-button to-terminal" :disabled="chatBusy" :aria-busy="chatBusy" :title="t('chatSurface.openInChatTitle')" @click="emit('chat')">
+          <Spinner v-if="chatBusy" :size="12" /><Icon v-else name="chat" :size="12" />{{ t("chatSurface.openInChat") }}
+        </button>
 
         <SessionNotice v-if="elsewhere" compact icon="info" :tag="elsewhereNotice.tag" :title="elsewhereNotice.title">{{ elsewhereNotice.body }}</SessionNotice>
         <template v-else-if="unknown">

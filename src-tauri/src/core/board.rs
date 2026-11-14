@@ -1242,6 +1242,10 @@ impl Core {
             Give::New | Give::Plan => Carry::Fresh,
             Give::Continue => self.carry_of(card),
         };
+        // A new Claude session goes to a chat while Settings › Claude says chats and the
+        // project's chats are allowed: its text the chat's first message.
+        let fresh = !matches!((carry, &card.session), (Carry::Follow, _) | (Carry::Resume, Some(_)));
+        let chat = fresh && start.agent == Agent::Claude && self.cards_go_to_chats(&card.path);
         let launch = match (carry, &card.session) {
             (Carry::Follow, _) => {
                 self.follow_card(id);
@@ -1284,7 +1288,7 @@ impl Core {
             Launch::ResumeCodex { session } => self.codex_rollout(session).map(|(account, _, _)| account),
             _ => None,
         };
-        let new_tab = || self.open_terminal_with(&card.path, &launch, Some(tab_name(&card.title)), false, size, unasked, account.as_deref());
+        let new_tab = || if chat { self.card_chat(card, start, unasked) } else { self.open_terminal_with(&card.path, &launch, Some(tab_name(&card.title)), false, size, unasked, account.as_deref()) };
         // `held`: its session goes on in a tab opened for it a moment ago (a click in the
         // terminals' history, before Claude Code lists its process): the card follows it there.
         let (view, held) = match &resumed {
@@ -1313,7 +1317,7 @@ impl Core {
         let now = now_ms();
         let mut board = self.board();
         // Its shell may have ended already, before the card knew of it (`board_terminal_gone`).
-        let open = self.terminal_sessions().contains_key(&view.id);
+        let open = self.tab_open(view.id);
         let Some(card) = board.place(id, Column::Claude, usize::MAX, now) else {
             // Deleted while its tab was opening: no card, so no Claude left working on it.
             drop(board);
@@ -1371,7 +1375,7 @@ impl Core {
     /// (`codex_logged`).
     fn carry_of(&self, card: &Card) -> Carry {
         let Some(session) = card.session.as_deref() else {
-            let starting = card.terminal.is_some_and(|terminal| self.terminal_sessions().contains_key(&terminal));
+            let starting = card.terminal.is_some_and(|terminal| self.tab_open(terminal));
             return carry(false, starting, &Liveness::Unknown, false, false);
         };
 
@@ -1531,6 +1535,20 @@ impl Core {
             linked = true;
         }
         if linked {
+            self.board_changed(board);
+        }
+    }
+
+    /// A chat's session went on in a terminal in its place (`chat_to_terminal`): its cards follow it
+    /// there.
+    pub(super) fn board_terminal_moved(&self, from: u64, to: u64) {
+        let mut board = self.board();
+        let mut moved = false;
+        for card in board.cards.iter_mut().filter(|card| card.terminal == Some(from)) {
+            card.terminal = Some(to);
+            moved = true;
+        }
+        if moved {
             self.board_changed(board);
         }
     }

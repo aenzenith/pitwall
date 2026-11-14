@@ -25,6 +25,8 @@ const HOSTILE = [
   '<svg onload="alert(1)"><script>alert(1)</script><a href="javascript:alert(1)"><text>x</text></a><animate attributeName="href" to="javascript:alert(1)"/><set attributeName="href" to="https://evil.test/set"/></svg>',
   '<math><mtext><img src="x" onerror="alert(1)"></mtext></math>',
   // Links that would take the app's own window to another page.
+  // A script's address in the shape of a file with its line (`main.rs:10`), which links keep.
+  '<a href="javascript:1">j1</a> <a href="JavaScript:2:3">j2</a> <a href="data:1">d1</a> <a href="vbscript:1">v1</a>',
   '<a href="javascript:alert(1)">j</a> <a href="data:text/html,<script>alert(1)</script>">d</a> <a href="https://evil.test/a" target="_top" ping="https://evil.test/ping">a</a>',
   '<svg><a href="https://evil.test/svg-a"><text>x</text></a><a xlink:href="https://evil.test/svg-xlink"><circle r="5"/></a></svg>',
   '<math href="https://evil.test/math"><mi>x</mi></math>',
@@ -140,6 +142,11 @@ describe("the Markdown preview's drawing", () => {
       "[^1]: The footnote.",
     ].join("\n"),
   );
+
+  it("keeps a link to a file with its line, or to a Windows path, for the chat to open", () => {
+    const links = [...drawn("[a](package.json:12) [b](src/app.ts:3:7) [c](C:/work/app.ts)").querySelectorAll("[data-href]")];
+    expect(links.map((link) => link.getAttribute("data-href"))).toEqual(["package.json:12", "src/app.ts:3:7", "C:/work/app.ts"]);
+  });
 
   it("still draws GitHub's Markdown, its maths and its diagrams' text", () => {
     const heading = article.querySelector("h1");

@@ -37,8 +37,9 @@ use super::board::{taken, CardImage, Column, ImageKind, IMAGES_MAX};
 use super::laps::{Lap, PausedBy, Place};
 use super::reveal::is_session_id;
 use super::*;
+use crate::chat::meta::{self, SessionsMeta};
 use crate::registry::{base36, write_durable};
-use crate::settings::{CustomCommand, FlagSettings, OpenSettings, Sounds, Team};
+use crate::settings::{ChatSettings, CustomCommand, FlagSettings, OpenSettings, Sounds, Team};
 
 const FORMAT: &str = "pitwall-backup";
 const VERSION: u64 = 1;
@@ -147,6 +148,8 @@ struct General {
     suggest_projects: bool,
     flag: FlagSettings,
     open: OpenSettings,
+    /// A backup of a version before chats has none: the chat's preferences here stay.
+    chat: ChatSettings,
 }
 
 impl General {
@@ -156,7 +159,7 @@ impl General {
         let Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open,
+            theme, resume, suggest_projects, flag, open, chat,
             // This Mac's own: its registration with the system, and what it has shown so far.
             launch_at_login: _, seen_version: _, update_told: _, onboarded: _, seen_folders: _, board_scope: _,
             // The projects part.
@@ -179,7 +182,7 @@ impl General {
         Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open,
+            theme, resume, suggest_projects, flag, open, chat,
         }
     }
 
@@ -204,13 +207,13 @@ impl General {
         let Self {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open,
+            theme, resume, suggest_projects, flag, open, chat,
         } = serde_json::from_value(Value::Object(fields))?;
 
         Ok(Settings {
             language, script, package_manager, editor, open_url_on_start, sounds, shortcut, shortcut_keys, projects_dir,
             fuel_in_bar, fuel_in_popover, bar_projects, terminal_projects, fuel_every, servers_in_bar, claudes_in_bar, auto_update, board_view, files_preview, favourites_only, panel_fold_outside, track,
-            theme, resume, suggest_projects, flag, open,
+            theme, resume, suggest_projects, flag, open, chat,
             ..settings.clone()
         })
     }
@@ -270,6 +273,10 @@ struct Document {
     /// The laps' jobs, as `for_backup` leaves them.
     #[serde(skip_serializing_if = "Option::is_none")]
     laps: Option<Vec<Lap>>,
+    /// The Sessions page's archive, groups and unread marks (`chat/meta.rs`: session ids and the
+    /// groups' names), with the days, whose sessions they mark.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sessions_meta: Option<SessionsMeta>,
 }
 
 /// A card of a backup and the images it takes: each one's number and kind, and its bytes.
@@ -288,6 +295,7 @@ struct Backup {
     cards: Option<Vec<Taken>>,
     days: Option<Vec<(String, String)>>,
     laps: Option<Vec<Lap>>,
+    sessions_meta: Option<SessionsMeta>,
 }
 
 impl Backup {
@@ -491,9 +499,11 @@ fn laps_here(laps: Vec<Lap>, listed: &[String]) -> Vec<Lap> {
 /// one it brings or replaces doesn't, until that is switched on here.
 fn put_projects(settings: &mut Settings, part: &ProjectsPart) {
     for (path, project) in &part.settings {
-        let project = project.clone().upgraded();
+        // Whether its chats were allowed is this Mac's own: never the file's to say.
+        let project = ProjectSettings { chat_trusted: false, ..project.clone().upgraded() };
         if !path.is_empty() && project != ProjectSettings::default() {
-            settings.projects.insert(path.clone(), project);
+            let trusted = settings.projects.get(path).is_some_and(|own| own.chat_trusted);
+            settings.projects.insert(path.clone(), ProjectSettings { chat_trusted: trusted, ..project });
         }
     }
 
@@ -628,13 +638,15 @@ impl Core {
                 favourites: self.registry.read_favourites(),
                 added: settings.added.clone().unwrap_or_default(),
                 order: settings.order.clone(),
-                settings: settings.projects.clone(),
+                // Whether a project's chats were allowed is this Mac's own (`chat_trust`).
+                settings: settings.projects.iter().map(|(path, project)| (path.clone(), ProjectSettings { chat_trusted: false, ..project.clone() })).collect(),
                 teams: settings.teams.clone(),
             }),
             board: parts.board.then(|| self.backup_board()),
             activity: parts.activity.then(|| self.backup_days()),
             // As the laps hand them over, and made sure of here: nothing of this Mac's own.
             laps: parts.laps.then(|| self.laps_export().into_iter().map(|lap| as_given(for_backup(lap), home)).collect()),
+            sessions_meta: parts.activity.then(|| meta::sessions_meta(&self.sessions_meta_file())).filter(|marks| *marks != SessionsMeta::default()),
         };
 
         let failed = |error: &dyn std::fmt::Display| t!("core.error.backupWrite", file = file.display(), error = error);
@@ -755,6 +767,7 @@ impl Core {
             cards: document.board.map(|part| self.backup_cards(part)),
             days: document.activity.map(|days| days.into_iter().filter(|(day, _)| is_day(day)).collect()),
             laps: document.laps.map(laps_taken),
+            sessions_meta: document.sessions_meta.map(SessionsMeta::checked),
         })
     }
 
@@ -817,6 +830,7 @@ impl Core {
         let cards = backup.cards.filter(|_| parts.board);
         let days = backup.days.filter(|_| parts.activity);
         let laps = backup.laps.filter(|laps| parts.laps && !laps.is_empty());
+        let marks = backup.sessions_meta.filter(|_| parts.activity);
         let incoming: Vec<&str> = cards.iter().flatten().map(|taken| taken.card.id.as_str()).collect();
         self.keep_before("import", &incoming).map_err(|error| t!("core.error.backupKeep", error = error))?;
 
@@ -879,6 +893,10 @@ impl Core {
         if let Some(days) = days {
             report.days = self.import_days(&days);
         }
+        if let Some(marks) = marks {
+            // Merged into this Mac's: what the import marks is added, nothing here is dropped.
+            meta::import_sessions_meta(&self.sessions_meta_file(), marks)?;
+        }
 
         self.notify();
         Ok(report)
@@ -894,7 +912,12 @@ impl Core {
         let dir = settings.with_file_name(KEPT_DIR).join(format!("before-{change}-{}", now_ms()));
         fs::create_dir_all(&dir)?;
 
-        let own = [settings.clone(), settings.with_file_name("board.json"), self.cfg.registry_dir.join("favorites.json")];
+        let own = [
+            settings.clone(),
+            settings.with_file_name("board.json"),
+            self.cfg.registry_dir.join("favorites.json"),
+            settings.with_file_name(meta::SESSIONS_META),
+        ];
         for file in own.into_iter().chain(self.laps_file()) {
             let Some(name) = file.file_name() else {
                 continue;
@@ -1594,6 +1617,7 @@ mod tests {
             code: Some("PDK".into()),
             open: crate::settings::ProjectOpen { list: Some("editor".into()), outside: Some("list".into()), pages: None },
             double_click: None,
+            chat_trusted: false,
         };
         core.set_project_settings(&old, kept.clone());
         core.mute_project(&old, true);

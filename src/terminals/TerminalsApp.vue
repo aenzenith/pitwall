@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
 import { connectAccounts } from "../lib/accounts";
+import { chatAsks } from "../lib/chat/open";
 import { t } from "../lib/i18n";
 import { panelPath, revealTab, terminalCollapsed } from "../lib/panel";
 import { followStand, keepPanelState, listenPanelAsks, standPanel, takePanelState } from "../lib/panelStand";
 import { closeChord, dragRegion, terminalChord } from "../lib/platform";
 import { api, connectDeps, connectSessions, snapshot } from "../lib/store";
+import StartChatDialog from "../window/chat/StartChatDialog.vue";
 import TerminalPanel from "../window/TerminalPanel.vue";
 
 /**
@@ -44,6 +46,12 @@ function toggleOnTop(): void {
 /** Back into Pitwall's window, where the panel stood before: along the bottom or as a card. */
 function bringBack(): void {
   standPanel(snapshot.value?.settings.terminalPlace?.back === "float" ? "float" : "dock");
+}
+
+/** A chat's settings button: Settings › Claude, in Pitwall's window, which comes up for it. */
+function openClaudeSettings(): void {
+  void emitTo("main", "reveal-page", { page: "settings", tab: "claude" });
+  void api.openWindow();
 }
 
 /** ⌘T opens a new terminal here; ⌘W closes the tab shown, and with none left the window. */
@@ -103,9 +111,12 @@ onBeforeUnmount(() => {
       </button>
     </header>
     <main class="room">
-      <TerminalPanel v-if="project" ref="panel" :project="project" stand="window" @empty="bringBack" />
+      <TerminalPanel v-if="project" ref="panel" :project="project" stand="window" @empty="bringBack" @open-settings="openClaudeSettings" />
       <p v-else class="none">{{ t("terminals.none") }}</p>
     </main>
+    <!-- A chat's start asked from here (the panel's "+", an empty pane): its question, as the main
+         window shows it (lib/chat/open: chatAsks). -->
+    <StartChatDialog v-if="chatAsks.length" :key="chatAsks[0].id" :ask="chatAsks[0]" />
   </div>
 </template>
 

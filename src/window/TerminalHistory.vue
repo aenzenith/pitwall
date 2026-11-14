@@ -7,11 +7,15 @@ import Highlight from "../components/Highlight.vue";
 import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
 import { agentOn, agentsOn, multiAgent } from "../lib/agents";
+import { startChat } from "../lib/chat/open";
 import { clock, dayName } from "../lib/day";
 import { fuzzy } from "../lib/fuzzy";
 import { t } from "../lib/i18n";
+import { useNativeMenu } from "../lib/nativeMenu";
 import { periodLabel } from "../lib/period";
+import { keys } from "../lib/platform";
 import { originView, statusLine } from "../lib/sessions";
+import { markOpened } from "../lib/sessionsMeta";
 import { api, now, sessions, snapshot, today } from "../lib/store";
 import type { Agent, PastSession, Project, Resumed, SessionRow } from "../lib/types";
 
@@ -22,7 +26,8 @@ import type { Agent, PastSession, Project, Resumed, SessionRow } from "../lib/ty
  * (`resume_claude`, `resume_codex`). Codex's are read from Codex's own files as the column opens
  * and dropped with it: Pitwall keeps no history of its own. Dragged onto the terminal, it opens where
  * it is let go (the panel works out where: `drag`, `drop`). `overlay`: a narrow panel's, over the
- * terminal's right side, gone once a session is picked.
+ * terminal's right side, gone once a session is picked. A past Claude session can go on in a chat
+ * instead (its row's chat button, its menu, ⌥↵: `startChat` with the session).
  */
 const props = defineProps<{ project: Project; overlay?: boolean }>();
 const emit = defineEmits<{
@@ -170,7 +175,10 @@ async function open(id: string): Promise<Resumed | null> {
   try {
     const result = agentOf(id) === "codex" ? await api.resumeCodex(props.project.path, id) : await api.resumeClaude(props.project.path, id);
     if (result === "missing" || result === "unsure") failed.value = { ...failed.value, [id]: result };
-    else if (props.overlay) emit("close");
+    else {
+      void markOpened(id);
+      if (props.overlay) emit("close");
+    }
     return result;
   } catch {
     failed.value = { ...failed.value, [id]: "unsure" };
@@ -178,6 +186,41 @@ async function open(id: string): Promise<Resumed | null> {
   } finally {
     opening.value = null;
   }
+}
+
+/** A past session of Claude's, not open now: it can go on in a chat. */
+function chattable(session: PastSession): boolean {
+  return session.agent === "claude" && agentOn("claude") && !live.value.has(session.id);
+}
+
+/** "Sohbette aç": the session in a chat in a new tab (lib/chat/open asks what it must first). */
+async function chat(id: string): Promise<void> {
+  const session = shown.value?.find((each) => each.id === id);
+  if (!session || !chattable(session) || opening.value) return;
+  picked.value = id;
+  opening.value = id;
+  try {
+    if (await startChat(props.project.path, { session: id })) {
+      void markOpened(id);
+      if (props.overlay) emit("close");
+    }
+  } finally {
+    opening.value = null;
+  }
+}
+
+const menu = useNativeMenu();
+
+/** Right-click on a row: what a click does, and the chat beside it for a past Claude session. */
+function rowMenu(event: MouseEvent, item: Item): void {
+  event.preventDefault();
+  const id = item.session.id;
+  picked.value = id;
+  const openLabel = live.value.has(id) ? "sessions.action.bringUp" : "sessions.action.reopenTerminal";
+  void menu.popup(event, [
+    { text: t(openLabel), enabled: !opening.value, action: () => void open(id) },
+    ...(chattable(item.session) ? [{ text: t("chatSurface.openInChat"), enabled: !opening.value, action: () => void chat(id) }] : []),
+  ]);
 }
 
 /* A row dragged onto the terminal: the session opens where it is let go. One that runs somewhere
@@ -276,7 +319,8 @@ function onKey(event: KeyboardEvent): void {
     case "Enter": {
       event.preventDefault();
       const id = picked.value ?? list[0]?.session.id;
-      if (id) void open(id);
+      // ⌥↵: in a chat, when it can go on in one.
+      if (id) void (event.altKey ? chat(id) : open(id));
       return;
     }
     case "Escape":
@@ -302,6 +346,9 @@ function failure(session: PastSession): string {
 /** The column's name: Claude's as today with Claude alone, else for every agent's (or Codex's
  * alone). */
 const title = computed(() => (multiAgent.value ? t("terminal.historyTitle.all") : agentOn("codex") && !agentOn("claude") ? t("terminal.historyTitle.codex") : t("terminal.historyTitle")));
+
+/** ⌥↵, as this keyboard writes it. */
+const chatKeys = keys("alt+Enter");
 
 defineExpose({ focus, open });
 </script>
@@ -342,6 +389,7 @@ defineExpose({ focus, open });
           :title="item.name"
           @pointerdown="startDrag($event, item)"
           @click="clickRow(item.session.id)"
+          @contextmenu="rowMenu($event, item)"
         >
           <AgentMark :agent="item.session.agent" :size="11" :class="{ dim: !live.has(item.session.id) }" />
           <span class="name"><Highlight v-if="item.hits" :text="item.name" :hits="item.hits" /><template v-else>{{ item.name }}</template></span>
@@ -351,7 +399,22 @@ defineExpose({ focus, open });
             <span class="where-text">{{ where(live.get(item.session.id)!) }}</span>
             <ClaudeDot :live="liveDot(live.get(item.session.id)!)" />
           </span>
-          <span v-else-if="item.session.at !== null" class="time">{{ clock(item.session.at) }}</span>
+          <template v-else>
+            <span v-if="item.session.at !== null" :class="['time', { swaps: chattable(item.session) }]">{{ clock(item.session.at) }}</span>
+            <!-- Under the pointer or the keyboard, the chat takes the time's place. -->
+            <button
+              v-if="chattable(item.session)"
+              type="button"
+              class="to-chat"
+              tabindex="-1"
+              :aria-label="t('chatSurface.openInChat')"
+              :title="t('chatSurface.history.chatTitle', { keys: chatKeys })"
+              @pointerdown.stop
+              @click.stop="chat(item.session.id)"
+            >
+              <Icon name="chat" :size="13" />
+            </button>
+          </template>
         </div>
       </template>
     </div>
@@ -483,6 +546,33 @@ defineExpose({ focus, open });
   font-size: 11.5px;
   color: var(--text-faint);
   white-space: nowrap;
+}
+/* A past Claude session's chat, in its time's place while the row is under the pointer or picked. */
+.to-chat {
+  display: none;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-right: -6px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+}
+.to-chat:hover {
+  background: var(--bg-control-hover);
+  color: var(--text-strong);
+}
+.row:hover .to-chat,
+.row.picked .to-chat {
+  display: inline-flex;
+}
+.row:hover .time.swaps,
+.row.picked .time.swaps {
+  display: none;
 }
 .where {
   flex-shrink: 1;

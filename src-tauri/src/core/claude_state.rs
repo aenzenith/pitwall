@@ -109,6 +109,8 @@ impl Core {
         let turns = self.turns_under_way();
         // Taken before the watch is locked: the laps take their lock alone.
         let apart = self.lap_sessions();
+        // So are the chats' own states, which stand over what the hook and the logs say.
+        let chats = self.chat_truths();
         self.codex_set_running();
         let announce = {
             let Ok(mut watch) = self.claude.lock() else {
@@ -124,6 +126,11 @@ impl Core {
             // The hook's latest event and its silence, for Settings' hook row.
             let (heard, quiet) = (watch.heard(), watch.quiet(now_ms()));
             let mut scan = watch.evaluate();
+            if !chats.is_empty() {
+                let book = watch.seen_everywhere();
+                let listed = watch.listed().to_vec();
+                super::chat::apply_chats(&mut scan, chats, &listed, |path| book.seen(path).unwrap_or(book.since), reckon);
+            }
             // Every other agent that is on, as if Claude had its sessions too.
             let merged = self.merge_agents(&mut scan);
             // The laps' sessions are no project's: none of what follows hears of them.

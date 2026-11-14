@@ -1044,6 +1044,12 @@ impl ClaudeWatch {
 
     /// The shared book plus every "I looked" from the legacy books (latest wins). The start
     /// time stays the shared one, so older legacy books can't bring back ancient turns.
+    /// When each project was last looked at, the extension's older books too: what a turn that
+    /// finished must be newer than to wait on the user.
+    pub fn seen_everywhere(&self) -> SeenBook {
+        self.read_seen_everywhere()
+    }
+
     fn read_seen_everywhere(&self) -> SeenBook {
         let mut book = self.read_seen();
         add_legacy_seen(&mut book, &self.legacy_seen);

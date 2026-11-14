@@ -80,40 +80,77 @@ const ORDER: Record<Section, (a: SessionRow, b: SessionRow) => number> = {
   ended: (a, b) => later(endedAt(a), endedAt(b)),
 };
 
-/** The sections shown, each with its sessions' ids in order; empty ones left out. */
-export type Layout = Array<{ section: Section; ids: string[] }>;
+/** The sections shown, each with its sessions' ids in order; empty ones left out. A group of the
+ * user's (O10, lib/sessionsMeta) is a section of its own, before the states, holding its sessions
+ * whatever their state. */
+export type LayoutSection = { section: Section; ids: string[] } | { section: "group"; ids: string[]; group: { id: string; name: string } };
+export type Layout = LayoutSection[];
 
-export function layout(rows: SessionRow[], sections: Section[] = SECTIONS): Layout {
-  return sections
+/** A section's key: its state's name, or its group's. */
+export function sectionKey(group: LayoutSection): string {
+  return group.section === "group" ? `group:${group.group.id}` : group.section;
+}
+
+/** In a group, by state (the list's sections' order), then as each state orders its own. */
+function byState(a: SessionRow, b: SessionRow): number {
+  const [sa, sb] = [sectionOf(a), sectionOf(b)];
+  return SECTIONS.indexOf(sa) - SECTIONS.indexOf(sb) || (sa === sb ? ORDER[sa](a, b) : 0) || a.id.localeCompare(b.id);
+}
+
+export function layout(rows: SessionRow[], sections: Section[] = SECTIONS, groups: Array<{ id: string; name: string; sessions: string[] }> = []): Layout {
+  const shown = rows.filter((row) => sections.includes(sectionOf(row)));
+  // A session in more than one group sits in the first.
+  const inGroup = new Map<string, string>();
+  for (const group of groups) for (const id of group.sessions) if (!inGroup.has(id)) inGroup.set(id, group.id);
+  const grouped: Layout = groups
+    .map((group) => ({
+      section: "group" as const,
+      group: { id: group.id, name: group.name },
+      ids: shown.filter((row) => inGroup.get(row.id) === group.id).sort(byState).map((row) => row.id),
+    }))
+    .filter((group) => group.ids.length);
+  const states: Layout = sections
     .map((section) => ({
       section,
-      ids: rows
-        .filter((row) => sectionOf(row) === section)
+      ids: shown
+        .filter((row) => !inGroup.has(row.id) && sectionOf(row) === section)
         .sort((a, b) => ORDER[section](a, b) || a.id.localeCompare(b.id))
         .map((row) => row.id),
     }))
     .filter((group) => group.ids.length);
+  return [...grouped, ...states];
 }
 
 /**
  * `next`, with the places of `frozen` kept (a row under the pointer or the keyboard never moves):
  * a session stays in its section and place whatever its state does meanwhile, even out of the
  * filter's sections, while it is in `present` (default: `next`); a new one joins the end of its
- * section, a gone one leaves.
+ * section, a gone one leaves. The groups come first, as `next` orders them.
  */
 export function keepOrder(frozen: Layout, next: Layout, present: Set<string> = new Set(next.flatMap((group) => group.ids))): Layout {
   const placed = new Set<string>();
-  const ids = new Map<Section, string[]>();
+  const ids = new Map<string, string[]>();
+  const heads = new Map<string, LayoutSection>();
   for (const group of frozen) {
     const kept = group.ids.filter((id) => present.has(id));
     kept.forEach((id) => placed.add(id));
-    ids.set(group.section, kept);
+    ids.set(sectionKey(group), kept);
+    heads.set(sectionKey(group), group);
   }
   for (const group of next) {
+    const key = sectionKey(group);
+    // A group renamed meanwhile goes by its new name.
+    heads.set(key, group);
     const fresh = group.ids.filter((id) => !placed.has(id));
-    if (fresh.length) ids.set(group.section, [...(ids.get(group.section) ?? []), ...fresh]);
+    if (fresh.length) ids.set(key, [...(ids.get(key) ?? []), ...fresh]);
   }
-  return SECTIONS.filter((section) => ids.get(section)?.length).map((section) => ({ section, ids: ids.get(section) ?? [] }));
+  const groupKeys = [...next, ...frozen].filter((group) => group.section === "group").map(sectionKey);
+  const order = [...new Set([...groupKeys, ...SECTIONS])];
+  return order.flatMap((key) => {
+    const list = ids.get(key);
+    const head = heads.get(key);
+    return list?.length && head ? [{ ...head, ids: list }] : [];
+  });
 }
 
 /** What bringing a session up does, as its button and menu say it: an ended one opens again in a
