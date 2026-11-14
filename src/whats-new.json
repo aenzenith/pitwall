@@ -1,130 +1,25 @@
 {
-  "since": "1.21.3",
+  "since": "1.22.0",
   "notes": [
     {
       "kind": "fix",
       "title": {
-        "en": "Fixed: Claude errors after uninstalling Pitwall",
-        "tr": "Pitwall'ı kaldırınca Claude artık hata vermiyor",
-        "de": "Behoben: Claude-Fehler nach dem Deinstallieren",
-        "es": "Corregido: errores de Claude tras desinstalar Pitwall",
-        "ru": "Исправлено: ошибки Claude после удаления Pitwall",
-        "ja": "修正：Pitwall を削除した後の Claude のエラー",
-        "zh-Hans": "已修复：卸载 Pitwall 后 Claude 报错"
+        "en": "Lighter in the background",
+        "tr": "Arka planda daha hafif",
+        "de": "Leichter im Hintergrund",
+        "es": "Más ligero en segundo plano",
+        "ru": "Легче в фоне",
+        "ja": "バックグラウンドで軽く",
+        "zh-Hans": "后台更轻快"
       },
       "body": {
-        "en": "On Windows, Pitwall's uninstaller now takes its hooks and team radio out of Claude Code and Codex, so your sessions no longer trip over an app that's gone.",
-        "tr": "Windows'ta kaldırıcı, Pitwall'ın hook'larını ve takım radyosunu da Claude Code'dan ve Codex'ten çıkarıyor. Oturumların artık silinmiş bir uygulamaya takılmıyor.",
-        "de": "Unter Windows nimmt der Deinstaller von Pitwall jetzt auch seine Hooks und den Teamfunk aus Claude Code und Codex heraus. Deine Sitzungen stolpern nicht mehr über eine App, die weg ist.",
-        "es": "En Windows, el desinstalador de Pitwall ahora quita también sus hooks y la radio del equipo de Claude Code y Codex. Tus sesiones ya no tropiezan con una app que ya no está.",
-        "ru": "В Windows деинсталлятор Pitwall теперь убирает его хуки и командное радио из Claude Code и Codex. Ваши сессии больше не спотыкаются о приложение, которого уже нет.",
-        "ja": "Windows では、Pitwall のアンインストーラーが Claude Code と Codex からフックとチーム無線も外すようになりました。消えたアプリにセッションがつまずくことはもうありません。",
-        "zh-Hans": "在 Windows 上，Pitwall 的卸载程序现在会把它的 Hook 和车队无线电从 Claude Code 和 Codex 中一并移除，你的会话不会再被一个已经不在的应用绊住。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Fixed: settings broken by a power cut",
-        "tr": "Elektrik kesintisi artık ayarları bozmuyor",
-        "de": "Behoben: Einstellungen nach einem Stromausfall kaputt",
-        "es": "Corregido: ajustes dañados tras un apagón",
-        "ru": "Исправлено: настройки портились при отключении питания",
-        "ja": "修正：停電で設定が壊れることがある",
-        "zh-Hans": "已修复：断电后设置可能损坏"
-      },
-      "body": {
-        "en": "Pitwall now makes sure your settings, board and project list have really reached the disk, so a sudden power cut no longer leaves them broken.",
-        "tr": "Pitwall ayarlarını, panonu ve proje listeni kaydederken diske gerçekten yazıldıklarından emin oluyor. Ani bir kesinti artık onları bozuk bırakmıyor.",
-        "de": "Pitwall sorgt jetzt dafür, dass deine Einstellungen, dein Board und deine Projektliste wirklich gespeichert sind. Ein plötzlicher Stromausfall macht sie nicht mehr kaputt.",
-        "es": "Pitwall ahora se asegura de que tus ajustes, tu tablero y tu lista de proyectos queden guardados de verdad en el disco. Un apagón repentino ya no los deja dañados.",
-        "ru": "Pitwall теперь следит, чтобы настройки, доска и список проектов действительно попадали на диск. Внезапное отключение питания больше их не портит.",
-        "ja": "Pitwall は、設定・ボード・プロジェクト一覧がディスクに確実に書き込まれたことを確かめるようになりました。急に電源が落ちても、壊れたまま残ることはもうありません。",
-        "zh-Hans": "Pitwall 现在会确认你的设置、看板和项目列表真正写进了磁盘，突然断电也不会再把它们弄坏。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Pick when a long turn is told",
-        "tr": "Uzun tur uyarısının süresini sen seç",
-        "de": "Du wählst, wann lange Arbeit gemeldet wird",
-        "es": "Elige cuándo avisar de un turno largo",
-        "ru": "Сами выбирайте, когда сообщать о долгом ходе",
-        "ja": "長い応答を知らせるまでの時間を選べます",
-        "zh-Hans": "长时间工作的提醒时间由你决定"
-      },
-      "body": {
-        "en": "In Settings › Notifications, choose how long Claude or Codex can work on one turn before Pitwall lets you know.",
-        "tr": "Claude ya da Codex bir turda ne kadar çalışınca haber verileceğini artık Ayarlar › Bildirimler'den seçebilirsin.",
-        "de": "In Einstellungen › Benachrichtigungen legst du fest, wie lange Claude oder Codex am Stück arbeiten darf, bevor Pitwall Bescheid gibt.",
-        "es": "En Ajustes › Notificaciones eliges cuánto puede trabajar Claude o Codex en un turno antes de que Pitwall te avise.",
-        "ru": "В «Настройки › Уведомления» можно выбрать, сколько Claude или Codex работает над одним ходом, прежде чем Pitwall вам сообщит.",
-        "ja": "設定 › 通知 で、Claude や Codex が 1 回の応答にどれだけ時間をかけたら Pitwall が知らせるかを選べるようになりました。",
-        "zh-Hans": "在“设置 › 通知”里，你可以选择 Claude 或 Codex 在一轮里工作多久后 Pitwall 来提醒你。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Ready updates no longer hide",
-        "tr": "Hazır güncelleme artık gözden kaçmıyor",
-        "de": "Fertige Updates fallen jetzt auf",
-        "es": "Ya ves cuándo hay una actualización lista",
-        "ru": "Готовое обновление больше не теряется",
-        "ja": "準備できたアップデートを見逃しません",
-        "zh-Hans": "准备好的更新不会再被错过"
-      },
-      "body": {
-        "en": "On Windows, Pitwall tells you once when a new version is ready, and keeps it on hand in the tray until you restart for it.",
-        "tr": "Windows'ta yeni sürüm hazır olunca Pitwall bir kez haber veriyor. Sen yeniden başlatana kadar da tepside seni bekliyor.",
-        "de": "Unter Windows sagt dir Pitwall einmal Bescheid, wenn eine neue Version bereitliegt, und hält sie im Tray bereit, bis du neu startest.",
-        "es": "En Windows, Pitwall te avisa una vez cuando hay una versión nueva lista y la deja a mano en la bandeja del sistema hasta que reinicies.",
-        "ru": "В Windows Pitwall один раз сообщает, что новая версия готова, и держит её под рукой в трее, пока вы не перезапустите приложение.",
-        "ja": "Windows では、新しいバージョンの準備ができると Pitwall が一度だけ知らせ、再起動するまでトレイで待っています。",
-        "zh-Hans": "在 Windows 上，新版本准备好后 Pitwall 会提醒你一次，并一直留在托盘里，直到你重启。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Your days as a spreadsheet",
-        "tr": "Günlerini tabloya dök",
-        "de": "Deine Tage als Tabelle",
-        "es": "Tus días en una hoja de cálculo",
-        "ru": "Ваши дни в таблице",
-        "ja": "毎日の記録を表計算ソフトへ",
-        "zh-Hans": "把每天的记录导出成表格"
-      },
-      "body": {
-        "en": "Export on the Today page saves a day, a week or any stretch you pick as a CSV file, with each project's time, tokens and cost.",
-        "tr": "Bugün sayfasındaki Dışa aktar, bir günü, bir haftayı ya da seçtiğin aralığı CSV dosyası olarak kaydediyor. Her projenin süresi, tokenları ve maliyeti içinde yer alıyor.",
-        "de": "Exportieren auf der Seite Heute speichert einen Tag, eine Woche oder einen frei gewählten Zeitraum als CSV-Datei, mit Zeit, Tokens und Kosten jedes Projekts.",
-        "es": "Exportar, en la página Hoy, guarda un día, una semana o el periodo que elijas como archivo CSV, con el tiempo, los tokens y el coste de cada proyecto.",
-        "ru": "Кнопка «Экспорт» на странице «Сегодня» сохраняет день, неделю или любой выбранный период в CSV-файл, где есть время, токены и стоимость каждого проекта.",
-        "ja": "今日ページの「書き出す」で、1 日、1 週間、または好きな期間を CSV ファイルに保存できます。プロジェクトごとの時間、トークン、コストが入っています。",
-        "zh-Hans": "在“今天”页面点“导出”，就能把一天、一周或你选的任意时段存成 CSV 文件，里面有每个项目的时间、token 和费用。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "See that the hook is listening",
-        "tr": "Hook'un son haberi görünüyor",
-        "de": "Sieh, ob der Hook zuhört",
-        "es": "Comprueba que el hook escucha",
-        "ru": "Видно, слышит ли хук",
-        "ja": "フックの様子が見えるように",
-        "zh-Hans": "能看到 Hook 是否在工作"
-      },
-      "body": {
-        "en": "Claude's hook in Settings now says when its last event came, and turns Silent if Claude works for a while without a word from it.",
-        "tr": "Ayarlar'daki Claude hook'u artık son olayın ne zaman geldiğini söylüyor. Claude uzun süre çalışıp hook'tan haber gelmezse Sessiz diye uyarıyor.",
-        "de": "Der Claude-Hook in den Einstellungen zeigt jetzt, wann sein letztes Ereignis kam, und wird Stumm, wenn Claude eine Weile arbeitet, ohne dass von ihm etwas kommt.",
-        "es": "El hook de Claude en Ajustes ahora dice cuándo llegó su último evento, y pasa a En silencio si Claude trabaja un buen rato sin noticias de él.",
-        "ru": "Хук Claude в настройках теперь показывает, когда пришло последнее событие, и помечается «Молчит», если Claude долго работает, а от хука ничего нет.",
-        "ja": "設定の Claude のフックに、最後のイベントがいつ届いたかが表示されます。Claude がしばらく作業してもフックから何も届かないときは「応答なし」になります。",
-        "zh-Hans": "设置里 Claude 的 Hook 现在会显示最近一次事件是什么时候收到的；如果 Claude 工作了好一阵 Hook 却毫无动静，会标为“无响应”。"
+        "en": "Pitwall does less work while it keeps an eye on your sessions, and its window rests while it's minimized, so more of your computer is left to you.",
+        "tr": "Pitwall oturumlarını izlerken artık daha az iş yapıyor, penceresi küçültülünce de dinlenmeye geçiyor. Böylece bilgisayarının gücü daha çok sana kalıyor.",
+        "de": "Pitwall arbeitet jetzt sparsamer, während es deine Sitzungen im Blick behält, und sein Fenster ruht, solange es minimiert ist. So bleibt mehr von deinem Rechner für dich.",
+        "es": "Pitwall ahora trabaja menos mientras vigila tus sesiones, y su ventana descansa mientras está minimizada, así que te deja más ordenador para ti.",
+        "ru": "Pitwall теперь делает меньше работы, пока следит за вашими сессиями, а его окно отдыхает, пока оно свёрнуто. Компьютеру остаётся больше сил для вас.",
+        "ja": "Pitwall はセッションを見守る間の処理が減り、ウィンドウを最小化しているあいだは描画を休むようになりました。そのぶんパソコンの力をあなたの作業に回せます。",
+        "zh-Hans": "Pitwall 现在盯着你的会话时做的事更少，窗口最小化时也会停下来歇着，把电脑更多的余力留给你。"
       }
     }
   ]

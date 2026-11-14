@@ -10,6 +10,7 @@
 //! Claude Code calls the session idle from that turn's start on (`set_idle`): the user
 //! interrupted it, and no `Stop` comes. "Seen" state lives in the shared `claude-seen.json`.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
@@ -755,9 +756,12 @@ fn modified_ms(path: &Path) -> Option<u64> {
 /// `cwd` is the project's folder or under it; on Windows in any letter case and with either
 /// separator (see `path_key`).
 pub(crate) fn inside(cwd: &str, folder_path: &str) -> bool {
-    let cwd = path_key(cwd);
-    let folder = path_key(folder_path);
-    *cwd == *folder || cwd.starts_with(&format!("{folder}{MAIN_SEPARATOR}"))
+    inside_key(&path_key(cwd), &path_key(folder_path))
+}
+
+/// `inside`, of two paths `path_key` folded already.
+fn inside_key(cwd: &str, folder: &str) -> bool {
+    cwd == folder || cwd.strip_prefix(folder).is_some_and(|rest| rest.starts_with(MAIN_SEPARATOR))
 }
 
 /// The listed project a session in `cwd` belongs to: of those that hold the folder, the
@@ -765,6 +769,42 @@ pub(crate) fn inside(cwd: &str, folder_path: &str) -> bool {
 /// alone: one session is one wait, told once.
 pub(crate) fn owner<'a>(listed: &'a [String], cwd: &str) -> Option<&'a String> {
     listed.iter().filter(|folder| inside(cwd, folder)).max_by_key(|folder| folder.len())
+}
+
+/// `owner` for one scan (`ClaudeWatch::evaluate`): the listed projects' folders folded once
+/// (`keys`, in `listed`'s order), and each session folder's owner found once, by its place in
+/// `listed`.
+struct Owners<'a> {
+    listed: &'a [String],
+    keys: &'a [Cow<'a, str>],
+    found: HashMap<String, Option<usize>>,
+}
+
+impl<'a> Owners<'a> {
+    fn new(listed: &'a [String], keys: &'a [Cow<'a, str>]) -> Self {
+        Self { listed, keys, found: HashMap::new() }
+    }
+
+    /// `owner(listed, cwd) == Some(folder_path)`.
+    fn is(&mut self, cwd: &str, folder_path: &str) -> bool {
+        let owner = match self.found.get(cwd) {
+            Some(&owner) => owner,
+            None => {
+                let cwd_key = path_key(cwd);
+                let owner = self
+                    .listed
+                    .iter()
+                    .zip(self.keys)
+                    .enumerate()
+                    .filter(|(_, (_, key))| inside_key(&cwd_key, key))
+                    .max_by_key(|(_, (folder, _))| folder.len())
+                    .map(|(index, _)| index);
+                self.found.insert(cwd.to_owned(), owner);
+                owner
+            }
+        };
+        owner.is_some_and(|index| self.listed[index] == folder_path)
+    }
 }
 
 /// Whether a folder under `~/.claude/projects` holds a project's sessions: `Some(true)` for its
@@ -1239,21 +1279,27 @@ impl ClaudeWatch {
         self.extra.retain(|_, (asked, _)| now.saturating_sub(*asked) < EXTRA_MAX_AGE_MS);
         let Self { logs, hooked, listed, extra, busy: busy_ids, idle: idle_at, .. } = self;
 
-        for folder_path in listed.iter() {
+        // Each listed project's folder and log folder, as paths are compared, worked out once.
+        let keys: Vec<Cow<str>> = listed.iter().map(|folder| path_key(folder)).collect();
+        let encodings: Vec<String> = listed.iter().map(|folder| path_key(&encode_project_path(folder)).into_owned()).collect();
+        let mut owners = Owners::new(listed, &keys);
+
+        for (folder_path, encoded) in listed.iter().zip(&encodings) {
             let baseline = book.seen(folder_path).unwrap_or(book.since);
             let since = baseline.min(recent);
-            let encoded = path_key(&encode_project_path(folder_path)).into_owned();
             let mut states: Vec<SessionState> = Vec::new();
+            // The ids in `states`.
+            let mut stated: HashSet<&str> = HashSet::new();
 
             for (dir, sessions) in logs.iter() {
-                let Some(exact) = dir_match(dir, &encoded) else {
+                let Some(exact) = dir_match(dir, encoded) else {
                     continue;
                 };
 
                 for (id, log) in sessions {
                     if !exact {
-                        let cwd = log.verdict.as_ref().and_then(|v| v.cwd.clone()).or_else(|| hooked.get(id).and_then(|h| h.cwd.clone()));
-                        if !cwd.is_some_and(|cwd| owner(listed, &cwd) == Some(folder_path)) {
+                        let cwd = log.verdict.as_ref().and_then(|v| v.cwd.as_deref()).or_else(|| hooked.get(id).and_then(|h| h.cwd.as_deref()));
+                        if !cwd.is_some_and(|cwd| owners.is(cwd, folder_path)) {
                             continue;
                         }
                     }
@@ -1273,6 +1319,7 @@ impl ClaudeWatch {
                             _ => continue,
                         },
                     };
+                    stated.insert(id);
                     states.push(session_state(id, folder_path, Some(log), hooked.get(id), phase, turn, idle));
                 }
             }
@@ -1280,13 +1327,13 @@ impl ClaudeWatch {
             // Sessions the hook reported whose log hasn't been read: not written yet, or older.
             for (id, session) in hooked.iter_mut() {
                 let busy = busy_ids.contains(id);
-                if (!busy && session.last <= since) || states.iter().any(|state| &state.id == id) {
+                if (!busy && session.last <= since) || stated.contains(id.as_str()) {
                     continue;
                 }
 
                 let log_dir = log_folder(session);
-                let by_cwd = session.cwd.as_deref().is_some_and(|cwd| owner(listed, cwd) == Some(folder_path));
-                if !by_cwd && log_dir.as_deref().is_none_or(|dir| dir_match(dir, &encoded) != Some(true)) {
+                let by_cwd = session.cwd.as_deref().is_some_and(|cwd| owners.is(cwd, folder_path));
+                if !by_cwd && log_dir.as_deref().is_none_or(|dir| dir_match(dir, encoded) != Some(true)) {
                     continue;
                 }
 
@@ -1294,6 +1341,7 @@ impl ClaudeWatch {
 
                 let idle = idle_at.get(id).copied();
                 if let Some((phase, turn)) = session.state(log.map_or(0, |log| log.modified_ms), baseline, recent, busy, idle) {
+                    stated.insert(id);
                     states.push(session_state(id, folder_path, log, Some(&*session), phase, turn, idle));
                 }
             }
@@ -1317,15 +1365,17 @@ impl ClaudeWatch {
         // Sessions in folders that aren't listed: the hook tells where they run; their own log,
         // as last asked for (`peek`, by the Sessions page), what the hook leaves open. Only its
         // modification time is read here.
+        let reported: HashSet<&str> = result.sessions.iter().map(|state| state.id.as_str()).collect();
         for (id, session) in hooked.iter_mut() {
             let Some(cwd) = session.cwd.clone() else {
                 continue;
             };
             let log_dir = log_folder(session);
-            let listed_here = listed.iter().any(|folder| {
-                inside(&cwd, folder) || log_dir.as_deref().is_some_and(|dir| dir_match(dir, &path_key(&encode_project_path(folder))) == Some(true))
+            let cwd_key = path_key(&cwd);
+            let listed_here = keys.iter().zip(&encodings).any(|(key, encoded)| {
+                inside_key(&cwd_key, key) || log_dir.as_deref().is_some_and(|dir| dir_match(dir, encoded) == Some(true))
             });
-            if listed_here || result.sessions.iter().any(|state| &state.id == id) {
+            if listed_here || reported.contains(id.as_str()) {
                 continue;
             }
 
