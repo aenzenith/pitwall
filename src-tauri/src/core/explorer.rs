@@ -1,10 +1,15 @@
 //! The Files window (`src/window/files/`): a listed project's folders by their entries' names,
-//! the Git state of its files, a file's text and its changes since the last commit. Each is read
-//! when the user opens it, and kept nowhere here: the window holds what it shows in its own
-//! memory. Nothing outside the project's folder is read (`inside`: every link and `..`
-//! followed first), `.git` is never listed or read into, and nothing is ever written.
+//! the Git state of its files, a file's text and its changes since the last commit, and the lines
+//! of its files that hold what the search was given. Each is read when the user opens or asks for
+//! it, and kept nowhere here: the window holds what it shows in its own memory. Nothing outside
+//! the project's folder is read (`inside`: every link and `..` followed first), `.git` is never
+//! listed or read into, and nothing is ever written.
 
 use std::cmp::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{LazyLock, PoisonError};
+
+use serde::Deserialize;
 
 use super::*;
 
@@ -34,6 +39,17 @@ const IMAGES: [(&str, &str); 9] = [
 /// The file index for the search: at most this many files, gathered for at most this long.
 const INDEX_FILES: usize = 20_000;
 const INDEX_TIME: Duration = Duration::from_millis(1500);
+/// The search of the files' text: a file larger than this isn't looked into, and the search
+/// stops at this many matches or after this long.
+const SEARCH_BYTES: u64 = 1024 * 1024;
+const SEARCH_HITS: usize = 2000;
+const SEARCH_TIME: Duration = Duration::from_secs(5);
+/// What the search may be given: longer words or a pattern beyond these aren't searched for.
+const SEARCH_WORDS: usize = 1000;
+const SEARCH_PATTERN_BYTES: usize = 1 << 20;
+/// A line found goes to the window cut to this many characters, from a few before its first match.
+const FOUND_CHARS: usize = 200;
+const FOUND_BEFORE: usize = 12;
 /// Git's answers: a status or a diff that takes longer is given up.
 const GIT_TIME: Duration = Duration::from_secs(8);
 /// A diff larger than this isn't shown.
@@ -78,14 +94,63 @@ pub struct GitMark {
     pub mark: char,
 }
 
-/// Every file of the project the search looks through, from its folder with `/`; `partial`
-/// when the index stopped at its bound.
+/// Every file and folder of the project the search looks through by name, from its folder with
+/// `/`; `partial` when the index stopped at its bound.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileIndex {
     pub files: Vec<String>,
+    pub dirs: Vec<String>,
     pub partial: bool,
 }
+
+/// What the window asks the search of the files' text for: the words as typed, and VS Code's
+/// three switches (letter case, whole word, a regular expression).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextQuery {
+    pub text: String,
+    #[serde(default)]
+    pub case: bool,
+    #[serde(default)]
+    pub word: bool,
+    #[serde(default)]
+    pub regex: bool,
+}
+
+/// The lines of the project's files that hold a match, file by file in the tree's order: how many
+/// matches, `partial` when the search stopped at its bound, `bad` when the pattern isn't one.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Found {
+    pub files: Vec<FoundFile>,
+    pub hits: usize,
+    pub partial: bool,
+    pub bad: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundFile {
+    pub path: String,
+    pub lines: Vec<FoundLine>,
+}
+
+/// A line with a match: its number (from 1), its text cut around its first match (`cut`: words
+/// before it left out) and where each match is in that text, in UTF-16 units as the page counts.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundLine {
+    pub line: usize,
+    pub text: String,
+    pub cut: bool,
+    pub ranges: Vec<[usize; 2]>,
+}
+
+/// The latest search of each project's text: a search asked for again (a key typed) ends the one
+/// before it, which gives up at its next file.
+static SEARCH_TURN: AtomicU64 = AtomicU64::new(0);
+static SEARCHES: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// The history the Source control tab draws, and where a commit of it is seen on the web.
 #[derive(Debug, Clone, Serialize)]
@@ -265,6 +330,7 @@ impl Core {
         let root = self.explorer_root(project)?;
         let started = Instant::now();
         let mut files = Vec::new();
+        let mut dirs = Vec::new();
         let mut partial = false;
         let mut folders = VecDeque::from([PathBuf::new()]);
 
@@ -287,6 +353,7 @@ impl Core {
                 let path = folder.join(&name);
                 if kind.is_dir() {
                     if !name.starts_with('.') && !UNSEARCHED.contains(&name.as_str()) {
+                        dirs.push(slashed(&path));
                         folders.push_back(path);
                     }
                 } else if kind.is_file() || kind.is_symlink() {
@@ -294,7 +361,97 @@ impl Core {
                 }
             }
         }
-        Some(FileIndex { files, partial })
+        Some(FileIndex { files, dirs, partial })
+    }
+
+    /// The lines of the project's files that hold `query` (`Found`), as VS Code's search finds
+    /// them: hidden folders and those of installed or built files left out as for the index, and
+    /// what `.gitignore` (and `.ignore`, Git's own exclude and global ignore files) leaves out;
+    /// no link followed, a binary file or one larger than `SEARCH_BYTES` not looked into. Bounded
+    /// in matches and time; `None` when another search of the project was asked for meanwhile.
+    pub fn explorer_grep(&self, project: &str, query: &TextQuery) -> Option<Found> {
+        let root = self.explorer_root(project)?;
+        let turn = SEARCH_TURN.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+        let searches = || SEARCHES.lock().unwrap_or_else(PoisonError::into_inner);
+        searches().insert(project.to_string(), turn);
+        let mut found = Found::default();
+        if query.text.is_empty() {
+            return Some(found);
+        }
+        let Some(pattern) = text_pattern(query) else {
+            found.bad = true;
+            return Some(found);
+        };
+
+        let started = Instant::now();
+        let walk = ignore::WalkBuilder::new(&root)
+            .hidden(false)
+            .follow_links(false)
+            .require_git(false)
+            .sort_by_file_name(|a, b| natural(&a.to_string_lossy(), &b.to_string_lossy()))
+            .filter_entry(|entry| {
+                let name = entry.file_name().to_string_lossy();
+                if HIDDEN.contains(&name.as_ref()) {
+                    return false;
+                }
+                let folder = entry.depth() > 0 && entry.file_type().is_some_and(|kind| kind.is_dir());
+                !folder || !(name.starts_with('.') || UNSEARCHED.contains(&name.as_ref()))
+            })
+            .build();
+        for entry in walk {
+            if found.hits >= SEARCH_HITS || started.elapsed() > SEARCH_TIME {
+                found.partial = true;
+                break;
+            }
+            if searches().get(project) != Some(&turn) {
+                return None;
+            }
+            // A link isn't followed: its type is the link's own.
+            let Ok(entry) = entry else {
+                continue;
+            };
+            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+                continue;
+            }
+            let Some(relative) = entry.path().strip_prefix(&root).ok().map(slashed) else {
+                continue;
+            };
+            // Through the same gate as a file the window reads, then as a regular file only.
+            let Some(path) = inside(&root, &relative) else {
+                continue;
+            };
+            if entry.metadata().map_or(true, |meta| meta.len() > SEARCH_BYTES) {
+                continue;
+            }
+            let Some(bytes) = crate::files::read_regular(&path, SEARCH_BYTES) else {
+                continue;
+            };
+            if bytes[..bytes.len().min(SNIFF_BYTES)].contains(&0) {
+                continue;
+            }
+            let text = String::from_utf8_lossy(bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes));
+            if !pattern.is_match(&text) {
+                continue;
+            }
+            let mut lines = Vec::new();
+            for (n, line) in text.split('\n').enumerate() {
+                let line = line.strip_suffix('\r').unwrap_or(line);
+                let ranges: Vec<(usize, usize)> = pattern.find_iter(line).filter(|hit| !hit.is_empty()).map(|hit| (hit.start(), hit.end())).take(SEARCH_HITS - found.hits).collect();
+                if ranges.is_empty() {
+                    continue;
+                }
+                found.hits += ranges.len();
+                lines.push(found_line(n + 1, line, &ranges));
+                if found.hits >= SEARCH_HITS {
+                    break;
+                }
+            }
+            if !lines.is_empty() {
+                found.files.push(FoundFile { path: relative, lines });
+            }
+        }
+        found.partial |= found.hits >= SEARCH_HITS;
+        Some(found)
     }
 
     /// The history of the project's branch and of its upstream, newest first (`git log
@@ -401,6 +558,38 @@ fn plain_path(path: &str) -> Option<String> {
     let parts: Vec<&str> = path.split(['/', '\\']).filter(|part| !part.is_empty() && *part != ".").collect();
     let plain = !parts.is_empty() && !path.contains('\0') && !path.starts_with(['/', '\\']) && parts.iter().all(|part| *part != ".." && *part != ".git" && !part.contains(':'));
     plain.then(|| parts.join("/"))
+}
+
+/// The search's words as a pattern: as written (a regular expression) or taken as they are,
+/// held to a whole word, letter case kept or not; lines matched one by one (`^` and `$` at a
+/// line's ends, a Windows line's too). `None` when it isn't a pattern or one too large.
+fn text_pattern(query: &TextQuery) -> Option<regex::Regex> {
+    if query.text.chars().count() > SEARCH_WORDS {
+        return None;
+    }
+    let body = if query.regex { query.text.clone() } else { regex::escape(&query.text) };
+    let body = if query.word { format!(r"\b(?:{body})\b") } else { body };
+    regex::RegexBuilder::new(&body)
+        .case_insensitive(!query.case)
+        .multi_line(true)
+        .crlf(true)
+        .size_limit(SEARCH_PATTERN_BYTES)
+        .dfa_size_limit(SEARCH_PATTERN_BYTES)
+        .build()
+        .ok()
+}
+
+/// A line found, as the window shows it: leading blanks dropped, cut from a few characters before
+/// its first match to `FOUND_CHARS` after that; the matches within it in UTF-16 units.
+fn found_line(line: usize, text: &str, ranges: &[(usize, usize)]) -> FoundLine {
+    let first = ranges[0].0;
+    let blank = text.len() - text.trim_start().len();
+    let back = text[..first].char_indices().rev().nth(FOUND_BEFORE - 1).map_or(0, |(at, _)| at);
+    let start = back.max(blank.min(first));
+    let end = text[start..].char_indices().nth(FOUND_CHARS).map_or(text.len(), |(at, _)| start + at);
+    let units = |to: usize| text[start..to].encode_utf16().count();
+    let ranges = ranges.iter().filter(|(from, _)| *from < end).map(|&(from, to)| [units(from), units(to.min(end))]).collect();
+    FoundLine { line, text: text[start..end].to_string(), cut: !text[..start].trim().is_empty(), ranges }
 }
 
 /// A commit's id as the window may name one: 4 to 64 hexadecimal digits, so it is never taken
@@ -642,11 +831,20 @@ mod tests {
         #[cfg(unix)]
         assert!(fx.core.explorer_list(&fx.project, "linked", 500).is_none(), "a link out of the folder must not be listed");
 
+        // The search of the files' text goes through the same gate: no link followed, nothing of
+        // `.git` looked into; what it finds is the project's own.
+        let grep = |text: &str| fx.core.explorer_grep(&fx.project, &TextQuery { text: text.into(), ..TextQuery::default() }).unwrap();
+        for text in ["secret", "[core]"] {
+            assert!(grep(text).files.is_empty(), "{text:?} is no line of the project's");
+        }
+        assert_eq!(grep("KEY=").files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>(), [".env"]);
+
         // The folder above the project holds the project's files too, and is no project.
         let above = fx.tmp.path().to_string_lossy().into_owned();
         assert!(fx.core.explorer_read(&above, "paddock/src/a.ts").is_none());
         assert!(fx.core.explorer_list(&above, "", 500).is_none());
         assert!(fx.core.explorer_files(&above).is_none());
+        assert!(fx.core.explorer_grep(&above, &TextQuery { text: "secret".into(), ..TextQuery::default() }).is_none());
     }
 
     /// A commit is named by its id alone: nothing that git could take for an option (`--output=`

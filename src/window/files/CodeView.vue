@@ -120,6 +120,9 @@ function pieces(n: number): Piece[] {
 
 const finding = ref(false);
 const needle = ref("");
+/** How the Files window's search found `needle` (its switches: letter case, whole word, a
+ * regular expression), until a key is typed in the bar. */
+const custom = ref<RegExp | null>(null);
 const at = ref(0);
 const findInput = ref<HTMLInputElement | null>(null);
 const LIMIT = 10_000;
@@ -127,10 +130,11 @@ const LIMIT = 10_000;
 const matches = computed(() => {
   const out: Array<{ line: number; start: number; end: number }> = [];
   if (!needle.value) return out;
-  const pattern = new RegExp(needle.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const pattern = custom.value ?? new RegExp(needle.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
   lines.value.forEach((line, n) => {
     if (out.length >= LIMIT) return;
     for (const hit of line.matchAll(pattern)) {
+      if (!hit[0]) continue;
       out.push({ line: n, start: hit.index, end: hit.index + hit[0].length });
       if (out.length >= LIMIT) break;
     }
@@ -156,7 +160,10 @@ watch(needle, () => {
 function openFind(): void {
   finding.value = true;
   const picked = window.getSelection()?.toString();
-  if (picked && !picked.includes("\n")) needle.value = picked;
+  if (picked && !picked.includes("\n")) {
+    needle.value = picked;
+    custom.value = null;
+  }
   void nextTick(() => {
     findInput.value?.focus();
     findInput.value?.select();
@@ -166,6 +173,20 @@ function openFind(): void {
 function closeFind(): void {
   finding.value = false;
   needle.value = "";
+  custom.value = null;
+}
+
+/** From the Files window's search: the bar filled with what it searched for, found as it found
+ * it, on the first match at line `n` (from 1) or after it. */
+async function findAt(text: string, pattern: RegExp | null, n: number): Promise<void> {
+  finding.value = true;
+  needle.value = text;
+  custom.value = pattern;
+  // After the needle's own watcher (the first match), the one at that line.
+  await nextTick();
+  const here = matches.value.findIndex((match) => match.line >= n - 1);
+  at.value = Math.max(0, here);
+  reveal(matches.value[at.value]?.line ?? n - 1);
 }
 
 function step(by: number): void {
@@ -199,7 +220,7 @@ let allPicked = false;
 
 function onKey(event: KeyboardEvent): void {
   const mod = event.metaKey || event.ctrlKey;
-  if (mod && event.code === "KeyF") {
+  if (mod && event.code === "KeyF" && !event.shiftKey) {
     event.preventDefault();
     openFind();
   } else if (mod && event.code === "KeyG") {
@@ -313,7 +334,7 @@ function goTo(n: number): void {
   emit("line", n);
 }
 
-defineExpose({ openFind, goTo });
+defineExpose({ openFind, goTo, findAt });
 </script>
 
 <template>
@@ -337,7 +358,7 @@ defineExpose({ openFind, goTo });
     </div>
 
     <div v-if="finding" class="find" role="search">
-      <input ref="findInput" v-model="needle" type="search" :placeholder="t('files.find')" :aria-label="t('files.find')" @keydown="onFindKey" />
+      <input ref="findInput" v-model="needle" type="search" :placeholder="t('files.find')" :aria-label="t('files.find')" @input="custom = null" @keydown="onFindKey" />
       <span class="count">{{ needle ? (matches.length ? t("files.findCount", { current: at + 1, total: matches.length }) : t("files.findNone")) : "" }}</span>
       <button type="button" class="icon" :disabled="!matches.length" :aria-label="t('output.searchPrevious')" :title="t('output.searchPrevious')" @click="step(-1)"><Icon name="chevron-down" :size="13" class="up" /></button>
       <button type="button" class="icon" :disabled="!matches.length" :aria-label="t('output.searchNext')" :title="t('output.searchNext')" @click="step(1)"><Icon name="chevron-down" :size="13" /></button>

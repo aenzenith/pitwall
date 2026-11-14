@@ -641,6 +641,7 @@ pub fn run() {
             commands::explorer_status,
             commands::explorer_diff,
             commands::explorer_files,
+            commands::explorer_grep,
             commands::explorer_reveal,
             commands::explorer_log,
             commands::explorer_commit,

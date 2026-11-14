@@ -1772,8 +1772,22 @@
   "files.show": "ファイルを表示",
   "files.window": "{name} のファイル",
   "files.openWindows": "ファイルウィンドウ",
-  "files.search": "ファイルを検索",
-  "files.noMatch": "一致するファイルはありません",
+  "files.search": "ファイル名と内容を検索",
+  "files.noMatch": "結果はありません",
+  "files.option.case": "大文字と小文字を区別する",
+  "files.option.word": "単語単位で検索する",
+  "files.option.regex": "正規表現を使用する",
+  "files.found.names": "名前",
+  "files.found.text": "内容",
+  "files.found.hits": {
+    "other": "{count} 件"
+  },
+  "files.found.files": {
+    "other": "{count} ファイル"
+  },
+  "files.found.searching": "検索しています…",
+  "files.found.partial": "最初の {count} 件を表示しています。",
+  "files.found.bad": "この正規表現は無効です。",
   "files.minimize": "最小化",
   "files.loading": "読み込み中…",
   "files.empty": "空",

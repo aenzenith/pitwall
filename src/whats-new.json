@@ -21,6 +21,27 @@
         "ja": "Pitwall はセッションを見守る間の処理が減り、ウィンドウを最小化しているあいだは描画を休むようになりました。そのぶんパソコンの力をあなたの作業に回せます。",
         "zh-Hans": "Pitwall 现在盯着你的会话时做的事更少，窗口最小化时也会停下来歇着，把电脑更多的余力留给你。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Search inside your files",
+        "tr": "Dosyaların içinde ara",
+        "de": "Suche in deinen Dateien",
+        "es": "Busca dentro de tus archivos",
+        "ru": "Поиск внутри файлов",
+        "ja": "ファイルの中身も検索",
+        "zh-Hans": "在文件内容中搜索"
+      },
+      "body": {
+        "en": "The search box in the Files window now finds words inside the project's files too, not just names. Click a line and the file opens right there.",
+        "tr": "Dosyalar penceresindeki arama kutusu artık yalnız adları değil, dosyaların içini de arıyor. Bir satıra basınca dosya tam o satırda açılıyor.",
+        "de": "Das Suchfeld im Fenster Dateien findet jetzt auch Wörter in den Dateien des Projekts, nicht nur Namen. Ein Klick auf eine Zeile öffnet die Datei genau dort.",
+        "es": "El buscador de la ventana Archivos ahora encuentra también palabras dentro de los archivos del proyecto, no solo nombres. Haz clic en una línea y el archivo se abre justo ahí.",
+        "ru": "Поле поиска в окне «Файлы» теперь находит слова и внутри файлов проекта, а не только имена. Нажмите на строку, и файл откроется прямо на ней.",
+        "ja": "ファイルウィンドウの検索ボックスで、名前だけでなくプロジェクトのファイルの中の言葉も見つかるようになりました。行をクリックすると、その行でファイルが開きます。",
+        "zh-Hans": "“文件”窗口的搜索框现在不只搜名字，还能找到项目文件里的文字。点一行，文件就在那一行打开。"
+      }
     }
   ]
 }

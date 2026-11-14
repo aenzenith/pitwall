@@ -1332,6 +1332,14 @@ pub async fn explorer_files(app: AppHandle, path: String) -> Option<crate::core:
     tauri::async_runtime::spawn_blocking(move || core.explorer_files(&path)).await.ok().flatten()
 }
 
+/// The lines of the project's files that hold what the window's search was given; `None` once
+/// a newer search of the project replaced it.
+#[tauri::command]
+pub async fn explorer_grep(app: AppHandle, path: String, query: crate::core::TextQuery) -> Option<crate::core::Found> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.explorer_grep(&path, &query)).await.ok().flatten()
+}
+
 /// The history of the project's branch and its upstream, `limit` commits after `skip`.
 #[tauri::command]
 pub async fn explorer_log(app: AppHandle, path: String, skip: usize, limit: usize) -> Option<crate::core::History> {

@@ -1886,8 +1886,26 @@
   "files.show": "Mostrar archivos",
   "files.window": "Archivos de {name}",
   "files.openWindows": "Ventanas de archivos",
-  "files.search": "Buscar archivos",
-  "files.noMatch": "Ningún archivo coincide",
+  "files.search": "Buscar nombres y contenido",
+  "files.noMatch": "Sin resultados",
+  "files.option.case": "Coincidir mayúsculas y minúsculas",
+  "files.option.word": "Solo palabras completas",
+  "files.option.regex": "Usar expresión regular",
+  "files.found.names": "Nombres",
+  "files.found.text": "Contenido",
+  "files.found.hits": {
+    "one": "{count} resultado",
+    "many": "{count} resultados",
+    "other": "{count} resultados"
+  },
+  "files.found.files": {
+    "one": "{count} archivo",
+    "many": "{count} archivos",
+    "other": "{count} archivos"
+  },
+  "files.found.searching": "Buscando…",
+  "files.found.partial": "Se muestran los primeros {count} resultados.",
+  "files.found.bad": "Esta expresión regular no es válida.",
   "files.minimize": "Minimizar",
   "files.loading": "Leyendo…",
   "files.empty": "Vacío",

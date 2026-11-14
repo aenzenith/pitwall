@@ -1841,8 +1841,24 @@
   "files.show": "Dateien zeigen",
   "files.window": "Dateien von {name}",
   "files.openWindows": "Dateifenster",
-  "files.search": "Dateien suchen",
-  "files.noMatch": "Keine passende Datei",
+  "files.search": "Namen und Inhalte suchen",
+  "files.noMatch": "Keine Treffer",
+  "files.option.case": "Groß-/Kleinschreibung beachten",
+  "files.option.word": "Nur ganzes Wort suchen",
+  "files.option.regex": "Regulären Ausdruck verwenden",
+  "files.found.names": "Namen",
+  "files.found.text": "Inhalte",
+  "files.found.hits": {
+    "one": "{count} Treffer",
+    "other": "{count} Treffer"
+  },
+  "files.found.files": {
+    "one": "{count} Datei",
+    "other": "{count} Dateien"
+  },
+  "files.found.searching": "Suche läuft…",
+  "files.found.partial": "Die ersten {count} Treffer werden angezeigt.",
+  "files.found.bad": "Dieser reguläre Ausdruck ist ungültig.",
   "files.minimize": "Minimieren",
   "files.loading": "Wird gelesen …",
   "files.empty": "Leer",

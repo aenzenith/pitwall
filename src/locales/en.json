@@ -1841,8 +1841,24 @@
   "files.show": "Show files",
   "files.window": "Files of {name}",
   "files.openWindows": "Files windows",
-  "files.search": "Search files",
-  "files.noMatch": "No matching file",
+  "files.search": "Search files and contents",
+  "files.noMatch": "No results",
+  "files.option.case": "Match case",
+  "files.option.word": "Match whole word",
+  "files.option.regex": "Use regular expression",
+  "files.found.names": "Names",
+  "files.found.text": "Contents",
+  "files.found.hits": {
+    "one": "{count} result",
+    "other": "{count} results"
+  },
+  "files.found.files": {
+    "one": "{count} file",
+    "other": "{count} files"
+  },
+  "files.found.searching": "Searching…",
+  "files.found.partial": "Showing the first {count} results.",
+  "files.found.bad": "This regular expression isn't valid.",
   "files.minimize": "Minimize",
   "files.loading": "Reading…",
   "files.empty": "Empty",

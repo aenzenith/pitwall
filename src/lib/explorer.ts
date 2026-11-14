@@ -16,6 +16,15 @@ export type FileView = { kind: "text"; text: string; size: number; lossy: boolea
 /** M changed, A added, R renamed, D deleted, U untracked, ! in conflict, I ignored. */
 export type Mark = "M" | "A" | "R" | "D" | "U" | "!" | "I";
 export type GitMark = { path: string; mark: Mark };
+/** VS Code's three switches of a search: letter case kept, a whole word, a regular expression. */
+export type SearchOptions = { case: boolean; word: boolean; regex: boolean };
+/** A line of a file that holds what the search was given (core/explorer.rs: `FoundLine`): its
+ * text cut around its first match (`cut`: words before it left out), its matches in that text. */
+export type FoundLine = { line: number; text: string; cut: boolean; ranges: Array<[number, number]> };
+export type Found = { files: Array<{ path: string; lines: FoundLine[] }>; hits: number; partial: boolean; bad: boolean };
+/** A file opened from the search at a line: the viewer goes there, ⌘F's bar filled with what was
+ * searched for (`pattern` its own way of finding it, null when the page can't build it). */
+export type Goto = { file: string; line: number; text: string; pattern: RegExp | null };
 
 /** A folder's entries shown at first; "N more" asks for the rest. */
 export const PAGE = 500;
@@ -48,7 +57,11 @@ export type ProjectFiles = {
   opened: Map<string, Opened>;
   /** The tree's row with the keyboard, or the one last clicked. */
   focus: string | null;
-  index: { files: string[]; partial: boolean } | "loading" | null;
+  index: { files: string[]; dirs: string[]; partial: boolean } | "loading" | null;
+  /** The search's switches, kept while the window lives. */
+  searchOptions: SearchOptions;
+  /** A line the search opened its file at, for the viewer to go to once the file is shown. */
+  goto: Goto | null;
   /** Files shown as their changes rather than as they are (the status bar's Changes). */
   diffOn: Set<string>;
   /** The Source control tab's history, once it was shown; `loading` while a page is asked for. */
@@ -141,6 +154,8 @@ export function projectFiles(path: string): ProjectFiles {
       opened: new Map(),
       focus: null,
       index: null,
+      searchOptions: { case: false, word: false, regex: false },
+      goto: null,
       diffOn: new Set(),
       history: null,
       commits: new Map(),
@@ -496,7 +511,31 @@ export async function pickCommitFile(files: ProjectFiles, id: string, path: stri
 export async function loadIndex(files: ProjectFiles): Promise<void> {
   if (files.index) return;
   files.index = "loading";
-  files.index = (await api.explorerFiles(files.path).catch(() => null)) ?? { files: [], partial: false };
+  files.index = (await api.explorerFiles(files.path).catch(() => null)) ?? { files: [], dirs: [], partial: false };
+}
+
+/** The search's words as the page finds them in a file (⌘F's bar), as the core does: taken as
+ * they are or as a regular expression, held to a whole word, letter case kept or not. Null when
+ * the page can't make it (a pattern only the core's syntax knows). */
+export function textPattern(text: string, options: SearchOptions): RegExp | null {
+  const body = options.regex ? text : text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const source = options.word ? `\\b(?:${body})\\b` : body;
+  const flags = options.case ? "gm" : "gim";
+  for (const extra of ["u", ""]) {
+    try {
+      return new RegExp(source, flags + extra);
+    } catch {
+      // Without Unicode's stricter escapes next.
+    }
+  }
+  return null;
+}
+
+/** A line found by the search: its file opened (in the preview tab, or `keep` one of its own) and
+ * shown there, ⌘F's bar filled. */
+export function openAt(files: ProjectFiles, file: string, line: number, text: string, keep = false): void {
+  files.goto = { file, line, text, pattern: textPattern(text, files.searchOptions) };
+  openFile(files, file, keep);
 }
 
 /** `file` (from the project's folder, `/` between its parts) as the system writes its whole path. */

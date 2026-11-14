@@ -1772,8 +1772,22 @@
   "files.show": "显示文件",
   "files.window": "{name} 的文件",
   "files.openWindows": "文件窗口",
-  "files.search": "搜索文件",
-  "files.noMatch": "没有匹配的文件",
+  "files.search": "搜索文件名和内容",
+  "files.noMatch": "没有结果",
+  "files.option.case": "区分大小写",
+  "files.option.word": "全字匹配",
+  "files.option.regex": "使用正则表达式",
+  "files.found.names": "名称",
+  "files.found.text": "内容",
+  "files.found.hits": {
+    "other": "{count} 个结果"
+  },
+  "files.found.files": {
+    "other": "{count} 个文件"
+  },
+  "files.found.searching": "正在搜索…",
+  "files.found.partial": "仅显示前 {count} 个结果。",
+  "files.found.bad": "此正则表达式无效。",
   "files.minimize": "最小化",
   "files.loading": "正在读取…",
   "files.empty": "空",

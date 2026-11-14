@@ -192,7 +192,8 @@ const viewer = ref<InstanceType<typeof FileViewer> | null>(null);
 function onKey(event: KeyboardEvent): void {
   const mod = isMac ? event.metaKey : event.ctrlKey;
   if (!mod || event.altKey || event.defaultPrevented) return;
-  if (event.code === "KeyP" && !event.shiftKey) {
+  // VS Code's keys for its quick open and its search; here one box does both.
+  if ((event.code === "KeyP" && !event.shiftKey) || (event.code === "KeyF" && event.shiftKey)) {
     event.preventDefault();
     win.side = "files";
     void nextTick(() => tree.value?.focusSearch());

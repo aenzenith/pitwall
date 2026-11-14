@@ -1824,8 +1824,24 @@
   "files.show": "Dosyaları göster",
   "files.window": "{name} dosyaları",
   "files.openWindows": "Dosya pencereleri",
-  "files.search": "Dosya ara",
-  "files.noMatch": "Eşleşen dosya yok",
+  "files.search": "Dosya ve içerik ara",
+  "files.noMatch": "Sonuç yok",
+  "files.option.case": "Büyük/küçük harfe duyarlı",
+  "files.option.word": "Tam sözcük",
+  "files.option.regex": "Düzenli ifade",
+  "files.found.names": "Adlar",
+  "files.found.text": "İçerik",
+  "files.found.hits": {
+    "one": "{count} sonuç",
+    "other": "{count} sonuç"
+  },
+  "files.found.files": {
+    "one": "{count} dosya",
+    "other": "{count} dosya"
+  },
+  "files.found.searching": "Aranıyor…",
+  "files.found.partial": "İlk {count} sonuç gösteriliyor.",
+  "files.found.bad": "Bu düzenli ifade geçersizdir.",
   "files.minimize": "Küçült",
   "files.loading": "Okunuyor…",
   "files.empty": "Boş",

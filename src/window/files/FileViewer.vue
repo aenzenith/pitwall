@@ -114,6 +114,24 @@ function showLine(line: number): void {
   setTimeout(() => code.value?.goTo(line));
 }
 
+/** A line the search opened its file at: shown as the file once its text is read, the line
+ * picked, ⌘F's bar filled with what was searched for (a Markdown preview stays as it is). */
+watch(
+  () => [props.files.goto, active.value, view.value?.kind] as const,
+  async ([goto, file, kind]) => {
+    if (!goto || goto.file !== file || !kind) return;
+    props.files.goto = null;
+    if (kind !== "text") return;
+    pickLine(goto.line);
+    setMode("file");
+    // The code view is there (and done with the file it showed before) a tick after.
+    await nextTick();
+    await nextTick();
+    if (active.value === goto.file) void code.value?.findAt(goto.text, goto.pattern, goto.line);
+  },
+  { immediate: true },
+);
+
 /* ---------- the eye: a Markdown file drawn, an SVG as its picture ---------- */
 
 /** What the eye can show of the shown file: `markdown` or `svg`; nothing for any other file. */

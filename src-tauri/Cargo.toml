@@ -46,6 +46,8 @@ base64 = "0.22"
 sha2 = "0.10"
 # Pitwall's own updates: asks GitHub's latest release, checks the signature, replaces the app.
 tauri-plugin-updater = { version = "2.13.1", default-features = false, features = ["native-tls"] }
+# The Files window's search of the files' text walks the project as ripgrep does: .gitignore kept.
+ignore = "0.4.34"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

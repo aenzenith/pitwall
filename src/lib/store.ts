@@ -45,6 +45,7 @@ import { dayName } from "./day";
 import { trackSettings, type TrackSettings } from "./track";
 import type { PhoneConfig, PhoneView } from "./types";
 import type { CalendarDay, DayRow, Lap, LapKind, LapResult, LapRun, LapsState, LapTerminal, LapWhen } from "./laps";
+import type { Found } from "./explorer";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -603,7 +604,8 @@ export const api = {
   /** What changed in a file since the last commit, as `git diff` writes it. */
   explorerDiff: (path: string, file: string) => invoke<string | null>("explorer_diff", { path, file }),
   /** The project's files, for the window's search. */
-  explorerFiles: (path: string) => invoke<{ files: string[]; partial: boolean } | null>("explorer_files", { path }),
+  explorerFiles: (path: string) => invoke<{ files: string[]; dirs: string[]; partial: boolean } | null>("explorer_files", { path }),
+  explorerGrep: (path: string, query: { text: string; case: boolean; word: boolean; regex: boolean }) => invoke<Found | null>("explorer_grep", { path, query }),
   /** The history of the project's branch and its upstream, `limit` commits after `skip`. */
   explorerLog: (path: string, skip: number, limit: number) => invoke<import("./explorer").History | null>("explorer_log", { path, skip, limit }),
   /** The files a commit of the project changed. */
