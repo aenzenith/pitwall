@@ -188,6 +188,9 @@ export type Settings = {
   boardView?: string;
   /** The Files window shows a Markdown or SVG file as its preview, until its eye is pressed again. */
   filesPreview?: boolean;
+  /** What the empty terminal panel's box picked last (`shell`, `chat`, `claude`, `codex`); this
+   * Mac's own. Unset before the first pick. */
+  terminalStart?: string;
   /** The list shows the favourites and the projects at work only ("Only favourites and open"). */
   favouritesOnly?: boolean;
   /** A press on the page folds the open terminal panel (Settings › Terminal); on unless turned off. */

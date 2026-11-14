@@ -324,7 +324,8 @@ export const api = {
    * it, the project's own. `shell`: on Windows, the shell of the list a shell tab runs, and
    * whether an administrator's; without it, Command Prompt there and the user's own shell
    * elsewhere. `account`: the Claude account it runs with ("Start with account"); without it, the
-   * one in use. */
+   * one in use. `prompt`: an agent's tab's first job (the empty panel's box), which the core hands
+   * the agent as a board card's text, never on its command line. */
   openTerminal: (
     path: string,
     claude = false,
@@ -332,6 +333,7 @@ export const api = {
     start: AgentStartChoice | null = null,
     shell: ShellChoice | null = null,
     account: string | null = null,
+    prompt: string | null = null,
   ) =>
     invoke<TerminalOpened>("open_terminal", {
       path,
@@ -342,6 +344,7 @@ export const api = {
       shell: shell?.shell,
       elevated: shell?.elevated,
       account: account ?? undefined,
+      prompt: prompt ?? undefined,
     }),
   /** The shells "+" offers on Windows (none elsewhere), asked of the system now. */
   terminalShells: () => invoke<TerminalShells>("terminal_shells"),
@@ -451,6 +454,8 @@ export const api = {
   /** How a project's board is drawn: `columns` or `list`. */
   setBoardView: (view: string) => invoke("set_board_view", { view }),
   setFilesPreview: (on: boolean) => invoke("set_files_preview", { on }),
+  /** What the empty terminal panel's box has picked last, kept for the next start. */
+  setTerminalStart: (kind: "shell" | "chat" | "claude" | "codex") => invoke("set_terminal_start", { kind }),
   /** The list's "Only favourites and open". */
   setFavouritesOnly: (on: boolean) => invoke("set_favourites_only", { on }),
   /** The Track page's own settings: its circuit, what the cars carry, how much moves. */

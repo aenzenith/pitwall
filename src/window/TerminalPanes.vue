@@ -34,9 +34,11 @@ import {
 import { SHELL_LABELS, shellIcon } from "../lib/shells";
 import { CODEX_MODELS, MODEL_LABELS, MODELS, projectChoice, projectCodexChoice } from "../lib/start";
 import { attach, fitView, tabAccountLabel, terminalTip } from "../lib/terminals";
+import type { EmptyStart } from "../lib/terminalEmpty";
 import type { AgentStartChoice, Project, Shell, ShellChoice, TerminalView } from "../lib/types";
 
 import ChatView from "./chat/ChatView.vue";
+import TerminalEmpty from "./TerminalEmpty.vue";
 import TerminalFind from "./TerminalFind.vue";
 
 /**
@@ -67,7 +69,14 @@ const props = defineProps<{
   names?: Map<number, string>;
   /** The shells installed, on Windows (a split's menu offers them); none elsewhere. */
   shells?: Shell[];
+  /** What an empty pane's box asked for, opened there (TerminalPanel's `launchEmpty`). */
+  launch?: (start: EmptyStart, place: Place) => Promise<boolean>;
 }>();
+
+/** An empty pane's box asked for something: opened in that pane. */
+function launchIn(request: EmptyStart, key: string): Promise<boolean> {
+  return props.launch ? props.launch(request, { kind: "cell", key }) : Promise.resolve(false);
+}
 
 const emit = defineEmits<{
   /** A new terminal, put there; `shell`, on Windows the shell of the list picked. */
@@ -478,9 +487,21 @@ onBeforeUnmount(() => {
   stopMove();
 });
 
-/** For the panel: the panes' places as shown, how the tree shows, a pane's room, and where
- * something let go at a point would go. */
-defineExpose({ placed, shown, rectOf, dropAt });
+/** The empty panes' boxes (TerminalEmpty), by pane. */
+const emptyBoxes = new Map<string, InstanceType<typeof TerminalEmpty>>();
+function emptyRef(key: string, box: InstanceType<typeof TerminalEmpty> | null): void {
+  if (box) emptyBoxes.set(key, box);
+  else emptyBoxes.delete(key);
+}
+
+/** The keyboard into an empty pane's box. */
+function focusEmpty(key: string): void {
+  emptyBoxes.get(key)?.focus();
+}
+
+/** For the panel: the panes' places as shown, how the tree shows, a pane's room, where something
+ * let go at a point would go, and the keyboard into an empty pane. */
+defineExpose({ placed, shown, rectOf, dropAt, focusEmpty });
 </script>
 
 <template>
@@ -559,18 +580,15 @@ defineExpose({ placed, shown, rectOf, dropAt });
         </template>
       </template>
       <div v-else class="cell" :aria-label="t('panes.empty')" role="group">
-        <button type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, false, null, null)">
-          <Icon name="terminal" :size="12" /> {{ t("terminal.newTab") }}
-        </button>
-        <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, null, null)">
-          <AgentMark agent="claude" :size="12" /> {{ t("terminal.newClaude") }}
-        </button>
-        <button v-if="agentOn('codex')" type="button" class="control" :disabled="opening" @click="emit('open', { kind: 'cell', key: pane.leaf.key }, true, projectCodexChoice(project), null)">
-          <AgentMark agent="codex" :size="12" /> {{ t("terminal.newCodex") }}
-        </button>
-        <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="emit('openChat', { kind: 'cell', key: pane.leaf.key })">
-          <Icon name="chat" :size="12" /> {{ t("chat.new") }}
-        </button>
+        <TerminalEmpty
+          :ref="(box) => emptyRef(pane.leaf.key, box as InstanceType<typeof TerminalEmpty> | null)"
+          :project="project"
+          :draft-key="`${project.path}#${pane.leaf.key}`"
+          :opening="opening"
+          :shells="shells"
+          pane
+          :launch="(request) => launchIn(request, pane.leaf.key)"
+        />
       </div>
       <div v-if="dropping?.key === pane.leaf.key" :class="['drop', dropping.side ?? 'swap']">
         <span>{{ dropping.label }}</span>
@@ -814,38 +832,12 @@ body.grabbing .head {
   border-color: var(--line-heavy);
 }
 
+/* An empty pane: the empty panel's box, smaller (TerminalEmpty). */
 .cell {
   flex: 1 1 auto;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  align-content: center;
-  gap: 6px;
-  padding: 8px;
-}
-
-/* As the empty terminal's buttons. */
-.control {
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 11px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--bg-control);
-  font-size: 12.5px;
-  color: var(--text-soft);
-}
-
-.control:hover:not(:disabled) {
-  background: var(--bg-control-hover);
-}
-
-.control:disabled {
-  opacity: 0.4;
-  cursor: default;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Where a pane being dragged would go. */

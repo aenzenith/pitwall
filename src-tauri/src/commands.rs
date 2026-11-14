@@ -239,6 +239,8 @@ pub async fn claude_last_message(app: AppHandle, session: String) -> Option<Stri
 /// agent's tab, that agent's account it runs with; without it, the one in use. `shell`: on Windows, the shell of the list a shell tab runs, by its
 /// word (`Shell::parse`; any other is none, Command Prompt), never a path or a command line;
 /// `elevated`, an administrator's, which waits for Windows' permission: off the main thread.
+/// `prompt`: for an agent's tab, its first job (the empty panel's box), handed to the agent as a
+/// board card's text is, never written into its command line; a shell tab takes none.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn open_terminal(
@@ -251,15 +253,16 @@ pub async fn open_terminal(
     shell: Option<String>,
     elevated: Option<bool>,
     account: Option<String>,
+    prompt: Option<String>,
 ) -> Result<crate::core::TerminalOpened, String> {
     use crate::core::TerminalOpened;
 
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     tauri::async_runtime::spawn_blocking(move || match (claude.unwrap_or(false), start.as_ref().map(StartChoice::gated)) {
         (true, Some(start)) if start.agent == crate::agent::Agent::Codex => {
-            core.open_codex_terminal_with(&path, Some(start), cols.zip(rows), account.as_deref()).map(|view| TerminalOpened::Tab { view })
+            core.open_codex_terminal_with(&path, Some(start), cols.zip(rows), account.as_deref(), prompt).map(|view| TerminalOpened::Tab { view })
         }
-        (true, start) => core.open_claude_terminal_with(&path, start, cols.zip(rows), account.as_deref()).map(|view| TerminalOpened::Tab { view }),
+        (true, start) => core.open_claude_terminal_with(&path, start, cols.zip(rows), account.as_deref(), prompt).map(|view| TerminalOpened::Tab { view }),
         (false, _) => core.open_shell(&path, shell.as_deref().and_then(crate::core::Shell::parse), elevated.unwrap_or(false), cols.zip(rows)),
     })
     .await
@@ -593,6 +596,13 @@ pub fn set_favourites_only(state: State<'_, AppState>, on: bool) {
 #[tauri::command]
 pub fn set_files_preview(state: State<'_, AppState>, on: bool) {
     state.core.set_files_preview(on);
+}
+
+/// What the empty terminal panel's box opened, by its word (`shell`, `chat`, `claude`, `codex`),
+/// picked again at its next start.
+#[tauri::command]
+pub fn set_terminal_start(state: State<'_, AppState>, kind: String) {
+    state.core.set_terminal_start(&kind);
 }
 
 /// The Track page's own settings: its circuit, what the cars carry, how much moves.

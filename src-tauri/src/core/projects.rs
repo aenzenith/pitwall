@@ -141,6 +141,8 @@ impl Core {
                 cli: kept.cli,
                 // Where the terminal panel stands: by its own commands (`layout.rs`).
                 terminal_place: kept.terminal_place,
+                // What its empty box opened last: by its own command (`set_terminal_start`).
+                terminal_start: kept.terminal_start,
                 // Claude's accounts: by their own commands (`core/accounts.rs`).
                 accounts: kept.accounts,
                 // The agents: by their own commands (`agents.rs`).
@@ -256,6 +258,24 @@ impl Core {
                 return;
             }
             inner.settings.files_preview = on;
+        }
+
+        self.save_settings();
+        self.notify();
+    }
+
+    /// What the empty terminal panel's box opened (`shell`, `chat`, `claude` or `codex`), picked
+    /// again at its next start. Any other word changes nothing.
+    pub fn set_terminal_start(&self, kind: &str) {
+        if !crate::settings::TERMINAL_STARTS.contains(&kind) {
+            return;
+        }
+        {
+            let mut inner = self.lock();
+            if inner.settings.terminal_start.as_deref() == Some(kind) {
+                return;
+            }
+            inner.settings.terminal_start = Some(kind.to_string());
         }
 
         self.save_settings();

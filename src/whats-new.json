@@ -126,6 +126,27 @@
         "ja": "設定に「ファイル」タブができました。そこのチェックを外すと、Pitwall のほかの場所をクリックしてもファイルウィンドウが開いたままになります。",
         "zh-Hans": "设置里新增了“文件”标签页。取消那里的勾选后，在 Pitwall 别处点击时，文件窗口会一直开着。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Start right from the empty panel",
+        "tr": "Boş panelden hemen başla",
+        "de": "Direkt im leeren Bereich loslegen",
+        "es": "Empieza desde el panel vacío",
+        "ru": "Старт прямо с пустой панели",
+        "ja": "空のパネルからすぐ始める",
+        "zh-Hans": "从空面板直接开始"
+      },
+      "body": {
+        "en": "When a project has no terminal, pick Shell, Chat, Claude or Codex and type what to do: it starts with your words. Your last pick is waiting there next time.",
+        "tr": "Projede terminal yokken Kabuk, Sohbet, Claude ya da Codex'i seç ve ne yapılacağını yaz, yazdığınla başlasın. Son seçimin bir dahaki sefere de seni bekler.",
+        "de": "Hat ein Projekt kein Terminal, wählst du Shell, Chat, Claude oder Codex und schreibst gleich, was zu tun ist. Deine letzte Wahl ist beim nächsten Mal schon ausgewählt.",
+        "es": "Si un proyecto no tiene terminal, elige Shell, Chat, Claude o Codex y escribe qué hay que hacer: arranca con tus palabras. La próxima vez, tu última elección ya estará marcada.",
+        "ru": "Если в проекте нет терминала, выберите оболочку, чат, Claude или Codex и сразу напишите, что сделать. В следующий раз ваш последний выбор уже будет отмечен.",
+        "ja": "ターミナルのないプロジェクトでは、シェル・チャット・Claude・Codex を選んで、やることをそのまま書けば始まります。前回選んだものは次も選ばれたままです。",
+        "zh-Hans": "项目里没有终端时，选好 Shell、对话、Claude 或 Codex，直接写下要做的事就能开始。上次的选择下次还会替你选好。"
+      }
     }
   ]
 }

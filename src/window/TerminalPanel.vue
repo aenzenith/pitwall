@@ -99,6 +99,7 @@ import { useTabReorder } from "../lib/tabReorder";
 import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
 import { peekChat } from "../lib/chat/store";
 import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, tabAccountLabel, terminalTip } from "../lib/terminals";
+import type { EmptyStart } from "../lib/terminalEmpty";
 import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
 import ChatView from "./chat/ChatView.vue";
@@ -108,6 +109,7 @@ import OutputSearch from "./detail/OutputSearch.vue";
 import LayoutMenu from "./LayoutMenu.vue";
 import RenameDialog from "./RenameDialog.vue";
 import TerminalFind from "./TerminalFind.vue";
+import TerminalEmpty from "./TerminalEmpty.vue";
 import TerminalHistory from "./TerminalHistory.vue";
 import TerminalPanes from "./TerminalPanes.vue";
 
@@ -910,9 +912,18 @@ function openSudoSettings(): void {
  * `where` asked for, it goes into a pane (`placeTerminal`). `shell`: on Windows, the shell of the
  * list picked, an administrator's or not; an administrator's that opened in a window of its own,
  * or that Windows refused, opens no tab and the panel says so (`notice`). `account`: the agent's
- * account it runs with (picked in "+"'s details); without one, the account in use. */
-async function openTerminal(claude = false, start: AgentStartChoice | null = null, where: Place | null = null, shell: ShellChoice | null = null, account: string | null = null): Promise<void> {
-  if (opening.value) return;
+ * account it runs with (picked in "+"'s details); without one, the account in use. `prompt`: what
+ * the empty panel's box typed: an agent's first job, or a shell's line, typed into it as the user
+ * would. True once a tab opened. */
+async function openTerminal(
+  claude = false,
+  start: AgentStartChoice | null = null,
+  where: Place | null = null,
+  shell: ShellChoice | null = null,
+  account: string | null = null,
+  prompt: string | null = null,
+): Promise<boolean> {
+  if (opening.value) return false;
   opening.value = true;
   try {
     // A new terminal is meant to be seen, and its shell starts at the open panel's size.
@@ -921,10 +932,10 @@ async function openTerminal(claude = false, start: AgentStartChoice | null = nul
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
     const size = viewport.value && !panesOn.value && !where ? measure(viewport.value) : null;
-    const opened = await api.openTerminal(props.project.path, claude, size, start, shell, account);
+    const opened = await api.openTerminal(props.project.path, claude, size, start, shell, account, claude ? prompt : null);
     if (opened.kind !== "tab") {
       notice.value = opened.kind;
-      return;
+      return false;
     }
     const view = opened.view;
     asked = view.id;
@@ -933,35 +944,123 @@ async function openTerminal(claude = false, start: AgentStartChoice | null = nul
     if (!terminals.value.some((term) => term.id === view.id)) fresh.add(view.id);
     if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, claude ? "claude" : "shell");
     chooseTab(props.project.path, { kind: "terminal", id: view.id });
+    if (prompt && !claude) void api.writeTerminal(view.id, `${prompt.replace(/\r?\n/g, "\r")}\r`).catch(() => undefined);
+    // Windows' agents take no first prompt on their command line: it waits in their input instead.
+    else if (prompt && isWindows) pasteWhenQuiet(view.id, prompt);
+    return true;
   } finally {
     opening.value = false;
   }
 }
 
-/** A new chat tab (the "+" menu's Yeni sohbet, an empty pane's button): opened as every chat is,
- * through `startChat` (lib/chat/open: the trust question first), placed as a new tab is. */
-async function openChat(where: Place | null = null): Promise<void> {
-  if (opening.value) return;
+/**
+ * On Windows, an agent's first job is pasted into its input once it is up: once its tab has drawn
+ * something and then gone quiet for a moment (Windows tells no session's tab), as a paste, so it
+ * waits there for the user's Return. A tab that never draws, or closes, gets nothing.
+ */
+function pasteWhenQuiet(id: number, text: string): void {
+  const began = Date.now();
+  let seq = -1;
+  let since = began;
+  const step = async (): Promise<void> => {
+    if (Date.now() - began > 30_000) return;
+    try {
+      const now = (await api.terminalBuffer(id)).seq;
+      if (now !== seq) {
+        seq = now;
+        since = Date.now();
+      } else if (now > 0 && Date.now() - since >= 1500) {
+        await api.writeTerminal(id, `\x1b[200~${text}\x1b[201~`);
+        return;
+      }
+    } catch {
+      return;
+    }
+    window.setTimeout(() => void step(), 250);
+  };
+  void step();
+}
+
+/** A new chat tab (the "+" menu's Yeni sohbet, an empty pane's button, the empty panel's box):
+ * opened as every chat is, through `startChat` (lib/chat/open: the trust question first), placed
+ * as a new tab is; `start` and `prompt`, the box's, the prompt sent once the chat is ready. True
+ * once a tab opened. */
+async function openChat(where: Place | null = null, start: AgentStartChoice | null = null, prompt: string | null = null): Promise<boolean> {
+  if (opening.value) return false;
   opening.value = true;
   try {
     if (collapsed.value) {
       toggleCollapsed();
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
-    const opened = await startChat(props.project.path);
-    if (!opened) return;
+    const sent = prompt ? { text: prompt, images: [], documents: [], priority: "next" as const, pasted: false } : null;
+    const opened = await startChat(props.project.path, { start, prompt: sent });
+    if (!opened) return false;
     if (opened.kind !== "tab") {
       notice.value = opened.kind;
-      return;
+      return false;
     }
     const view = opened.view;
     asked = view.id;
     if (!terminals.value.some((term) => term.id === view.id)) fresh.add(view.id);
     if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, "claude");
     chooseTab(props.project.path, { kind: "terminal", id: view.id });
+    return true;
   } finally {
     opening.value = false;
   }
+}
+
+/** The empty panel's box, which takes the keyboard where "New tab" did. */
+const emptyBox = ref<InstanceType<typeof TerminalEmpty> | null>(null);
+
+/** What the empty panel's box (or an empty pane's, `where`) asked for: the kind it picked, opened
+ * with what was typed. Claude's tab here is always the terminal: the box names the chat apart. */
+function launchEmpty(request: EmptyStart, where: Place | null = null): Promise<boolean> {
+  const prompt = request.text || null;
+  const codex = request.kind === "codex" ? projectCodexChoice(props.project) : null;
+  // Sent from the panel's own box: its leave and the new view's arrival are drawn (`emptyGoing`).
+  if (!where) {
+    emptyGoing.value = true;
+    window.clearTimeout(goingTimer);
+    goingTimer = window.setTimeout(() => (emptyGoing.value = false), 4000);
+  }
+  const opened =
+    request.kind === "chat"
+      ? openChat(where, request.start, prompt)
+      : request.kind === "shell"
+        ? openTerminal(false, null, where, request.shell, null, prompt)
+        : openTerminal(true, request.start ?? codex, where, null, null, prompt);
+  return opened
+    .catch(() => false)
+    .then((ok) => {
+      if (!ok && !where) emptyGoing.value = false;
+      return ok;
+    });
+}
+
+/**
+ * The empty box was just sent from: it goes up and fades as the tab it opened comes, and that tab
+ * rises into its place. Only then; a project picked, a tab closed, change at once as before.
+ */
+const emptyGoing = ref(false);
+const arriving = ref(false);
+let goingTimer = 0;
+let arrivingTimer = 0;
+
+watch(
+  () => !!active.value,
+  (shown) => {
+    if (!shown || !emptyGoing.value) return;
+    arriving.value = true;
+    window.clearTimeout(arrivingTimer);
+    arrivingTimer = window.setTimeout(() => (arriving.value = false), 450);
+  },
+);
+
+function emptyLeft(): void {
+  emptyGoing.value = false;
+  window.clearTimeout(goingTimer);
 }
 
 function show(id: number): void {
@@ -1059,13 +1158,13 @@ function openAgent(agent: Agent | null = null, account: string | null = null): v
 }
 
 /**
- * A Claude tab asked for anywhere but "+"'s Yeni Claude row (the empty panel's and an empty pane's
- * buttons, a pane's split menu, a page's request): Claude Code's terminal, or while Settings ›
+ * A Claude tab asked for anywhere but "+"'s Yeni Claude row and the empty panel's box (a pane's
+ * split menu, a page's request, a double click on the tab row): Claude Code's terminal, or while Settings ›
  * Claude says "Sohbet" (Claude açılınca), a chat (lib/chat/open) with the same start and account,
  * placed as the terminal would be. "+" keeps both, Yeni Claude and Yeni sohbet, as rows of their own.
  */
 async function openClaude(start: AgentStartChoice | null = null, where: Place | null = null, account: string | null = null): Promise<void> {
-  if (!opensChat()) return openTerminal(true, start, where, null, account);
+  if (!opensChat()) return void (await openTerminal(true, start, where, null, account));
   if (opening.value) return;
   opening.value = true;
   try {
@@ -2227,13 +2326,24 @@ watch(terminals, async (list) => {
   else panel.value?.querySelector<HTMLElement>(".action")?.focus();
 });
 
-// A tab closed with ⌘W (`closing`): with none left, the keyboard goes to "New tab".
+// A tab closed with ⌘W (`closing`): with none left, the keyboard goes to the empty panel's box
+// (with panes, the focused pane's).
 watch(terminals, async (list) => {
   if (closing === null || list.some((term) => term.id === closing)) return;
   closing = null;
   await nextTick();
-  if (!active.value && !collapsed.value) body.value?.querySelector<HTMLElement>(".empty .control")?.focus();
+  if (!active.value && !collapsed.value) focusShown();
 });
+
+/** The keyboard into what the panel shows: its terminal (with panes, the focused pane's), else the
+ * empty box there. */
+function focusShown(): void {
+  const id = active.value?.id;
+  const now = layout.value;
+  if (id !== undefined) focusView(id);
+  else if (now) panesView.value?.focusEmpty(now.focus);
+  else emptyBox.value?.focus();
+}
 
 // A Claude session in one of these terminals was brought up (`reveal-terminal`, lib/panel:
 // terminalRequest): its tab, the panel open, the keyboard in the shell. A request waits a moment
@@ -2717,29 +2827,17 @@ defineExpose({ openTerminal, closeShown });
       <!-- The terminal, and over it the output shown in its place (one per output, each starting
            at its end, following); collapsed, out of the keyboard's way. -->
       <div ref="stageEl" class="stage">
-        <div v-show="!panesOn" :class="['screen', { away: showsOutput }]">
+        <div v-show="!panesOn" :class="['screen', { away: showsOutput, arriving }]">
           <div ref="viewport" :class="['viewport', { covered: active?.kind === 'chat' }]" @pointerdown="pressScreen"></div>
           <!-- A chat has no xterm: drawn over the viewport, which keeps its size to be measured. -->
           <ChatView v-if="active?.kind === 'chat' && !panesOn" :key="active.id" class="chat-host" :view="active" @pointerdown="pressScreen" @settings="emit('openSettings')" />
           <TerminalFind v-if="active && !panesOn && active.kind !== 'chat'" :key="active.id" :id="active.id" />
-          <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
-            <span>{{ t("terminal.none", { name: project.name }) }}</span>
-            <!-- The "+" menu's rows, at hand where there is nothing yet. -->
-            <div class="empty-actions">
-              <button type="button" class="control" :disabled="opening" @click="openTerminal()">
-                <Icon name="terminal" :size="12" /> {{ t("terminal.newTab") }}
-              </button>
-              <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="openAgent('claude')">
-                <AgentMark agent="claude" :size="12" /> {{ t("terminal.newClaude") }}
-              </button>
-              <button v-if="agentOn('codex')" type="button" class="control" :disabled="opening" @click="openAgent('codex')">
-                <AgentMark agent="codex" :size="12" /> {{ t("terminal.newCodex") }}
-              </button>
-              <button v-if="agentOn('claude')" type="button" class="control" :disabled="opening" @click="openChat()">
-                <Icon name="chat" :size="12" /> {{ t("chat.new") }}
-              </button>
+          <Transition name="empty-go" :css="emptyGoing" @after-leave="emptyLeft">
+            <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
+              <!-- What opens and its first job, at hand where there is nothing yet. -->
+              <TerminalEmpty ref="emptyBox" :project="project" :draft-key="project.path" :opening="opening" :shells="shells" :launch="(request) => launchEmpty(request)" />
             </div>
-          </div>
+          </Transition>
         </div>
         <TerminalPanes
           v-if="layout"
@@ -2759,6 +2857,7 @@ defineExpose({ openTerminal, closeShown });
           :quiet="sliding"
           :opening="opening"
           :shells="shells"
+          :launch="launchEmpty"
           @open="(where, claude, start, shell) => (claude && start?.agent !== 'codex' ? openClaude(start, where) : openTerminal(claude, start, where, shell))"
           @open-chat="(where) => openChat(where)"
           @settings="emit('openSettings')"
@@ -3825,40 +3924,52 @@ defineExpose({ openTerminal, closeShown });
   inset: 0;
   border-radius: 8px;
   background: var(--bg-log);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--text-subtle);
 }
 
-.empty-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
+/* Sent from the box: it lifts away and fades as the tab it opened rises in under it. */
+.empty-go-leave-active {
+  pointer-events: none;
+  transition: opacity 300ms ease;
 }
 
-.control {
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--bg-control);
-  font-size: 13px;
-  color: var(--text-soft);
+.empty-go-leave-active :deep(.te) {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.control:hover:not(:disabled) {
-  background: var(--bg-control-hover);
+.empty-go-leave-to {
+  opacity: 0;
 }
 
-.control:disabled {
-  opacity: 0.4;
-  cursor: default;
+.empty-go-leave-to :deep(.te) {
+  transform: translateY(-32px);
+}
+
+.screen.arriving > .viewport,
+.screen.arriving > .chat-host {
+  animation: arrive 320ms 60ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-go-leave-active,
+  .empty-go-leave-active :deep(.te) {
+    transition-duration: 150ms;
+  }
+
+  .empty-go-leave-to :deep(.te) {
+    transform: none;
+  }
+
+  .screen.arriving > .viewport,
+  .screen.arriving > .chat-host {
+    animation: none;
+  }
 }
 
 /* What the panel says about an administrator's shell, on a row of its own under the terminals (the

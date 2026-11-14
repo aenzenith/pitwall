@@ -195,23 +195,24 @@ impl Core {
     /// A Claude Code tab in the project's folder ("New Claude"): with the model and in the mode
     /// of `start`, or, without one, as the project's own settings say.
     pub fn open_claude_terminal(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
-        self.open_claude_terminal_with(path, start, size, None)
+        self.open_claude_terminal_with(path, start, size, None, None)
     }
 
     /// `open_claude_terminal` with the account `account` names ("Start with account ›";
-    /// `accounts::MAIN` for the main one); none: the one in use.
-    pub fn open_claude_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>) -> Result<TerminalView, String> {
+    /// `accounts::MAIN` for the main one); none: the one in use. `prompt`, the text typed into the
+    /// empty panel's box, is Claude's first job (`first_prompt`), as a board card's text is.
+    pub fn open_claude_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>, prompt: Option<String>) -> Result<TerminalView, String> {
         let start = start.unwrap_or_else(|| self.lock().settings.project(path).start_with(Agent::Claude));
-        self.open_terminal_with(path, &Launch::Claude { prompt: None, start, images: None, session: None }, None, false, size, false, account)
+        self.open_terminal_with(path, &Launch::Claude { prompt: first_prompt(prompt), start, images: None, session: None }, None, false, size, false, account)
     }
 
     /// A Codex tab in the project's folder ("New Codex"), as `open_claude_terminal_with` is
     /// Claude's: with the model and in the mode of `start`'s Codex part, or, without one, as the
     /// project's own settings say for Codex; with the Codex account `account` names
-    /// (`accounts::MAIN` for the main one), else the one in use.
-    pub fn open_codex_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>) -> Result<TerminalView, String> {
+    /// (`accounts::MAIN` for the main one), else the one in use; with `prompt` as its first job.
+    pub fn open_codex_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>, prompt: Option<String>) -> Result<TerminalView, String> {
         let start = start.unwrap_or_else(|| self.lock().settings.project(path).start_with(Agent::Codex));
-        self.open_terminal_with(path, &Launch::Codex { prompt: None, start, images: None }, None, false, size, false, account)
+        self.open_terminal_with(path, &Launch::Codex { prompt: first_prompt(prompt), start, images: None }, None, false, size, false, account)
     }
 
     /// How a Claude session of the project at `path` starts when nothing else was chosen: the
@@ -837,6 +838,35 @@ impl Core {
     }
 }
 
+/// The most of a prompt typed into the empty panel's box that reaches the agent: it travels to
+/// the agent's process twice (in `PITWALL_PROMPT` and as its argument), and the system bounds the
+/// two together (1 MB on macOS).
+const FIRST_PROMPT_BYTES: usize = 100_000;
+
+/// A prompt typed into the empty terminal panel's box as the agent is given it: without NUL
+/// characters (no environment variable can hold one), trimmed and cut to `FIRST_PROMPT_BYTES` on
+/// a character's boundary; none when nothing is left. A lone word gets a line break after it:
+/// Claude reads a prompt that is one of its subcommands' names (`update`, `doctor`…) as that
+/// subcommand even after `--` (see the board's), and only one that is the name whole.
+fn first_prompt(text: Option<String>) -> Option<String> {
+    let text: String = text?.chars().filter(|&c| c != '\0').collect();
+    let mut text = text.trim().to_string();
+    if text.is_empty() {
+        return None;
+    }
+    if text.len() > FIRST_PROMPT_BYTES {
+        let mut end = FIRST_PROMPT_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+    }
+    if !text.contains(char::is_whitespace) {
+        text.push('\n');
+    }
+    Some(text)
+}
+
 /// The environment variable a first prompt travels in, from Pitwall to Claude's command line.
 #[cfg(unix)]
 const PROMPT_VAR: &str = "PITWALL_PROMPT";
@@ -1258,5 +1288,23 @@ mod tests {
             assert!(resume_command("/bin/zsh", bad).is_err(), "{bad}");
             assert!(codex_resume_command("/bin/zsh", bad).is_err(), "{bad}");
         }
+    }
+
+    /// A prompt typed into the empty panel's box: no NUL reaches the variable, a blank one opens
+    /// the agent with none, a long one is cut on a character's boundary, and a lone word is never
+    /// the whole name of one of Claude's subcommands.
+    #[test]
+    fn a_first_prompt_is_cleaned() {
+        assert_eq!(first_prompt(Some("  fix\0 the tests \n".into())), Some("fix the tests".into()));
+        assert_eq!(first_prompt(None), None);
+        for blank in ["", "  \n\t ", "\0\0", " \0 \n"] {
+            assert_eq!(first_prompt(Some(blank.into())), None, "{blank:?}");
+        }
+        assert_eq!(first_prompt(Some(" update ".into())), Some("update\n".into()));
+
+        // Three bytes, then two-byte letters: the bound falls inside one, which is left out.
+        let cut = first_prompt(Some(format!("ab {}", "ğ".repeat(FIRST_PROMPT_BYTES)))).unwrap();
+        assert_eq!(cut.len(), FIRST_PROMPT_BYTES - 1);
+        assert!(cut.starts_with("ab ğ") && cut.ends_with('ğ'));
     }
 }

@@ -603,6 +603,7 @@ pub fn run() {
             commands::set_board_view,
             commands::set_favourites_only,
             commands::set_files_preview,
+            commands::set_terminal_start,
             commands::set_track,
             commands::set_shortcut,
             commands::suspend_shortcut,

@@ -706,6 +706,11 @@ pub struct Settings {
     /// Where the terminal panel stands: docked, floating or in a window of its own.
     #[serde(default)]
     pub terminal_place: TerminalPlace,
+    /// What the empty terminal panel's box opened last (`TERMINAL_STARTS`: a shell, a chat,
+    /// Claude or Codex), picked again at the next start; none until one is picked, and for a word
+    /// that isn't one of them. This Mac's own, in no backup.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "terminal_start_or_none")]
+    pub terminal_start: Option<String>,
     /// The Track page's own settings. None until one is changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<TrackSettings>,
@@ -764,6 +769,16 @@ pub struct Settings {
     /// Settings › Terminal's own choices, in backups like the others; the window alone reads them.
     #[serde(default)]
     pub terminal: TerminalSettings,
+}
+
+/// What the empty terminal panel's box can open (`Settings::terminal_start`).
+pub const TERMINAL_STARTS: [&str; 4] = ["shell", "chat", "claude", "codex"];
+
+/// The empty terminal panel's pick as a file has it: one of `TERMINAL_STARTS`, none for
+/// anything else.
+fn terminal_start_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    Ok(value.as_str().filter(|kind| TERMINAL_STARTS.contains(kind)).map(str::to_string))
 }
 
 /// What a double click on the terminal panel's tab row does and which click opens the folded
@@ -876,6 +891,7 @@ impl Default for Settings {
             files_fold_outside: true,
             panes_height: None,
             terminal_place: TerminalPlace::default(),
+            terminal_start: None,
             track: None,
             theme: "system".into(),
             teams: Vec::new(),
