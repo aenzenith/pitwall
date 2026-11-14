@@ -21,22 +21,33 @@ export const GUTTER = 6;
  * pane takes around its rows: its border, its head and the head's line, the terminal's margins. */
 const CELL = { w: 7.2, h: 20 };
 const AROUND = { w: 2 + 14, h: 2 + 22 + 1 + 12 };
-export type PaneKind = "shell" | "claude";
-/** The least a pane may be, in columns and rows: a shell's, and a Claude session's, under which
- * Claude Code's own screen breaks its lines apart. */
-export const PANE_LEAST: Record<PaneKind, { cols: number; rows: number }> = { shell: { cols: 40, rows: 5 }, claude: { cols: 60, rows: 8 } };
+export type PaneKind = "shell" | "chat" | "claude";
+/** The least a pane may be, in columns and rows: a shell's; a chat's (window/chat), whose lines
+ * wrap but whose message box needs that much for its buttons; and an agent's session in a
+ * terminal, under which Claude Code's own screen breaks its lines apart. */
+export const PANE_LEAST: Record<PaneKind, { cols: number; rows: number }> = { shell: { cols: 40, rows: 5 }, chat: { cols: 48, rows: 8 }, claude: { cols: 60, rows: 8 } };
 export function leastPx(kind: PaneKind): { w: number; h: number } {
   return { w: Math.ceil(PANE_LEAST[kind].cols * CELL.w) + AROUND.w, h: PANE_LEAST[kind].rows * CELL.h + AROUND.h };
 }
 export const PANE_MIN_W = leastPx("shell").w;
 export const PANE_MIN_H = leastPx("shell").h;
 
-/** The Claude terminals of the project shown (TerminalPanel keeps it): their panes are larger at
- * least. */
-export const claudeTerminals = ref<ReadonlySet<number>>(new Set());
+/** What the terminals of the project shown are that aren't shells (TerminalPanel keeps it): a
+ * chat, or an agent's session (Claude's or Codex's). Their panes are larger at least. */
+export const paneKinds = ref<ReadonlyMap<number, PaneKind>>(new Map());
+
+/** What a terminal is, for the room its pane needs. */
+export function kindOfTerminal(id: number | null | undefined): PaneKind {
+  return id === null || id === undefined ? "shell" : (paneKinds.value.get(id) ?? "shell");
+}
 
 export function kindOf(pane: PaneLeaf): PaneKind {
-  return pane.terminal !== null && claudeTerminals.value.has(pane.terminal) ? "claude" : "shell";
+  return kindOfTerminal(pane.terminal);
+}
+
+/** The larger of two leasts, each way. */
+function larger(one: { w: number; h: number }, other: { w: number; h: number }): { w: number; h: number } {
+  return { w: Math.max(one.w, other.w), h: Math.max(one.h, other.h) };
 }
 /** What the open panel takes around its panes: its top line (1), handle (9) and tab row (24), and
  * the panes' margins (6 above, 20 under). */
@@ -158,18 +169,18 @@ export function place(root: PaneNode, w: number, h: number): Placed {
   return out;
 }
 
-/** The least room a node takes: every pane in it at its least. */
-export function minSize(node: PaneNode): { w: number; h: number } {
-  if (node.kind === "pane") return leastPx(kindOf(node));
-  const kids = node.kids.map(minSize);
+/** The least room a node takes: every pane in it at its least (`kindFor`: what each pane holds). */
+export function minSize(node: PaneNode, kindFor: (pane: PaneLeaf) => PaneKind = kindOf): { w: number; h: number } {
+  if (node.kind === "pane") return leastPx(kindFor(node));
+  const kids = node.kids.map((kid) => minSize(kid, kindFor));
   const gaps = GUTTER * (kids.length - 1);
   return node.dir === "row"
     ? { w: kids.reduce((sum, kid) => sum + kid.w, gaps), h: Math.max(...kids.map((kid) => kid.h)) }
     : { w: Math.max(...kids.map((kid) => kid.w)), h: kids.reduce((sum, kid) => sum + kid.h, gaps) };
 }
 
-export function fits(node: PaneNode, w: number, h: number): boolean {
-  const least = minSize(node);
+export function fits(node: PaneNode, w: number, h: number, kindFor: (pane: PaneLeaf) => PaneKind = kindOf): boolean {
+  const least = minSize(node, kindFor);
   return least.w <= w && least.h <= h;
 }
 
@@ -183,11 +194,28 @@ export function canAddPane(tree: PaneNode): boolean {
   return leaves(tree).length < MAX_PANES;
 }
 
-/** A pane of that room can be split that way: both halves at their least, the one there and the
- * one coming (each a shell's or a Claude session's). */
+/** A room can be split that way: both halves at their least, the one there and the one coming. */
 export function canSplit(rect: Rect, dir: SplitDir, kinds: [PaneKind, PaneKind] = ["shell", "shell"]): boolean {
   const [one, other] = kinds.map(leastPx);
   return dir === "row" ? rect.w >= one.w + other.w + GUTTER : rect.h >= one.h + other.h + GUTTER;
+}
+
+/**
+ * A pane can go at the side `side` of the pane `key`, the panes still fitting a `w` × `h` room: one
+ * of theirs moved there (`from`, out of its own place first), or a new one holding `coming`. A pane
+ * too small to be halved may still take one beside it: its neighbours make room where they have
+ * more than their least, as the panes are drawn (`lengths`).
+ */
+export function canPlace(tree: PaneNode, key: string, side: Side, room: { w: number; h: number }, coming: PaneKind | { from: string }): boolean {
+  if (typeof coming === "object") {
+    if (coming.from === key || !findLeaf(tree, coming.from)) return false;
+    const moved = movePane(tree, coming.from, key, side);
+    return moved !== tree && fits(moved, room.w, room.h);
+  }
+  if (!findLeaf(tree, key)) return false;
+  const probe: PaneLeaf = { kind: "pane", key: "coming", terminal: null };
+  const next = splitPane(tree, key, side === "left" || side === "right" ? "row" : "col", probe, side === "left" || side === "top");
+  return fits(next, room.w, room.h, (pane) => (pane.key === probe.key ? coming : kindOf(pane)));
 }
 
 /** How a tree is shown in a room: as it is; its panes dealt out again in rows when the room is too
@@ -199,10 +227,7 @@ export type Shown = { tree: PaneNode; mode: "as-is" | "rearranged" | "squeezed" 
 export function shownIn(tree: PaneNode, w: number, h: number): Shown {
   if (w <= 0 || h <= 0 || fits(tree, w, h)) return { tree, mode: "as-is" };
   const panes = leaves(tree);
-  const least = panes.reduce((most, pane) => {
-    const each = minSize(pane);
-    return { w: Math.max(most.w, each.w), h: Math.max(most.h, each.h) };
-  }, { w: 0, h: 0 });
+  const least = panes.map((pane) => minSize(pane)).reduce(larger, { w: 0, h: 0 });
   const rows = autoRows(panes.length, w, h, least);
   if (!rows) return { tree, mode: "squeezed" };
   let from = 0;
@@ -255,8 +280,8 @@ export function preset(id: PresetId, terminals: number[], w: number, h: number):
     return fits(tree, w, h) ? tree : null;
   }
   // Every pane as large as the largest of those it holds needs: a Claude session among them, a
-  // Claude session's.
-  const least = leastPx(panes.some((pane) => kindOf(pane) === "claude") ? "claude" : "shell");
+  // Claude session's; chats and shells alone, a chat's.
+  const least = panes.map((pane) => leastPx(kindOf(pane))).reduce(larger);
   const rows = autoRows(count, w, h, least);
   if (!rows) return null;
   let from = 0;

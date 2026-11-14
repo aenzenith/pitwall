@@ -654,10 +654,13 @@ body.moving * {
   cursor: grab !important;
 }
 
-/* While a row is dragged into place, the closed hand everywhere. */
+/* While a row is dragged into place, the closed hand everywhere, and no text it passes over (a
+   chat's) selected on the way. */
 body.grabbing,
 body.grabbing * {
   cursor: grabbing !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
 }
 
 /* The keyboard's place: a neutral ring, shown for the keyboard only (:focus-visible), never for

@@ -189,6 +189,27 @@
         "ja": "開発サーバーのタブは、サーバーが動いているあいだだけ表示されます。検索・フィルタ・コピーのボタンは出力の右上に移りました。",
         "zh-Hans": "开发服务器标签页只在服务器运行时出现，搜索、筛选和复制按钮也挪到了输出的右上角。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Panes land where you drop them",
+        "tr": "Bölmeler bıraktığın yerde",
+        "de": "Teilfenster landen, wo du sie loslässt",
+        "es": "Las divisiones caen donde las sueltas",
+        "ru": "Области встают туда, где их отпустили",
+        "ja": "ペインは離した場所へ",
+        "zh-Hans": "窗格落在你松手的地方"
+      },
+      "body": {
+        "en": "Drop a pane or a tab at another pane's edge and it goes right there, even beside a narrow one, as long as everything still fits.",
+        "tr": "Bir bölmeyi ya da sekmeyi başka bir bölmenin kenarına bırakınca, her şey sığdığı sürece tam oraya yerleşir. Dar bir bölmenin yanına da geçebilir.",
+        "de": "Lass ein Teilfenster oder einen Tab am Rand eines anderen los, und es kommt genau dorthin, auch neben ein schmales, solange alles noch passt.",
+        "es": "Suelta una división o una pestaña en el borde de otra y se queda justo ahí, incluso junto a una estrecha, mientras todo siga cabiendo.",
+        "ru": "Отпустите область или вкладку у края другой области, и она встанет именно там, даже рядом с узкой, если всё ещё помещается.",
+        "ja": "ペインやタブを別のペインの端で離すと、全体が収まるかぎり、狭いペインの隣でもそこに入ります。",
+        "zh-Hans": "把窗格或标签页拖到另一个窗格的边缘松开，只要整体还放得下，它就会放到那里，哪怕旁边是很窄的窗格。"
+      }
     }
   ]
 }

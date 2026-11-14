@@ -9,9 +9,8 @@ import { t } from "../lib/i18n";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
 import {
   canAddPane,
-  canSplit,
+  canPlace,
   evenBorder,
-  kindOf,
   leaves,
   MAX_PANES,
   moveBorder,
@@ -24,6 +23,7 @@ import {
   swapPanes,
   tellPanes,
   type Gutter,
+  type PaneKind,
   type PaneLayout,
   type Place,
   type PlacedPane,
@@ -222,8 +222,7 @@ function rectOf(key: string): PlacedPane | undefined {
 /** The pane can be split that way, with a shell beside it (`claude`: a Claude session), and the
  * panes may take one more. */
 function splits(key: string, dir: SplitDir, claude = false): boolean {
-  const rect = rectOf(key);
-  return asIs.value && !!rect && canAddPane(props.layout.tree) && canSplit(rect, dir, [kindOf(rect.leaf), claude ? "claude" : "shell"]);
+  return asIs.value && canAddPane(props.layout.tree) && canPlace(props.layout.tree, key, dir === "row" ? "right" : "bottom", { w: width.value, h: height.value }, claude ? "claude" : "shell");
 }
 
 function splitTitle(key: string, dir: SplitDir): string {
@@ -368,13 +367,15 @@ function startMove(event: PointerEvent, key: string, name: string): void {
   window.addEventListener("keydown", escMove, true);
 }
 
-/** Where a pane let go here would go: into the middle of another, they change places; onto its
- * edge, beside it there, when that pane has the room to be split that way. */
-function dropAt(x: number, y: number, from: string): Drop | null {
+/** Where a pane let go here would go (`coming`: one of these panes, or a new one holding that):
+ * into the middle of another, they change places; onto its edge, beside it there, when the panes
+ * still fit the room so. */
+function dropAt(x: number, y: number, coming: { from: string } | PaneKind): Drop | null {
   const room = stage.value?.getBoundingClientRect();
   if (!room) return null;
   const px = x - room.left;
   const py = y - room.top;
+  const from = typeof coming === "object" ? coming.from : "";
   const target = placed.value.panes.find((pane) => pane.leaf.key !== from && px >= pane.x && px < pane.x + pane.w && py >= pane.y && py < pane.y + pane.h);
   if (!target) return null;
   if (target.leaf.terminal === null || !asIs.value) return { key: target.leaf.key, side: null };
@@ -388,7 +389,7 @@ function dropAt(x: number, y: number, from: string): Drop | null {
     ["bottom", 1 - ry],
   ];
   const side = near.sort((a, b) => a[1] - b[1])[0][0];
-  return { key: target.leaf.key, side: canSplit(target, side === "left" || side === "right" ? "row" : "col") ? side : null };
+  return { key: target.leaf.key, side: canPlace(props.layout.tree, target.leaf.key, side, { w: width.value, h: height.value }, coming) ? side : null };
 }
 
 function dragMove(event: PointerEvent): void {
@@ -398,7 +399,7 @@ function dragMove(event: PointerEvent): void {
   if (!drag.started) document.body.classList.add("grabbing");
   // Over the tab row it goes back to being a tab; elsewhere, beside or in another pane.
   const row = !!props.rowAt?.(event.clientX, event.clientY);
-  moving.value = { ...drag, started: true, x: event.clientX, y: event.clientY, drop: row ? null : dropAt(event.clientX, event.clientY, drag.key), row };
+  moving.value = { ...drag, started: true, x: event.clientX, y: event.clientY, drop: row ? null : dropAt(event.clientX, event.clientY, { from: drag.key }), row };
   if (row || drag.row) emit("overRow", row ? event.clientX : null);
 }
 

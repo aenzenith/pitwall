@@ -35,8 +35,9 @@ const props = defineProps<{ project: Project; overlay?: boolean }>();
 const emit = defineEmits<{
   close: [];
   leave: [];
-  /** A row dragged: its session and where the pointer is; none once the drag is called off. */
-  drag: [drag: { id: string; name: string; agent: Agent; x: number; y: number } | null];
+  /** A row dragged: its session, the tab it runs in, whether it opens in a chat and where the
+   * pointer is; none once the drag is called off. */
+  drag: [drag: { id: string; name: string; agent: Agent; terminal: number | null; chat: boolean; x: number; y: number } | null];
   /** A dragged row let go: the panel opens its session where it was let go. */
   drop: [id: string];
 }>();
@@ -237,7 +238,7 @@ function rowMenu(event: MouseEvent, item: Item): void {
 
 /** How far the pointer goes before a press on a row becomes a drag. */
 const DRAG_FROM = 5;
-let press: { id: string; name: string; agent: Agent; x: number; y: number; started: boolean } | null = null;
+let press: { id: string; name: string; agent: Agent; terminal: number | null; chat: boolean; x: number; y: number; started: boolean } | null = null;
 /** A drag just ended: the click that may follow it opens nothing. */
 let dragged = false;
 
@@ -245,7 +246,9 @@ function startDrag(event: PointerEvent, item: Item): void {
   if (event.button !== 0 || opening.value) return;
   const row = live.value.get(item.session.id);
   if (row && row.origin.kind !== "pitwall") return;
-  press = { id: item.session.id, name: item.name, agent: item.session.agent, x: event.clientX, y: event.clientY, started: false };
+  const terminal = row?.origin.kind === "pitwall" ? row.origin.terminal : null;
+  const chat = chattable(item.session) && chatFirst.value;
+  press = { id: item.session.id, name: item.name, agent: item.session.agent, terminal, chat, x: event.clientX, y: event.clientY, started: false };
   window.addEventListener("pointermove", dragMove);
   window.addEventListener("pointerup", dragEnd);
   window.addEventListener("pointercancel", dragCancel);
@@ -259,7 +262,7 @@ function dragMove(event: PointerEvent): void {
     press.started = true;
     document.body.classList.add("grabbing");
   }
-  emit("drag", { id: press.id, name: press.name, agent: press.agent, x: event.clientX, y: event.clientY });
+  emit("drag", { id: press.id, name: press.name, agent: press.agent, terminal: press.terminal, chat: press.chat, x: event.clientX, y: event.clientY });
 }
 
 function dragEnd(): void {

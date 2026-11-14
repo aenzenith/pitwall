@@ -55,11 +55,11 @@ import {
 import { keepCard, standPanel } from "../lib/panelStand";
 import {
   canAddPane,
+  canPlace,
   canSplit,
-  claudeTerminals,
   evenAll,
   findLeaf,
-  kindOf,
+  kindOfTerminal,
   leaf,
   leafOf,
   leaves,
@@ -70,6 +70,7 @@ import {
   PANES_CHROME,
   PANES_HEIGHT,
   panesHeight,
+  paneKinds,
   place,
   preset,
   presetOf,
@@ -337,12 +338,12 @@ const rowTabs = computed(() => {
 /** The names the row and the panes show: two of the same name told apart ("zsh", "zsh 2"). */
 const names = computed(() => distinctNames(terminals.value));
 
-// An agent's session's pane is larger at least (lib/panes): which of these terminals are an
-// agent's (Claude's or Codex's).
+// A chat's pane and an agent's session's are larger at least (lib/panes): which of these
+// terminals are chats, and which an agent's (Claude's or Codex's).
 watch(
   terminals,
   (list) => {
-    claudeTerminals.value = new Set(list.filter((term) => term.kind !== "shell").map((term) => term.id));
+    paneKinds.value = new Map(list.filter((term) => term.kind !== "shell").map((term) => [term.id, term.kind === "chat" ? "chat" : "claude"]));
   },
   { immediate: true },
 );
@@ -1022,7 +1023,7 @@ async function openChat(where: Place | null = null, start: AgentStartChoice | nu
     const view = opened.view;
     asked = view.id;
     if (!terminals.value.some((term) => term.id === view.id)) fresh.add(view.id);
-    if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, "claude");
+    if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, "chat");
     chooseTab(props.project.path, { kind: "terminal", id: view.id });
     return true;
   } finally {
@@ -1193,7 +1194,7 @@ async function openClaude(start: AgentStartChoice | null = null, where: Place | 
     const id = opened.view.id;
     asked = id;
     if (!terminals.value.some((term) => term.id === id)) fresh.add(id);
-    if (where || layout.value) placeTerminal(id, where ?? { kind: "auto" });
+    if (where || layout.value) placeTerminal(id, where ?? { kind: "auto" }, "chat");
     chooseTab(props.project.path, { kind: "terminal", id });
   } finally {
     opening.value = false;
@@ -1232,11 +1233,6 @@ function placedNow(): Placed | null {
  * is a pane split by the keys or by a terminal coming. */
 function panesAsIs(): boolean {
   return !layout.value?.zoom && (panesView.value?.shown.mode ?? "as-is") === "as-is";
-}
-
-/** What a terminal is, for the room its pane needs: a Claude session's, or a shell's. */
-function kindOfTerminal(id: number | undefined): PaneKind {
-  return id !== undefined && claudeTerminals.value.has(id) ? "claude" : "shell";
 }
 
 /**
@@ -1323,13 +1319,12 @@ function placeTerminal(id: number, where: Place, kind: PaneKind = kindOfTerminal
     focus = where.key;
   } else {
     const empty = emptyPane(now.tree, now.focus);
-    const rect = panesAsIs() ? placedNow()?.panes.find((pane) => pane.leaf.key === now.focus) : undefined;
-    const kinds: [PaneKind, PaneKind] = [rect ? kindOf(rect.leaf) : "shell", kind];
+    const beside = (side: Side): boolean => more && panesAsIs() && canPlace(now.tree, now.focus, side, paneRoom.value, kind);
     if (empty) {
       tree = setTerminal(now.tree, empty.key, id);
       focus = empty.key;
-    } else if (rect && more && canSplit(rect, "row", kinds)) tree = splitPane(now.tree, now.focus, "row", added);
-    else if (rect && more && canSplit(rect, "col", kinds)) tree = splitPane(now.tree, now.focus, "col", added);
+    } else if (beside("right")) tree = splitPane(now.tree, now.focus, "row", added);
+    else if (beside("bottom")) tree = splitPane(now.tree, now.focus, "col", added);
     else {
       tree = setTerminal(now.tree, now.focus, id);
       focus = now.focus;
@@ -1530,8 +1525,7 @@ function onPanelKey(event: KeyboardEvent): void {
     event.preventDefault();
     if (opening.value) return;
     if (now) {
-      const rect = panesAsIs() ? placedNow()?.panes.find((pane) => pane.leaf.key === now.focus) : undefined;
-      if (rect && canAddPane(now.tree) && canSplit(rect, dir, [kindOf(rect.leaf), "shell"])) void openTerminal(false, null, { kind: "split", key: now.focus, dir });
+      if (panesAsIs() && canAddPane(now.tree) && canPlace(now.tree, now.focus, dir === "row" ? "right" : "bottom", paneRoom.value, "shell")) void openTerminal(false, null, { kind: "split", key: now.focus, dir });
     } else if (active.value) {
       const room = roomAt(Math.min(panesWant(), tallest()));
       if (canSplit({ x: 0, y: 0, ...room }, dir, [kindOfTerminal(active.value.id), "shell"])) void openTerminal(false, null, { kind: "split", key: "", dir });
@@ -1549,7 +1543,10 @@ function onPanelKey(event: KeyboardEvent): void {
 
 /** Something dragged onto the terminals from elsewhere in the panel: a session from the history
  * (TerminalHistory) or, one terminal at a time, a tab from the row. */
-type Incoming = { kind: "session" | "tab"; id: string | number; name: string; agent: Agent | null; x: number; y: number };
+/** Something dragged onto the terminals: a session from the history, or a tab off the row.
+ * `terminal`: the tab it is (a session's, the one it runs in); `chat`: a session that opens in a
+ * chat. */
+type Incoming = { kind: "session" | "tab"; id: string | number; name: string; agent: Agent | null; terminal: number | null; chat: boolean; x: number; y: number };
 const incoming = ref<Incoming | null>(null);
 /** Where it would land: a pane (`pane`; none with one terminal at a time) and its side, or the
  * middle (`side` none: into that pane, or for a session with one terminal at a time, a tab). */
@@ -1563,13 +1560,21 @@ function overStage(x: number, y: number): boolean {
   return !!box && x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
 }
 
+/** What a terminal dragged in needs a pane of: its tab's, else a chat's, an agent's or a shell's. */
+function kindComing(drag: Incoming): PaneKind {
+  if (drag.terminal !== null) return kindOfTerminal(drag.terminal);
+  return drag.chat ? "chat" : drag.agent ? "claude" : "shell";
+}
+
 function landingAt(drag: Incoming): Landing | null {
   const box = stageEl.value?.getBoundingClientRect();
   if (!box || !overStage(drag.x, drag.y)) return null;
   if (layout.value) {
-    const at = panesView.value?.dropAt(drag.x, drag.y, "");
+    // A tab in a pane already moves from it, as a pane dragged by its head does.
+    const own = drag.terminal !== null ? leafOf(layout.value.tree, drag.terminal) : undefined;
+    const at = panesView.value?.dropAt(drag.x, drag.y, own ? { from: own.key } : kindComing(drag));
     // With as many panes as there may be, it goes into a pane, never beside one.
-    return at ? { pane: at.key, side: canAddPane(layout.value.tree) ? at.side : null } : null;
+    return at ? { pane: at.key, side: own || canAddPane(layout.value.tree) ? at.side : null } : null;
   }
   const shown = active.value;
   // A tab beside itself is no split; with nothing shown, a session opens as a tab.
@@ -1586,8 +1591,7 @@ function landingAt(drag: Incoming): Landing | null {
   const side = near.sort((a, b) => a[1] - b[1])[0][0];
   const middle = rx > 0.3 && rx < 0.7 && ry > 0.3 && ry < 0.7;
   const room = roomAt(Math.min(panesWant(), tallest()));
-  const coming: PaneKind = drag.kind === "session" || drag.agent ? "claude" : "shell";
-  if (!middle && canSplit({ x: 0, y: 0, ...room }, side === "left" || side === "right" ? "row" : "col", [kindOfTerminal(shown.id), coming])) return { pane: null, side };
+  if (!middle && canSplit({ x: 0, y: 0, ...room }, side === "left" || side === "right" ? "row" : "col", [kindOfTerminal(shown.id), kindComing(drag)])) return { pane: null, side };
   return drag.kind === "tab" ? null : { pane: null, side: null };
 }
 
@@ -1630,7 +1634,7 @@ function placeDropped(id: number, place: Place): void {
  * that brings its terminal takes it (`terminalRequest`). */
 let dropPlace: { place: Place; at: number } | null = null;
 
-function sessionDragged(drag: { id: string; name: string; agent: Agent; x: number; y: number } | null): void {
+function sessionDragged(drag: { id: string; name: string; agent: Agent; terminal: number | null; chat: boolean; x: number; y: number } | null): void {
   incoming.value = drag ? { kind: "session", ...drag } : null;
 }
 
@@ -1703,7 +1707,7 @@ const tabElsewhere = {
       return false;
     }
     const term = terminals.value.find((each) => each.id === id);
-    incoming.value = { kind: "tab", id, name: names.value.get(id) ?? term?.name ?? "", agent: term && term.kind !== "shell" ? (term.kind === "chat" ? "claude" : term.kind) : null, x, y };
+    incoming.value = { kind: "tab", id, name: names.value.get(id) ?? term?.name ?? "", agent: term && term.kind !== "shell" ? (term.kind === "chat" ? "claude" : term.kind) : null, terminal: id, chat: term?.kind === "chat", x, y };
     return true;
   },
   drop(id: number): boolean {
