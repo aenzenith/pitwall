@@ -355,6 +355,8 @@ defineExpose({
       </template>
       <span v-else class="dim">{{ empty }}</span>
     </div>
+    <!-- What the page puts in the box's corner (the output's tools), over the lines. -->
+    <slot />
     <button v-if="!following" type="button" class="pill" @click="follow">
       {{ fresh ? t("output.pausedNew", { count: fresh }) : t("output.paused") }}
       <Icon name="chevron-down" :size="12" />

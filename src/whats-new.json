@@ -168,6 +168,27 @@
         "ja": "⌘T（Windows と Linux では Ctrl+Shift+T）を押すと、新しいタブを開く代わりにターミナルパネルが開き、そのまま入力できます。もう一度押すとパネルはまた折りたたまれます。",
         "zh-Hans": "⌘T（在 Windows 和 Linux 上是 Ctrl+Shift+T）不再新建标签页，而是展开终端面板，让你直接在里面输入。再按一次，面板就会重新收起。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Tidier output tabs",
+        "tr": "Daha sade çıktı sekmeleri",
+        "de": "Aufgeräumte Ausgabe-Tabs",
+        "es": "Pestañas de salida más limpias",
+        "ru": "Вкладки вывода стали чище",
+        "ja": "出力タブがすっきり",
+        "zh-Hans": "输出标签页更清爽"
+      },
+      "body": {
+        "en": "The Dev server tab only shows while the server runs, and an output's search, filter and copy buttons now sit in its top right corner.",
+        "tr": "Dev sunucusu sekmesi artık yalnız sunucu çalışırken görünüyor. Çıktının arama, filtre ve kopyalama düğmeleri de sağ üst köşesine geçti.",
+        "de": "Der Tab „Dev-Server“ erscheint nur noch, solange der Server läuft. Suchen, Filtern und Kopieren sitzen jetzt oben rechts in der Ausgabe.",
+        "es": "La pestaña Servidor de desarrollo solo aparece mientras el servidor está en marcha, y los botones de buscar, filtrar y copiar están ahora en la esquina superior derecha de la salida.",
+        "ru": "Вкладка Dev-сервер видна, только пока сервер работает, а кнопки поиска, фильтра и копирования теперь в правом верхнем углу вывода.",
+        "ja": "開発サーバーのタブは、サーバーが動いているあいだだけ表示されます。検索・フィルタ・コピーのボタンは出力の右上に移りました。",
+        "zh-Hans": "开发服务器标签页只在服务器运行时出现，搜索、筛选和复制按钮也挪到了输出的右上角。"
+      }
     }
   ]
 }

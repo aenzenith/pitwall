@@ -594,12 +594,11 @@ function liftGlide(from: DOMRect): void {
 
 /* ---------- the outputs ---------- */
 
-/** The outputs' tabs: the dev server, then every command that ran in this session, then the Garage
- * page's installs and migrations that did (lib/deps) and the core doesn't list as commands. Each
- * with its state: running, or failed (a crashed server). */
+/** The outputs' tabs: the dev server while it is at work, then every command that ran in this
+ * session, then the Garage page's installs and migrations that did (lib/deps) and the core doesn't
+ * list as commands. Each with its state: running, or failed (a crashed server). */
 const outputs = computed(() => {
   const project = props.project;
-  const server = { id: null as string | null, name: t("common.devServer"), state: project.status === "running" ? "on" : project.status === "crashed" ? "bad" : null };
   // A run that ended well a while ago leaves the row, unless its output is the one picked here.
   const picked = chosen.value?.kind === "output" ? chosen.value.job : undefined;
   const commands = (project.commands ?? [])
@@ -609,7 +608,13 @@ const outputs = computed(() => {
   const jobs = (depJobs.value[project.path] ?? [])
     .filter((job) => !listed.has(job))
     .map((job) => ({ id: job as string | null, name: depJobName(project.path, job) ?? job, state: null }));
-  return [server, ...commands, ...jobs];
+  const others = [...commands, ...jobs];
+  // The server's tab only while it runs, starts, stops or crashed (the user's word): a stopped one
+  // leaves the row unless its output is the one shown, or the one picked has left it.
+  const shown = picked !== undefined && !others.some((item) => item.id === picked);
+  if (project.status === "stopped" && !shown) return others;
+  const server = { id: null as string | null, name: t("common.devServer"), state: project.status === "running" ? "on" : project.status === "crashed" ? "bad" : null };
+  return [server, ...others];
 });
 /** The output picked: the one chosen while it is still a tab, else the dev server's. */
 const job = computed<string | null>(() => {
@@ -2718,7 +2723,7 @@ defineExpose({ openTerminal, closeShown });
         </TransitionGroup>
       </div>
       <!-- The terminals' tabs and right after them the button that opens one; at the right end, the
-           outputs' tabs, the shown output's tools, the history and collapse. -->
+           outputs' tabs, the history and collapse. -->
       <span :class="['divider', { shown: rowTabs.length }]" aria-hidden="true"></span>
       <!-- A shell tab, an agent's session, or one with a model or mode of its own: a menu under it. -->
       <button
@@ -2760,7 +2765,7 @@ defineExpose({ openTerminal, closeShown });
           type="button"
           role="tab"
           :aria-selected="showsOutput && job === item.id"
-          :tabindex="item.id === job ? 0 : -1"
+          :tabindex="item.id === job || (i === 0 && !outputs.some((each) => each.id === job)) ? 0 : -1"
           :class="['out-tab', { on: showsOutput && job === item.id }]"
           :title="item.name"
           @click="openOutput(item.id)"
@@ -2771,30 +2776,6 @@ defineExpose({ openTerminal, closeShown });
         </button>
         </TransitionGroup>
       </div>
-      <!-- The shown output's tools: they come and go as a tab does, growing to their width and
-           shrinking away, the outputs' tabs sliding along. -->
-      <Transition :css="false" @enter="tabEnter" @leave="tabLeave">
-      <div v-if="showsOutput && !collapsed" class="tools">
-        <span class="divider shown" aria-hidden="true"></span>
-        <button type="button" :class="['icon', 'tool', { on: searching }]" :aria-pressed="searching" :aria-label="t('output.search')" :title="t('output.search')" @click="searching ? closeSearch() : openSearch()">
-          <Icon name="search" :size="13" />
-        </button>
-        <button
-          type="button"
-          :class="['icon', 'tool', { on: errorsOnly }]"
-          :aria-pressed="errorsOnly"
-          :aria-label="errorCount ? `${t('output.errorsOnly')} (${errorCount})` : t('output.errorsOnly')"
-          :title="t('output.errorsOnly')"
-          @click="errorsOnly = !errorsOnly"
-        >
-          <Icon name="filter" :size="13" />
-          <span v-if="errorCount" class="errors">{{ errorCount }}</span>
-        </button>
-        <button type="button" class="icon tool" :disabled="!shownOutput.length" :aria-label="t('output.copyAll')" :title="t(copied ? 'output.copied' : 'output.copyAll')" @click="copyAll">
-          <Icon :name="copied ? 'check' : 'copy'" :size="13" />
-        </button>
-      </div>
-      </Transition>
       <LayoutMenu :current="presetNow" :count="layoutCount" :room="menuRoom" :fits="fitsPreset" :panes="panesOn" :compact="snug" @pick="pickLayout" @even="evenPanes" />
       <button
         type="button"
@@ -2911,7 +2892,28 @@ defineExpose({ openTerminal, closeShown });
             :current="current"
             :empty="emptyOutput"
             @card="errorCard = { ...$event, path: project.path }"
-          />
+          >
+            <!-- The shown output's tools, in its box's top right corner (the user's word). -->
+            <div class="tools">
+              <button type="button" :class="['icon', 'tool', { on: searching }]" :aria-pressed="searching" :aria-label="t('output.search')" :title="t('output.search')" @click="searching ? closeSearch() : openSearch()">
+                <Icon name="search" :size="13" />
+              </button>
+              <button
+                type="button"
+                :class="['icon', 'tool', { on: errorsOnly }]"
+                :aria-pressed="errorsOnly"
+                :aria-label="errorCount ? `${t('output.errorsOnly')} (${errorCount})` : t('output.errorsOnly')"
+                :title="t('output.errorsOnly')"
+                @click="errorsOnly = !errorsOnly"
+              >
+                <Icon name="filter" :size="13" />
+                <span v-if="errorCount" class="errors">{{ errorCount }}</span>
+              </button>
+              <button type="button" class="icon tool" :disabled="!shownOutput.length" :aria-label="t('output.copyAll')" :title="t(copied ? 'output.copied' : 'output.copyAll')" @click="copyAll">
+                <Icon :name="copied ? 'check' : 'copy'" :size="13" />
+              </button>
+            </div>
+          </OutputLog>
         </div>
       </div>
       <!-- The history's room beside the terminal: the panel's right margin alone while it is
@@ -3445,12 +3447,19 @@ defineExpose({ openTerminal, closeShown });
   background: var(--crash);
 }
 
-/* The shown output's tools, before "History": one piece that grows in and shrinks away. */
+/* The shown output's tools, in its box's top right corner, clear of the scrollbar (10 px): on the
+   box's own ground, so the lines that pass under them don't show through. */
 .tools {
-  flex-shrink: 0;
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--bg-log);
 }
 
 .tool {
@@ -3467,7 +3476,7 @@ defineExpose({ openTerminal, closeShown });
 }
 
 /* How many errors the output holds, on the corner of the button that shows them alone: the
-   button keeps its width. Inside the row's height, which cuts what leaves it. */
+   button keeps its width. */
 .errors {
   position: absolute;
   top: 0;
