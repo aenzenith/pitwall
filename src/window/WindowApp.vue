@@ -185,17 +185,17 @@ watch(visible, (on) => {
   if (view.value === "board") void loadBoard();
 });
 const settingsOpen = ref(false);
-/** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's, the Track
- * page's settings button on Track's, the popover's "Quiet hours…" on Notifications'. The first
- * run's phone row opens it on Notifications' too, at the phone's part (`settingsPart`); the Fuel
- * page's account panel on Claude's, at its accounts (with the add dialog open for "Add account"). */
-const settingsTab = ref<"claude" | "track" | "notifications" | undefined>(undefined);
+/** Settings opens on this tab: the Sessions page's "Add hook" opens it on Claude's, the popover's
+ * "Quiet hours…" on Notifications'. The first run's phone row opens it on Notifications' too, at
+ * the phone's part (`settingsPart`); the Fuel page's account panel on Claude's, at its accounts
+ * (with the add dialog open for "Add account"). */
+const settingsTab = ref<"claude" | "notifications" | undefined>(undefined);
 type SettingsPart = "phone" | "accounts" | "addAccount";
 const settingsPart = ref<SettingsPart | undefined>(undefined);
 /** With the tab Agents, whose part it opens on: the Fuel page asks for Codex's with Codex picked. */
 const settingsAgent = ref<Agent | undefined>(undefined);
 
-function openSettings(tab?: "claude" | "track" | "notifications", part?: SettingsPart, agent?: Agent): void {
+function openSettings(tab?: "claude" | "notifications", part?: SettingsPart, agent?: Agent): void {
   settingsTab.value = tab;
   settingsPart.value = part;
   settingsAgent.value = agent;
@@ -1149,7 +1149,7 @@ function server(project: Project): string {
     <div class="pages" :inert="setupOpen">
     <div class="page" :style="{ marginBottom: panelDocked ? `${COLLAPSED_HEIGHT}px` : undefined, '--panel-over': `${panelOver}px` }">
     <DayView v-if="view === 'day'" />
-    <TrackView v-else-if="view === 'track'" @open-project="revealProject" @open-settings="openSettings('track')" />
+    <TrackView v-else-if="view === 'track'" @open-project="revealProject" />
     <FuelView v-else-if="view === 'fuel'" :terminal-project="panelHere ? (panelProject?.path ?? null) : null" @open-settings="(part, agent) => openSettings('claude', part, agent)" />
     <SessionsView
       v-else-if="view === 'sessions'"

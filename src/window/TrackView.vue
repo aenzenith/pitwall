@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-import Icon from "../components/Icon.vue";
 import type { Inset } from "../lib/circuit";
 import { t } from "../lib/i18n";
 import { openInWindow, pickRequest } from "../lib/open";
@@ -14,6 +13,7 @@ import type { Project } from "../lib/types";
 import TrackCanvas from "./track/TrackCanvas.vue";
 import TrackCard from "./track/TrackCard.vue";
 import TrackLegend from "./track/TrackLegend.vue";
+import TrackOptions from "./track/TrackOptions.vue";
 import TrackPicker from "./track/TrackPicker.vue";
 import TrackTower from "./track/TrackTower.vue";
 
@@ -24,9 +24,9 @@ import TrackTower from "./track/TrackTower.vue";
  * project is off the circuit, in the tower only. The tower beside the circuit lists every one
  * drawn for the keyboard, and the card under it
  * acts on the one selected. That project's terminals are along the page's bottom. Its settings are
- * in Settings, under Track.
+ * its own, in a popover behind the settings button in its bar (track/TrackOptions).
  */
-const emit = defineEmits<{ "open-project": [path: string]; "open-settings": [] }>();
+const emit = defineEmits<{ "open-project": [path: string] }>();
 
 /** The tower and the card, from the stage's left edge: narrower in a narrow window, where the
  * circuit needs the room more. */
@@ -189,9 +189,7 @@ const inset = computed<Inset>(() => ({
         </span>
       </div>
       <TrackPicker :picked="settings.circuit" :shown="shown" @pick="setTrack({ ...settings, circuit: $event })" />
-      <button type="button" class="options" :aria-label="t('track.options')" :title="t('track.options')" @click="emit('open-settings')">
-        <Icon name="settings" :size="16" />
-      </button>
+      <TrackOptions />
     </header>
 
     <div ref="stage" class="stage">
@@ -302,26 +300,6 @@ const inset = computed<Inset>(() => ({
 
 .dot.crash {
   background: var(--crash);
-}
-
-/* The page's settings open in Settings: a quiet button, as the other pages' are. */
-.options {
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.options:hover {
-  background: var(--bg-icon-hover);
-  color: var(--text-strong);
 }
 
 /* The ground the circuit lies in, a shade under the window's: the night in the dark theme, a

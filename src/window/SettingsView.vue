@@ -32,16 +32,14 @@ import FlagSection from "./settings/FlagSection.vue";
 import RadioSection from "./settings/RadioSection.vue";
 import TowerSection from "./settings/TowerSection.vue";
 import MissingProjects from "./backup/MissingProjects.vue";
-import TrackOptions from "./track/TrackOptions.vue";
 
-type Tab = "general" | "projects" | "servers" | "editor" | "claude" | "track" | "notifications" | "about";
+type Tab = "general" | "projects" | "servers" | "editor" | "claude" | "notifications" | "about";
 
-/** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's, the Track
- * page's settings button Track's); `startPart`: a part of it scrolled to the top (the first run's
- * phone row asks for the phone's, the Fuel page's account panel for the accounts', with the add
- * dialog open for `addAccount`); `startAgent`: with the tab Agents, the agent whose part it shows
- * (Claude's unless said). `openSetup`: the first run's steps are asked for again;
- * `openWhatsNew`: this version's notes. */
+/** `startTab`: the tab it opens on (the Sessions page's "Add hook" opens Claude's); `startPart`: a
+ * part of it scrolled to the top (the first run's phone row asks for the phone's, the Fuel page's
+ * account panel for the accounts', with the add dialog open for `addAccount`); `startAgent`: with
+ * the tab Agents, the agent whose part it shows (Claude's unless said). `openSetup`: the first
+ * run's steps are asked for again; `openWhatsNew`: this version's notes. */
 const props = defineProps<{ startTab?: Tab; startPart?: "phone" | "accounts" | "addAccount"; startAgent?: Agent }>();
 const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNew: [] }>();
 
@@ -50,13 +48,12 @@ const emit = defineEmits<{ close: []; openUpdate: []; openSetup: []; openWhatsNe
 
 /** Each tab with its icon; Claude's is Claude's mark, in the same colour as the others, and the
  * Agents tab's a pinned chip. */
-const tabs = computed<Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "claude" | "agents" | "flag" | "bell" }>>(() => [
+const tabs = computed<Array<{ id: Tab; label: Key; icon: "settings" | "grid" | "server" | "editor" | "claude" | "agents" | "bell" }>>(() => [
   { id: "general", label: "settings.general", icon: "settings" },
   { id: "projects", label: "common.projects", icon: "grid" },
   { id: "servers", label: "settings.servers", icon: "server" },
   { id: "editor", label: "settings.editor", icon: "editor" },
   agentsTab.value ? { id: "claude", label: "settings.agents", icon: "agents" } : { id: "claude", label: "settings.claude", icon: "claude" },
-  { id: "track", label: "track.nav", icon: "flag" },
   { id: "notifications", label: "settings.notifications", icon: "bell" },
 ]);
 
@@ -845,12 +842,6 @@ function setTheme(theme: Theme): void {
             :detail="detailOf('codex')"
             :start-add="startPart === 'addAccount' && agentPicked === 'codex'"
           />
-        </fieldset>
-
-        <!-- The Track page's own: each change goes to the core by its own command, never with the
-             form (`@change.stop`). -->
-        <fieldset v-show="tab === 'track'" :aria-label="t('track.nav')" @change.stop>
-          <TrackOptions />
         </fieldset>
 
         <!-- Notifications' own: each change goes to the core by its own command (`@change.stop`).
