@@ -69,12 +69,15 @@ impl Sessions {
         });
     }
 
-    /// Sends the view when it changed, while the main window's page wants it and is up.
+    /// Sends the view when it changed, while the main window's page wants it and is up: shown and
+    /// not minimized (Windows calls a minimized window visible).
     fn send_changes(&self, app: &AppHandle) {
         if !self.asked.load(Ordering::SeqCst) {
             return;
         }
-        let visible = app.get_webview_window(MAIN).is_some_and(|main| main.is_visible().unwrap_or(false));
+        let visible = app.get_webview_window(MAIN).is_some_and(|main| {
+            main.is_visible().unwrap_or(false) && !main.is_minimized().unwrap_or(false)
+        });
         if !visible {
             return;
         }
