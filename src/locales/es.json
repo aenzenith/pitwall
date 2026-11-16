@@ -316,10 +316,10 @@
   "terminal.move": "Arrastra para mover",
   "terminal.dropDock": "Suelta para fijarlo abajo",
   "terminal.dropWindow": "Suelta para abrirlo en su propia ventana",
-  "terminal.outputs": {
-    "one": "{count} salida",
-    "many": "{count} salidas",
-    "other": "{count} salidas"
+  "terminal.processes": {
+    "one": "{count} proceso",
+    "many": "{count} procesos",
+    "other": "{count} procesos"
   },
   "terminals.title": "Terminales",
   "terminals.onTop": "Siempre encima",

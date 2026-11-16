@@ -309,8 +309,8 @@
   "terminal.move": "ドラッグして移動",
   "terminal.dropDock": "離すと下に固定します",
   "terminal.dropWindow": "離すと別ウィンドウで開きます",
-  "terminal.outputs": {
-    "other": "出力 {count} 件"
+  "terminal.processes": {
+    "other": "プロセス {count} 件"
   },
   "terminals.title": "ターミナル",
   "terminals.onTop": "常に手前",

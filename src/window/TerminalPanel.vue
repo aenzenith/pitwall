@@ -97,7 +97,7 @@ import { sessionWaits, statusLine } from "../lib/sessions";
 import { shellIcon } from "../lib/shells";
 import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
-import { distinctNames, tabKey } from "../lib/tabs";
+import { distinctNames } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
 import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
 import { peekChat } from "../lib/chat/store";
@@ -110,6 +110,7 @@ import CardDialog from "./board/CardDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
 import LayoutMenu from "./LayoutMenu.vue";
+import OutputsMenu, { type OutputItem } from "./OutputsMenu.vue";
 import RenameDialog from "./RenameDialog.vue";
 import TerminalFind from "./TerminalFind.vue";
 import TerminalEmpty from "./TerminalEmpty.vue";
@@ -608,26 +609,26 @@ function liftGlide(from: DOMRect): void {
 
 /* ---------- the outputs ---------- */
 
-/** The outputs' tabs: the dev server while it is at work, then every command that ran in this
+/** The outputs (OutputsMenu): the dev server while it is at work, then every command that ran in this
  * session, then the Garage page's installs and migrations that did (lib/deps) and the core doesn't
  * list as commands. Each with its state: running, or failed (a crashed server). */
-const outputs = computed(() => {
+const outputs = computed<OutputItem[]>(() => {
   const project = props.project;
   // A run that ended well a while ago leaves the row, unless its output is the one picked here.
   const picked = chosen.value?.kind === "output" ? chosen.value.job : undefined;
   const commands = (project.commands ?? [])
     .filter((c) => (c.status !== "idle" || c.result) && (!commandFaded(c, now.value) || c.id === picked))
-    .map((c) => ({ id: c.id as string | null, name: c.name, state: c.status === "running" ? "on" : c.status === "failed" ? "bad" : null }));
+    .map((c): OutputItem => ({ id: c.id, name: c.name, state: c.status === "running" ? "on" : c.status === "failed" ? "bad" : null }));
   const listed = new Set((project.commands ?? []).map((c) => c.id));
   const jobs = (depJobs.value[project.path] ?? [])
     .filter((job) => !listed.has(job))
-    .map((job) => ({ id: job as string | null, name: depJobName(project.path, job) ?? job, state: null }));
+    .map((job): OutputItem => ({ id: job, name: depJobName(project.path, job) ?? job, state: null }));
   const others = [...commands, ...jobs];
   // The server's tab only while it runs, starts, stops or crashed (the user's word): a stopped one
   // leaves the row unless its output is the one shown, or the one picked has left it.
   const shown = picked !== undefined && !others.some((item) => item.id === picked);
   if (project.status === "stopped" && !shown) return others;
-  const server = { id: null as string | null, name: t("common.devServer"), state: project.status === "running" ? "on" : project.status === "crashed" ? "bad" : null };
+  const server: OutputItem = { id: null, name: t("common.devServer"), state: project.status === "running" ? "on" : project.status === "crashed" ? "bad" : null };
   return [server, ...others];
 });
 /** The output picked: the one chosen while it is still a tab, else the dev server's. */
@@ -677,12 +678,6 @@ function closeOutput(): void {
   const from = outputFrom[props.project.path];
   const back = list.find((term) => term.id === from) ?? list[list.length - 1];
   show(back.id);
-}
-
-/** ←/→, Home and End move between the outputs' tabs. */
-function onOutputKey(event: KeyboardEvent, at: number): void {
-  const next = tabKey(event, outputs.value.length, at);
-  if (next !== null) openOutput(outputs.value[next].id);
 }
 
 /** The output shown: a project's server, or one of its commands. Each has its own filter. */
@@ -1729,7 +1724,7 @@ const tabElsewhere = {
  * card's handle is part of it. */
 function emptyPart(event: MouseEvent): boolean {
   const target = event.target as HTMLElement;
-  return target === event.currentTarget || target === tablist.value || target.classList.contains("grow") || target.classList.contains("outlist") || !!target.closest(".mover");
+  return target === event.currentTarget || target === tablist.value || target.classList.contains("grow") || !!target.closest(".mover");
 }
 
 /* ---------- the panel's stand: the row's buttons and menu, the card moved and resized ---------- */
@@ -1985,29 +1980,12 @@ const bandStyle = computed(() => {
 /** The row's width, as last measured. */
 const rowWidth = ref(0);
 /** A card or a window narrower than the bottom's row (the card as it first comes too): "Layout" and
- * "History" are their marks alone, and the outputs, two or more, are one button, so the tabs keep
- * their names. Along the bottom only once the row is narrow (`compact`). */
+ * "History" are their marks alone, so the tabs keep their names. Along the bottom only once the row
+ * is narrow (`compact`). */
 const snug = computed(() => rowWidth.value > 0 && rowWidth.value < (props.stand === "dock" ? 640 : 960));
 /** A narrow row (a small card, a narrow window): what `snug` gives, and the three stands are one
  * button. */
 const compact = computed(() => rowWidth.value > 0 && rowWidth.value < 640);
-const gathered = computed(() => snug.value && outputs.value.length > 1);
-/** That button: the output shown, else how many there are, and the state that tells most. */
-const gatheredLabel = computed(() => {
-  const shown = showsOutput.value ? outputs.value.find((item) => item.id === job.value) : undefined;
-  return shown?.name ?? t("terminal.outputs", { count: outputs.value.length });
-});
-const gatheredState = computed(() => (outputs.value.some((item) => item.state === "bad") ? "bad" : outputs.value.some((item) => item.state === "on") ? "on" : null));
-
-/** The outputs, as a menu under their button. */
-function outputsMenu(event: MouseEvent): void {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  void popup(
-    { clientX: box.left, clientY: box.bottom + 4 },
-    outputs.value.map((item) => ({ text: item.name, checked: showsOutput.value && job.value === item.id, action: () => openOutput(item.id) })),
-  );
-}
-
 /** The click that brought the folded panel up, until the next one begins. */
 let unfoldedBy = false;
 
@@ -2766,33 +2744,9 @@ defineExpose({ openTerminal, closeShown });
         @chat="openChat()"
       />
       <span class="grow"></span>
-      <!-- The outputs, always at the right end: the dev server's, then the commands' that ran. -->
-      <!-- A narrow row: the outputs are one button, with a menu of them. -->
-      <button v-if="gathered" type="button" :class="['out-tab', 'gathered', { on: showsOutput }]" aria-haspopup="menu" :title="t('detail.output')" @click="outputsMenu">
-        <span v-if="gatheredState" :class="['out-state', gatheredState]" aria-hidden="true"></span>
-        <span class="tab-name">{{ gatheredLabel }}</span>
-        <Icon name="chevron-down" :size="11" />
-      </button>
-      <div v-else class="outlist" role="tablist" :aria-label="t('detail.output')">
-        <!-- A command's tab comes as a terminal's does, growing to its width. -->
-        <TransitionGroup :key="project.path" :css="false" @enter="tabEnter" @leave="tabLeave">
-        <button
-          v-for="(item, i) in outputs"
-          :key="item.id ?? 'server'"
-          type="button"
-          role="tab"
-          :aria-selected="showsOutput && job === item.id"
-          :tabindex="item.id === job || (i === 0 && !outputs.some((each) => each.id === job)) ? 0 : -1"
-          :class="['out-tab', { on: showsOutput && job === item.id }]"
-          :title="item.name"
-          @click="openOutput(item.id)"
-          @keydown="onOutputKey($event, i)"
-        >
-          <span v-if="item.state" :class="['out-state', item.state]" aria-hidden="true"></span>
-          <span class="tab-name">{{ item.name }}</span>
-        </button>
-        </TransitionGroup>
-      </div>
+      <!-- The outputs, always at the right end, as one button with Pitwall's menu of them: the
+           dev server's, then the commands' that ran. -->
+      <OutputsMenu v-if="outputs.length" :items="outputs" :shown="showsOutput ? job : undefined" @pick="openOutput" />
       <LayoutMenu :current="presetNow" :count="layoutCount" :room="menuRoom" :fits="fitsPreset" :panes="panesOn" :compact="snug" @pick="pickLayout" @even="evenPanes" />
       <button
         type="button"
@@ -3092,7 +3046,7 @@ defineExpose({ openTerminal, closeShown });
   cursor: grab;
 }
 
-.term-panel.float:not(.collapsed) .tabs > :where(:not(.tablist, .grow, .outlist, .mover, button, [role="button"])) {
+.term-panel.float:not(.collapsed) .tabs > :where(:not(.tablist, .grow, .mover, button, [role="button"])) {
   cursor: default;
 }
 
@@ -3415,55 +3369,6 @@ defineExpose({ openTerminal, closeShown });
   border-right: 1px solid var(--line);
 }
 
-/* The outputs' tabs, at the row's right end: they give way before the terminals' do. */
-.outlist {
-  flex: 0 100000 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  overflow: hidden;
-}
-
-.out-tab {
-  min-width: 0;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12px;
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-
-.out-tab:hover {
-  color: var(--text-muted);
-}
-
-.out-tab.on {
-  color: var(--text-lit);
-}
-
-/* What the output's run is at: green while it runs, red once it failed (a crashed server). */
-.out-state {
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.out-state.on {
-  background: var(--run);
-}
-
-.out-state.bad {
-  background: var(--crash);
-}
-
 /* The shown output's tools, in its box's top right corner, clear of the scrollbar (10 px): on the
    box's own ground, so the lines that pass under them don't show through. */
 .tools {
@@ -3557,7 +3462,7 @@ defineExpose({ openTerminal, closeShown });
   color: var(--text-lit);
 }
 
-/* A narrow row: "History" is its clock alone, and the outputs one button. */
+/* A narrow row: "History" is its clock alone. */
 .tabs.snug .action.history-toggle {
   width: 24px;
   padding: 0;
@@ -3571,16 +3476,6 @@ defineExpose({ openTerminal, closeShown });
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-.out-tab.gathered {
-  flex: 0 1 auto;
-  max-width: 160px;
-  gap: 5px;
-}
-
-.out-tab.gathered .tab-name {
-  min-width: 0;
 }
 
 /* The card's edges and corners: thin strips over its border, a resize cursor on each. */

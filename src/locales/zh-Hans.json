@@ -309,8 +309,8 @@
   "terminal.move": "拖动以移动",
   "terminal.dropDock": "松开即可固定在底部",
   "terminal.dropWindow": "松开即可在单独窗口中打开",
-  "terminal.outputs": {
-    "other": "{count} 个输出"
+  "terminal.processes": {
+    "other": "{count} 个进程"
   },
   "terminals.title": "终端",
   "terminals.onTop": "始终置顶",

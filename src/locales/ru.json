@@ -324,11 +324,11 @@
   "terminal.move": "Перетащите, чтобы переместить",
   "terminal.dropDock": "Отпустите, чтобы закрепить внизу",
   "terminal.dropWindow": "Отпустите, чтобы открыть в отдельном окне",
-  "terminal.outputs": {
-    "one": "{count} вывод",
-    "few": "{count} вывода",
-    "many": "{count} выводов",
-    "other": "{count} вывода"
+  "terminal.processes": {
+    "one": "{count} процесс",
+    "few": "{count} процесса",
+    "many": "{count} процессов",
+    "other": "{count} процесса"
   },
   "terminals.title": "Терминалы",
   "terminals.onTop": "Поверх всех окон",

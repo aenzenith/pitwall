@@ -312,9 +312,9 @@
   "terminal.move": "Taşımak için sürükle",
   "terminal.dropDock": "Alta sabitlemek için bırak",
   "terminal.dropWindow": "Ayrı pencerede açmak için bırak",
-  "terminal.outputs": {
-    "one": "{count} çıktı",
-    "other": "{count} çıktı"
+  "terminal.processes": {
+    "one": "{count} işlem",
+    "other": "{count} işlem"
   },
   "terminals.title": "Terminaller",
   "terminals.onTop": "Hep üstte",

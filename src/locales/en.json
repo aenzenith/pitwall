@@ -314,9 +314,9 @@
   "terminal.move": "Drag to move",
   "terminal.dropDock": "Let go to dock it at the bottom",
   "terminal.dropWindow": "Let go to open it in its own window",
-  "terminal.outputs": {
-    "one": "{count} output",
-    "other": "{count} outputs"
+  "terminal.processes": {
+    "one": "{count} process",
+    "other": "{count} processes"
   },
   "terminals.title": "Terminals",
   "terminals.onTop": "Always on top",

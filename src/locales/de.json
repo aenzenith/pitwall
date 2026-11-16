@@ -314,9 +314,9 @@
   "terminal.move": "Zum Verschieben ziehen",
   "terminal.dropDock": "Loslassen, um unten anzudocken",
   "terminal.dropWindow": "Loslassen, um es in eigenem Fenster zu öffnen",
-  "terminal.outputs": {
-    "one": "{count} Ausgabe",
-    "other": "{count} Ausgaben"
+  "terminal.processes": {
+    "one": "{count} Prozess",
+    "other": "{count} Prozesse"
   },
   "terminals.title": "Terminals",
   "terminals.onTop": "Immer im Vordergrund",
