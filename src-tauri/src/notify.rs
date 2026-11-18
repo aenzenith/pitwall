@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use block2::RcBlock;
 use objc2::rc::Retained;
-use objc2::runtime::{Bool, NSObject, NSObjectProtocol, ProtocolObject};
+use objc2::runtime::{AnyClass, AnyObject, Bool, NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{define_class, msg_send, AllocAnyThread};
 use objc2_foundation::{NSArray, NSError, NSString, NSURL};
 use objc2_user_notifications::{
@@ -28,6 +28,9 @@ use objc2_user_notifications::{
 
 /// Who a dev binary's notifications come from.
 const DEV_SENDER: &str = "com.apple.ScriptEditor2";
+/// How many of a dev binary's notifications wait for their click at once: the newest. Each one
+/// waiting costs the main run loop a question to the notification server every half second.
+const DEV_WAITING: usize = 3;
 /// How long the system is given to say what it allows.
 const READ_WAIT: Duration = Duration::from_secs(3);
 /// How long a test waits for the answer to macOS's question, when it asks one.
@@ -184,6 +187,8 @@ pub fn post(path: String, title: String, body: String, image: Option<&Path>) {
     let image = image.map(|image| image.to_string_lossy().into_owned());
     // Waiting for the click blocks, so each notification gets its own thread.
     thread::spawn(move || {
+        // The older ones leave Notification Center, and with it their waits end.
+        keep_delivered(DEV_WAITING - 1);
         let mut notification = mac_notification_sys::Notification::new();
         notification.title(&title).message(&body).wait_for_click(true);
         if let Some(image) = image.as_deref() {
@@ -191,6 +196,49 @@ pub fn post(path: String, title: String, body: String, image: Option<&Path>) {
         }
         if let Ok(mac_notification_sys::NotificationResponse::Click) = notification.send() {
             clicked(path);
+        }
+    });
+}
+
+/// A dev binary's notifications still in Notification Center, but for the newest `keep`, are taken
+/// out of it. `mac_notification_sys` has no way to stop waiting for a click: while one waits, a
+/// timer of its on the main run loop asks the notification server every half second whether the
+/// notification is still delivered (`deliveredNotifications`, a call that waits for its answer),
+/// and ends the wait, timer and thread, the first time it isn't (its `notify.m`). Dozens of
+/// banners nobody dismissed kept the main thread in that call. One taken out here is no longer
+/// delivered, so the library's own next look ends its wait: at most `keep` wait on, and the one
+/// about to be posted. A click on one of those does what it did; an older one is gone.
+fn keep_delivered(keep: usize) {
+    objc2::rc::autoreleasepool(|_| {
+        let Some(class) = AnyClass::get(c"NSUserNotificationCenter") else {
+            return;
+        };
+        // SAFETY: `defaultUserNotificationCenter` is a class method that returns the center or
+        // nil; `deliveredNotifications` an array of notifications or nil; `actualDeliveryDate` a
+        // date or nil, whose `timeIntervalSinceReferenceDate` is a double; and
+        // `removeDeliveredNotification:` takes a notification of that array and returns nothing.
+        // The library delivers from this kind of thread too.
+        unsafe {
+            let center: Option<Retained<AnyObject>> = msg_send![class, defaultUserNotificationCenter];
+            let Some(center) = center else {
+                return;
+            };
+            let delivered: Option<Retained<NSArray<AnyObject>>> = msg_send![&*center, deliveredNotifications];
+            let mut delivered: Vec<(f64, Retained<AnyObject>)> = delivered
+                .map(|delivered| delivered.to_vec())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|notification| {
+                    let date: Option<Retained<AnyObject>> = msg_send![&*notification, actualDeliveryDate];
+                    let at: f64 = date.map_or(0.0, |date| msg_send![&*date, timeIntervalSinceReferenceDate]);
+                    (at, notification)
+                })
+                .collect();
+            // The newest first.
+            delivered.sort_by(|a, b| b.0.total_cmp(&a.0));
+            for (_, notification) in delivered.into_iter().skip(keep) {
+                let _: () = msg_send![&*center, removeDeliveredNotification: &*notification];
+            }
         }
     });
 }
