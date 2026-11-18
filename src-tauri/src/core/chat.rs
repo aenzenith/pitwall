@@ -87,6 +87,8 @@ pub(super) struct ChatTab {
 /// What goes to the window, in order.
 enum Out {
     Frame(u64, Value),
+    /// The tab is shown now (`set_tabs_shown`): the frames held for it go at once.
+    Shown,
     Exit { code: Option<i32>, reason: ChatExitReason, stderr: Option<String> },
 }
 
@@ -448,6 +450,13 @@ fn take_reply(shared: &mut Shared, frame: &Value) {
         _ => Err(response.get("error").and_then(Value::as_str).map(wire::short_error).unwrap_or_else(|| t!("chatCore.error.refusedByCli"))),
     };
     let _ = waiting.send(result);
+}
+
+/// A frame a window that doesn't show its tab can wait for (`send_chat_events`): what a turn
+/// streams, which only the chat's own view draws. Every other frame goes as it always did: the
+/// tab row tells the chat's state and its cards from them.
+fn waits(frame: &Value) -> bool {
+    matches!(frame.get("type").and_then(Value::as_str), Some("stream_event" | "assistant" | "user" | "tool_progress"))
 }
 
 /// The last `max` bytes of `text`, on a character's edge.
@@ -1267,20 +1276,29 @@ impl Core {
     }
 
     /// The thread that sends tab `id`'s frames to the window: gathered for `BATCH` after the first,
-    /// as one event, and the process's end after them. It ends with the tab.
+    /// as one event, and the process's end after them. It ends with the tab. While the panel
+    /// doesn't show the tab (`Shown`), what a turn streams (`waits`) gathers for `Shown::hold`
+    /// instead; any other frame, the tab shown (`Out::Shown`) or the process's end sends what is
+    /// held, as a tab shown would have.
     fn send_chat_events(&self, id: u64, events: mpsc::Receiver<Out>) {
         let sink = Arc::clone(&self.sink);
+        let shown = Arc::clone(&self.shown);
         thread::spawn(move || {
             while let Ok(first) = events.recv() {
-                let deadline = Instant::now() + BATCH;
+                let mut deadline = Instant::now() + if shown.has(id) { BATCH } else { shown.hold() };
                 let (mut frames, mut seq, mut exit) = (Vec::new(), 0, None);
                 let mut next = Some(first);
                 while let Some(out) = next.take() {
                     match out {
                         Out::Frame(n, frame) => {
+                            if !waits(&frame) {
+                                deadline = deadline.min(Instant::now() + BATCH);
+                            }
                             seq = n;
                             frames.push(frame);
                         }
+                        // With whatever came before the word did, and no later.
+                        Out::Shown => deadline = Instant::now(),
                         Out::Exit { code, reason, stderr } => {
                             exit = Some(CoreEvent::ChatExit { id, code, reason, stderr });
                             break;
@@ -1296,6 +1314,14 @@ impl Core {
                 }
             }
         });
+    }
+
+    /// The chats among `ids` are shown now: what their threads hold goes to the window at once.
+    pub(super) fn chats_shown(&self, ids: &[u64]) {
+        let chats = self.chats();
+        for tab in ids.iter().filter_map(|id| chats.get(id)) {
+            let _ = tab.out.send(Out::Shown);
+        }
     }
 
     /* ---------- the window's commands ---------- */

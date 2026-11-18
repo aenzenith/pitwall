@@ -311,6 +311,8 @@ pub struct Core {
     /// The chat tabs (`chat.rs`), by terminal id; never held while one of them is
     /// (`ChatTab::shared` is a leaf).
     chat_tabs: Mutex<HashMap<u64, Arc<chat::ChatTab>>>,
+    /// The panel's tabs the window draws now (`set_tabs_shown`); a leaf, held for a look only.
+    shown: Arc<terminal::Shown>,
     /// What the day's timeline has written down last.
     activity: Mutex<activity::Recorder>,
     /// The day's Claude tokens as last looked at, and what of them was written down.
@@ -421,6 +423,7 @@ impl Core {
             }),
             terminals: Mutex::new(HashMap::new()),
             chat_tabs: Mutex::new(HashMap::new()),
+            shown: Arc::default(),
             activity: Mutex::new(activity::Recorder::default()),
             day_tokens: Mutex::new(day_tokens::DayTokens::default()),
             sessions: Mutex::new(sessions::SessionsCache::new(claude_off)),

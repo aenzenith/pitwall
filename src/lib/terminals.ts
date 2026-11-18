@@ -378,6 +378,46 @@ export function dispose(id: number): void {
   views.delete(id);
 }
 
+/* ---------- the tabs on screen ---------- */
+
+/** What the core was last told of them, in order; null: nothing yet, or the panel is no longer this
+ * page's. */
+let told: number[] | null = null;
+let telling: ReturnType<typeof setTimeout> | undefined;
+/** How long the core hears of tabs that only left the screen after they did. */
+const LEFT_MS = 300;
+
+/**
+ * The panel says which tabs it shows right now (terminals and chats, by their ids), or null: the
+ * panel is no longer this page's (it went to the other window), and this page says nothing more.
+ * The core hears it (`set_tabs_shown`) only when the tabs changed: it sends a tab that is not
+ * among them its output in bigger, rarer batches, and at once what it held when the tab comes in.
+ * So a tab that came on screen is told at once; tabs that only went (the panel folded, the window
+ * hidden) a moment later, since a tab told as shown too long costs nothing, and a page that goes
+ * for good (the terminals' window closing) then says nothing after the page that took the panel.
+ * The laps' tabs (LapResultDialog) are not the panel's and never told: the core takes them for
+ * shown always.
+ */
+export function showTabs(ids: readonly number[] | null): void {
+  clearTimeout(telling);
+  if (ids === null) {
+    told = null;
+    return;
+  }
+  const next = [...new Set(ids)].sort((a, b) => a - b);
+  if (told && next.length === told.length && next.every((id, i) => id === told![i])) return;
+  const tell = (): void => {
+    told = next;
+    // Not taken: told again at the next look, or a tab on screen would stay hidden to the core.
+    void api.setTabsShown(next).catch(() => {
+      if (told === next) told = null;
+    });
+  };
+  const before = told;
+  if (next.some((id) => !before?.includes(id))) tell();
+  else telling = setTimeout(tell, LEFT_MS);
+}
+
 /* ---------- chat tabs ---------- */
 
 /**

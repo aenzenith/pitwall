@@ -355,6 +355,8 @@ export const api = {
   renameTerminal: (id: number, name: string) => invoke("rename_terminal", { id, name }),
   writeTerminal: (id: number, data: string) => invoke("write_terminal", { id, data }),
   resizeTerminal: (id: number, cols: number, rows: number) => invoke("resize_terminal", { id, cols, rows }),
+  /** The panel's tabs on screen in this page (lib/terminals: `showTabs`): the core sends the others' output in rarer batches. */
+  setTabsShown: (ids: number[]) => invoke("set_tabs_shown", { ids }),
   closeTerminal: (id: number) => invoke("close_terminal", { id }),
   /** The terminal panel's height for its panes, kept for the next start. */
   setPanesHeight: (height: number) => invoke("set_panes_height", { height }),

@@ -138,6 +138,9 @@ function outOfSight(key: string): boolean {
   return !!zoom.value && zoom.value !== key;
 }
 
+/** The tabs on screen in the panes: each pane's, or only the one's that fills the room. */
+const seen = computed(() => placed.value.panes.flatMap((pane) => (pane.leaf.terminal !== null && !outOfSight(pane.leaf.key) ? [pane.leaf.terminal] : [])));
+
 const defaults = computed(() => projectChoice(props.project));
 
 /* ---------- the terminals in their panes ---------- */
@@ -502,7 +505,7 @@ function focusEmpty(key: string): void {
 
 /** For the panel: the panes' places as shown, how the tree shows, a pane's room, where something
  * let go at a point would go, and the keyboard into an empty pane. */
-defineExpose({ placed, shown, rectOf, dropAt, focusEmpty });
+defineExpose({ placed, shown, seen, rectOf, dropAt, focusEmpty });
 </script>
 
 <template>

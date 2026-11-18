@@ -38,7 +38,9 @@ import {
   panelMeasure,
   panelOpening,
   panelOver,
+  panelAway,
   panelPath,
+  panelStand,
   panelTyping,
   TAB_CHROME,
   TAB_ROOM,
@@ -101,7 +103,7 @@ import { distinctNames } from "../lib/tabs";
 import { useTabReorder } from "../lib/tabReorder";
 import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
 import { peekChat } from "../lib/chat/store";
-import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, tabAccountLabel, terminalTip } from "../lib/terminals";
+import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, showTabs, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { EmptyStart } from "../lib/terminalEmpty";
 import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
@@ -1549,6 +1551,31 @@ type Landing = { pane: string | null; side: Side | null };
 
 const stageEl = ref<HTMLElement | null>(null);
 const panesView = ref<InstanceType<typeof TerminalPanes> | null>(null);
+
+/* ---------- the tabs on screen ---------- */
+
+/**
+ * The tabs whose content can be seen here right now, terminals and chats: the one shown, or with
+ * panes each pane's (a pane that fills the room: its own alone); none while the panel is folded
+ * (once it has slid shut), an output stands in the terminal's place or the window is off screen.
+ */
+const seenTabs = computed<number[]>(() => {
+  if (!visible.value || showsOutput.value || (collapsed.value && !animating.value)) return [];
+  const now = layout.value;
+  // Panes not drawn yet: all of them, rather than one too few.
+  if (now) return panesView.value?.seen ?? leaves(now.tree).flatMap((pane) => (pane.terminal === null ? [] : [pane.terminal]));
+  return active.value ? [active.value.id] : [];
+});
+/** The panel is this page's to speak for: in its own window, while the core says it stands there
+ * (that window's page lives a moment longer than its panel's stay); in Pitwall's window, always
+ * (there this panel is only drawn while it stands in it). */
+const hosting = computed(() => !windowed.value || panelStand.value === "window");
+// The core hears which tabs are on screen from the one page that has the panel (lib/terminals:
+// `showTabs`), and only when they change.
+watch([hosting, seenTabs], ([hosts, ids]) => showTabs(hosts ? ids : null), { immediate: true });
+// The panel goes from this page: to the other window (nothing more is said here: that page speaks
+// from now on), or because there is nothing to show it for (no tab is on screen).
+onBeforeUnmount(() => showTabs(panelAway() || !hosting.value ? null : []));
 
 function overStage(x: number, y: number): boolean {
   const box = stageEl.value?.getBoundingClientRect();

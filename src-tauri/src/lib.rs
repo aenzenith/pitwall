@@ -478,7 +478,13 @@ pub fn run() {
             }
             // The terminals' window closes as asked, and the panel goes back where it stood.
             WindowEvent::CloseRequested { .. } if window.label() == TERMINALS => terminals::closing(window.app_handle()),
-            WindowEvent::Destroyed if window.label() == TERMINALS => windows::forget(TERMINALS),
+            WindowEvent::Destroyed if window.label() == TERMINALS => {
+                windows::forget(TERMINALS);
+                // The tabs its panel showed are shown by it no more (`set_tabs_shown`).
+                if let Some(state) = window.app_handle().try_state::<AppState>() {
+                    state.core.tabs_window_gone(TERMINALS);
+                }
+            }
             // Where it is left is where it comes back.
             WindowEvent::Moved(_) | WindowEvent::Resized(_) if window.label() == TERMINALS => terminals::frame_changed(window.app_handle()),
             // Where the mini tower is left is where it comes back (`tower.rs`).
@@ -555,6 +561,7 @@ pub fn run() {
             commands::sessions_meta,
             commands::set_sessions_meta,
             commands::terminal_buffer,
+            commands::set_tabs_shown,
             commands::board_state,
             commands::laps_state,
             commands::lap_save,

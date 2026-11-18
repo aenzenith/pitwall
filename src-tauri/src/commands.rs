@@ -367,6 +367,13 @@ pub fn close_terminal(state: State<'_, AppState>, id: u64) {
     state.core.close_terminal(id);
 }
 
+/// The terminal panel's tabs whose content is on screen now in the window that asks, from its
+/// page, which hosts a panel (`Core::set_tabs_shown`): each window speaks for itself alone.
+#[tauri::command]
+pub fn set_tabs_shown(window: tauri::WebviewWindow, state: State<'_, AppState>, ids: Vec<u64>) {
+    state.core.set_tabs_shown(window.label(), ids);
+}
+
 #[tauri::command]
 pub fn terminal_buffer(state: State<'_, AppState>, id: u64) -> crate::core::TerminalBuffer {
     state.core.terminal_buffer(id)

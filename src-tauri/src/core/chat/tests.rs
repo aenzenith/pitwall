@@ -489,3 +489,100 @@ fn the_settings_start_mode_takes_only_a_normal_start() {
     let args = chat_args(with_mode(ChatStart::default(), chat_start_mode(&settings.mode)), &ChatSession::New(new_uuid()), false, false, None).unwrap();
     assert!(!args.iter().any(|arg| arg == "auto"), "{args:?}");
 }
+
+/// A stand-in that streams: answers `initialize` and goes idle; for each message it starts a
+/// turn and, a moment later, says forty partial frames and nothing more, and for a message saying `last` it ends
+/// right after them.
+const STREAMS: &str = r#"#!/bin/sh
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"subtype":"initialize"'*)
+      printf '%s\n' '{"type":"control_response","response":{"subtype":"success","request_id":"'"$id"'","response":{"commands":[],"models":[]}}}'
+      printf '%s\n' '{"type":"system","subtype":"session_state_changed","state":"idle"}'
+      ;;
+    *'"type":"control_request"'*)
+      printf '%s\n' '{"type":"control_response","response":{"subtype":"success","request_id":"'"$id"'","response":{}}}'
+      ;;
+    *'"type":"user"'*)
+      printf '%s\n' '{"type":"system","subtype":"session_state_changed","state":"running"}'
+      sleep 0.3
+      i=0
+      while [ $i -lt 40 ]; do
+        printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"word '"$i"'"}}}'
+        i=$((i+1))
+      done
+      case "$line" in *last*) exit 0 ;; esac
+      ;;
+  esac
+done
+"#;
+
+/// The frames of a chat the panel doesn't show are held back from the window, never lost: every
+/// frame reaches it once, numbered one after another (a gap makes the window read the chat
+/// again, a frame twice would be drawn twice), at once when the tab is shown, and the process's
+/// end comes after its last frames. What tells the tab row of the chat (its state) isn't held.
+#[test]
+fn a_chat_not_shown_loses_no_frame_and_ends_after_them() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (heard, sink) = heard();
+    let core = core_in(tmp.path(), sink);
+    let path = tmp.path().join("paddock");
+    fs::create_dir_all(&path).unwrap();
+    let path = path.to_string_lossy().into_owned();
+    core.add_project(&path).unwrap();
+    core.chat_trust(&path).unwrap();
+    let program = tmp.path().join("bin").join("claude");
+    fs::create_dir_all(program.parent().unwrap()).unwrap();
+    fs::write(&program, STREAMS).unwrap();
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+    PROGRAM.with(|own| *own.borrow_mut() = Some(program));
+
+    // Longer than the test: only being shown, a frame that doesn't wait or the end sends them.
+    core.shown.set_hold(Duration::from_secs(600));
+    core.set_tabs_shown("main", Vec::new());
+    let id = ready_chat(&core, &path, ChatOpen::default());
+
+    // The last frame the window was sent, every event checked: its frames follow the last one's.
+    let sent = || {
+        let mut last = 0;
+        for event in heard.lock().unwrap().iter().map(|text| serde_json::from_str::<Value>(text).unwrap()).filter(|event| event.get("frames").is_some()) {
+            let (seq, frames) = (event["seq"].as_u64().unwrap(), event["frames"].as_array().unwrap().len() as u64);
+            assert_eq!(seq - frames, last, "frames out of their place");
+            last = seq;
+        }
+        last
+    };
+    let held = || core.chat_buffer(id, 0).unwrap().seq;
+    let words = || core.chat_buffer(id, 0).unwrap().frames.iter().filter(|frame| frame["type"] == "stream_event").count();
+
+    // Hidden: the turn's start is told (the tab row's dot), what it streams waits.
+    core.chat_send(id, ChatOutgoing::text("go".into())).unwrap();
+    wait_for("the stream", || words() == 40);
+    thread::sleep(Duration::from_millis(200));
+    assert!(sent() < held(), "a hidden chat's stream wasn't held");
+    let told: Vec<Value> = heard.lock().unwrap().iter().map(|text| serde_json::from_str(text).unwrap()).collect();
+    assert!(told.iter().any(|event| event["frames"].as_array().is_some_and(|frames| frames.iter().any(|frame| frame["kind"] == "state" && frame["state"] == "running"))), "the turn's start waited");
+
+    // Shown, in another window: at once, whatever the hold.
+    core.set_tabs_shown("terminals", vec![id]);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while sent() < held() {
+        assert!(Instant::now() < deadline, "being shown didn't send what was held");
+        thread::sleep(Duration::from_millis(10));
+    }
+    // What the first window says late hides no tab the other shows; that one gone, it is hidden.
+    core.set_tabs_shown("main", Vec::new());
+    assert!(core.shown.has(id), "a window hid a tab another one shows");
+
+    // Hidden again, and the process ends mid-stream: its last frames first, then its end.
+    core.tabs_window_gone("terminals");
+    assert!(!core.shown.has(id));
+    core.chat_send(id, ChatOutgoing::text("last".into())).unwrap();
+    wait_for("the chat's end", || heard.lock().unwrap().iter().any(|text| text.contains("\"reason\"")));
+    assert_eq!(sent(), held(), "the end overtook the last frames");
+    assert!(heard.lock().unwrap().last().unwrap().contains("\"reason\""), "something came after the end");
+    assert_eq!(words(), 80, "the core read the whole of both streams");
+
+    core.dispose();
+}

@@ -271,6 +271,9 @@ impl Core {
             place.mode = mode.into();
             from
         };
+        if (from == "window") != (mode == "window") {
+            self.tabs_host_changed();
+        }
         self.save_settings();
         self.notify();
         Ok(from)
@@ -287,6 +290,7 @@ impl Core {
             }
             place.mode = place.back().into();
         }
+        self.tabs_host_changed();
         self.save_settings();
         self.notify();
         true

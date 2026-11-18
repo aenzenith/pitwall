@@ -26,6 +26,12 @@ pub(super) const TAB_NAME_MAX: usize = 200;
 const GATHER: Duration = Duration::from_millis(8);
 /// The most output one event to the window carries.
 const EVENT_BYTES: usize = 64 * 1024;
+/// How long the output of a tab the panel doesn't show (`Shown`) gathers before it goes to the
+/// window: a tab at work behind another then costs the window's one thread a few events a second
+/// instead of one a frame. Only the event waits; the scrollback takes the output as it comes.
+const HOLD: Duration = Duration::from_millis(250);
+/// The most output held back for a tab not shown; more goes at once.
+const HOLD_BYTES: usize = 4 * EVENT_BYTES;
 /// How long a tab just opened counts as one its agent may be starting in, before its processes
 /// can tell (`agent_may_run_in`).
 pub(super) const STARTING: Duration = Duration::from_secs(1);
@@ -117,9 +123,49 @@ impl Launch {
     }
 }
 
+/// The panel's tabs (terminals and chats) whose content is on screen now, as each window whose
+/// page hosts a panel last said (`Core::set_tabs_shown`, by the window's label): a tab is shown
+/// while any of them shows it. Until one has said so once, every tab counts as shown. What a tab
+/// that isn't shown says reaches the window whole and in order, only later (`HOLD`), and at once
+/// when the tab is shown.
+pub(super) struct Shown {
+    ids: Mutex<Option<HashMap<String, HashSet<u64>>>>,
+    /// `HOLD`, in milliseconds; a test sets its own.
+    hold: std::sync::atomic::AtomicU64,
+}
+
+impl Default for Shown {
+    fn default() -> Self {
+        Self { ids: Mutex::new(None), hold: std::sync::atomic::AtomicU64::new(HOLD.as_millis() as u64) }
+    }
+}
+
+impl Shown {
+    fn ids(&self) -> MutexGuard<'_, Option<HashMap<String, HashSet<u64>>>> {
+        self.ids.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Whether tab `id` is on screen, as far as the core was told.
+    pub(super) fn has(&self, id: u64) -> bool {
+        self.ids().as_ref().is_none_or(|windows| windows.values().any(|ids| ids.contains(&id)))
+    }
+
+    /// How long what a tab not shown says is held.
+    pub(super) fn hold(&self) -> Duration {
+        Duration::from_millis(self.hold.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    #[cfg(all(test, unix))]
+    pub(super) fn set_hold(&self, hold: Duration) {
+        self.hold.store(hold.as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// What a terminal's reader hands on to the thread that sends its output to the window.
 enum Pty {
     Output(Vec<u8>),
+    /// The tab is shown now (`set_tabs_shown`): what was held for it goes at once.
+    Shown,
     /// The shell ended, `failed` with a code other than 0 (`code`; none when it couldn't be read):
     /// what was read before goes first, then the tab.
     Exited { failed: bool, code: Option<u32> },
@@ -138,6 +184,10 @@ pub(super) struct Session {
     scrollback: String,
     /// Number of the last chunk sent to the window.
     seq: u64,
+    /// How much of the end of `scrollback` the window wasn't sent yet (a tab not shown).
+    held: usize,
+    /// To the thread that sends its output to the window (`Pty::Shown`).
+    wake: mpsc::Sender<Pty>,
     /// When the tab was opened (`agent_may_run_in`, `refused`).
     opened: Instant,
     /// An administrator's shell, through sudo.
@@ -389,18 +439,18 @@ impl Core {
             view
         };
 
-        let session = Session { master: pair.master, input, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0, opened: Instant::now(), elevated };
+        let (output, read) = mpsc::channel::<Pty>();
+        let exited = output.clone();
+        let session = Session { master: pair.master, input, killer, pid, path: path.to_string(), scrollback: String::new(), seq: 0, held: 0, wake: output.clone(), opened: Instant::now(), elevated };
         self.terminal_sessions().insert(view.id, session);
         self.record_pids();
         self.notify();
 
-        let (output, read) = mpsc::channel::<Pty>();
-        let exited = output.clone();
         thread::spawn(move || read_terminal(reader, output));
 
         let core = Arc::clone(self);
         let id = view.id;
-        thread::spawn(move || core.stream_terminal(id, read));
+        thread::spawn(move || core.stream_terminal(id, apart, read));
 
         let core = Arc::clone(self);
         thread::spawn(move || {
@@ -416,23 +466,41 @@ impl Core {
     }
 
     /// Sends a terminal's output on to the window: output after a pause at once, the rest
-    /// gathered for `GATHER` after the last. The tab goes once its shell has ended, after the
+    /// gathered for `GATHER` after the last. The scrollback takes it then, whatever the tab; the
+    /// window is sent it then too while the tab is shown (`Shown`; the laps' own, `apart`,
+    /// always), else once it has been held for `Shown::hold`, is `HOLD_BYTES` long, the tab is
+    /// shown (`Pty::Shown`) or its shell ended. The tab goes once its shell has ended, after the
     /// output read before that, unless Windows refused it its permission (`refused`).
-    fn stream_terminal(&self, id: u64, read: mpsc::Receiver<Pty>) {
+    fn stream_terminal(&self, id: u64, apart: bool, read: mpsc::Receiver<Pty>) {
         let mut pending: Vec<u8> = Vec::new();
         let mut sent: Option<Instant> = None;
         let mut exited: Option<(bool, Option<u32>)> = None;
+        // What the scrollback took and the window wasn't sent yet, and since when.
+        let mut held = String::new();
+        let mut since: Option<Instant> = None;
 
         while exited.is_none() {
-            let Ok(first) = read.recv() else {
-                break;
+            let first = match since {
+                None => match read.recv() {
+                    Ok(first) => first,
+                    Err(_) => break,
+                },
+                Some(since) => match read.recv_timeout((since + self.shown.hold()).saturating_duration_since(Instant::now())) {
+                    Ok(first) => first,
+                    Err(mpsc::RecvTimeoutError::Timeout) => Pty::Shown,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                },
             };
-            if let Some(wait) = sent.and_then(|sent| GATHER.checked_sub(sent.elapsed())) {
-                thread::sleep(wait);
+            let mut now = matches!(first, Pty::Shown);
+            if !now {
+                if let Some(wait) = sent.and_then(|sent| GATHER.checked_sub(sent.elapsed())) {
+                    thread::sleep(wait);
+                }
             }
             for message in std::iter::once(first).chain(read.try_iter()) {
                 match message {
                     Pty::Output(bytes) => pending.extend_from_slice(&bytes),
+                    Pty::Shown => now = true,
                     Pty::Exited { failed, code } => {
                         exited = Some((failed, code));
                         break;
@@ -442,11 +510,18 @@ impl Core {
 
             let data = take_text(&mut pending);
             if !data.is_empty() {
-                self.send_terminal(id, &data);
+                self.keep_terminal(id, &data);
+                held.push_str(&data);
                 sent = Some(Instant::now());
+                since = since.or(sent);
+            }
+            if now || exited.is_some() || apart || held.len() >= HOLD_BYTES || self.shown.has(id) {
+                self.emit_terminal(id, &std::mem::take(&mut held));
+                since = None;
             }
         }
 
+        self.emit_terminal(id, &held);
         if let Some((failed, code)) = exited {
             if !self.refused(id, failed, code) {
                 self.forget_terminal(id);
@@ -472,9 +547,29 @@ impl Core {
         refused
     }
 
-    /// Output into the terminal's scrollback and on to the window, in events of at most
-    /// `EVENT_BYTES`, each numbered after the last.
+    /// Output into the terminal's scrollback and on to the window.
     fn send_terminal(&self, id: u64, data: &str) {
+        self.keep_terminal(id, data);
+        self.emit_terminal(id, data);
+    }
+
+    /// Output into the terminal's scrollback, the window still to be sent it (`emit_terminal`).
+    fn keep_terminal(&self, id: u64, data: &str) {
+        if let Some(session) = self.terminal_sessions().get_mut(&id) {
+            session.scrollback.push_str(data);
+            trim_scrollback(&mut session.scrollback);
+            // What the trim cut is the window's all the same: it is sent the whole of it.
+            session.held = (session.held + data.len()).min(session.scrollback.len());
+        }
+    }
+
+    /// Everything the scrollback took since the last time (`data`) on to the window, in events of
+    /// at most `EVENT_BYTES`, each numbered after the last. Only the terminal's own thread calls
+    /// it, so the events go in their order.
+    fn emit_terminal(&self, id: u64, data: &str) {
+        if data.is_empty() {
+            return;
+        }
         let mut chunks = Vec::new();
         let mut rest = data;
         while !rest.is_empty() {
@@ -489,8 +584,7 @@ impl Core {
 
         let first = match self.terminal_sessions().get_mut(&id) {
             Some(session) => {
-                session.scrollback.push_str(data);
-                trim_scrollback(&mut session.scrollback);
+                session.held = 0;
                 let first = session.seq + 1;
                 session.seq += chunks.len() as u64;
                 first
@@ -500,6 +594,49 @@ impl Core {
 
         for (seq, chunk) in (first..).zip(chunks) {
             self.emit(CoreEvent::Terminal { id, seq, data: chunk.to_string() });
+        }
+    }
+
+    /// The panel's tabs whose content is on screen now in `window` (its label), from its page,
+    /// which hosts a panel: the whole of them, in the place of what that window said before;
+    /// what another window shows stays shown. What is held for a tab no window showed goes to
+    /// the window at once (its own thread sends it, woken here).
+    pub fn set_tabs_shown(&self, window: &str, ids: Vec<u64>) {
+        let ids: HashSet<u64> = ids.into_iter().collect();
+        let new: Vec<u64> = {
+            let mut shown = self.shown.ids();
+            // Before anyone said anything every tab was shown: none is new.
+            let new = shown.as_ref().map(|windows| ids.iter().filter(|id| !windows.values().any(|were| were.contains(id))).copied().collect()).unwrap_or_default();
+            shown.get_or_insert_with(HashMap::new).insert(window.to_string(), ids);
+            new
+        };
+        if new.is_empty() {
+            return;
+        }
+        {
+            let sessions = self.terminal_sessions();
+            for session in new.iter().filter_map(|id| sessions.get(id)) {
+                let _ = session.wake.send(Pty::Shown);
+            }
+        }
+        self.chats_shown(&new);
+    }
+
+    /// The panel went to another window's page (to the terminals' own window, or back from it):
+    /// the page it left says nothing more (`showTabs` in `lib/terminals.ts`), so what any window
+    /// said is forgotten, and the page that has the panel now says what it shows as it mounts.
+    /// Until then no tab counts as shown; what is held for one goes when that page names it.
+    pub(super) fn tabs_host_changed(&self) {
+        if let Some(windows) = self.shown.ids().as_mut() {
+            windows.clear();
+        }
+    }
+
+    /// `window` is gone (destroyed): what it showed is shown no more, unless another window
+    /// shows it.
+    pub fn tabs_window_gone(&self, window: &str) {
+        if let Some(windows) = self.shown.ids().as_mut() {
+            windows.remove(window);
         }
     }
 
@@ -634,11 +771,12 @@ impl Core {
         }
     }
 
-    /// What the terminal has shown lately, to draw it again.
+    /// What the terminal has shown lately, to draw it again: up to the last chunk sent to the
+    /// window, what is held after it (a tab not shown) coming as chunks of its own.
     pub fn terminal_buffer(&self, id: u64) -> TerminalBuffer {
         self.terminal_sessions()
             .get(&id)
-            .map(|session| TerminalBuffer { data: session.scrollback.clone(), seq: session.seq })
+            .map(|session| TerminalBuffer { data: session.scrollback[..session.scrollback.len() - session.held].to_string(), seq: session.seq })
             .unwrap_or(TerminalBuffer { data: String::new(), seq: 0 })
     }
 
@@ -834,6 +972,7 @@ impl Core {
         if let Some(session) = self.terminal_sessions().get_mut(&id) {
             session.scrollback.insert_str(0, text);
             trim_scrollback(&mut session.scrollback);
+            session.held = session.held.min(session.scrollback.len());
         }
     }
 }
@@ -1306,5 +1445,145 @@ mod tests {
         let cut = first_prompt(Some(format!("ab {}", "ğ".repeat(FIRST_PROMPT_BYTES)))).unwrap();
         assert_eq!(cut.len(), FIRST_PROMPT_BYTES - 1);
         assert!(cut.starts_with("ab ğ") && cut.ends_with('ğ'));
+    }
+
+    /// What the window would hear of terminals: each chunk's number and text, and a tab's end.
+    #[derive(Debug, Clone, PartialEq)]
+    enum Heard {
+        Data(u64, String),
+        Exit,
+    }
+
+    fn shell_core(tmp: &Path) -> (Arc<Core>, String, Arc<Mutex<Vec<Heard>>>) {
+        let heard: Arc<Mutex<Vec<Heard>>> = Arc::default();
+        let into = Arc::clone(&heard);
+        let sink: Sink = Arc::new(move |event| match event {
+            CoreEvent::Terminal { seq, data, .. } => into.lock().unwrap().push(Heard::Data(seq, data)),
+            CoreEvent::TerminalExit { .. } => into.lock().unwrap().push(Heard::Exit),
+            _ => {}
+        });
+        let core = Core::new(
+            CoreConfig {
+                registry_dir: tmp.join("registry"),
+                claude_dir: tmp.join("claude").join("projects"),
+                codex_home: tmp.join("codex"),
+                settings_file: tmp.join("config").join("settings.json"),
+                claude_settings: tmp.join("claude").join("settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            sink,
+        );
+        let project = tmp.join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        (core, project.to_string_lossy().into_owned(), heard)
+    }
+
+    fn wait_for(limit: Duration, mut done: impl FnMut() -> bool) -> bool {
+        let deadline = Instant::now() + limit;
+        while Instant::now() < deadline {
+            if done() {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        done()
+    }
+
+    /// The text of every chunk heard, their numbers checked: each one after the last, none left
+    /// out (a window drops a chunk numbered at or below the last it drew).
+    fn text_of(heard: &Mutex<Vec<Heard>>) -> String {
+        let heard = heard.lock().unwrap();
+        let mut text = String::new();
+        let mut last = 0;
+        for each in heard.iter() {
+            if let Heard::Data(seq, data) = each {
+                assert_eq!(*seq, last + 1, "a chunk out of its place");
+                last = *seq;
+                text.push_str(data);
+            }
+        }
+        text
+    }
+
+    fn scrollback_of(core: &Core, id: u64) -> String {
+        core.terminal_tabs().into_iter().find(|tab| tab.id == id).map(|tab| tab.scrollback).unwrap_or_default()
+    }
+
+    /// The output of a tab the panel doesn't show is held back from the window, never lost: the
+    /// window gets every byte the scrollback took, once and in order, at once when the tab is
+    /// shown; a view drawn meanwhile gets the history up to the last chunk sent and the rest as
+    /// chunks; and the tab's end comes after its last output. Before the panel said anything,
+    /// output goes as it always did.
+    #[test]
+    fn a_tab_not_shown_loses_no_output_and_ends_after_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (core, project, heard) = shell_core(tmp.path());
+        // Longer than the test: only being shown, or the end, sends what is held.
+        core.shown.set_hold(Duration::from_secs(600));
+        let id = core.open_terminal(&project, false, Some((80, 24))).unwrap().id;
+
+        // Nothing said yet: every tab counts as shown.
+        core.write_terminal(id, "printf 'one%s\\n' -$((40+2))\r");
+        assert!(wait_for(Duration::from_secs(15), || text_of(&heard).contains("one-42")), "{:?}", heard.lock().unwrap());
+
+        // Hidden: the scrollback takes the output, the window isn't sent it.
+        core.set_tabs_shown("main", Vec::new());
+        core.write_terminal(id, "printf 'two%s\\n' -$((40+3))\r");
+        assert!(wait_for(Duration::from_secs(15), || scrollback_of(&core, id).contains("two-43")));
+        thread::sleep(Duration::from_millis(200));
+        let before = text_of(&heard);
+        assert!(!before.contains("two-43"), "a hidden tab's output wasn't held");
+        // A view drawn now: the history it reads and the chunks after it are the whole.
+        let buffer = core.terminal_buffer(id);
+        assert_eq!(buffer.seq, heard.lock().unwrap().iter().filter(|each| matches!(each, Heard::Data(..))).count() as u64);
+        assert_eq!(buffer.data, before);
+
+        // Shown: at once, whatever the hold.
+        core.set_tabs_shown("main", vec![id]);
+        assert!(wait_for(Duration::from_secs(2), || text_of(&heard).contains("two-43")), "being shown didn't send what was held");
+        assert_eq!(text_of(&heard), scrollback_of(&core, id));
+
+        // Hidden again, and the shell ends: its last output first, then its end.
+        core.set_tabs_shown("main", Vec::new());
+        core.write_terminal(id, "printf 'three%s\\n' -$((40+4)); exit\r");
+        assert!(wait_for(Duration::from_secs(15), || heard.lock().unwrap().contains(&Heard::Exit)), "the tab never ended");
+        assert!(text_of(&heard).contains("three-44"), "the end overtook the last output");
+        assert_eq!(heard.lock().unwrap().last(), Some(&Heard::Exit));
+
+        core.dispose();
+    }
+
+    /// How many events a tab at work costs the window, shown and not: a line every few
+    /// milliseconds for two seconds, and a flood of 20 MB. Run by hand (`--ignored --nocapture`); it asserts only that
+    /// nothing was lost.
+    #[test]
+    #[ignore]
+    fn measure_the_events_of_a_busy_tab() {
+        for (what, line) in [
+            ("steady", "i=0; while [ $i -lt 400 ]; do echo \"line $i aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"; i=$((i+1)); sleep 0.005; done; printf 'done%s\\n' -$((1+1))\r"),
+            ("flood", "yes aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | head -c 20000000; printf 'done%s\\n' -$((1+1))\r"),
+        ] {
+            for hidden in [false, true] {
+                let tmp = tempfile::tempdir().unwrap();
+                let (core, project, heard) = shell_core(tmp.path());
+                let id = core.open_terminal(&project, false, Some((80, 24))).unwrap().id;
+                assert!(wait_for(Duration::from_secs(15), || !scrollback_of(&core, id).is_empty()));
+                thread::sleep(Duration::from_millis(500));
+                if hidden {
+                    core.set_tabs_shown("main", Vec::new());
+                }
+                let events = |heard: &Mutex<Vec<Heard>>| heard.lock().unwrap().len();
+                let (first, began) = (events(&heard), Instant::now());
+                core.write_terminal(id, line);
+                let done = |heard: &Mutex<Vec<Heard>>| heard.lock().unwrap().iter().rev().take(8).any(|each| matches!(each, Heard::Data(_, data) if data.contains("done-2")));
+                assert!(wait_for(Duration::from_secs(60), || done(&heard)), "{what}: {} events", events(&heard));
+                text_of(&heard);
+                let (took, count) = (began.elapsed(), events(&heard) - first);
+                let bytes: usize = heard.lock().unwrap()[first..].iter().map(|each| if let Heard::Data(_, data) = each { data.len() } else { 0 }).sum();
+                println!("{what} hidden={hidden}: {count} events, {bytes} bytes in {took:?} ({:.1} events/s)", count as f64 / took.as_secs_f64());
+                core.dispose();
+            }
+        }
     }
 }
