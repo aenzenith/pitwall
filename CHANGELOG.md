@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.23.0](https://github.com/aenzenith/pitwall/compare/v1.22.0...v1.23.0) (2026-11-18)
+
+
+### Features
+
+* **chat:** a Claude tab could be a chat Pitwall drew itself ([49b8c37](https://github.com/aenzenith/pitwall/commit/49b8c3791d70266d4612b1a196f36217c87ea036))
+* **files:** the Files window could stay up at a click outside ([5fac51d](https://github.com/aenzenith/pitwall/commit/5fac51dbd0f6f045bbb3a537e55a0fe42f1ab33f))
+* **files:** the Files window's search looked inside the files too ([188dfd3](https://github.com/aenzenith/pitwall/commit/188dfd394da5ad017ce2cbeb634d9305e2eecdc8))
+* **output:** the server's tab showed only while the server ran ([9acb756](https://github.com/aenzenith/pitwall/commit/9acb7562dbd64b6a1dce9853278092bf23f9b2e3))
+* **settings:** a Terminal tab chose what the panel's clicks did ([0795a45](https://github.com/aenzenith/pitwall/commit/0795a45c142ae9372f5cd4b4740d0d1e5fd5e3b1))
+* **terminal:** ⌘T took the keyboard to the terminal panel ([817ae0a](https://github.com/aenzenith/pitwall/commit/817ae0adfd4fbc5f2206445776a037b65cb8f120))
+* **terminal:** the empty panel started a tab with its first words ([1086dfd](https://github.com/aenzenith/pitwall/commit/1086dfddafd4b30e1bf285d2fef77b424cfd6557))
+* **terminal:** the terminal panel could float or take a window ([d452b2f](https://github.com/aenzenith/pitwall/commit/d452b2fc0559014d5baa104103be659710593fda))
+* **track:** a working session's subagents circled its light ([13fb145](https://github.com/aenzenith/pitwall/commit/13fb1454f82806d8199379ca589965878362f327))
+
+
+### Bug Fixes
+
+* **panes:** a pane let go at another's edge went where its preview said ([24ddd85](https://github.com/aenzenith/pitwall/commit/24ddd856a47ca41d47e19532f3cf5b666e89d2d6))
+
+
+### Performance
+
+* **chat:** a chat's tab drew its latest turns first, its shimmer on the compositor ([bb96b53](https://github.com/aenzenith/pitwall/commit/bb96b53649bf37a279150bc3c35b27b25a65c9fb))
+* **chat:** a streaming answer drew only the block being written again ([4b19e1c](https://github.com/aenzenith/pitwall/commit/4b19e1c355f2285de740e40444b4de0bdcbc52c2))
+* **chat:** an idle chat rested until the next message ([9547e9b](https://github.com/aenzenith/pitwall/commit/9547e9b008432d5ee8ba53f66793c6bcf6d366aa))
+* **claude:** each session's project was found once a scan ([4766025](https://github.com/aenzenith/pitwall/commit/47660253602da9c0b6a40ab8f779e2a8314001e7))
+* **core:** a pass over tabs or cards read the process table once ([d0a83d4](https://github.com/aenzenith/pitwall/commit/d0a83d45154ad5038f989986d015a8b3804af847))
+* **notify:** only the newest dev notifications were kept ([a29a1e9](https://github.com/aenzenith/pitwall/commit/a29a1e95f6f33af8f1881bc971c7b2d676616dc0))
+* **sessions:** the Sessions feed rested while the window was minimized ([e287e3f](https://github.com/aenzenith/pitwall/commit/e287e3fa72b8b197363a70aeb0d8e93332a3a9c8))
+* **terminal:** a hidden tab's output came in batches ([acbea20](https://github.com/aenzenith/pitwall/commit/acbea20383e628c2ae5b3246cbb10edc536dc573))
+* **windows:** a minimized window's page was told it was out of sight ([faa6d97](https://github.com/aenzenith/pitwall/commit/faa6d97a2898cd997bddc40928fff62b9ebf30a3))
+
 ## [1.22.0](https://github.com/aenzenith/pitwall/compare/v1.21.3...v1.22.0) (2026-11-12)
 
 
