@@ -30,6 +30,8 @@ pub struct LiveSession {
     /// While it waits on a permission prompt: the tool's name, when the hook told it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool: Option<String>,
+    /// While it works: its subagents at work, as the hook told it (the Track page's dots).
+    pub helpers: u32,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

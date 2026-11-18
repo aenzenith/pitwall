@@ -127,8 +127,9 @@ export type Project = {
   /** Claude is mid-turn here right now. */
   claudeWorking: boolean;
   /** Its Claude sessions that are working, or wait on you (notifications not read yet). `since`:
-   * when a working one began, as the hook told it; `tool`: the tool a permission wait is for. */
-  claudeSessions: Array<{ id: string; agent: Agent; phase: "working" | "waiting"; turn: Turn | null; since?: number; tool?: string }>;
+   * when a working one began, as the hook told it; `tool`: the tool a permission wait is for;
+   * `helpers`: a working one's subagents at work, as the hook told it. */
+  claudeSessions: Array<{ id: string; agent: Agent; phase: "working" | "waiting"; turn: Turn | null; since?: number; tool?: string; helpers?: number }>;
   git: GitInfo | null;
   script: string;
   /** The exact command the dev server runs: `npm run dev`, `pnpm dev`, `bun run dev`… */

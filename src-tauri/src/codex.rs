@@ -1398,6 +1398,7 @@ impl CodexWatch {
                 ended: gone || hook.is_some_and(|hook| hook.phase == HookPhase::Ended),
                 tool: hook.filter(|_| permission).and_then(|hook| hook.tool.clone()),
                 subagents: hook.map_or(0, |hook| hook.helpers.len() as u32),
+                helping: hook.map_or(0, |hook| hook.helping.len() as u32),
                 interrupted,
             };
             match path {

@@ -92,6 +92,8 @@ pub struct SessionState {
     pub tool: Option<String>,
     /// Subagents that ran tools in its current turn, as the hook heard them.
     pub subagents: u32,
+    /// Subagents at work now: started and not stopped yet, as the hook heard them.
+    pub helping: u32,
     /// Idle from a turn the user interrupted: Claude Code called it idle with no `Stop`
     /// (`set_idle`).
     pub interrupted: bool,
@@ -571,6 +573,9 @@ struct HookSession {
     asker: Option<String>,
     /// The open permission dialog's tool.
     tool: Option<String>,
+    /// Subagents started and not stopped yet, with when each started (`SubagentStart`). A
+    /// background one goes on after the turn's `Stop`.
+    helping: HashMap<String, u64>,
 }
 
 impl HookSession {
@@ -586,6 +591,7 @@ impl HookSession {
             busy: HashSet::new(),
             asker: None,
             tool: None,
+            helping: HashMap::new(),
         }
     }
 
@@ -655,12 +661,25 @@ impl HookSession {
                 Some("elicitation_complete" | "elicitation_response") if prompt_open => Some(HookPhase::Working),
                 _ => None,
             },
+            "SubagentStart" => {
+                if !thread.is_empty() {
+                    self.helping.insert(thread, event.at);
+                }
+                None
+            }
+            "SubagentStop" => {
+                self.helping.remove(&thread);
+                None
+            }
             "Stop" => Some(HookPhase::Waiting(TurnKind::Finished)),
             "SessionEnd" => Some(HookPhase::Ended),
             _ => None,
         };
 
         if let Some(phase) = next {
+            if matches!(phase, HookPhase::Idle | HookPhase::Ended) {
+                self.helping.clear();
+            }
             if phase != HookPhase::Waiting(TurnKind::Permission) {
                 self.busy.clear();
                 self.asker = None;
@@ -691,6 +710,10 @@ impl HookSession {
     /// open) that began no later was interrupted (Esc: no `Stop` comes): it is over there, with
     /// nothing to tell, and a prompt sent after that began a new one.
     fn state(&mut self, logged: u64, baseline: u64, recent: u64, busy: bool, idle: Option<u64>) -> Option<(SessionPhase, Option<Turn>)> {
+        // Idle to Claude Code: no subagent that started before is at work (its stop went unheard).
+        if let (false, Some(idle)) = (busy, idle) {
+            self.helping.retain(|_, started| *started > idle);
+        }
         let under_way = matches!(self.phase, HookPhase::Working | HookPhase::Waiting(TurnKind::Permission | TurnKind::Asking));
         if let (true, false, Some(idle)) = (under_way, busy, idle) {
             if idle >= self.since.max(self.prompt) {
@@ -1488,6 +1511,7 @@ fn session_state(id: &str, path: &str, log: Option<&Log>, hook: Option<&HookSess
         ended: hook.is_some_and(|hook| hook.phase == HookPhase::Ended),
         tool: hook.filter(|_| permission).and_then(|hook| hook.tool.clone()),
         subagents: hook.map_or(0, HookSession::subagents),
+        helping: hook.map_or(0, |hook| hook.helping.len() as u32),
         interrupted: phase == SessionPhase::Idle
             && match decided {
                 Some(hook) => hook.phase == HookPhase::Interrupted,

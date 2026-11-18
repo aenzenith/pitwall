@@ -284,7 +284,8 @@ fn live_sessions(sessions: &[crate::claude::SessionState]) -> HashMap<String, Ve
     for session in sessions.iter().filter(|s| s.phase != SessionPhase::Idle) {
         // Only the hook tells when the work began; a log's last line doesn't.
         let since = session.since.filter(|_| session.hooked && session.phase == SessionPhase::Working);
-        let live = LiveSession { id: session.id.clone(), agent: session.agent, phase: session.phase, turn: session.turn, since, tool: session.tool.clone() };
+        let helpers = if session.phase == SessionPhase::Working { session.helping } else { 0 };
+        let live = LiveSession { id: session.id.clone(), agent: session.agent, phase: session.phase, turn: session.turn, since, tool: session.tool.clone(), helpers };
         found.entry(session.path.clone()).or_default().push(live);
     }
     found

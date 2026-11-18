@@ -41,7 +41,8 @@ const SWEEP_ONE_IN: u64 = 100;
 /// call that finishes after a prompt answers it; `PreToolUse` only for the tools that ask.
 /// `PermissionRequest` comes the moment a permission dialog opens, with the tool's name;
 /// `Notification` reports the same dialog only 6 s later and stays for older Claude Codes.
-const EVENTS: [(&str, Option<&str>); 8] = [
+/// `SubagentStart` and `SubagentStop` tell which subagents are at work (the Track page's dots).
+const EVENTS: [(&str, Option<&str>); 10] = [
     ("SessionStart", Some("")),
     ("UserPromptSubmit", None),
     ("PreToolUse", Some("AskUserQuestion|ExitPlanMode")),
@@ -49,6 +50,8 @@ const EVENTS: [(&str, Option<&str>); 8] = [
     ("PostToolUse", Some("")),
     ("Notification", Some("")),
     ("Stop", None),
+    ("SubagentStart", None),
+    ("SubagentStop", None),
     ("SessionEnd", Some("")),
 ];
 
@@ -67,6 +70,7 @@ case "$1" in
   PostToolUse) keys="session_id agent_id tool_name" ;;
   PermissionRequest) keys="session_id agent_id tool_name cwd transcript_path" ;;
   SessionEnd) keys="session_id" ;;
+  SubagentStart|SubagentStop) keys="session_id agent_id" ;;
   SessionStart) keys="session_id source cwd transcript_path" ;;
   Notification) keys="session_id notification_type cwd transcript_path" ;;
   UserPromptSubmit|PreToolUse|Stop) keys="session_id cwd transcript_path" ;;
@@ -229,6 +233,7 @@ fn event_keys(event: &str) -> Option<&'static [&'static str]> {
         "PostToolUse" => &["session_id", "agent_id", "tool_name"],
         "PermissionRequest" => &["session_id", "agent_id", "tool_name", "cwd", "transcript_path"],
         "SessionEnd" => &["session_id"],
+        "SubagentStart" | "SubagentStop" => &["session_id", "agent_id"],
         "SessionStart" => &["session_id", "source", "cwd", "transcript_path"],
         "Notification" => &["session_id", "notification_type", "cwd", "transcript_path"],
         "UserPromptSubmit" | "PreToolUse" | "Stop" => &["session_id", "cwd", "transcript_path"],
@@ -994,6 +999,17 @@ mod tests {
         let mut stop = base("Stop");
         stop["last_assistant_message"] = secret.into();
         assert!(!noted(&hook, "Stop", &stop).contains("SECRET"));
+
+        // A subagent: its id alone, never its prompt, its answer or where its log is.
+        let mut start = base("SubagentStart");
+        start["agent_id"] = "a1".into();
+        start["agent_type"] = secret.into();
+        assert_eq!(noted(&hook, "SubagentStart", &start), "event=SubagentStart\nsession_id=9bb85e86\nagent_id=a1\n");
+        let mut finished = base("SubagentStop");
+        finished["agent_id"] = "a1".into();
+        finished["agent_transcript_path"] = secret.into();
+        finished["last_assistant_message"] = secret.into();
+        assert_eq!(noted(&hook, "SubagentStop", &finished), "event=SubagentStop\nsession_id=9bb85e86\nagent_id=a1\n");
 
         // A permission dialog: the tool's name only, never what it would run or the
         // suggestions built from it.

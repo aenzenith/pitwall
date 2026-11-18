@@ -46,6 +46,13 @@ const FROM_AFAR = 6;
 /** After a resize, what stands still follows the circuit at once for this long (ms); otherwise it
  * slides to a new place. */
 const SETTLE = 250;
+/** A session's subagents at work go round its light's head, a dot each, against the clock: once
+ * in `SPIN` seconds of the circuit's clock, `ORBIT` px from it (a little further for many), at
+ * most `DOTS` of them. A new one comes out of the head to its place, one that finished drifts
+ * off and goes out, and the others move round to share the ring again. */
+const SPIN = 2.4;
+const ORBIT = 15;
+const DOTS = 16;
 
 /** The circuit's look: the night's in the dark theme, the day's in the light one. */
 const look = computed<Look>(() => (resolvedTheme.value === "light" ? "day" : "night"));
@@ -207,6 +214,16 @@ const riders = computed(() => {
   return rode;
 });
 
+/** The sessions at work whose subagents are at work too: dots go round their lights' heads. */
+/** Every session at work has its ring, empty while none of its subagents works: the last dot to
+ * finish goes out as the others do. */
+const orbiting = computed(() => scene.value.movers.filter((mover) => mover.kind === "claude"));
+const dots = (mover: Mover): number => Math.min(DOTS, mover.helpers);
+/** How far from the head a ring's dots go round. */
+const ringOf = (mover: Mover): string => `${ORBIT + Math.max(0, dots(mover) - 6) * 0.9}px`;
+/** Where a dot stands on its ring, before the ring turns. */
+const turnOf = (mover: Mover, nth: number): string => `${((360 * nth) / dots(mover)).toFixed(1)}deg`;
+
 type Spot = { key: string; id: string; path: string; kind: Stander["kind"] | "lane"; session: string | null; x: number; y: number; tagX: number; tagY: number; text: string; label: string; side: "under" | "beside" | "after" | "before" };
 
 /** What stands still, where the circuit puts it: placed when the layout or the projects change, not
@@ -282,10 +299,16 @@ const empty = computed(() => !straight.value && supported.value && scene.value.m
 /* ---------- the tags that ride ---------- */
 
 const riderEls = new Map<string, HTMLElement>();
+const orbitEls = new Map<string, HTMLElement>();
 
 function setRider(key: string, el: unknown): void {
   if (el instanceof HTMLElement) riderEls.set(key, el);
   else riderEls.delete(key);
+}
+
+function setOrbit(key: string, el: unknown): void {
+  if (el instanceof HTMLElement) orbitEls.set(key, el);
+  else orbitEls.delete(key);
 }
 
 function colour(car: Car): readonly [number, number, number] {
@@ -477,6 +500,19 @@ function render(): void {
     if (!light) continue;
     const [x, y] = drawn.project(light.head, across(light), true);
     el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+  }
+  // A session's subagents at work go round its light's head, against the clock (a negative turn
+  // on the screen), as the light dims and brightens.
+  const spun = (-2 * Math.PI * clock) / SPIN;
+  for (const [key, el] of leftRiders.value ? [] : orbitEls) {
+    const light = ridden.get(key);
+    if (!light) {
+      el.style.opacity = "0";
+      continue;
+    }
+    const [x, y] = drawn.project(light.head, across(light), true);
+    el.style.opacity = Math.min(1, light.gain).toFixed(2);
+    el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) rotate(${spun.toFixed(3)}rad)`;
   }
 
   if (heads.size > drivers.value.lapping.size + runs.size) {
@@ -763,7 +799,12 @@ watch([scene, () => props.selected, () => props.hot, () => props.settings.glow, 
     <canvas v-show="supported" ref="canvas" aria-hidden="true"></canvas>
 
     <!-- For the pointer: the tower lists the same projects for the keyboard and VoiceOver. -->
-    <div v-if="supported" :class="['over', sliding, { settled, turning }]" aria-hidden="true">
+    <div v-if="supported" :class="['over', sliding, { settled, turning, still: motion === 'still' }]" aria-hidden="true">
+      <div v-for="mover in orbiting" :key="mover.key" :ref="(el) => setOrbit(mover.key, el)" class="anchor orbit" :style="{ '--ring': ringOf(mover) }">
+        <TransitionGroup name="dot" appear>
+          <span v-for="nth in dots(mover)" :key="nth" class="dot" :style="{ '--turn': turnOf(mover, nth - 1) }"></span>
+        </TransitionGroup>
+      </div>
       <div v-for="mover in riders" :key="mover.key" :ref="(el) => setRider(mover.key, el)" class="anchor">
         <button
           v-show="shows(mover.path)"
@@ -906,6 +947,67 @@ canvas {
 
 .over.turning .tag.rides {
   opacity: 0;
+  transition: none;
+}
+
+/* A session's subagents at work: bright dots round its light's head, turned each frame. Hidden
+   until the first frame has placed them. */
+.orbit {
+  opacity: 0;
+}
+
+.over.turning .orbit {
+  visibility: hidden;
+}
+
+/* A dot's place on its ring (`--turn`, `--ring`): when one comes or goes, the others move round to
+   share the ring again. */
+.dot {
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--claude) 55%, #fff);
+  box-shadow:
+    0 0 3px 1px color-mix(in srgb, var(--claude) 85%, transparent),
+    0 0 8px 2px color-mix(in srgb, var(--claude) 40%, transparent);
+  transform: rotate(var(--turn)) translateX(var(--ring));
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-theme="light"] .dot {
+  background: var(--claude);
+  box-shadow: 0 0 4px 1px color-mix(in srgb, var(--claude) 45%, transparent);
+}
+
+/* A new subagent: its dot comes out of the head to its place on the ring. */
+.dot-enter-active {
+  transition:
+    transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.35s ease-out;
+}
+
+.dot.dot-enter-from {
+  opacity: 0;
+  transform: rotate(var(--turn)) translateX(0) scale(0.3);
+}
+
+/* One that finished: its dot drifts off the ring and goes out, still going round. */
+.dot-leave-active {
+  transition:
+    transform 0.7s ease-in,
+    opacity 0.7s ease-in;
+}
+
+.dot.dot-leave-to {
+  opacity: 0;
+  transform: rotate(var(--turn)) translateX(calc(var(--ring) * 2)) scale(0.4);
+}
+
+/* Nothing moves: the dots come and go at once. */
+.over.still .dot {
   transition: none;
 }
 

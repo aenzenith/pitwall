@@ -1084,6 +1084,7 @@ mod agent_tests {
             ended: false,
             tool: None,
             subagents: 0,
+            helping: 0,
             interrupted: false,
         }
     }

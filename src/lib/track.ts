@@ -252,6 +252,8 @@ export type Mover = {
   trail: number;
   /** It carries its project's tag (a project's lights share one). */
   tagged: boolean;
+  /** A session's subagents at work: as many dots go round its head. */
+  helpers: number;
 };
 
 /** A light standing still: a Claude session waiting on you at the pit wall, a crashed server where it
@@ -364,7 +366,7 @@ export function grid(projects: Project[], on: Circuit, gap: number, slot = 0): G
     const column = (nth: number): number => offset + (nth - (abreast - 1) / 2) * (abreast > 2 ? TRIO : 2 * PAIR);
 
     if (running) {
-      movers.push({ key: `${project.path}#server`, path: project.path, kind: "server", warn: project.issue !== null, offset: column(0), phase: seed, speed, trail: 3.2 + 1.6 * hash(`${project.path}#trail`), tagged: !straight });
+      movers.push({ key: `${project.path}#server`, path: project.path, kind: "server", warn: project.issue !== null, offset: column(0), phase: seed, speed, trail: 3.2 + 1.6 * hash(`${project.path}#trail`), tagged: !straight, helpers: 0 });
     } else if (project.status === "crashed") {
       standers.push({ key: `${project.path}#crashed`, path: project.path, kind: "crashed", t: straight ? 0.25 + 0.5 * seed : seed, offset, turn: null, session: null, lane: offset, trail: 0 });
     } else if (project.status === "busy") {
@@ -388,7 +390,7 @@ export function grid(projects: Project[], on: Circuit, gap: number, slot = 0): G
       const lane = column((running ? 1 : 0) + (order.indexOf(place) % 2));
       if (session.phase === "working") {
         const behind = (((running ? 1 : 0) + place) * TANDEM) / on.line.length;
-        movers.push({ key: `${project.path}#claude:${session.id}`, path: project.path, kind: "claude", warn: false, offset: lane, phase: seed - behind, speed, trail, tagged: !straight && !running && place === lead });
+        movers.push({ key: `${project.path}#claude:${session.id}`, path: project.path, kind: "claude", warn: false, offset: lane, phase: seed - behind, speed, trail, tagged: !straight && !running && place === lead, helpers: session.helpers ?? 0 });
       } else if (session.phase === "waiting") {
         // A place each at the wall; on the straight, at its lane's far end and back from it.
         const t = straight ? 1 - (stood++ * STACK) / on.line.length : on.wall.t + ((placed++ - (waiting - 1) / 2) * gap) / on.line.length;

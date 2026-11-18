@@ -2434,7 +2434,7 @@ mod tests {
             let mut inner = core.lock();
             inner.scanned.retain(|state| state.id != session);
             let turn = turn.map(|(kind, at)| crate::claude::Turn { kind, at });
-            inner.scanned.push(SessionState { id: session, agent, path: String::new(), folder: None, title: None, phase, turn, since: Some(now_ms()), hooked: true, ended, tool: None, subagents: 0, interrupted: false });
+            inner.scanned.push(SessionState { id: session, agent, path: String::new(), folder: None, title: None, phase, turn, since: Some(now_ms()), hooked: true, ended, tool: None, subagents: 0, helping: 0, interrupted: false });
         }
         core.follow_board();
     }

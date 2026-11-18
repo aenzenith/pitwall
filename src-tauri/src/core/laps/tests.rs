@@ -562,6 +562,7 @@ fn what_a_runs_session_waits_on_is_told_by_the_laps() {
         ended: false,
         tool: Some("Bash".into()),
         subagents: 0,
+        helping: 0,
         interrupted: false,
     };
     let told = |state: SessionState| core.lap_waits(&[state]).into_iter().map(|signal| (signal.kind, signal.name, signal.detail)).collect::<Vec<_>>();

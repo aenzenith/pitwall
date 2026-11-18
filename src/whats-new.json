@@ -210,6 +210,27 @@
         "ja": "ペインやタブを別のペインの端で離すと、全体が収まるかぎり、狭いペインの隣でもそこに入ります。",
         "zh-Hans": "把窗格或标签页拖到另一个窗格的边缘松开，只要整体还放得下，它就会放到那里，哪怕旁边是很窄的窗格。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Subagents on the Track",
+        "tr": "Pist'te alt ajanlar",
+        "de": "Subagenten auf der Strecke",
+        "es": "Subagentes en la Pista",
+        "ru": "Субагенты на трассе",
+        "ja": "コースにサブエージェント",
+        "zh-Hans": "赛道上的子代理"
+      },
+      "body": {
+        "en": "When Claude or Codex sends out subagents, bright orange dots circle its light on the Track, one for each that's still at work.",
+        "tr": "Claude ya da Codex alt ajan çalıştırınca Pist'teki ışığının başında parlak turuncu noktalar döner. Hâlâ çalışan her alt ajan için bir nokta vardır.",
+        "de": "Schickt Claude oder Codex Subagenten los, kreisen helle orange Punkte um sein Licht auf der Strecke, einer für jeden, der noch arbeitet.",
+        "es": "Cuando Claude o Codex lanza subagentes, unos puntos naranjas brillantes giran alrededor de su luz en la Pista, uno por cada uno que sigue trabajando.",
+        "ru": "Когда Claude или Codex запускает субагентов, вокруг его огонька на трассе кружат яркие оранжевые точки, по одной на каждого, кто ещё работает.",
+        "ja": "Claude や Codex がサブエージェントを動かすと、コース上のライトの周りを明るいオレンジの点が回ります。まだ働いているサブエージェントごとに一つです。",
+        "zh-Hans": "Claude 或 Codex 派出子代理时，赛道上它的光点周围会有明亮的橙色小点在转，每个还在工作的子代理一个。"
+      }
     }
   ]
 }

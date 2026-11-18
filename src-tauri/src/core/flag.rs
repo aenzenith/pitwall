@@ -394,6 +394,7 @@ mod tests {
             ended: false,
             tool: tool.map(str::to_string),
             subagents: 0,
+            helping: 0,
             interrupted: false,
         }
     }

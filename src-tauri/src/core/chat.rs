@@ -2623,6 +2623,7 @@ pub(super) fn apply_chats(scan: &mut crate::claude::ScanResult, truths: Vec<Chat
             ended: false,
             tool,
             subagents: old.as_ref().map_or(0, |old| old.subagents),
+            helping: old.as_ref().map_or(0, |old| old.helping),
             interrupted: phase == SessionPhase::Idle && truth.interrupted,
         });
         touched.insert(path);
