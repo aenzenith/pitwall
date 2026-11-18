@@ -90,9 +90,19 @@ type Item =
 /** Several lookups in a row fold into one row. */
 const GROUP_FROM = 3;
 
+/* Which thinking has any text, as one string: it is looked at again with each word that streams
+   in, and the rows are worked out again only when it changes, not at every word. */
+const thoughtKeys = computed(() =>
+  props.turn.items
+    .filter((entry) => entry.kind === "thinking" && /\S/.test(entry.text))
+    .map((entry) => entry.key)
+    .join("\n"),
+);
+const thought = computed(() => new Set(thoughtKeys.value.split("\n")));
+
 /** Thinking with no text is drawn as nothing (O8). */
 function shown(entry: ChatEntry): boolean {
-  if (entry.kind === "thinking") return !!entry.text.trim();
+  if (entry.kind === "thinking") return thought.value.has(entry.key);
   if (entry.kind === "result") return !!entry.duration || entry.error;
   return true;
 }
@@ -406,7 +416,7 @@ const taskOf = (tool: ToolEntry) => props.tasks.get(tool.id);
         </button>
       </div>
       <div v-else :class="['entry', { 'in-steps': item.inSteps }]">
-        <ChatMarkdown v-if="item.entry.kind === 'text'" class="answer selectable" :text="item.entry.text" :streaming="item.entry.streaming" :project="project" />
+        <ChatMarkdown v-if="item.entry.kind === 'text'" class="answer selectable" :entry="item.entry" :project="project" />
         <ToolRow
           v-else-if="item.entry.kind === 'tool'"
           :tool="item.entry"

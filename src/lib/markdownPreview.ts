@@ -178,6 +178,31 @@ export function renderMarkdown(text: string, titles: AlertTitles): string {
   return cleaner().sanitize(html, { FORBID_TAGS, ALLOW_DATA_ATTR: false, ADD_ATTR: ["data-line", "data-lang"] });
 }
 
+/** Where a text still being written may be cut, for the chat's streaming answer: the place its
+ * last block starts, counting whole lines only (a line half written may yet join the block before
+ * it: `2` becomes `2.`, the list's next item). What stands before it no longer changes as more
+ * text comes, so it is drawn once. 0 when there is one block; -1 when the text must be drawn whole
+ * each time, since a later line can change an earlier one or an earlier one those after it: HTML
+ * (`<details>` closed paragraphs later, a tag left open), a link's definition, a footnote. */
+export function streamCut(text: string, titles: AlertTitles): number {
+  const end = text.lastIndexOf("\n") + 1;
+  if (!end) return 0;
+  if (text.includes("\r")) return -1;
+  const env: { references?: Record<string, unknown>; footnotes?: unknown } = {};
+  const tokens = renderer(titles).parse(text.slice(0, end), env);
+  if (env.footnotes || (env.references && Object.keys(env.references).length)) return -1;
+  let line = 0;
+  for (const token of tokens) {
+    // A tag left open (`<b>` named in a sentence) reaches into every block after it.
+    if (token.type === "html_block" || token.children?.some((child) => child.type === "html_inline")) return -1;
+    if (token.level !== 0 || token.nesting < 0) continue;
+    if (token.map) line = token.map[0];
+  }
+  let at = 0;
+  for (; line > 0; line--) at = text.indexOf("\n", at) + 1;
+  return at;
+}
+
 let mermaid: Promise<typeof import("mermaid").default> | null = null;
 let svgCleaner: ReturnType<typeof DOMPurify> | null = null;
 let drawn = 0;

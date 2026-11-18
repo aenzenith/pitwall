@@ -510,12 +510,14 @@ provide(CHAT_ROW, { id, now: tick });
 const WORKING = { phase: "working", text: "" } as const;
 
 /** What Claude is at while a turn runs (V34): the words under the last turn. */
+/* A yes or no of its own: every frame moves `lastFrame`, and the line is worked out again only
+   when the answer changes, not at each word that streams in. */
+const silent = computed(() => tick.value - model.value.lastFrame > 60_000);
 const phase = computed(() => {
   if (!busy.value || cards.value.length) return null;
   const m = model.value;
-  const silent = tick.value - m.lastFrame;
   const working = m.commands.some((each) => each.state === "running" && !each.background) || m.tasks.some((each) => each.state === "running" && !each.background);
-  if (silent > 60_000 && !working) return { text: t("chat.status.silent"), stuck: true };
+  if (silent.value && !working) return { text: t("chat.status.silent"), stuck: true };
   if (m.status === "compacting") return { text: t("chat.status.compacting"), stuck: false };
   const last = m.entries[m.entries.length - 1];
   if (last?.kind === "thinking" && last.streaming && !last.ended) return { text: t("chat.status.thinking"), stuck: false };

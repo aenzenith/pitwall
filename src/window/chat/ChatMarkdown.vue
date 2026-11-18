@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
+import { atStreamBeat, leaveStreamBeat } from "../../lib/chat/streamClock";
 import { BOLD, highlight, ITALIC } from "../../lib/highlight";
 import { language, t } from "../../lib/i18n";
 import { languageOf } from "../../lib/languages";
+import type { AlertTitles } from "../../lib/markdownPreview";
 import { api } from "../../lib/store";
 import { resolvedTheme } from "../../lib/theme";
 
@@ -11,80 +13,138 @@ import { resolvedTheme } from "../../lib/theme";
  * Claude's words, drawn as Markdown by the Files window's renderer (lib/markdownPreview: DOMPurify,
  * links and pictures held back), its code coloured as the code view colours it, at the terminal
  * panel's size. A link opens only when clicked: a web address in the browser, a file of the
- * project in the editor (at its line, `file.ts:12` or `#L12`). While the words stream in, they
- * are drawn again a few times a second, not at every word.
+ * project in the editor (at its line, `file.ts:12` or `#L12`). While the words stream in, the
+ * block being written is drawn again a few times a second, not at every word, and the blocks
+ * before it stay as drawn.
  */
-const props = defineProps<{ text: string; streaming: boolean; project: string }>();
+/* A streaming answer is given as its entry, not as its text: the text is read here alone, so each
+   word that comes draws nothing of the turn around it again. */
+const props = defineProps<{ text?: string; streaming?: boolean; entry?: { text: string; streaming: boolean }; project: string }>();
+const text = (): string => (props.entry ? props.entry.text : (props.text ?? ""));
+const streaming = computed(() => (props.entry ? props.entry.streaming : !!props.streaming));
 
 const root = ref<HTMLElement | null>(null);
-const html = shallowRef("");
 let lib: typeof import("../../lib/markdownPreview") | null = null;
 let run = 0;
-let timer: ReturnType<typeof setTimeout> | undefined;
-let last = 0;
 
-/** How often streaming words are drawn again. */
-const STREAM_MS = 90;
+/** While the words stream in, only the block being written is drawn again: the text before it is
+ * settled (`lib.streamCut`), its nodes stay as they are. `settled` is that text, `kept` how many
+ * of the box's first nodes draw it, `tail` the rest's markup as last drawn (null: none stands),
+ * `lined` where the text's last whole line ended when the cut was last looked for. `whole`: this
+ * text can't be cut (a later line may change an earlier one), so all of it is drawn each time. */
+let settled = "";
+let kept = 0;
+let tail: string | null = null;
+let lined = -1;
+let whole = false;
 
-async function render(): Promise<void> {
-  const mine = ++run;
-  lib ??= await import("../../lib/markdownPreview");
-  if (mine !== run) return;
-  last = Date.now();
-  html.value = lib.renderMarkdown(props.text, {
-    note: t("files.md.note"),
-    tip: t("files.md.tip"),
-    important: t("files.md.important"),
-    warning: t("files.md.warning"),
-    caution: t("files.md.caution"),
-  });
-  await nextTick();
-  const box = root.value;
-  if (mine !== run || !box) return;
-  const dark = resolvedTheme.value === "dark";
-  for (const img of box.querySelectorAll<HTMLImageElement>("img[data-src]")) {
+function forget(): void {
+  settled = "";
+  kept = 0;
+  tail = null;
+  lined = -1;
+}
+
+/** `source` drawn, as nodes not yet in the page. */
+function drawn(source: string, titles: AlertTitles): { html: string; nodes: DocumentFragment } {
+  const html = lib!.renderMarkdown(source, titles);
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  for (const img of template.content.querySelectorAll<HTMLImageElement>("img[data-src]")) {
     // Claude's pictures are never loaded: named, as a web picture is in the Files window.
     const note = document.createElement("span");
     note.className = "md-picture-off";
     note.textContent = img.getAttribute("alt") || img.dataset.src || "";
     img.replaceWith(note);
   }
-  addCopy(box);
-  if (props.streaming) return;
+  addCopy(template.content);
+  return { html, nodes: template.content };
+}
+
+function trim(box: HTMLElement, count: number): void {
+  while (box.childNodes.length > count) box.lastChild!.remove();
+}
+
+/** The streaming text: what settled since the last time is added after the settled nodes, and the
+ * block being written drawn again after them. A slice past the text's start begins with an empty
+ * line, so that a rule (`---`) at its head is never read as front matter. */
+function stream(box: HTMLElement, text: string, titles: AlertTitles): void {
+  if (!text.startsWith(settled)) {
+    forget();
+    whole = false;
+  }
+  const end = text.lastIndexOf("\n");
+  if (!whole && end !== lined) {
+    lined = end;
+    const pad = settled ? 1 : 0;
+    const rest = (pad ? "\n" : "") + text.slice(settled.length);
+    const cut = lib!.streamCut(rest, titles);
+    if (cut < 0) {
+      whole = true;
+      forget();
+    } else if (cut > pad) {
+      trim(box, kept);
+      box.append(drawn(rest.slice(0, cut), titles).nodes);
+      kept = box.childNodes.length;
+      settled = text.slice(0, settled.length + cut - pad);
+      tail = null;
+    }
+  }
+  const next = drawn((settled ? "\n" : "") + text.slice(settled.length), titles);
+  if (next.html === tail && box.childNodes.length >= kept) return;
+  tail = next.html;
+  trim(box, kept);
+  box.append(next.nodes);
+}
+
+async function render(): Promise<void> {
+  const mine = ++run;
+  lib ??= await import("../../lib/markdownPreview");
+  if (!root.value) await nextTick();
+  const box = root.value;
+  if (mine !== run || !box) return;
+  const titles: AlertTitles = {
+    note: t("files.md.note"),
+    tip: t("files.md.tip"),
+    important: t("files.md.important"),
+    warning: t("files.md.warning"),
+    caution: t("files.md.caution"),
+  };
+  if (streaming.value) return stream(box, text(), titles);
+  forget();
+  whole = false;
+  box.replaceChildren(drawn(text(), titles).nodes);
+  const dark = resolvedTheme.value === "dark";
   void colourCode(box, dark, mine);
   void lib.drawDiagrams(box, dark, t("files.md.diagramFailed"), t("files.md.diagramsCapped", { count: lib.DIAGRAMS }));
 }
 
+/** While the words stream in they are drawn at the beat every streaming answer shares
+ * (lib/chat/streamClock), a few times a second. */
+const draw = (): void => void render();
 function schedule(): void {
-  if (!props.streaming) {
-    clearTimeout(timer);
-    timer = undefined;
-    void render();
-    return;
-  }
-  if (timer) return;
-  timer = setTimeout(() => {
-    timer = undefined;
-    void render();
-  }, Math.max(0, STREAM_MS - (Date.now() - last)));
+  if (streaming.value) return atStreamBeat(draw);
+  leaveStreamBeat(draw);
+  void render();
 }
 
-watch(() => props.text, schedule, { immediate: true });
-watch([() => props.streaming, () => resolvedTheme.value, language], () => {
-  clearTimeout(timer);
-  timer = undefined;
+watch(text, schedule, { immediate: true });
+watch([streaming, () => resolvedTheme.value, language], () => {
+  leaveStreamBeat(draw);
+  // The alerts' titles are the language's: what settled is drawn again.
+  forget();
   void render();
 });
 onBeforeUnmount(() => {
   run++;
-  clearTimeout(timer);
+  leaveStreamBeat(draw);
 });
 
 const COPY_SVG =
   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg>';
 
 /** A copy button on each block of code, shown while the pointer is over it. */
-function addCopy(box: HTMLElement): void {
+function addCopy(box: ParentNode): void {
   for (const pre of box.querySelectorAll<HTMLElement>("pre.md-code")) {
     if (pre.querySelector(".md-copy") || pre.closest(".md-diagram")) continue;
     const button = document.createElement("button");
@@ -187,12 +247,12 @@ function onKey(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <!-- Cleaned in lib/markdownPreview (DOMPurify), and the app's CSP runs no script of it. -->
-  <!-- eslint-disable-next-line vue/no-v-html -->
-  <div ref="root" :class="['chat-md', { streaming }]" data-find @click="onClick" @keydown="onKey" v-html="html"></div>
+  <!-- Its nodes are put in by `render`: cleaned in lib/markdownPreview (DOMPurify), and the app's
+       CSP runs no script of them. -->
+  <div ref="root" :class="['chat-md', { streaming }]" data-find @click="onClick" @keydown="onKey"></div>
 </template>
 
-<!-- Claude's markup: not scoped (v-html), every rule under `.chat-md`. -->
+<!-- Claude's markup: not scoped (nodes of its own), every rule under `.chat-md`. -->
 <style>
 /* No paint containment: WebKit kept such a box's drawing at its old size while the streamed words
    grew it, so its new lines stayed blank until a scroll repainted them (the user's word, 17 Nov:
