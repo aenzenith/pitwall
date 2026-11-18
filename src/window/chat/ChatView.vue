@@ -1,3 +1,10 @@
+<script lang="ts">
+/** Where a conversation scrolled away from its end was left: the turn at the view's top (its key)
+ * and how far above that top the turn begins. By the chat's own state, in memory only; a view
+ * shown again draws from that turn on and stands where it stood. */
+const places = new WeakMap<object, { key: string; offset: number }>();
+</script>
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 
@@ -123,15 +130,152 @@ const turns = computed<Turn[]>(() => {
 /** A long conversation draws its latest turns; older ones come on asking (V125). */
 const PAGE = 40;
 const shownCount = ref(PAGE);
-const shownTurns = computed(() => turns.value.slice(Math.max(0, turns.value.length - shownCount.value)));
 const hiddenTurns = computed(() => Math.max(0, turns.value.length - shownCount.value));
 
-async function showEarlier(): Promise<void> {
+/* Of those, a view draws only the latest few at first and the older ones by itself right after,
+   a few at a time over the top with the view held where it is: a chat's tab is drawn anew each
+   time it is shown, and forty turns at once kept the window from answering for 170–200 ms
+   (measured 17 Nov). `drawn` is how many of the page's turns are in the page so far; once all
+   are, it is the page's own count, so a conversation that grows never loses its oldest turn to
+   it. The button for what is beyond the page shows once the page is whole. */
+const FIRST = 8;
+const drawn = ref(FIRST);
+const wanted = computed(() => Math.min(shownCount.value, turns.value.length));
+const whole = computed(() => drawn.value >= wanted.value);
+const shownTurns = computed(() => turns.value.slice(Math.max(0, turns.value.length - Math.min(drawn.value, shownCount.value))));
+
+/* Turns drawn over the top push what is in view down, and go on pushing for a moment: a turn's
+   Markdown comes in a little after the turn itself. So the first turn that was there is held
+   where it is in the view (`held`: the turn, and how far down the conversation it begins): each
+   time the conversation's height changes, the scroll position takes up what was added above it,
+   before anything is painted. A view following its end is left to that. */
+let held: { turn: HTMLElement; at: number; want: number | null; owed: number } | null = null;
+let letGo: ReturnType<typeof setTimeout> | undefined;
+
+function startOf(turn: HTMLElement, box: HTMLElement): number {
+  return turn.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+}
+
+/** Holds `turn` where it is, or `want` under the view's top (a view shown again, put back where
+ * it was left: its turns have no height yet to scroll to, so the place is taken as they get it,
+ * until the user scrolls). A turn held already stays the one. */
+function hold(turn: HTMLElement | null, want: number | null = null): void {
   const box = scroller.value;
-  const from = box ? box.scrollHeight - box.scrollTop : 0;
-  shownCount.value += PAGE;
+  clearTimeout(letGo);
+  letGo = undefined;
+  if (held?.turn.isConnected || !box) return;
+  held = turn ? { turn, at: startOf(turn, box), want, owed: 0 } : null;
+}
+
+function keepHeld(): void {
+  const box = scroller.value;
+  if (!held || !box) return;
+  if (!held.turn.isConnected) {
+    held = null;
+    return;
+  }
+  const at = startOf(held.turn, box);
+  if (!following && (held.want !== null || at !== held.at)) {
+    // A scroll position is a whole number of pixels here: the part lost is owed to the next
+    // move, so the steps never add up to a drift.
+    const to = held.want !== null ? at - held.want : box.scrollTop + at - held.at + held.owed;
+    box.scrollTop = to;
+    const lost = to - box.scrollTop;
+    held.owed = held.want === null && Math.abs(lost) < 1 ? lost : 0;
+  }
+  held.at = at;
+}
+
+/** `count` more of the page's turns drawn over the top; what is in view stays where it is. */
+async function drawMore(count: number): Promise<void> {
+  hold(thread.value?.querySelector<HTMLElement>(":scope > [data-turn]") ?? null);
+  const next = drawn.value + count;
+  drawn.value = next >= wanted.value ? shownCount.value : next;
   await nextTick();
-  if (box) box.scrollTop = box.scrollHeight - from;
+  keepHeld();
+}
+
+/** How many turns the next step draws, by what the last step took: its turns' Markdown, layout
+ * and painting come after what is timed here and take a few times as long, and all of it is to
+ * fit in a frame or two. */
+let stride = 4;
+let filler: ReturnType<typeof setTimeout> | undefined;
+let filling = false;
+let gone = false;
+
+function fillSoon(delay: number): void {
+  if (gone || filler !== undefined) return;
+  filler = setTimeout(() => {
+    filler = undefined;
+    void fill();
+  }, delay);
+}
+
+/** The rest of the page, step by step between frames. It waits while the user scrolls, unless the
+ * top of what is drawn is near. */
+async function fill(): Promise<void> {
+  if (gone || filling) return;
+  const box = scroller.value;
+  if (!box || whole.value) return settle();
+  if (Date.now() - userMoved < 200 && box.scrollTop > box.clientHeight) return fillSoon(100);
+  filling = true;
+  const began = performance.now();
+  const count = stride;
+  await drawMore(count);
+  stride = Math.max(1, Math.min(6, Math.round((count * 6) / Math.max(1, performance.now() - began))));
+  filling = false;
+  if (whole.value) settle();
+  else fillSoon(30);
+}
+
+/** Everything of the page is drawn: from here on the page's count alone says what shows, and the
+ * turn held is let go once the last ones drawn have their height. */
+function settle(): void {
+  if (!whole.value) return;
+  if (turns.value.length || model.value.loaded) drawn.value = shownCount.value;
+  if (held && letGo === undefined) letGo = setTimeout(() => (held = null), 300);
+}
+
+/** Before the first paint of new turns: enough of them that the view is full and more (they are
+ * measured before their Markdown is in, so they only get taller); the rest follow. */
+async function cover(): Promise<void> {
+  const box = scroller.value;
+  if (!box || filling) return;
+  filling = true;
+  while (!gone && !whole.value && box.scrollHeight < box.clientHeight * 1.5) await drawMore(4);
+  filling = false;
+  if (whole.value) settle();
+  else fillSoon(60);
+}
+
+/** The whole page at once: something is about to look through all of it. */
+async function drawAll(): Promise<void> {
+  clearTimeout(filler);
+  filler = undefined;
+  if (!whole.value) await drawMore(shownCount.value);
+  settle();
+}
+
+// A turn that comes while the page still fills joins what is drawn: counted from the end, it would
+// otherwise push the oldest drawn turn out, and a view scrolled up would lose its place.
+watch(
+  () => turns.value.length,
+  (now, was) => {
+    if (now > was && drawn.value < Math.min(shownCount.value, was)) drawn.value += now - was;
+  },
+);
+// A conversation read after the view came up (a chat's first show) is drawn the same way.
+watch(() => turns.value.length, () => void cover(), { flush: "post" });
+onBeforeUnmount(() => {
+  gone = true;
+  clearTimeout(filler);
+  clearTimeout(letGo);
+});
+
+async function showEarlier(): Promise<void> {
+  shownCount.value += PAGE;
+  await drawMore(PAGE);
+  settle();
 }
 
 const commandsByTool = computed(() => {
@@ -403,6 +547,7 @@ let userMoved = 0;
 let barHeld = false;
 function userScrolls(): void {
   userMoved = Date.now();
+  if (held) held.want = null;
 }
 function pressScroller(event: PointerEvent): void {
   // A press on the scroller itself, not on what it holds: its scroll bar.
@@ -424,7 +569,34 @@ function onScroll(): void {
   else if (barHeld || Date.now() - userMoved < 800) following = false;
   ui.value.stuck = following;
   ui.value.scroll = scroller.value?.scrollTop ?? null;
+  keepPlace();
   measureUnder();
+  // The top of what is drawn comes near while older turns are still to come: they come now.
+  const box = scroller.value;
+  if (box && !whole.value && box.scrollTop < box.clientHeight) {
+    clearTimeout(filler);
+    filler = undefined;
+    void fill();
+  }
+}
+
+/** The turn at the view's top, kept for the next time this chat is shown (`places`). */
+function keepPlace(): void {
+  const box = scroller.value;
+  const list = following ? null : thread.value?.querySelectorAll<HTMLElement>(":scope > [data-turn]");
+  if (!box || !list?.length) {
+    places.delete(ui.value);
+    return;
+  }
+  const edge = box.getBoundingClientRect().top;
+  let low = 0;
+  let high = list.length - 1;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (list[mid].getBoundingClientRect().bottom > edge) high = mid;
+    else low = mid + 1;
+  }
+  places.set(ui.value, { key: list[low].dataset.turn ?? "", offset: edge - list[low].getBoundingClientRect().top });
 }
 
 /** How much of the conversation lies under its bottom edge, up to the fade's height: the fade over
@@ -479,15 +651,33 @@ function measureBar(): void {
   if (box) bar.value = Math.max(0, box.offsetWidth - box.clientWidth);
 }
 
+/* A view left away from its end draws from the turn it was left at (and one before it), so it
+   can stand there again; one whose place isn't known, or is beyond the page, draws the whole page
+   and takes the scroll position it had. */
+const place = ui.value.stuck || ui.value.scroll === null ? null : (places.get(ui.value) ?? null);
+const placeAt = place ? turns.value.findIndex((turn) => turn.key === place.key) : -1;
+const placed = placeAt >= 0 && turns.value.length - placeAt < PAGE;
+if (placed) drawn.value = Math.max(FIRST, turns.value.length - placeAt + 1);
+else if (!ui.value.stuck && ui.value.scroll !== null) drawn.value = PAGE;
+
 let grower: ResizeObserver | null = null;
 onMounted(() => {
   following = ui.value.stuck;
   void nextTick(() => {
-    if (!following && ui.value.scroll !== null && scroller.value) scroller.value.scrollTop = ui.value.scroll;
-    else toEnd();
+    const box = scroller.value;
+    if (!following && ui.value.scroll !== null && box) {
+      const turn = placed && place ? thread.value?.querySelector<HTMLElement>(`:scope > [data-turn="${CSS.escape(place.key)}"]`) : null;
+      if (turn && place) {
+        hold(turn, -place.offset);
+        keepHeld();
+      } else box.scrollTop = ui.value.scroll;
+    } else toEnd();
+    void cover();
   });
   grower = new ResizeObserver(() => {
     if (following) toEnd();
+    keepHeld();
+    if (lookAgain !== undefined) refind();
     measureBar();
     measureUnder();
   });
@@ -943,7 +1133,17 @@ onMounted(() => {
   hostChat(id.value, {
     focus: () => composer.value?.focus(),
     selection: () => finder.selection(),
-    search: (query, options, step) => finder.search(query, options, step),
+    search: (query, options, step) => {
+      const found = finder.search(query, options, step);
+      // Older turns of the page still to be drawn: all of them now, and the search once more
+      // where it stands as they get their words, so it counts what it always counted.
+      if (query && !whole.value) {
+        clearTimeout(lookAgain);
+        lookAgain = setTimeout(() => (lookAgain = undefined), 500);
+        void drawAll().then(refind);
+      }
+      return found;
+    },
     clear: () => finder.clear(),
   });
   registerComposer(id.value, composer.value);
@@ -954,16 +1154,27 @@ onBeforeUnmount(() => {
   registerComposer(id.value, null);
 });
 
+/** Set for a moment after a search made the whole page be drawn: the search is made again as the
+ * conversation's height changes (the new turns' Markdown coming in). */
+let lookAgain: ReturnType<typeof setTimeout> | undefined;
+onBeforeUnmount(() => clearTimeout(lookAgain));
+
+/** The open search, found again where it stands. */
+function refind(): void {
+  const find = finds.get(id.value);
+  if (!find?.query || gone) return;
+  const found = finder.search(find.query, findOptions, null);
+  find.index = found.index;
+  find.count = found.count;
+}
+
 // New words while the search is open: found again where it stands.
 watch(
   () => all.value.length,
   async () => {
-    const find = finds.get(id.value);
-    if (!find?.query) return;
+    if (!finds.get(id.value)?.query) return;
     await nextTick();
-    const found = finder.search(find.query, findOptions, null);
-    find.index = found.index;
-    find.count = found.count;
+    refind();
   },
 );
 
@@ -1076,10 +1287,11 @@ const retryText = computed(() => {
             </div>
             <Spinner v-else :size="14" />
           </div>
-          <button v-if="hiddenTurns" type="button" class="earlier" @click="showEarlier">{{ t("chat.earlier", { count: hiddenTurns }) }}</button>
+          <button v-if="hiddenTurns && whole" type="button" class="earlier" @click="showEarlier">{{ t("chat.earlier", { count: hiddenTurns }) }}</button>
           <ChatTurn
             v-for="turn in shownTurns"
             :key="turn.key"
+            :data-turn="turn.key"
             :turn="turn"
             :project="path"
             :commands="commandsByTool"
@@ -1139,7 +1351,10 @@ const retryText = computed(() => {
           <div v-if="phase" :class="['phase', { stuck: phase.stuck }]" role="status">
             <Icon v-if="phase.stuck" name="info" :size="12" />
             <ClaudeDot v-else :live="WORKING" />
-            <span :class="['words', { shimmer: !phase.stuck }]">{{ phase.text }}</span>
+            <span :class="['words', { shimmer: !phase.stuck }]"
+              >{{ phase.text
+              }}<span v-if="!phase.stuck" class="band" aria-hidden="true"><span class="lit">{{ phase.text }}</span></span></span
+            >
             <span class="faint">{{ elapsed }}</span>
             <button v-if="phase.stuck" type="button" class="control small" @click="interrupt">{{ t("chat.status.stop") }}</button>
           </div>
@@ -1506,37 +1721,82 @@ const retryText = computed(() => {
 }
 
 /* The words at work: dimmed, a band of their full colour sweeping over them from left to right,
-   in either theme. Plain under reduced motion. */
+   in either theme. Plain under reduced motion.
+   The band is the same words in their full colour over the dimmed ones, seen through a window
+   that fades at both ends: the window slides across while the words in it slide back as far, so
+   they stand still. Only transforms move, which the compositor runs by itself: nothing is drawn
+   again while it sweeps. (A gradient clipped to the text and moved by `background-position` drew
+   the words anew at every frame: 15 points of a core for one chat at work, measured 17 Nov.)
+   The numbers keep that gradient's look: a band 0.9 of the words wide, from wholly before them
+   to wholly after them in 2 s. */
 .shimmer {
-  background: linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--claude-text) 50%, transparent) 0%,
-      color-mix(in srgb, var(--claude-text) 50%, transparent) 35%,
-      var(--claude-text) 50%,
-      color-mix(in srgb, var(--claude-text) 50%, transparent) 65%,
-      color-mix(in srgb, var(--claude-text) 50%, transparent) 100%
-    )
-    0 0 / 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: shimmer 2s linear infinite;
+  position: relative;
+  color: color-mix(in srgb, var(--claude-text) 50%, transparent);
 }
 
-@keyframes shimmer {
+.band {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 50%, transparent) 0 0 / 90% 100% no-repeat;
+  mask: linear-gradient(90deg, transparent, #000 50%, transparent) 0 0 / 90% 100% no-repeat;
+  animation: shimmer-band 2s linear infinite;
+}
+
+/* The same box as the band's, so the two slides are the same length to the last part of a pixel
+   and the words in the band never creep over those under them. Cut where those are. */
+.lit {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--claude-text);
+  animation: shimmer-lit 2s linear infinite;
+}
+
+/* Added to the dimmed words instead of drawn over them, the band's words need only the other
+   half of the colour: a letter's soft edge then comes out as the one gradient drew it, where
+   words drawn twice would thicken it. */
+@supports (mix-blend-mode: plus-lighter) {
+  .shimmer {
+    isolation: isolate;
+  }
+
+  .band {
+    mix-blend-mode: plus-lighter;
+  }
+
+  .lit {
+    color: color-mix(in srgb, var(--claude-text) 50%, transparent);
+  }
+}
+
+@keyframes shimmer-band {
   from {
-    background-position: 100% 0;
+    transform: translateX(-95%);
   }
   to {
-    background-position: 0% 0;
+    transform: translateX(105%);
+  }
+}
+
+@keyframes shimmer-lit {
+  from {
+    transform: translateX(95%);
+  }
+  to {
+    transform: translateX(-105%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .shimmer {
-    animation: none;
-    background: none;
     color: inherit;
+  }
+
+  .band {
+    display: none;
   }
 }
 
