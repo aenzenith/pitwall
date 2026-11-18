@@ -11,6 +11,11 @@
 //! to the main window as `chat` events batched per 16 ms: never written down, logged, in a
 //! snapshot, a record or a backup. The quit's and the update's records name a chat by its session
 //! id, its name and its account (`kind: chat`), no frame of it.
+//!
+//! A chat nothing has happened in for `REST_AFTER` sleeps (`Rest`): its process is ended and the
+//! tab stays as it was, idle, with everything it held. Whatever needs the process starts it again
+//! on the chat's session (`chat_wake`), and nothing tells of either: no `chat-exit`, no state, and
+//! to the rest of the core its session runs on, idle (`chats_asleep`, `chat_truths`).
 
 use std::io::{Read, Write};
 use std::process::ExitStatus;
@@ -59,6 +64,14 @@ const SHELL_BYTES: usize = 16 * 1024;
 const CARRY_MAX: usize = 10;
 /// The longest `!` line.
 const SHELL_LINE_MAX: usize = 10_000;
+/// How long nothing happens in a chat before its process is let go (`Rest`), and how often that
+/// is looked at.
+const REST_AFTER: Duration = Duration::from_secs(15 * 60);
+const REST_CHECK: Duration = Duration::from_secs(60);
+/// The tools that have the CLI start a turn by itself later (a `/loop`, a schedule) or tie it to
+/// another session that may write to it (`SendMessage`, `ListAgents`): a chat that called one
+/// never sleeps, since only its process knows when, and a message to a process let go is lost.
+const WAKERS: [&str; 4] = ["ScheduleWakeup", "CronCreate", "SendMessage", "ListAgents"];
 /// What the core answers a request of the CLI's it serves nothing for.
 const UNSERVED: &str = "Pitwall serves no such request";
 /// The most of a message the CLI is given to name its session from: Claude Code reads no more
@@ -77,11 +90,49 @@ pub(super) struct ChatTab {
     /// The worktree Pitwall named for it (O12).
     worktree: Option<String>,
     program: PathBuf,
+    /// When it may sleep.
+    nap: Nap,
     shared: Mutex<Shared>,
     /// Told whenever its process ends.
     changed: Condvar,
     /// To the thread that sends its frames to the window.
     out: mpsc::Sender<Out>,
+}
+
+/// How long a chat is left alone before it sleeps, and how often it is looked at.
+#[derive(Debug, Clone, Copy)]
+struct Nap {
+    after: Duration,
+    check: Duration,
+}
+
+/// `REST_AFTER` and `REST_CHECK`; in a test, what it set.
+fn nap() -> Nap {
+    #[cfg(test)]
+    if let Some(nap) = tests::NAP.with(|nap| *nap.borrow()) {
+        return Nap { after: nap.0, check: nap.1 };
+    }
+    Nap { after: REST_AFTER, check: REST_CHECK }
+}
+
+/// Whether a chat's process is let go while nothing needs it. The tab shows none of it: asleep it
+/// stands idle, as it did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Rest {
+    /// Its process is its own business: running, starting or exited.
+    Awake,
+    /// Its process is being ended for a sleep; what is sent meanwhile is held.
+    Falling,
+    /// It has no process, and starts one when something needs it.
+    Asleep,
+    /// Its process is starting again, the messages held until it is ready.
+    Waking,
+}
+
+/// What stands for the process of chat tab `id` while it sleeps, falls asleep or wakes, where a
+/// pid is asked for (`chat_shells`, `chats_asleep`): no process's pid, and never signalled.
+fn resting_pid(id: u64) -> u32 {
+    u32::MAX - (id & 0x3fff_ffff) as u32
 }
 
 /// What goes to the window, in order.
@@ -175,6 +226,21 @@ struct Shared {
     /// The `!` runs going, by run id: their process groups.
     shells: HashMap<String, u32>,
     carry: Vec<ShellCarry>,
+    rest: Rest,
+    /// While it falls asleep: something asked for its process, which starts again at once.
+    roused: bool,
+    /// Its process was started by a wake (`start_chat`), not by the user's word.
+    woken: bool,
+    /// When anything last happened in it: a frame, a request of the core's.
+    active: Instant,
+    /// The tasks the CLI says run in the background (`background_tasks_changed`).
+    background: HashSet<String>,
+    /// Its process holds what no start brings back (a rule allowed for the session, a folder
+    /// added, an MCP server switched, a wakeup it set itself): it never sleeps.
+    pinned: bool,
+    /// The lasting controls the process took, the latest of each kind: a process that wakes is
+    /// asked them again.
+    kept: Vec<ChatControl>,
 }
 
 impl Shared {
@@ -210,22 +276,76 @@ impl Shared {
             dry_runs: HashSet::new(),
             shells: HashMap::new(),
             carry: Vec::new(),
+            rest: Rest::Awake,
+            roused: false,
+            woken: false,
+            active: Instant::now(),
+            background: HashSet::new(),
+            pinned: false,
+            kept: Vec::new(),
         }
     }
 
+    /// It sleeps, or wakes with no process started yet: the tab stands idle with none.
+    fn resting(&self) -> bool {
+        !self.running && matches!(self.rest, Rest::Asleep | Rest::Waking)
+    }
+
+    /// Its session is stood for among the running ones (`chats_asleep`): from the moment it
+    /// starts to fall asleep, through its sleep and its wake, and for as long as the process it
+    /// woke with runs, which Claude Code lists a moment after it started. So no reading in between
+    /// finds the session ended.
+    fn stood_for(&self) -> bool {
+        !self.gone && (self.rest != Rest::Awake || (self.running && self.woken))
+    }
+
+    /// Nothing of it runs, waits or is owed, and nothing happened for `after`: its process may be
+    /// let go.
+    fn may_rest(&self, after: Duration) -> bool {
+        self.rest == Rest::Awake
+            && self.running
+            && self.ready
+            && !self.gone
+            && !self.closing
+            && !self.wire_lost
+            && !self.reset
+            && !self.pinned
+            && self.state == ChatState::Idle
+            && self.pending.is_empty()
+            && self.replies.is_empty()
+            && self.held.is_empty()
+            && self.shells.is_empty()
+            && self.background.is_empty()
+            && self.streams.is_empty()
+            && self.active.elapsed() >= after
+    }
+
     /// Writes the user's `message` to the process, or holds it until the process answered
-    /// `initialize`.
-    fn send(&mut self, message: Waiting) -> Result<(), String> {
+    /// `initialize`; a chat asleep holds it for the process it wakes with. Whether the caller is
+    /// to wake it (`chat_rouse`).
+    fn send(&mut self, message: Waiting) -> Result<bool, String> {
+        match self.rest {
+            Rest::Asleep => {
+                self.held.push(message);
+                self.rest = Rest::Waking;
+                return Ok(true);
+            }
+            Rest::Falling | Rest::Waking => {
+                self.held.push(message);
+                return Ok(false);
+            }
+            Rest::Awake => {}
+        }
         if !self.running {
             return Err(not_running());
         }
         if !self.ready {
             self.held.push(message);
-            return Ok(());
+            return Ok(false);
         }
         self.writer.as_ref().ok_or_else(not_running)?.send(message.line).map_err(|_| not_running())?;
         self.sent = true;
-        Ok(())
+        Ok(false)
     }
 
     /// Stops the tab's `!` runs: their groups get SIGKILL (their threads tell their ends).
@@ -251,6 +371,7 @@ impl ChatTab {
     /// and a window that comes in while it streams still gets every word so far.
     fn push_as(&self, shared: &mut Shared, live: Value, frame: Value) {
         shared.seq += 1;
+        shared.active = Instant::now();
         let kind = frame.get("type").and_then(Value::as_str).unwrap_or_default();
         let tool = kind == "user" && tool_output(&frame);
         let (stream, ended) = if kind == "stream_event" { stream_of(shared, &frame) } else { (None, false) };
@@ -289,6 +410,102 @@ impl ChatTab {
         }
         !closed.is_empty()
     }
+
+    /// What was held for a process that never took it: the tab says so and hands it back
+    /// (`unsent`: the drawn messages' uuids, their text for the composer), the `!` runs it
+    /// carried left for the next message.
+    fn give_back(&self, shared: &mut Shared) {
+        let unsent = std::mem::take(&mut shared.held);
+        if unsent.is_empty() {
+            return;
+        }
+        let uuids: Vec<&str> = unsent.iter().map(|message| message.uuid.as_str()).collect();
+        let text = unsent.iter().map(|message| message.text.as_str()).filter(|text| !text.is_empty()).collect::<Vec<_>>().join("\n\n");
+        self.push(shared, own("error", json!({ "reason": "unsent", "text": t!("chatCore.error.unsent") })));
+        self.push(shared, own("unsent", json!({ "uuids": uuids, "text": text })));
+        let mut carry: Vec<ShellCarry> = unsent.into_iter().flat_map(|message| message.carry).collect();
+        carry.append(&mut shared.carry);
+        let over = carry.len().saturating_sub(CARRY_MAX);
+        carry.drain(..over);
+        shared.carry = carry;
+    }
+
+    /// The process is gone for good, as far as the tab goes: what was held is handed back, the
+    /// tab is `exited` and the window told why (`chat-exit`).
+    fn exited(&self, shared: &mut Shared, code: Option<i32>, reason: ChatExitReason, stderr: Option<String>) {
+        shared.rest = Rest::Awake;
+        shared.roused = false;
+        self.give_back(shared);
+        shared.state = ChatState::Exited;
+        shared.since = now_ms();
+        self.push(shared, own("state", json!({ "state": ChatState::Exited })));
+        let _ = self.out.send(Out::Exit { code, reason, stderr });
+        self.changed.notify_all();
+    }
+}
+
+/// What a frame tells of work the process still holds once its turn is over: the tasks in its
+/// background as it lists them, one that starts or ends there, and a wakeup it sets itself
+/// (`WAKERS`), of which only the tool's name is looked at.
+fn note_work(shared: &mut Shared, kind: &str, subtype: &str, frame: &Value) {
+    let task = || frame.get("task_id").and_then(Value::as_str).map(str::to_string);
+    match (kind, subtype) {
+        ("system", "background_tasks_changed") => {
+            let listed = frame.get("tasks").and_then(Value::as_array).map(|tasks| tasks.iter().filter_map(|task| task.get("task_id").and_then(Value::as_str)).map(str::to_string).collect());
+            shared.background = listed.unwrap_or_default();
+        }
+        ("system", "task_started") if frame.get("is_backgrounded").and_then(Value::as_bool) == Some(true) => {
+            shared.background.extend(task());
+        }
+        ("system", "task_notification") => {
+            if let Some(task) = task() {
+                shared.background.remove(&task);
+            }
+        }
+        ("system", "task_updated") => {
+            if let (Some(task), Some("completed" | "failed" | "killed" | "stopped")) = (task(), frame.pointer("/patch/status").and_then(Value::as_str)) {
+                shared.background.remove(&task);
+            }
+        }
+        ("assistant", _) => {
+            let blocks = frame.pointer("/message/content").and_then(Value::as_array);
+            let wakes = |block: &Value| block.get("type").and_then(Value::as_str) == Some("tool_use") && block.get("name").and_then(Value::as_str).is_some_and(|name| WAKERS.contains(&name));
+            if blocks.is_some_and(|blocks| blocks.iter().any(wakes)) {
+                shared.pinned = true;
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A frame of a sleep or a wake, which the tab is told nothing of. A process that wakes
+/// (`Rest::Waking`, until it is ready) is sent no message yet, so nothing it says is a turn's: only
+/// its replies and requests are taken, and what it says of itself at its start (its `init` in the
+/// mode of its start, a state, a notice) neither reaches the window nor touches what the tab
+/// knows. Of a process that falls asleep the hooks' frames are dropped (`--include-hook-events`:
+/// its `SessionEnd` hooks run as it ends): the session didn't end.
+fn unsaid(shared: &Shared, kind: &str, subtype: &str) -> bool {
+    let wire = matches!(kind, "control_response" | "control_request" | "control_cancel_request" | "keep_alive");
+    match shared.rest {
+        Rest::Awake | Rest::Asleep => false,
+        Rest::Waking => !wire,
+        Rest::Falling => kind == "system" && subtype.starts_with("hook_"),
+    }
+}
+
+/// A control whose word lasts for the process it was said to: one that wakes is asked it again.
+fn lasting(control: &ChatControl) -> bool {
+    matches!(
+        control,
+        ChatControl::SetModel { .. }
+            | ChatControl::SetThinking { .. }
+            | ChatControl::SetEffort { .. }
+            | ChatControl::SetFast { .. }
+            | ChatControl::SetUltracode { .. }
+            | ChatControl::SetAgent { .. }
+            | ChatControl::SetStyle { .. }
+            | ChatControl::SuggestionsPaused { .. }
+    )
 }
 
 /// A request a subagent asks (its `agent_id`): a background one's outlives its turn.
@@ -594,7 +811,11 @@ impl Core {
     /// Whether tab `id` is a chat, and if so whether its process runs (a closed one's too, until
     /// it has ended): its Claude may still write its log (`agent_may_run_in`).
     pub(super) fn chat_alive(&self, id: u64) -> Option<bool> {
-        self.chats().get(&id).map(|tab| tab.lock().running)
+        self.chats().get(&id).map(|tab| {
+            let shared = tab.lock();
+            // Asleep, its Claude starts here again whenever it is needed: the session is the tab's.
+            shared.running || (shared.resting() && !shared.gone)
+        })
     }
 
     /// A tab is open: a terminal's shell or a chat (the board's cards).
@@ -603,16 +824,49 @@ impl Core {
     }
 
     /// Every open chat's running Claude, as `terminal_shells` gives a shell: its pid, the tab and
-    /// its project.
+    /// its project; and what stands for it (`resting_pid`) while its session is stood for.
     pub(super) fn chat_shells(&self) -> Vec<(u32, u64, String)> {
         let tabs: Vec<Arc<ChatTab>> = self.chats().values().cloned().collect();
         tabs.iter()
-            .filter_map(|tab| {
+            .flat_map(|tab| {
                 let shared = tab.lock();
-                let pid = shared.pid.filter(|_| shared.running && !shared.gone)?;
-                Some((pid, tab.id, tab.path.clone()))
+                // What stands for its process (`chats_asleep`) ties its session to the tab, beside
+                // the process itself: a reading from before a sleep or a wake still finds the tab.
+                let stand_in = shared.stood_for().then(|| resting_pid(tab.id));
+                let pid = shared.pid.filter(|_| shared.running && !shared.gone);
+                pid.into_iter().chain(stand_in).map(|pid| (pid, tab.id, tab.path.clone())).collect::<Vec<_>>()
             })
             .collect()
+    }
+
+    /// The sessions of the chats asleep, falling asleep or woken (`stood_for`), laid among the
+    /// running ones as they were read: each stands as its process did, idle in its tab, unless
+    /// Claude Code lists a process that runs it (the chat's own, or one elsewhere), which stands
+    /// as read. So whatever asks whether a session runs (a card, the Sessions page, a click on it,
+    /// an account's count) is told what it was told while the chat's process idled, at every
+    /// moment: also while the process ends (its entry gone before its end is taken in) and while
+    /// the next one starts (its entry not written yet).
+    pub(super) fn chats_asleep(&self, running: &mut HashMap<String, super::sessions::Running>) {
+        let tabs: Vec<Arc<ChatTab>> = self.chats().values().cloned().collect();
+        for tab in tabs {
+            let shared = tab.lock();
+            if !shared.stood_for() {
+                continue;
+            }
+            let stand_in = resting_pid(tab.id);
+            let pid = shared.pid.filter(|_| shared.running).unwrap_or(stand_in);
+            let lineage = if pid == stand_in { vec![pid] } else { vec![pid, stand_in] };
+            running.entry(shared.session.clone()).or_insert_with(|| super::sessions::Running {
+                pid,
+                entrypoint: Some("sdk-cli".into()),
+                cwd: Some(tab.path.clone()),
+                started_at: None,
+                status: Some("idle".into()),
+                status_at: None,
+                lineage,
+                app: None,
+            });
+        }
     }
 
     /// Every process group a chat started that may still run: its Claude (a closed tab's too,
@@ -789,6 +1043,7 @@ impl Core {
             origin: session.clone(),
             worktree: made.worktree,
             program: made.program,
+            nap: nap(),
             shared: Mutex::new(Shared::new(session_id.clone(), sent)),
             changed: Condvar::new(),
             out,
@@ -810,7 +1065,7 @@ impl Core {
         }
         self.chats().insert(view.id, Arc::clone(&tab));
 
-        if let Err(error) = self.start_chat(&tab, session) {
+        if let Err(error) = self.start_chat(&tab, session, false) {
             self.chats().remove(&view.id);
             self.lock().terminal_list.retain(|known| known.id != view.id);
             self.notify();
@@ -818,20 +1073,23 @@ impl Core {
         }
         // Its session is this tab's: nothing opens it again while its Claude may run here.
         self.sessions_cache().reopened.insert(session_id, view.id);
+        watch_rest(&tab);
         self.notify();
         Ok(view)
     }
 
     /// Starts the tab's process on `session`: its writer, reader, stderr drain and waiter, and the
-    /// `initialize` request.
-    fn start_chat(self: &Arc<Self>, tab: &Arc<ChatTab>, session: ChatSession) -> Result<(), String> {
+    /// `initialize` request. `wake`: for a chat asleep, whose tab is told nothing of the start (it
+    /// stays idle) and whose last turn, over long ago, is never gone on with; a tab closed or
+    /// taken out of its sleep meanwhile starts none.
+    fn start_chat(self: &Arc<Self>, tab: &Arc<ChatTab>, session: ChatSession, wake: bool) -> Result<(), String> {
         let (suggestions, hook_events, continued) = {
             let inner = self.lock();
             let chat = &inner.settings.chat;
             (chat.suggestions, chat.hook_rows, chat.continue_interrupted)
         };
         let args = chat_args(tab.start, &session, suggestions, hook_events, tab.worktree.as_deref()).ok_or_else(refused)?;
-        let spawn = cli::Spawn { program: tab.program.clone(), args, cwd: PathBuf::from(&tab.path), account: tab.account.as_ref().map(|(_, dir)| dir.clone()), continue_interrupted: continued };
+        let spawn = cli::Spawn { program: tab.program.clone(), args, cwd: PathBuf::from(&tab.path), account: tab.account.as_ref().map(|(_, dir)| dir.clone()), continue_interrupted: continued && !wake };
         let mut child = cli::spawn(&spawn).map_err(|error| t!("chatCore.error.start", error = error))?;
         let pid = child.id();
         let (Some(mut stdin), Some(stdout), Some(stderr)) = (child.stdin.take(), child.stdout.take(), child.stderr.take()) else {
@@ -843,22 +1101,38 @@ impl Core {
         let (writer, lines) = mpsc::channel::<String>();
         let generation = {
             let mut shared = tab.lock();
+            if wake && (shared.gone || shared.rest != Rest::Waking || shared.running) {
+                drop(shared);
+                cli::stop(pid, true);
+                let _ = child.wait();
+                return Ok(());
+            }
             shared.generation += 1;
             shared.pid = Some(pid);
             shared.writer = Some(writer);
             shared.running = true;
+            shared.woken = wake;
             shared.ready = false;
             shared.closing = false;
             shared.wire_lost = false;
             shared.reset = false;
             shared.streams.clear();
+            shared.background.clear();
+            shared.active = Instant::now();
             // A new process: a dry run of the last one is no check for this one, and a title the
             // last was asked for is not waited for.
             shared.dry_runs.clear();
             shared.naming = false;
-            shared.state = ChatState::Starting;
-            shared.since = now_ms();
-            tab.push(&mut shared, own("state", json!({ "state": ChatState::Starting })));
+            if !wake {
+                // Started by the user's word: it runs as its start says, and holds nothing yet.
+                shared.rest = Rest::Awake;
+                shared.roused = false;
+                shared.pinned = false;
+                shared.kept.clear();
+                shared.state = ChatState::Starting;
+                shared.since = now_ms();
+                tab.push(&mut shared, own("state", json!({ "state": ChatState::Starting })));
+            }
             shared.generation
         };
 
@@ -914,16 +1188,24 @@ impl Core {
     /// Sends `initialize` and waits for its reply: then the tab knows the process (`info`), and
     /// the messages held go to it. One that doesn't answer is ended.
     fn chat_initialize(&self, tab: &Arc<ChatTab>, generation: u64, suggestions: bool) {
-        match self.chat_request(tab, generation, control::initialize(suggestions)) {
-            Ok(reply) => {
-                // Of the account only its kind and provider are read (`of_initialize`).
-                let info = ChatInfo::of_initialize(&reply);
+        // Of the account only its kind and provider are read (`of_initialize`).
+        let known = self.chat_request(tab, generation, control::initialize(suggestions)).and_then(|reply| {
+            let mut info = ChatInfo::of_initialize(&reply);
+            self.chat_woken(tab, generation, &mut info)?;
+            Ok(info)
+        });
+        match known {
+            Ok(info) => {
                 {
                     let mut shared = tab.lock();
                     if shared.generation != generation || !shared.running {
                         return;
                     }
                     shared.ready = true;
+                    if shared.rest == Rest::Waking {
+                        shared.rest = Rest::Awake;
+                    }
+                    tab.changed.notify_all();
                     shared.info = Some(info.clone());
                     tab.push(&mut shared, own("info", json!({ "info": info })));
                     if shared.state == ChatState::Starting {
@@ -960,6 +1242,54 @@ impl Core {
         }
     }
 
+    /// A process that wakes is brought to where the one before it stood, before any message goes
+    /// to it: the mode the chat was in and the lasting controls it had taken are asked of it again
+    /// (each checked against what this process lists, one it refuses left out), and `info` keeps
+    /// what only a turn tells of (the model, the tools, the servers), so the window's chips and
+    /// lists stay as they were. Nothing for any other start.
+    ///
+    /// The mode is the one thing a message must not go without (held for a chat in plan mode, it
+    /// would run in the mode of the start, which may be auto): a process that doesn't take it
+    /// fails its wake with the CLI's error, as one that never answered `initialize` does. A mode
+    /// no control of Pitwall's sets is one the start gave, and this process stands in it too.
+    fn chat_woken(&self, tab: &ChatTab, generation: u64, info: &mut ChatInfo) -> Result<(), String> {
+        let (was, kept) = {
+            let shared = tab.lock();
+            if shared.generation != generation || shared.rest != Rest::Waking {
+                return Ok(());
+            }
+            (shared.info.clone().unwrap_or_default(), shared.kept.clone())
+        };
+        let (models, agents, styles) = (info.model_values(), info.agents.iter().map(|agent| agent.name.clone()).collect::<Vec<_>>(), info.output_styles.clone());
+        let known = Known { models: &models, agents: &agents, styles: &styles };
+        let ask = |control: &ChatControl| control::request_body(control, &known, &HashSet::new()).and_then(|body| self.chat_request(tab, generation, body)).is_ok();
+        if let Some(mode) = was.permission_mode.clone().filter(|mode| info.permission_mode.as_ref() != Some(mode)) {
+            if let Ok(body) = control::request_body(&ChatControl::SetMode { mode: mode.clone() }, &known, &HashSet::new()) {
+                match self.chat_request(tab, generation, body) {
+                    Ok(_) => info.permission_mode = Some(mode),
+                    // The mode its start gave it is the one it stands in, asked or not.
+                    Err(_) if mode == tab.start.mode.word() => {}
+                    Err(error) => return Err(error),
+                }
+            }
+        }
+        for control in &kept {
+            ask(control);
+        }
+        info.version = info.version.take().or(was.version);
+        info.model = info.model.take().or(was.model);
+        info.output_style = info.output_style.take().or(was.output_style);
+        info.fast_mode_state = info.fast_mode_state.take().or(was.fast_mode_state);
+        info.skills = info.skills.take().or(was.skills);
+        info.tools = info.tools.take().or(was.tools);
+        info.mcp_servers = info.mcp_servers.take().or(was.mcp_servers);
+        info.plugins = info.plugins.take().or(was.plugins);
+        info.terminal_commands = info.terminal_commands.take().or(was.terminal_commands);
+        info.cwd = info.cwd.take().or(was.cwd);
+        info.session_id = info.session_id.take().or(was.session_id);
+        Ok(())
+    }
+
     /// A request of the core's to the process (`body`), its reply waited for `REPLY_WAIT`: the
     /// CLI's `response`, or its error. A reply that comes later is dropped.
     fn chat_request(&self, tab: &ChatTab, generation: u64, body: Value) -> Result<Value, String> {
@@ -973,6 +1303,7 @@ impl Core {
             let line = control::request_line(&id, body).to_string();
             shared.writer.as_ref().ok_or_else(not_running)?.send(line).map_err(|_| not_running())?;
             shared.replies.insert(id.clone(), reply);
+            shared.active = Instant::now();
         }
         match replied.recv_timeout(REPLY_WAIT) {
             Ok(result) => result,
@@ -1013,6 +1344,10 @@ impl Core {
             let subtype = frame.get("subtype").and_then(Value::as_str).unwrap_or_default().to_string();
             if matches!(kind.as_str(), "user" | "assistant") {
                 stamp(&mut frame);
+            }
+            note_work(&mut shared, &kind, &subtype, &frame);
+            if unsaid(&shared, &kind, &subtype) {
+                return true;
             }
             match (kind.as_str(), subtype.as_str()) {
                 ("control_response", _) => {
@@ -1169,57 +1504,66 @@ impl Core {
 
     /// The process ended (reaped): why, as the window is told (`chat-exit`), every card closed,
     /// the tab `exited` until it is closed or started again; a closed tab goes now.
-    fn chat_ended(&self, tab: &Arc<ChatTab>, generation: u64, status: Option<ExitStatus>, end: End, tail: &Mutex<VecDeque<u8>>) {
+    ///
+    /// The process of a chat that falls asleep (`Rest::Falling`) ends unsaid: the tab stays idle
+    /// with what it holds, tells the window nothing, and wakes at once when something was sent or
+    /// asked meanwhile.
+    fn chat_ended(self: &Arc<Self>, tab: &Arc<ChatTab>, generation: u64, status: Option<ExitStatus>, end: End, tail: &Mutex<VecDeque<u8>>) {
         let code = status.and_then(|status| status.code());
         let stderr = {
             let mut tail = tail.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             String::from_utf8_lossy(tail.make_contiguous()).into_owned()
         };
-        let (pid, gone) = {
+        let (pid, gone, wake) = {
             let mut shared = tab.lock();
             if shared.generation != generation {
                 return;
             }
-            let reason = if end != End::Eof || shared.wire_lost {
-                ChatExitReason::Error
-            } else if shared.closing {
-                ChatExitReason::Closed
-            } else if stderr.contains("No conversation found") {
-                ChatExitReason::NotFound
-            } else if !shared.ready {
-                ChatExitReason::StartFailed
-            } else if code == Some(0) {
-                ChatExitReason::Closed
+            if shared.rest == Rest::Falling {
+                shared.running = false;
+                shared.ready = false;
+                shared.writer = None;
+                shared.closing = false;
+                shared.replies.clear();
+                shared.background.clear();
+                shared.streams.clear();
+                tab.close_pending(&mut shared, true);
+                // Whatever it said last: asleep, the tab stands idle.
+                if shared.state != ChatState::Idle {
+                    shared.state = ChatState::Idle;
+                    shared.since = now_ms();
+                    tab.push(&mut shared, own("state", json!({ "state": ChatState::Idle })));
+                }
+                let wake = !shared.gone && (shared.roused || !shared.held.is_empty());
+                shared.roused = false;
+                shared.rest = if wake { Rest::Waking } else { Rest::Asleep };
+                tab.changed.notify_all();
+                (shared.pid.take(), shared.gone, wake)
             } else {
-                ChatExitReason::Error
-            };
-            shared.running = false;
-            shared.ready = false;
-            shared.writer = None;
-            shared.replies.clear();
-            tab.close_pending(&mut shared, true);
-            // What was held for it never went: the tab says so and hands it back (`unsent`: the
-            // drawn messages' uuids, their text for the composer), the `!` runs it carried left
-            // for the next message.
-            let unsent = std::mem::take(&mut shared.held);
-            if !unsent.is_empty() {
-                let uuids: Vec<&str> = unsent.iter().map(|message| message.uuid.as_str()).collect();
-                let text = unsent.iter().map(|message| message.text.as_str()).filter(|text| !text.is_empty()).collect::<Vec<_>>().join("\n\n");
-                tab.push(&mut shared, own("error", json!({ "reason": "unsent", "text": t!("chatCore.error.unsent") })));
-                tab.push(&mut shared, own("unsent", json!({ "uuids": uuids, "text": text })));
-                let mut carry: Vec<ShellCarry> = unsent.into_iter().flat_map(|message| message.carry).collect();
-                carry.append(&mut shared.carry);
-                let over = carry.len().saturating_sub(CARRY_MAX);
-                carry.drain(..over);
-                shared.carry = carry;
+                let reason = if end != End::Eof || shared.wire_lost {
+                    ChatExitReason::Error
+                } else if shared.closing {
+                    ChatExitReason::Closed
+                } else if stderr.contains("No conversation found") {
+                    ChatExitReason::NotFound
+                } else if !shared.ready {
+                    ChatExitReason::StartFailed
+                } else if code == Some(0) {
+                    ChatExitReason::Closed
+                } else {
+                    ChatExitReason::Error
+                };
+                shared.running = false;
+                shared.ready = false;
+                shared.writer = None;
+                shared.replies.clear();
+                shared.background.clear();
+                tab.close_pending(&mut shared, true);
+                // What was held for it never went: handed back (`give_back`).
+                let told = (reason != ChatExitReason::Closed).then(|| last_bytes(&stderr, STDERR_TOLD).to_string()).filter(|text| !text.trim().is_empty());
+                tab.exited(&mut shared, code, reason, told);
+                (shared.pid.take(), shared.gone, false)
             }
-            shared.state = ChatState::Exited;
-            shared.since = now_ms();
-            tab.push(&mut shared, own("state", json!({ "state": ChatState::Exited })));
-            let told = (reason != ChatExitReason::Closed).then(|| last_bytes(&stderr, STDERR_TOLD).to_string()).filter(|text| !text.trim().is_empty());
-            let _ = tab.out.send(Out::Exit { code, reason, stderr: told });
-            tab.changed.notify_all();
-            (shared.pid.take(), shared.gone)
         };
         // What it started and left in its group (a server, a background command, an MCP server)
         // goes with it, whether it ended by itself or was closed.
@@ -1238,6 +1582,109 @@ impl Core {
             self.refresh_claude();
         } else {
             self.chat_changed(tab, true);
+        }
+        if wake {
+            self.chat_rouse(tab);
+        }
+    }
+
+    /// Starts the process of a chat asleep again, off the caller's thread (`Rest::Waking` is set
+    /// by whoever asks, so it is asked once).
+    fn chat_rouse(self: &Arc<Self>, tab: &Arc<ChatTab>) {
+        let (core, tab) = (Arc::clone(self), Arc::clone(tab));
+        thread::spawn(move || core.chat_wake(&tab));
+    }
+
+    /// The process of a chat asleep starts again on the session it holds (`session_now`, as a
+    /// restart's does), with the account and the start it had; the tab is told nothing of it. It
+    /// needs no `open_once`: asleep, the tab held its session all along (`chat_alive`). Only a
+    /// wake that can't be (its project no longer listed, Claude turned off, the session running
+    /// elsewhere since, a start that failed) leaves the tab `exited` with its reason, what was
+    /// held for it handed back.
+    fn chat_wake(self: &Arc<Self>, tab: &Arc<ChatTab>) {
+        let (session, mine) = {
+            let shared = tab.lock();
+            (shared.session.clone(), shared.pid.filter(|_| shared.running))
+        };
+        // What stands for it, or its own process: neither is another's.
+        let own = |lineage: &[u32]| lineage.contains(&resting_pid(tab.id)) || mine.is_some_and(|pid| lineage.contains(&pid));
+        let failed = if !self.is_listed(&tab.path) {
+            // As for every other start (`chat_made`): a chat runs in a listed project's folder only.
+            Some((ChatExitReason::StartFailed, Some(t!("core.error.depsNotListed", path = tab.path.as_str()))))
+        } else if !self.agent_on(Agent::Claude) {
+            Some((ChatExitReason::StartFailed, Some(t!("terminal.claudeOff"))))
+        } else if matches!(self.liveness(&session), Liveness::Running { lineage, .. } if !own(&lineage)) {
+            Some((ChatExitReason::Elsewhere, None))
+        } else {
+            self.start_chat(tab, self.session_now(tab, &session), true).err().map(|error| (ChatExitReason::StartFailed, Some(error)))
+        };
+        let Some((reason, why)) = failed else {
+            return;
+        };
+        {
+            let mut shared = tab.lock();
+            if shared.gone || shared.rest != Rest::Waking || shared.running {
+                return;
+            }
+            tab.exited(&mut shared, None, reason, why);
+        }
+        // The running sessions are read again: this one no longer stands among them.
+        self.tab_gone(None);
+        self.chat_changed(tab, true);
+    }
+
+    /// Before something needs the chat's process: one asleep is woken, and its process waited
+    /// for until it is ready (or gone). An agent that is off is started for nothing: the chat
+    /// stays asleep.
+    fn chat_awake(self: &Arc<Self>, tab: &Arc<ChatTab>) -> Result<(), String> {
+        if tab.lock().rest == Rest::Awake {
+            return Ok(());
+        }
+        let on = self.agent_on(Agent::Claude);
+        let rouse = {
+            let mut shared = tab.lock();
+            match shared.rest {
+                Rest::Asleep if !on => return Err(t!("terminal.claudeOff")),
+                Rest::Asleep => {
+                    shared.rest = Rest::Waking;
+                    true
+                }
+                Rest::Falling => {
+                    shared.roused = true;
+                    false
+                }
+                Rest::Waking | Rest::Awake => false,
+            }
+        };
+        if rouse {
+            self.chat_rouse(tab);
+        }
+        let deadline = Instant::now() + REPLY_WAIT;
+        let mut shared = tab.lock();
+        loop {
+            if shared.rest == Rest::Awake {
+                return if shared.running && shared.ready { Ok(()) } else { Err(not_running()) };
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(t!("chatCore.error.noAnswer"));
+            }
+            shared = tab.changed.wait_timeout(shared, left).map(|(shared, _)| shared).unwrap_or_else(|poisoned| poisoned.into_inner().0);
+        }
+    }
+
+    /// A chat asleep, or falling asleep, is taken out of it before its tab ends its chat
+    /// (`chat_to_terminal`): one with no process stands as one whose process was closed, one
+    /// whose process is still ending ends as closed.
+    fn chat_unrest(&self, tab: &ChatTab) {
+        let mut shared = tab.lock();
+        match shared.rest {
+            Rest::Falling => {
+                shared.rest = Rest::Awake;
+                shared.roused = false;
+            }
+            Rest::Asleep | Rest::Waking if !shared.running => tab.exited(&mut shared, None, ChatExitReason::Closed, None),
+            _ => {}
         }
     }
 
@@ -1328,23 +1775,35 @@ impl Core {
 
     /// Sends the user's message: the uuid the core mints for it (the window's to rewind to), with
     /// the `!` runs since the last message before its text.
-    pub fn chat_send(&self, id: u64, message: ChatOutgoing) -> Result<String, String> {
+    ///
+    /// A chat asleep holds it and wakes: it goes to the process once that is ready, in the order
+    /// sent, and comes back (`unsent`) should the process not start. While Claude is off nothing
+    /// is started, and a chat asleep takes no message.
+    pub fn chat_send(self: &Arc<Self>, id: u64, message: ChatOutgoing) -> Result<String, String> {
         let tab = self.chat(id).ok_or_else(gone)?;
+        let asleep = tab.lock().rest == Rest::Asleep;
+        if asleep && !self.agent_on(Agent::Claude) {
+            return Err(t!("terminal.claudeOff"));
+        }
         let mut shared = tab.lock();
-        if !shared.running {
+        if !shared.running && shared.rest == Rest::Awake {
             return Err(not_running());
         }
         message.checked(!shared.carry.is_empty())?;
         let uuid = new_uuid();
         let line = wire::user_message(&message, &uuid, &shared.carry).to_string();
         let carry = shared.carry.clone();
-        shared.send(Waiting { uuid: uuid.clone(), line, text: message.text.clone(), carry })?;
+        let wake = shared.send(Waiting { uuid: uuid.clone(), line, text: message.text.clone(), carry })?;
         shared.title_from = title_source(&message.text);
         shared.carry.clear();
         // The turn it starts may change the files a dry run listed: it is asked again.
         shared.dry_runs.clear();
         let (live, held) = echoed(&uuid, &message);
         tab.push_as(&mut shared, live, held);
+        drop(shared);
+        if wake {
+            self.chat_rouse(&tab);
+        }
         Ok(uuid)
     }
 
@@ -1358,6 +1817,10 @@ impl Core {
             let body = control::answer_body(&shared.pending[at].request, answer)?;
             let writer = shared.writer.as_ref().ok_or_else(not_running)?;
             writer.send(control::answer_line(request, body).to_string()).map_err(|_| not_running())?;
+            // A rule allowed for the session lives in its process alone.
+            if matches!(answer, ChatAnswer::Allow { always: Some(always), .. } if always.destination == "session") {
+                shared.pinned = true;
+            }
             shared.pending.remove(at);
             tab.push(&mut shared, own("answered", json!({ "requestId": request })));
         }
@@ -1370,6 +1833,10 @@ impl Core {
         let tab = self.chat(id).ok_or_else(gone)?;
         let generation = {
             let mut shared = tab.lock();
+            // Asleep, or falling asleep: no turn is under way.
+            if shared.resting() || shared.rest == Rest::Falling {
+                return Ok(ChatInterruptReceipt::default());
+            }
             if !shared.running {
                 return Err(not_running());
             }
@@ -1387,8 +1854,28 @@ impl Core {
 
     /// One of the window's controls (`ChatControl`), checked against what the process said of
     /// itself, and the CLI's reply with what names the account taken out (`scrub_answer`).
-    pub fn chat_control(&self, id: u64, control: &ChatControl) -> Result<Value, String> {
+    /// A chat asleep is woken for it first (`chat_awake`).
+    pub fn chat_control(self: &Arc<Self>, id: u64, control: &ChatControl) -> Result<Value, String> {
         let tab = self.chat(id).ok_or_else(gone)?;
+        self.chat_needing(&tab, || self.chat_control_now(&tab, control))
+    }
+
+    /// Does what needs the chat's process (`ask`), one asleep woken for it first (`chat_awake`).
+    /// A chat that started to fall asleep just as it was asked has no process for it: it is
+    /// woken and asked again, once.
+    fn chat_needing<T>(self: &Arc<Self>, tab: &Arc<ChatTab>, ask: impl Fn() -> Result<T, String>) -> Result<T, String> {
+        self.chat_awake(tab)?;
+        match ask() {
+            Err(error) if error == not_running() && tab.lock().rest != Rest::Awake => {
+                self.chat_awake(tab)?;
+                ask()
+            }
+            result => result,
+        }
+    }
+
+    /// `chat_control`, of the process the chat has now.
+    fn chat_control_now(&self, tab: &ChatTab, control: &ChatControl) -> Result<Value, String> {
         let (generation, models, agents, styles, dry_runs) = {
             let shared = tab.lock();
             if !shared.running || !shared.ready {
@@ -1398,13 +1885,33 @@ impl Core {
             (shared.generation, info.model_values(), info.agents.iter().map(|agent| agent.name.clone()).collect::<Vec<_>>(), info.output_styles.clone(), shared.dry_runs.clone())
         };
         let body = control::request_body(control, &Known { models: &models, agents: &agents, styles: &styles }, &dry_runs)?;
-        let mut reply = self.chat_request(&tab, generation, body)?;
+        let mut reply = self.chat_request(tab, generation, body)?;
         if let ChatControl::RewindFiles { message, dry_run } = control {
             let mut shared = tab.lock();
             if !dry_run {
                 shared.dry_runs.remove(message);
             } else if reply.get("canRewind").and_then(Value::as_bool) == Some(true) {
                 shared.dry_runs.insert(message.clone());
+            }
+        }
+        // What the process took and a later one must be told again (`chat_woken`), or can't be.
+        {
+            let mut shared = tab.lock();
+            if shared.generation == generation {
+                match control {
+                    ChatControl::SetMode { mode } => {
+                        let word = ChatMode::parse(mode).map(|mode| mode.word().to_string());
+                        if let (Some(info), Some(word)) = (shared.info.as_mut(), word) {
+                            info.permission_mode = Some(word);
+                        }
+                    }
+                    ChatControl::McpToggle { .. } => shared.pinned = true,
+                    control if lasting(control) => {
+                        shared.kept.retain(|kept| std::mem::discriminant(kept) != std::mem::discriminant(control));
+                        shared.kept.push(control.clone());
+                    }
+                    _ => {}
+                }
             }
         }
         wire::scrub_answer(&mut reply);
@@ -1429,19 +1936,27 @@ impl Core {
     }
 
     /// A folder the user picked for Claude to work in too (`/add-dir`): `register_repo_root`.
-    pub fn chat_add_dir(&self, id: u64, folder: &Path) -> Result<(), String> {
+    pub fn chat_add_dir(self: &Arc<Self>, id: u64, folder: &Path) -> Result<(), String> {
         let tab = self.chat(id).ok_or_else(gone)?;
         if !folder.is_dir() {
             return Err(refused());
         }
-        let generation = {
-            let shared = tab.lock();
-            if !shared.ready {
-                return Err(not_running());
+        self.chat_needing(&tab, || {
+            let generation = {
+                let shared = tab.lock();
+                if !shared.ready {
+                    return Err(not_running());
+                }
+                shared.generation
+            };
+            self.chat_request(&tab, generation, json!({ "subtype": "register_repo_root", "directory": folder.to_string_lossy() }))?;
+            // Its process alone knows the folder.
+            let mut shared = tab.lock();
+            if shared.generation == generation {
+                shared.pinned = true;
             }
-            shared.generation
-        };
-        self.chat_request(&tab, generation, json!({ "subtype": "register_repo_root", "directory": folder.to_string_lossy() })).map(|_| ())
+            Ok(())
+        })
     }
 
     /// The chat that exited starts again on its session (`session_now`). Never while it runs
@@ -1451,7 +1966,8 @@ impl Core {
         let tab = self.chat(id).ok_or_else(gone)?;
         let (running, session) = {
             let shared = tab.lock();
-            (shared.running, shared.session.clone())
+            // Asleep, it starts by itself when it is needed.
+            (shared.running || shared.rest != Rest::Awake, shared.session.clone())
         };
         if running {
             return Ok(());
@@ -1467,7 +1983,7 @@ impl Core {
             return elsewhere();
         }
         let start = || {
-            self.start_chat(&tab, self.session_now(&tab, &session))?;
+            self.start_chat(&tab, self.session_now(&tab, &session), false)?;
             self.chat_view(id).ok_or_else(gone)
         };
         match self.open_once(&session, start) {
@@ -1506,6 +2022,7 @@ impl Core {
         if !sent && matches!(self.session_now(&tab, &session), ChatSession::Fork { .. }) {
             return Err(t!("chatCore.error.noLog"));
         }
+        self.chat_unrest(&tab);
         end_process(&tab, true);
         let (session, running) = {
             let shared = tab.lock();
@@ -1563,19 +2080,25 @@ impl Core {
     }
 
     /// Closes chat tab `id`: the tab goes now, its `!` runs are stopped and its process runs the
-    /// close ladder (`end_process`) off the caller's thread. False when `id` is no chat.
+    /// close ladder (`end_process`) off the caller's thread; one asleep has none, and its session
+    /// runs no more from here on. False when `id` is no chat.
     pub(super) fn close_chat(&self, id: u64) -> bool {
         let Some(tab) = self.chat(id) else {
             return false;
         };
-        let running = {
+        let (running, stood) = {
             let mut shared = tab.lock();
+            let stood = shared.stood_for();
             shared.gone = true;
             shared.stop_shells();
-            shared.running
+            (shared.running, stood)
         };
         if !running {
             self.chats().remove(&id);
+            // Asleep, its session stood among the running ones: they are read again.
+            if stood {
+                self.tab_gone(None);
+            }
         } else {
             let tab = Arc::clone(&tab);
             thread::spawn(move || end_process(&tab, true));
@@ -1591,6 +2114,10 @@ impl Core {
             self.notify();
         }
         self.board_terminal_gone(id);
+        // And the watch is told now, as a running chat's process tells it at its end (`chat_ended`).
+        if stood && !running {
+            self.refresh_claude();
+        }
         true
     }
 
@@ -1835,7 +2362,8 @@ impl Core {
         tabs.iter()
             .filter_map(|tab| {
                 let shared = tab.lock();
-                if !shared.running || shared.gone {
+                // Asleep, it stands where it stood: idle, or with a finished turn not looked at.
+                if (!shared.running && !shared.resting()) || shared.gone {
                     return None;
                 }
                 let phase = match shared.pending.first() {
@@ -1917,6 +2445,31 @@ impl Core {
     pub fn chat_exists(&self, id: u64) -> bool {
         self.chat(id).is_some()
     }
+}
+
+/// Looks at the chat every `Nap::check` for as long as its tab is open, and lets its process go
+/// (the close ladder, `Rest::Falling`) once nothing of it runs, waits or is owed and nothing has
+/// happened in it for `Nap::after` (`may_rest`); whether the tab is on screen makes no
+/// difference. Its end is `chat_ended`'s to take in.
+fn watch_rest(tab: &Arc<ChatTab>) {
+    let (tab, nap) = (Arc::downgrade(tab), tab.nap);
+    thread::spawn(move || loop {
+        thread::sleep(nap.check);
+        let Some(tab) = tab.upgrade() else {
+            return;
+        };
+        {
+            let mut shared = tab.lock();
+            if shared.gone {
+                return;
+            }
+            if !shared.may_rest(nap.after) {
+                continue;
+            }
+            shared.rest = Rest::Falling;
+        }
+        end_process(&tab, true);
+    });
 }
 
 /// Reads a `!` run's output to its end as `shell` frames, escapes taken out; what it printed last
@@ -2086,5 +2639,6 @@ mod tests;
 mod tests {
     thread_local! {
         pub(super) static PROGRAM: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
+        pub(super) static NAP: std::cell::RefCell<Option<(std::time::Duration, std::time::Duration)>> = const { std::cell::RefCell::new(None) };
     }
 }

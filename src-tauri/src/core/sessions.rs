@@ -447,7 +447,9 @@ impl Core {
         }
         let dir = self.sessions_dir().filter(|dir| dir.is_dir())?;
         let table = process::process_table()?;
-        let running = read_running(&dir, &table);
+        let mut running = read_running(&dir, &table);
+        // A chat asleep holds its session as its idle process did (`chats_asleep`).
+        self.chats_asleep(&mut running);
 
         let mut cache = self.sessions_cache();
         cache.running = Some(running.clone());

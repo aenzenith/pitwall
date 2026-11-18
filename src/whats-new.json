@@ -13,13 +13,13 @@
         "zh-Hans": "后台更轻快"
       },
       "body": {
-        "en": "Pitwall does less work while it keeps an eye on your sessions, and its window rests while it's minimized, so more of your computer is left to you.",
-        "tr": "Pitwall oturumlarını izlerken artık daha az iş yapıyor, penceresi küçültülünce de dinlenmeye geçiyor. Böylece bilgisayarının gücü daha çok sana kalıyor.",
-        "de": "Pitwall arbeitet jetzt sparsamer, während es deine Sitzungen im Blick behält, und sein Fenster ruht, solange es minimiert ist. So bleibt mehr von deinem Rechner für dich.",
-        "es": "Pitwall ahora trabaja menos mientras vigila tus sesiones, y su ventana descansa mientras está minimizada, así que te deja más ordenador para ti.",
-        "ru": "Pitwall теперь делает меньше работы, пока следит за вашими сессиями, а его окно отдыхает, пока оно свёрнуто. Компьютеру остаётся больше сил для вас.",
-        "ja": "Pitwall はセッションを見守る間の処理が減り、ウィンドウを最小化しているあいだは描画を休むようになりました。そのぶんパソコンの力をあなたの作業に回せます。",
-        "zh-Hans": "Pitwall 现在盯着你的会话时做的事更少，窗口最小化时也会停下来歇着，把电脑更多的余力留给你。"
+        "en": "Pitwall does less work while it watches your sessions, with many tabs open or its window minimized. A chat left idle rests and picks up where it left off at your next message.",
+        "tr": "Pitwall oturumlarını izlerken artık daha az iş yapıyor; çok sekme açıkken de, penceresi küçültülmüşken de bilgisayarını yormuyor. Boşta kalan sohbet dinlenmeye geçiyor, yeni mesajınla kaldığı yerden sürüyor.",
+        "de": "Pitwall arbeitet sparsamer, während es deine Sitzungen im Blick behält, auch mit vielen offenen Tabs oder minimiertem Fenster. Ein Chat, der länger nichts zu tun hat, ruht und macht mit deiner nächsten Nachricht dort weiter, wo er war.",
+        "es": "Pitwall trabaja menos mientras vigila tus sesiones, tengas muchas pestañas abiertas o la ventana minimizada. Un chat que lleva un rato parado descansa y sigue donde lo dejaste con tu siguiente mensaje.",
+        "ru": "Pitwall делает меньше работы, пока следит за вашими сессиями, даже когда открыто много вкладок или окно свёрнуто. Чат, который давно простаивает, засыпает и с вашим следующим сообщением продолжает с того же места.",
+        "ja": "Pitwall はセッションを見守る間の処理が減り、タブをたくさん開いていても、ウィンドウを最小化していても軽くなりました。しばらく使っていないチャットは休み、次のメッセージで続きから再開します。",
+        "zh-Hans": "Pitwall 盯着你的会话时做的事更少了，标签页开得再多、窗口最小化时都一样轻。闲置一阵的对话会先歇着，你再发消息时接着原来的地方继续。"
       }
     },
     {

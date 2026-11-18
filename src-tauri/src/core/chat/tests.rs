@@ -7,6 +7,8 @@ use crate::chat::control::Always;
 thread_local! {
     /// The `claude` a test's chats run: a stand-in script.
     pub(super) static PROGRAM: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    /// How long a test's chats are left alone before they sleep, and how often they are looked at.
+    pub(super) static NAP: RefCell<Option<(Duration, Duration)>> = const { RefCell::new(None) };
 }
 
 const EMAIL: &str = "secret@example.com";
@@ -225,8 +227,15 @@ fn a_chat_is_recorded_by_its_session_alone_and_never_opened_twice() {
 /// `/clear` resets the conversation, and the process goes on under `CLEARED`); answers a rewind
 /// as possible; starts a turn by itself on `get_context_usage` (as a background task's
 /// notification would); ends on `get_usage`. With `die` in its folder it ends at once, with
-/// `child` it leaves a `sleep` in its group. It writes into `log` each start with its arguments
-/// and each rewind it is asked.
+/// `child` it leaves a `sleep` in its group, with `nomode` it refuses a mode. It writes into `log`
+/// each start with its arguments, each rewind, each mode and each flag setting it is asked, and
+/// each message it is sent.
+///
+/// With `sessions` in its folder (the path of Claude Code's sessions folder) it lists itself there
+/// as Claude Code does, and takes itself out before it ends, a moment before; started on a
+/// session it goes on with (`--resume`) it lists itself only a moment after its start, and first
+/// says what a process says of itself as it starts (a hook of the session's start, its `init` in
+/// the mode of its start, a state, a notice); a hook of the session's end as it ends.
 const QUIET: &str = r#"#!/bin/sh
 LOG='@LOG@'
 DIR='@DIR@'
@@ -246,15 +255,41 @@ answer() {
 state() {
   printf '%s\n' '{"type":"system","subtype":"session_state_changed","state":"'"$1"'","session_id":"'"$sid"'"}'
 }
+FILE=
+if [ -e "$DIR/sessions" ]; then
+  FILE="$(cat "$DIR/sessions")/$$.json"
+  entry() {
+    printf '%s\n' '{"pid":'"$$"',"sessionId":"'"$sid"'","cwd":"/","entrypoint":"sdk-cli","status":"idle"}' > "$FILE"
+  }
+  if [ -n "$res" ]; then
+    ( sleep 0.7; entry ) </dev/null >/dev/null 2>&1 &
+    printf '%s\n' '{"type":"system","subtype":"hook_started","hook_event":"SessionStart","hook_name":"SessionStart:resume"}'
+    printf '%s\n' '{"type":"system","subtype":"init","permissionMode":"auto","session_id":"'"$sid"'"}'
+    state running
+    state idle
+    printf '%s\n' '{"type":"system","subtype":"informational","content":"resumed"}'
+  else
+    entry
+  fi
+fi
 while IFS= read -r line; do
   id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
   case "$line" in
     *'"subtype":"initialize"'*) answer "$id" '{"commands":[],"models":[]}'; state idle ;;
+    *'"subtype":"set_permission_mode"'*)
+      if [ -e "$DIR/nomode" ]; then
+        printf '%s\n' '{"type":"control_response","response":{"subtype":"error","request_id":"'"$id"'","error":"no such mode"}}'
+      else
+        echo "mode $line" >> "$LOG"; answer "$id" '{}'
+      fi
+      ;;
     *'"subtype":"rewind_files"'*) echo "rewind $line" >> "$LOG"; answer "$id" '{"canRewind":true,"filesChanged":[],"insertions":0,"deletions":0}' ;;
     *'"subtype":"get_context_usage"'*) answer "$id" '{}'; state running; state idle ;;
     *'"subtype":"get_usage"'*) answer "$id" '{}'; exit 0 ;;
+    *'"subtype":"apply_flag_settings"'*) echo "flags $line" >> "$LOG"; answer "$id" '{}' ;;
     *'"type":"control_request"'*) answer "$id" '{}' ;;
     *'"type":"user"'*)
+      echo "user $line" >> "$LOG"
       state running
       case "$line" in
         *'/clear'*)
@@ -268,6 +303,11 @@ while IFS= read -r line; do
       ;;
   esac
 done
+if [ -n "$FILE" ]; then
+  rm -f "$FILE"
+  printf '%s\n' '{"type":"system","subtype":"hook_started","hook_event":"SessionEnd","hook_name":"SessionEnd"}'
+  sleep 0.3
+fi
 "#;
 
 /// The session the quiet stand-in goes on under after a `/clear`.
@@ -314,7 +354,7 @@ fn ready_chat(core: &Arc<Core>, path: &str, open: ChatOpen) -> u64 {
 }
 
 /// Ends the chat's process (the stand-in's `get_usage`) and waits for its end.
-fn end_chat(core: &Core, id: u64) {
+fn end_chat(core: &Arc<Core>, id: u64) {
     let _ = core.chat_control(id, &ChatControl::Usage);
     wait_for("the chat's end", || state_of(core, id) == Some(ChatState::Exited));
 }
@@ -488,6 +528,282 @@ fn the_settings_start_mode_takes_only_a_normal_start() {
     settings.mode = "default".into();
     let args = chat_args(with_mode(ChatStart::default(), chat_start_mode(&settings.mode)), &ChatSession::New(new_uuid()), false, false, None).unwrap();
     assert!(!args.iter().any(|arg| arg == "auto"), "{args:?}");
+}
+
+/// What the stand-in wrote into its log since its start number `start` (from 1), by `prefix`.
+fn since_start(log: &Path, start: usize, prefix: &str) -> Vec<String> {
+    let text = log_of(log);
+    let mut seen = 0;
+    text.lines().filter(|line| {
+        seen += usize::from(line.starts_with("start "));
+        seen >= start && line.starts_with(prefix)
+    }).map(str::to_string).collect()
+}
+
+/// A chat left alone sleeps: its process is ended only once nothing of it runs (here a `!` run
+/// holds it up), and nobody is told: no `chat-exit`, no state but idle, the tab and its session
+/// held as before. What is sent to it asleep reaches the process it wakes with exactly once and
+/// in the order sent, after the control the chat had taken, on the session it had.
+#[test]
+fn a_chat_asleep_wakes_for_a_message_and_loses_none() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (events, sink) = heard();
+    let core = core_in(tmp.path(), sink);
+    let (path, log, _) = quiet_project(tmp.path(), &core);
+    NAP.with(|nap| *nap.borrow_mut() = Some((Duration::from_millis(400), Duration::from_millis(40))));
+
+    let id = ready_chat(&core, &path, ChatOpen::default());
+    let session = session_of(&core, id);
+    let logs = tmp.path().join("claude").join("projects").join("-paddock");
+    fs::create_dir_all(&logs).unwrap();
+    fs::write(logs.join(format!("{session}.jsonl")), "{\"type\":\"user\"}\n").unwrap();
+    let pid = core.chat_shells().into_iter().find(|(_, tab, _)| *tab == id).map(|(pid, _, _)| pid).unwrap();
+    core.chat_control(id, &ChatControl::SetEffort { level: "high".into() }).unwrap();
+
+    core.chat_shell(id, "sleep 1.5").unwrap();
+    thread::sleep(Duration::from_millis(1000));
+    assert!(process::group_alive(pid), "it slept while a run of its was going");
+    wait_for("its sleep", || !process::group_alive(pid));
+
+    assert_eq!(state_of(&core, id), Some(ChatState::Idle));
+    assert_eq!(core.chat_view(id).and_then(|view| view.chat).map(|chat| chat.state), Some(ChatState::Idle));
+    assert_eq!(core.chat_alive(id), Some(true), "its session is no longer the tab's");
+    assert!(matches!(core.liveness(&session), Liveness::Running { .. }), "its session reads as ended");
+    assert_eq!(core.chat_truths().len(), 1);
+    assert_eq!(starts(&log).len(), 1);
+
+    core.chat_send(id, ChatOutgoing::text("the first".into())).unwrap();
+    core.chat_send(id, ChatOutgoing::text("the second".into())).unwrap();
+    wait_for("both messages", || since_start(&log, 2, "user ").len() >= 2);
+    wait_for("the turns' end", || state_of(&core, id) == Some(ChatState::Idle) && core.chat_buffer(id, 0).unwrap().frames.iter().filter(|frame| frame["type"] == "result").count() == 2);
+    let woke = starts(&log);
+    assert_eq!(woke.len(), 2, "{woke:?}");
+    assert!(woke[1].contains(&format!("--resume {session}")), "{}", woke[1]);
+    let said = since_start(&log, 2, "");
+    let at = |word: &str| said.iter().position(|line| line.contains(word)).unwrap_or_else(|| panic!("{word} in {said:?}"));
+    assert!(at("\"effortLevel\":\"high\"") < at("the first") && at("the first") < at("the second"), "{said:?}");
+    assert_eq!(since_start(&log, 1, "user ").len(), 2, "each message once: {said:?}");
+
+    let frames = core.chat_buffer(id, 0).unwrap().frames;
+    let told = |state: &str| frames.iter().filter(|frame| frame["kind"] == "state" && frame["state"] == state).count();
+    assert_eq!((told("starting"), told("exited")), (1, 0), "the tab was told of the sleep or the wake");
+    assert!(!frames.iter().any(|frame| frame["kind"] == "unsent" || frame["kind"] == "error"));
+    assert!(!events.lock().unwrap().iter().any(|event| event.contains("\"reason\"")), "an exit was announced");
+    core.dispose();
+}
+
+/// A chat asleep whose process doesn't start again says so as any failed start does, and the
+/// message that woke it comes back for the composer.
+#[test]
+fn a_wake_that_fails_hands_the_message_back() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (events, sink) = heard();
+    let core = core_in(tmp.path(), sink);
+    let (path, log, dir) = quiet_project(tmp.path(), &core);
+    NAP.with(|nap| *nap.borrow_mut() = Some((Duration::from_millis(200), Duration::from_millis(40))));
+
+    let id = ready_chat(&core, &path, ChatOpen::default());
+    let pid = core.chat_shells().into_iter().find(|(_, tab, _)| *tab == id).map(|(pid, _, _)| pid).unwrap();
+    wait_for("its sleep", || !process::group_alive(pid) && core.chat_shells().iter().any(|(shell, tab, _)| *tab == id && *shell != pid));
+    assert!(!events.lock().unwrap().iter().any(|event| event.contains("\"reason\"")));
+
+    fs::write(dir.join("die"), "").unwrap();
+    core.chat_send(id, ChatOutgoing::text("words not to lose".into())).unwrap();
+    wait_for("the failed wake", || state_of(&core, id) == Some(ChatState::Exited));
+    let frames = core.chat_buffer(id, 0).unwrap().frames;
+    let unsent = frames.iter().find(|frame| frame["kind"] == "unsent").expect("the message is handed back");
+    assert_eq!(unsent["text"], "words not to lose");
+    wait_for("its exit", || events.lock().unwrap().iter().any(|event| event.contains("\"reason\":\"startFailed\"")));
+    assert_eq!(starts(&log).len(), 2);
+    assert_eq!(core.chat_alive(id), Some(false));
+
+    // And it starts again as any exited chat does.
+    fs::remove_file(dir.join("die")).unwrap();
+    core.chat_restart(id).unwrap();
+    wait_for("the restart", || state_of(&core, id) == Some(ChatState::Idle));
+    core.dispose();
+}
+
+fn asleep(core: &Core, id: u64) -> bool {
+    core.chat(id).is_some_and(|tab| {
+        let shared = tab.lock();
+        shared.rest == Rest::Asleep && !shared.running
+    })
+}
+
+/// A chat's session runs on through its sleep and its wake, at every moment and in its tab: also
+/// while its process ends (Claude Code's entry gone before the end is taken in) and while the
+/// next one starts (its entry not written yet). One reading of it as ended would take a board
+/// card of it to review and tell the user of work nobody did. The tab is told nothing of what the
+/// process says as it ends and as it starts, the mode the chat was in is asked of the process it
+/// wakes with before the message goes, and a control that finds the chat just falling asleep is
+/// asked again of the process it wakes with.
+#[test]
+fn a_chats_session_runs_on_through_its_sleep_and_its_wake() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (_, sink) = heard();
+    let core = core_in(tmp.path(), sink);
+    let (path, log, dir) = quiet_project(tmp.path(), &core);
+    fs::write(dir.join("sessions"), tmp.path().join("claude").join("sessions").to_string_lossy().as_bytes()).unwrap();
+    // Longer than the woken stand-in takes to list itself.
+    NAP.with(|nap| *nap.borrow_mut() = Some((Duration::from_millis(1500), Duration::from_millis(40))));
+
+    let id = ready_chat(&core, &path, ChatOpen::default());
+    let session = session_of(&core, id);
+    let listed = |pid: u32| matches!(core.liveness(&session), Liveness::Running { lineage, .. } if lineage.first() == Some(&pid) && lineage.len() > 2);
+    let pid = core.chat_shells().into_iter().find(|(_, tab, _)| *tab == id).map(|(pid, _, _)| pid).unwrap();
+    wait_for("Claude Code's entry", || listed(pid));
+    core.chat_control(id, &ChatControl::SetMode { mode: "plan".into() }).unwrap();
+
+    // Every reading from here on: running, in this tab.
+    let (done, lost) = (Arc::new(std::sync::atomic::AtomicBool::new(false)), Arc::new(Mutex::new(Vec::<String>::new())));
+    let reader = {
+        let (core, session, done, lost) = (Arc::clone(&core), session.clone(), Arc::clone(&done), Arc::clone(&lost));
+        thread::spawn(move || {
+            while !done.load(std::sync::atomic::Ordering::Relaxed) {
+                match core.liveness(&session) {
+                    Liveness::Running { lineage, .. } if core.pitwall_terminal(&lineage).map(|(tab, _)| tab) == Some(id) => {}
+                    other => lost.lock().unwrap().push(format!("{other:?}")),
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
+        })
+    };
+
+    wait_for("its sleep", || asleep(&core, id));
+    core.chat_send(id, ChatOutgoing::text("the words".into())).unwrap();
+    wait_for("the message", || since_start(&log, 2, "user ").len() == 1);
+    let woken = core.chat_shells().into_iter().find(|(_, tab, _)| *tab == id).map(|(pid, _, _)| pid).unwrap();
+    wait_for("the woken process's entry", || listed(woken));
+
+    // As `watch_rest` lets it go, just after a control found it awake.
+    let tab = core.chat(id).unwrap();
+    let asked = std::cell::Cell::new(0);
+    let status = core.chat_needing(&tab, || {
+        if asked.replace(asked.get() + 1) == 0 {
+            tab.lock().rest = Rest::Falling;
+            end_process(&tab, true);
+        }
+        core.chat_control_now(&tab, &ChatControl::Status)
+    });
+    assert!(status.is_ok() && asked.get() == 2, "{status:?} after {} tries", asked.get());
+
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    reader.join().unwrap();
+    assert!(lost.lock().unwrap().is_empty(), "its session read as not running: {:?}", lost.lock().unwrap());
+
+    let said = since_start(&log, 2, "");
+    let at = |word: &str| said.iter().position(|line| line.contains(word)).unwrap_or_else(|| panic!("{word} in {said:?}"));
+    assert!(at("\"mode\":\"plan\"") < at("the words"), "{said:?}");
+    let buffer = core.chat_buffer(id, 0).unwrap();
+    let told = |state: &str| buffer.frames.iter().filter(|frame| frame["kind"] == "state" && frame["state"] == state).count();
+    assert_eq!(told("running"), 1, "a state of the wake reached the tab");
+    let of_the_wake = |frame: &&Value| frame["type"] == "system" && (frame["subtype"].as_str().is_some_and(|subtype| subtype.starts_with("hook_")) || frame["subtype"] == "informational" || frame["permissionMode"] == "auto");
+    assert_eq!(buffer.frames.iter().filter(of_the_wake).count(), 0, "what the process said as it ended or started reached the tab");
+    assert_eq!(buffer.info.and_then(|info| info.permission_mode).as_deref(), Some("plan"));
+    core.dispose();
+}
+
+/// A chat asleep starts no process it may not: its session runs no more once its tab is closed
+/// (nothing would ever end it), a chat whose project is no longer listed stays without one, and
+/// one whose process doesn't take the mode the chat was in sends it no message, which would run
+/// in the mode of its start. Each message comes back for the composer.
+#[test]
+fn a_chat_asleep_wakes_only_where_and_as_it_stood() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (_, sink) = heard();
+    let core = core_in(tmp.path(), sink);
+    let (path, log, dir) = quiet_project(tmp.path(), &core);
+    NAP.with(|nap| *nap.borrow_mut() = Some((Duration::from_millis(200), Duration::from_millis(40))));
+    let handed_back = |id: u64, words: &str| {
+        wait_for("the failed wake", || state_of(&core, id) == Some(ChatState::Exited));
+        let frames = core.chat_buffer(id, 0).unwrap().frames;
+        let unsent = frames.iter().find(|frame| frame["kind"] == "unsent").expect("the message is handed back");
+        assert_eq!(unsent["text"], words);
+        assert!(!log_of(&log).contains(words), "it went to a process: {}", log_of(&log));
+    };
+
+    let (closed, moded, unlisted) = (ready_chat(&core, &path, ChatOpen::default()), ready_chat(&core, &path, ChatOpen::default()), ready_chat(&core, &path, ChatOpen::default()));
+    core.chat_control(moded, &ChatControl::SetMode { mode: "plan".into() }).unwrap();
+    wait_for("their sleep", || [closed, moded, unlisted].iter().all(|id| asleep(&core, *id)));
+
+    let session = session_of(&core, closed);
+    assert!(matches!(core.liveness(&session), Liveness::Running { .. }));
+    core.close_terminal(closed);
+    assert!(!core.running_cached().unwrap().contains_key(&session), "a closed chat's session still runs");
+
+    fs::write(dir.join("nomode"), "").unwrap();
+    core.chat_send(moded, ChatOutgoing::text("words for plan mode".into())).unwrap();
+    handed_back(moded, "words for plan mode");
+    assert_eq!(starts(&log).len(), 4);
+
+    core.remove_project(&path);
+    assert!(!core.is_listed(&path));
+    core.chat_send(unlisted, ChatOutgoing::text("words for a listed project".into())).unwrap();
+    handed_back(unlisted, "words for a listed project");
+    assert_eq!(starts(&log).len(), 4, "a process started in a project that isn't listed");
+    core.dispose();
+}
+
+/// A chat's process is let go only when every condition holds: one dataset over what keeps it.
+#[test]
+fn a_chat_sleeps_only_when_nothing_of_it_runs_waits_or_is_owed() {
+    let rested = || {
+        let mut shared = Shared::new(new_uuid(), true);
+        shared.running = true;
+        shared.ready = true;
+        shared.state = ChatState::Idle;
+        shared
+    };
+    assert!(rested().may_rest(Duration::ZERO));
+    assert!(!rested().may_rest(Duration::from_secs(60)), "something happened in it a moment ago");
+    let (reply, _) = mpsc::channel();
+    let waiting = || Waiting { uuid: new_uuid(), line: String::new(), text: String::new(), carry: Vec::new() };
+    type Keep = Box<dyn FnOnce(&mut Shared)>;
+    let keeps: Vec<(&str, Keep)> = vec![
+        ("a turn under way", Box::new(|shared| shared.state = ChatState::Running)),
+        ("a card open", Box::new(|shared| shared.state = ChatState::RequiresAction)),
+        ("starting", Box::new(|shared| shared.state = ChatState::Starting)),
+        ("not ready", Box::new(|shared| shared.ready = false)),
+        ("exited", Box::new(|shared| shared.running = false)),
+        ("a card of a background subagent", Box::new(|shared| shared.pending.push(Pending { id: "cli-1".into(), request: Value::Null, at: 0 }))),
+        ("a request awaiting its reply", Box::new(move |shared| shared.replies = HashMap::from([("req".to_string(), reply)]))),
+        ("a message held", Box::new(move |shared| shared.held.push(waiting()))),
+        ("a `!` run", Box::new(|shared| shared.shells = HashMap::from([("sh_1".to_string(), 1)]))),
+        ("a background task", Box::new(|shared| shared.background = HashSet::from(["task".to_string()]))),
+        ("a message streaming", Box::new(|shared| shared.streams = HashMap::from([(String::new(), "msg".to_string())]))),
+        ("a conversation being reset", Box::new(|shared| shared.reset = true)),
+        ("what only its process holds", Box::new(|shared| shared.pinned = true)),
+        ("being closed", Box::new(|shared| shared.closing = true)),
+        ("its tab closed", Box::new(|shared| shared.gone = true)),
+        ("asleep already", Box::new(|shared| shared.rest = Rest::Asleep)),
+    ];
+    for (what, keep) in keeps {
+        let mut shared = rested();
+        keep(&mut shared);
+        assert!(!shared.may_rest(Duration::ZERO), "it slept with {what}");
+    }
+
+    // What the frames tell of work its process still holds.
+    let mut shared = rested();
+    note_work(&mut shared, "system", "background_tasks_changed", &json!({ "tasks": [{ "task_id": "a" }, { "task_id": "b" }] }));
+    note_work(&mut shared, "system", "task_notification", &json!({ "task_id": "a", "status": "completed" }));
+    assert!(!shared.may_rest(Duration::ZERO), "a background task still runs");
+    note_work(&mut shared, "system", "task_updated", &json!({ "task_id": "b", "patch": { "status": "killed" } }));
+    assert!(shared.may_rest(Duration::ZERO));
+    note_work(&mut shared, "system", "task_started", &json!({ "task_id": "c", "is_backgrounded": true }));
+    assert!(!shared.may_rest(Duration::ZERO));
+    note_work(&mut shared, "system", "background_tasks_changed", &json!({ "tasks": [] }));
+    assert!(shared.may_rest(Duration::ZERO));
+    note_work(&mut shared, "assistant", "", &json!({ "message": { "content": [{ "type": "tool_use", "name": "ScheduleWakeup", "input": {} }] } }));
+    assert!(!shared.may_rest(Duration::ZERO), "it set itself a wakeup only its process knows of");
+
+    // A chat that talks with another session waits for what that one writes to its process.
+    for tool in ["SendMessage", "ListAgents"] {
+        let mut shared = rested();
+        note_work(&mut shared, "assistant", "", &json!({ "message": { "content": [{ "type": "tool_use", "name": tool, "input": {} }] } }));
+        assert!(!shared.may_rest(Duration::ZERO), "{tool}: another session may write to it");
+    }
 }
 
 /// A stand-in that streams: answers `initialize` and goes idle; for each message it starts a
