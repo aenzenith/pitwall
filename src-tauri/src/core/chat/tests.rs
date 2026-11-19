@@ -726,6 +726,9 @@ fn a_chat_asleep_wakes_only_where_and_as_it_stood() {
     let (closed, moded, unlisted) = (ready_chat(&core, &path, ChatOpen::default()), ready_chat(&core, &path, ChatOpen::default()), ready_chat(&core, &path, ChatOpen::default()));
     core.chat_control(moded, &ChatControl::SetMode { mode: "plan".into() }).unwrap();
     wait_for("their sleep", || [closed, moded, unlisted].iter().all(|id| asleep(&core, *id)));
+    // Counted from their sleep: on a slow machine a chat may fall asleep before its mode comes,
+    // and be woken for it, a start of its own.
+    let slept = starts(&log).len();
 
     let session = session_of(&core, closed);
     assert!(matches!(core.liveness(&session), Liveness::Running { .. }));
@@ -735,13 +738,13 @@ fn a_chat_asleep_wakes_only_where_and_as_it_stood() {
     fs::write(dir.join("nomode"), "").unwrap();
     core.chat_send(moded, ChatOutgoing::text("words for plan mode".into())).unwrap();
     handed_back(moded, "words for plan mode");
-    assert_eq!(starts(&log).len(), 4);
+    assert_eq!(starts(&log).len(), slept + 1, "the closed chat started, or the wake started more than one process");
 
     core.remove_project(&path);
     assert!(!core.is_listed(&path));
     core.chat_send(unlisted, ChatOutgoing::text("words for a listed project".into())).unwrap();
     handed_back(unlisted, "words for a listed project");
-    assert_eq!(starts(&log).len(), 4, "a process started in a project that isn't listed");
+    assert_eq!(starts(&log).len(), slept + 1, "a process started in a project that isn't listed");
     core.dispose();
 }
 
