@@ -20,7 +20,8 @@ permissions:
   actions: read
 
 jobs:
-  # Conventional Commits decide the next version: feat → minor, fix/perf → patch, feat! → major.
+  # Conventional Commits decide the next version: feat → minor, fix/perf/improvement → patch,
+  # feat! → major (`improvement`: neither new nor a bug, e.g. a new model priced).
   # The release PR bumps package.json, tauri.conf.json, Cargo.toml and Cargo.lock together.
   #
   # Nobody merges that PR by hand: once CI has passed on the pushed commit it is merged here and
