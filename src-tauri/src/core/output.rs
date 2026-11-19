@@ -127,8 +127,15 @@ impl Core {
                 lines.pop_back();
             }
             lines.push_back(line.clone());
+            let (mut gone, mut own) = (0, 0);
             while lines.len() > OUTPUT_LINES {
-                lines.pop_front();
+                let first = lines.pop_front().unwrap_or_default();
+                gone += 1;
+                own += u64::from(!first.starts_with(MARKER));
+            }
+            // A session that reads only what is new keeps its place as older lines go (`radio`).
+            if gone > 0 {
+                inner.radio.team.went(&key, gone, own);
             }
             // The command line's `logs -f` and `run` follow along (`cli`).
             inner.cli.heard(&key, &line);
@@ -168,7 +175,10 @@ impl Core {
     /// was remembered of its last run.
     pub(super) fn forget_output(&self, key: &str) {
         let mut inner = self.lock();
-        inner.output.remove(key);
+        let lines = inner.output.remove(key).unwrap_or_default();
+        // What a session read of it went with it, and what comes next is a run of its own (`radio`).
+        let own = lines.iter().filter(|line| !line.starts_with(MARKER)).count();
+        inner.radio.team.emptied(key, lines.len() as u64, own as u64);
         inner.ended.remove(key);
     }
 

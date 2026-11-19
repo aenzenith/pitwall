@@ -1572,6 +1572,9 @@
     "one": "Paused after {count} failure",
     "other": "Paused after {count} failures"
   },
+  "laps.paused.review": "Claude added this job. Read its script, then resume it.",
+  "laps.paused.review.codex": "Codex added this job. Read its script, then resume it.",
+  "laps.paused.reviewChanged": "Read this job's script, then resume it.",
   "laps.off": "Off",
   "laps.ring.at": "at {time}",
   "laps.ring.atDay": "{day} at {time}",
@@ -1847,8 +1850,21 @@
   "radio.tool.server_output": "The last lines of the server's output",
   "radio.tool.server_restart": "Starts, stops and restarts the server",
   "radio.tool.run_command": "Runs the project's saved commands, except those marked \"Ask before running\"",
+  "radio.tool.stop_command": "Stops the project's saved commands that are running",
   "radio.tool.board_add": "Adds a card to “Up next” on the board",
   "radio.tool.board_note": "Leaves a note on its own card and moves it to “To review”",
+  "radio.tool.board_list": "Reads the board's cards and their notes",
+  "radio.tool.board_edit": "Edits cards added over the radio; on yours it only adds a signed note",
+  "radio.tool.board_move": "Reorders “Up next” and moves cards between it and “Done”",
+  "radio.tool.board_delete": "Deletes cards added over the radio, from “Up next” or “Done”",
+  "radio.tool.board_take": "Takes a card from “Up next” and works on it in its session",
+  "radio.tool.team_status": "Who else works in the project: each session's state, where it runs and its card",
+  "radio.tool.fuel_status": "Its own usage limits as Pitwall last read them, and when they refill",
+  "radio.tool.lap_list": "Lists the project's laps, and reads a job's runs and last result",
+  "radio.tool.lap_add": "Adds a job to the project's laps; a job whose script it wrote waits, paused, until you resume it",
+  "radio.tool.lap_edit": "Changes only jobs added over the radio",
+  "radio.tool.lap_pause": "Pauses and resumes the project's jobs, except one waiting for your review",
+  "radio.tool.lap_delete": "Deletes only jobs added over the radio",
   "radio.calls": "Radio",
   "radio.callsToday": {
     "one": "{count} call today",
@@ -1859,7 +1875,27 @@
     "other": "{count} lines"
   },
   "radio.result.card": "“{title}” · {column}",
+  "radio.result.listed": {
+    "one": "{count} card",
+    "other": "{count} cards"
+  },
+  "radio.result.read": "“{title}”",
+  "radio.result.edited": "“{title}” · edited",
+  "radio.result.deleted": "“{title}” · deleted",
+  "radio.result.laps": {
+    "one": "{count} job",
+    "other": "{count} jobs"
+  },
+  "radio.result.lap": "“{name}”",
+  "radio.result.lapPaused": "“{name}” · Paused",
+  "radio.result.lapResumed": "“{name}” · Resumed",
   "radio.result.refused": "Refused",
+  "radio.result.notRunning": "“{name}” wasn't running",
+  "radio.result.sessions": {
+    "one": "{count} session",
+    "other": "{count} sessions"
+  },
+  "radio.result.noFuel": "No reading",
   "radio.kind.codex": "Codex MCP server",
   "radio.hint.codex": "Codex asks Pitwall about the dev server instead of starting one.",
   "radio.missing.codex": "Codex wasn't found.",

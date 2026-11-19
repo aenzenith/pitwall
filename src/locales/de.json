@@ -1572,6 +1572,9 @@
     "one": "Pausiert nach {count} Fehler",
     "other": "Pausiert nach {count} Fehlern"
   },
+  "laps.paused.review": "Claude hat diese Aufgabe angelegt. Lies das Skript, bevor du fortsetzt.",
+  "laps.paused.review.codex": "Codex hat diese Aufgabe angelegt. Lies das Skript, bevor du fortsetzt.",
+  "laps.paused.reviewChanged": "Lies das Skript dieser Aufgabe, bevor du fortsetzt.",
   "laps.off": "Aus",
   "laps.ring.at": "um {time}",
   "laps.ring.atDay": "{day} um {time}",
@@ -1847,8 +1850,21 @@
   "radio.tool.server_output": "Die letzten Zeilen der Serverausgabe",
   "radio.tool.server_restart": "Startet, stoppt und startet den Server neu",
   "radio.tool.run_command": "Führt gespeicherte Befehle des Projekts aus, außer denen mit „Vor dem Ausführen fragen“",
+  "radio.tool.stop_command": "Stoppt laufende gespeicherte Befehle des Projekts",
   "radio.tool.board_add": "Legt im Board eine Karte unter „Als Nächstes“ an",
   "radio.tool.board_note": "Notiert auf der eigenen Karte und schiebt sie nach „Zu prüfen“",
+  "radio.tool.board_list": "Liest die Karten des Boards und ihre Notizen",
+  "radio.tool.board_edit": "Bearbeitet über den Funk angelegte Karten; an deine hängt es nur eine signierte Notiz an",
+  "radio.tool.board_move": "Ordnet „Als Nächstes“ neu und verschiebt Karten zwischen dort und „Erledigt“",
+  "radio.tool.board_delete": "Löscht über den Funk angelegte Karten aus „Als Nächstes“ oder „Erledigt“",
+  "radio.tool.board_take": "Nimmt eine Karte aus „Als Nächstes“ und arbeitet in seiner Sitzung daran",
+  "radio.tool.team_status": "Wer sonst im Projekt arbeitet: Stand, Ort und Karte jeder Sitzung",
+  "radio.tool.fuel_status": "Die eigenen Nutzungslimits, wie Pitwall sie zuletzt las, und wann sie sich füllen",
+  "radio.tool.lap_list": "Listet die Runden des Projekts und liest die Läufe und das letzte Ergebnis einer Aufgabe",
+  "radio.tool.lap_add": "Legt eine Aufgabe in den Runden des Projekts an; eine mit selbst geschriebenem Skript wartet pausiert, bis du sie fortsetzt",
+  "radio.tool.lap_edit": "Ändert nur über den Funk angelegte Aufgaben",
+  "radio.tool.lap_pause": "Pausiert die Aufgaben des Projekts und setzt sie fort, außer einer, die auf deine Prüfung wartet",
+  "radio.tool.lap_delete": "Löscht nur über den Funk angelegte Aufgaben",
   "radio.calls": "Funk",
   "radio.callsToday": {
     "one": "{count} Aufruf heute",
@@ -1859,7 +1875,27 @@
     "other": "{count} Zeilen"
   },
   "radio.result.card": "„{title}“ · {column}",
+  "radio.result.listed": {
+    "one": "{count} Karte",
+    "other": "{count} Karten"
+  },
+  "radio.result.read": "„{title}“",
+  "radio.result.edited": "„{title}“ · bearbeitet",
+  "radio.result.deleted": "„{title}“ · gelöscht",
+  "radio.result.laps": {
+    "one": "{count} Aufgabe",
+    "other": "{count} Aufgaben"
+  },
+  "radio.result.lap": "„{name}“",
+  "radio.result.lapPaused": "„{name}“ · Pausiert",
+  "radio.result.lapResumed": "„{name}“ · Fortgesetzt",
   "radio.result.refused": "Abgelehnt",
+  "radio.result.notRunning": "„{name}“ lief nicht",
+  "radio.result.sessions": {
+    "one": "{count} Sitzung",
+    "other": "{count} Sitzungen"
+  },
+  "radio.result.noFuel": "Kein Messwert",
   "radio.kind.codex": "Codex-MCP-Server",
   "radio.hint.codex": "Codex fragt Pitwall nach dem Dev-Server, statt selbst einen zu starten.",
   "radio.missing.codex": "Codex wurde nicht gefunden.",

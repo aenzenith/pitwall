@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -344,8 +344,31 @@ impl Fuel {
         self.app.try_state::<AppState>().is_some_and(|state| state.core.agent_on(Agent::Claude))
     }
 
+    /// The account in use's limits as last read, for the team radio's `fuel_status`: what is held
+    /// here already, nothing asked for. None while the agent is off, and for Codex before its
+    /// first look.
+    fn last_read(&self, agent: Agent) -> Option<UsageState> {
+        match agent {
+            Agent::Claude => self.claude_on().then(|| self.limits()),
+            Agent::Codex => {
+                let core = &self.app.try_state::<AppState>()?.core;
+                if !core.agent_on(Agent::Codex) {
+                    return None;
+                }
+                let in_use = codex_in_use(&core.codex_accounts());
+                let codex = lock(&self.codex);
+                codex.limits.iter().find(|(id, _)| *id == in_use).map(|(_, state)| state.clone())
+            }
+        }
+    }
+
     /// Keeps both fresh for as long as the app runs.
     pub fn start(app: &AppHandle) {
+        // The team radio's `fuel_status` is answered from what is held here (`last_read`).
+        if let Some(state) = app.try_state::<AppState>() {
+            let reader = app.clone();
+            state.core.radio_fuel_from(Arc::new(move |agent| reader.try_state::<AppState>().and_then(|state| state.fuel.last_read(agent))));
+        }
         let app = app.clone();
         thread::spawn(move || loop {
             if let Some(state) = app.try_state::<AppState>() {

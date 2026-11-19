@@ -45,6 +45,23 @@ const TEXT: Record<string, Key> = {
   run_command: "radio.tool.run_command",
   board_add: "radio.tool.board_add",
   board_note: "radio.tool.board_note",
+  // [seam C1 server tools]
+  stop_command: "radio.tool.stop_command",
+  // [seam A board tools]
+  board_list: "radio.tool.board_list",
+  board_edit: "radio.tool.board_edit",
+  board_move: "radio.tool.board_move",
+  board_delete: "radio.tool.board_delete",
+  board_take: "radio.tool.board_take",
+  // [seam B lap tools]
+  lap_list: "radio.tool.lap_list",
+  lap_add: "radio.tool.lap_add",
+  lap_edit: "radio.tool.lap_edit",
+  lap_pause: "radio.tool.lap_pause",
+  lap_delete: "radio.tool.lap_delete",
+  // [seam C2 team tools]
+  team_status: "radio.tool.team_status",
+  fuel_status: "radio.tool.fuel_status",
 };
 
 /** `stacked`: in Settings › Agents' narrower part, what the radio is goes under its name, not

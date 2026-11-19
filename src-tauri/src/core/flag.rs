@@ -418,6 +418,8 @@ mod tests {
             start: None,
             schedule: None,
             starting: false,
+            by: None,
+            taken: false,
         }
     }
 

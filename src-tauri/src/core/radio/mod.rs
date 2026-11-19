@@ -30,7 +30,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use super::*;
 use crate::mcp::{self, receive, same_secret, send, Call, Endpoint, Hello, Reply, Timed, Welcome, TOOLS};
 
+mod board_tools;
+mod lap_tools;
 pub(super) mod register;
+mod team_tools;
 mod tools;
 
 // The command line (`cli`) tells a saved command and an output's current run the same way.
@@ -83,6 +86,9 @@ pub(super) struct Radio {
     asked: Arc<Mutex<Option<(Instant, RadioState)>>>,
     /// The same of Codex's radio, as its CLI said it.
     codex_asked: Arc<Mutex<Option<(Instant, RadioState)>>>,
+    /// What the team's tools keep: where each caller last read an output, and how the fuel
+    /// readings are asked for (`team_tools.rs`).
+    pub(super) team: team_tools::Team,
 }
 
 /// Who calls: the folder Claude Code started its server in, and Claude Code's own pid.
@@ -115,6 +121,38 @@ pub enum CallResult {
     Noted,
     /// A saved command run, by the name the user gave it.
     Ran { name: String },
+    // [seam A board results]
+    /// The board read: how many cards were listed, or the one card read, by its title.
+    Listed { count: usize, title: Option<String> },
+    /// A card's title or note changed, by its title as it is now.
+    Edited { title: String },
+    /// A card moved within "Up next", or between it and "Done", into `column`.
+    Moved { title: String, column: super::board::Column },
+    /// A card the radio added, deleted.
+    Deleted { title: String },
+    /// A card the session took for itself, now with its `agent`.
+    Taken { title: String, agent: Agent },
+    // [seam B lap results]
+    /// The project's laps listed: how many.
+    LapList { count: usize },
+    /// One of its laps read whole, by its name.
+    LapRead { name: String },
+    /// A lap added, by its name; `held` while its script waits, paused, for the user.
+    LapAdded { name: String, held: bool },
+    /// A lap changed, by its name; `held` as `LapAdded`'s.
+    LapEdited { name: String, held: bool },
+    /// A lap paused, or resumed (`paused` false), by its name.
+    LapPaused { name: String, paused: bool },
+    /// A lap deleted with its runs, by its name.
+    LapDeleted { name: String },
+    // [seam C server and team results]
+    /// A saved command stopped, by its name; `running` false when it wasn't running.
+    Stopped { name: String, running: bool },
+    /// The sessions `team_status` listed.
+    Team { count: usize },
+    /// The shares used `fuel_status` answered, in whole percents: the 5-hour session's and the
+    /// week's, none where there was no reading of it.
+    Fuel { session: Option<u32>, week: Option<u32> },
     Refused,
 }
 

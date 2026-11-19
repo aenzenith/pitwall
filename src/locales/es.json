@@ -1606,6 +1606,9 @@
     "many": "En pausa tras {count} fallos",
     "other": "En pausa tras {count} fallos"
   },
+  "laps.paused.review": "Claude agregó esta tarea. Lee su script antes de reanudarla.",
+  "laps.paused.review.codex": "Codex agregó esta tarea. Lee su script antes de reanudarla.",
+  "laps.paused.reviewChanged": "Lee el script de esta tarea antes de reanudarla.",
   "laps.off": "Desactivada",
   "laps.ring.at": "a {las} {time}",
   "laps.ring.atDay": "{day} a {las} {time}",
@@ -1893,8 +1896,21 @@
   "radio.tool.server_output": "Las últimas líneas de la salida del servidor",
   "radio.tool.server_restart": "Inicia, detiene y reinicia el servidor",
   "radio.tool.run_command": "Ejecuta los comandos guardados del proyecto, salvo los marcados «Preguntar antes de ejecutar»",
+  "radio.tool.stop_command": "Detiene los comandos guardados del proyecto que están en marcha",
   "radio.tool.board_add": "Agrega una tarjeta en «Siguiente» del tablero",
   "radio.tool.board_note": "Deja una nota en su propia tarjeta y la pasa a «Por revisar»",
+  "radio.tool.board_list": "Lee las tarjetas del tablero y sus notas",
+  "radio.tool.board_edit": "Edita las tarjetas agregadas desde la radio; en las tuyas solo añade una nota firmada",
+  "radio.tool.board_move": "Reordena «Siguiente» y mueve tarjetas entre esa columna y «Hecho»",
+  "radio.tool.board_delete": "Borra las tarjetas agregadas desde la radio, de «Siguiente» o de «Hecho»",
+  "radio.tool.board_take": "Toma una tarjeta de «Siguiente» y trabaja en ella en su sesión",
+  "radio.tool.team_status": "Quién más trabaja en el proyecto: el estado de cada sesión, dónde corre y su tarjeta",
+  "radio.tool.fuel_status": "Sus propios límites de uso según la última lectura de Pitwall, y cuándo se rellenan",
+  "radio.tool.lap_list": "Enumera las vueltas del proyecto y lee las ejecuciones y el último resultado de una tarea",
+  "radio.tool.lap_add": "Agrega una tarea a las vueltas del proyecto; si escribe un script, la tarea espera en pausa hasta que la reanudes",
+  "radio.tool.lap_edit": "Cambia solo las tareas agregadas desde la radio",
+  "radio.tool.lap_pause": "Pausa y reanuda las tareas del proyecto, salvo la que espera tu revisión",
+  "radio.tool.lap_delete": "Elimina solo las tareas agregadas desde la radio",
   "radio.calls": "Radio",
   "radio.callsToday": {
     "one": "{count} llamada hoy",
@@ -1905,7 +1921,27 @@
     "other": "{count} líneas"
   },
   "radio.result.card": "«{title}» · {column}",
+  "radio.result.listed": {
+    "one": "{count} tarjeta",
+    "other": "{count} tarjetas"
+  },
+  "radio.result.read": "«{title}»",
+  "radio.result.edited": "«{title}» · editada",
+  "radio.result.deleted": "«{title}» · eliminada",
+  "radio.result.laps": {
+    "one": "{count} tarea",
+    "other": "{count} tareas"
+  },
+  "radio.result.lap": "«{name}»",
+  "radio.result.lapPaused": "«{name}» · En pausa",
+  "radio.result.lapResumed": "«{name}» · Reanudada",
   "radio.result.refused": "Rechazada",
+  "radio.result.notRunning": "«{name}» no estaba en marcha",
+  "radio.result.sessions": {
+    "one": "{count} sesión",
+    "other": "{count} sesiones"
+  },
+  "radio.result.noFuel": "Sin lectura",
   "radio.kind.codex": "Servidor MCP de Codex",
   "radio.hint.codex": "Codex le pregunta a Pitwall por el servidor de desarrollo en vez de iniciar uno.",
   "radio.missing.codex": "No se encontró Codex.",

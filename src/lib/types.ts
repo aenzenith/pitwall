@@ -786,6 +786,11 @@ export type Card = {
   /** Given to Codex, its session not found yet while Codex still runs in its tab (up to ten
    * minutes): starting, however long past the minute a session is otherwise looked for. */
   starting?: boolean;
+  /** The agent whose session added it over the team radio; unset for a card the user wrote, or
+   * changed and saved since. */
+  by?: Agent | null;
+  /** A session took it for itself over the radio: in review it stays there while that session works on. */
+  taken?: boolean;
 };
 
 /** An image a card holds: its number in the note, and what its file is. */
@@ -941,6 +946,23 @@ export type RadioResult =
   | { kind: "card"; title: string }
   | { kind: "noted" }
   | { kind: "ran"; name: string }
+  // [seam A board results]
+  | { kind: "listed"; count: number; title: string | null }
+  | { kind: "edited"; title: string }
+  | { kind: "moved"; title: string; column: BoardColumn }
+  | { kind: "deleted"; title: string }
+  | { kind: "taken"; title: string; agent: Agent }
+  // [seam B lap results]
+  | { kind: "lapList"; count: number }
+  | { kind: "lapRead"; name: string }
+  | { kind: "lapAdded"; name: string; held: boolean }
+  | { kind: "lapEdited"; name: string; held: boolean }
+  | { kind: "lapPaused"; name: string; paused: boolean }
+  | { kind: "lapDeleted"; name: string }
+  // [seam C server and team results]
+  | { kind: "stopped"; name: string; running: boolean }
+  | { kind: "team"; count: number }
+  | { kind: "fuel"; session: number | null; week: number | null }
   | { kind: "refused" };
 
 /** One call a session made over the radio. */

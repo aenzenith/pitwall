@@ -10,6 +10,9 @@ use crate::settings::CustomCommand;
 
 #[cfg(unix)]
 mod ask_first;
+mod board;
+mod laps;
+mod team;
 
 struct Paddock {
     tmp: tempfile::TempDir,
@@ -93,7 +96,7 @@ fn a_call_reaches_the_project_of_its_folder_and_no_other() {
     assert_eq!(pad.cards(), [(alpha.clone(), "from alpha".to_string()), (inner.clone(), "from inner".to_string())]);
 
     for cwd in [neighbour.as_str(), above.as_str(), "", ghost.as_str()] {
-        for tool in &TOOLS {
+        for tool in TOOLS {
             let args = aimed(json!({ "title": "from outside", "note": "n", "name": "x", "action": "start" }));
             let reply = pad.call(cwd, tool.name, args);
             assert!(reply.error && reply.text.contains("isn't one of Pitwall's projects"), "{cwd} {}: {}", tool.name, reply.text);

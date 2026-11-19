@@ -1555,6 +1555,9 @@
     "one": "{count} hatada durdu",
     "other": "{count} hatada durdu"
   },
+  "laps.paused.review": "Bu işi Claude ekledi. Önce betiğini oku, sonra sürdür.",
+  "laps.paused.review.codex": "Bu işi Codex ekledi. Önce betiğini oku, sonra sürdür.",
+  "laps.paused.reviewChanged": "Bu işin betiğini oku, sonra sürdür.",
   "laps.off": "Kapalı",
   "laps.ring.at": "{time}'{at}",
   "laps.ring.atDay": "{day} {time}'{at}",
@@ -1830,8 +1833,21 @@
   "radio.tool.server_output": "Sunucu çıktısının son satırları",
   "radio.tool.server_restart": "Sunucuyu başlatır, durdurur, yeniden başlatır",
   "radio.tool.run_command": "Projenin kayıtlı komutlarını çalıştırır; \"Çalıştırmadan önce sor\" işaretliler hariç",
+  "radio.tool.stop_command": "Projenin çalışan kayıtlı komutlarını durdurur",
   "radio.tool.board_add": "Panoda Sıradaki'ne kart ekler",
   "radio.tool.board_note": "Kendi kartına not düşer, İncelenecek'e taşır",
+  "radio.tool.board_list": "Panodaki kartları ve notlarını okur",
+  "radio.tool.board_edit": "Radyodan eklenen kartları düzenler; seninkilere yalnızca imzalı not ekler",
+  "radio.tool.board_move": "Sıradaki'nin sırasını değiştirir, kartları Sıradaki ile Bitti arasında taşır",
+  "radio.tool.board_delete": "Radyodan eklenen kartları Sıradaki'nden ya da Bitti'den siler",
+  "radio.tool.board_take": "Sıradaki'nden bir kart alır, oturumunda onun üzerinde çalışır",
+  "radio.tool.team_status": "Projede başka kimlerin çalıştığı: her oturumun durumu, nerede çalıştığı ve kartı",
+  "radio.tool.fuel_status": "Kendi kullanım limitleri ve dolum saatleri, Pitwall'un son okumasıyla",
+  "radio.tool.lap_list": "Projenin turlarını listeler, bir işin koşularını ve son sonucunu okur",
+  "radio.tool.lap_add": "Projenin turlarına iş ekler; betiğini kendisi yazdıysa iş, sen sürdürene dek duraklatılmış bekler",
+  "radio.tool.lap_edit": "Yalnız radyodan eklenen işleri değiştirir",
+  "radio.tool.lap_pause": "Projenin işlerini duraklatır ve sürdürür; incelemeni bekleyen işi sürdürmez",
+  "radio.tool.lap_delete": "Yalnız radyodan eklenen işleri siler",
   "radio.calls": "Radyo",
   "radio.callsToday": {
     "one": "bugün {count} çağrı",
@@ -1842,7 +1858,27 @@
     "other": "{count} satır"
   },
   "radio.result.card": "“{title}” · {column}",
+  "radio.result.listed": {
+    "one": "{count} kart",
+    "other": "{count} kart"
+  },
+  "radio.result.read": "“{title}”",
+  "radio.result.edited": "“{title}” · düzenlendi",
+  "radio.result.deleted": "“{title}” · silindi",
+  "radio.result.laps": {
+    "one": "{count} iş",
+    "other": "{count} iş"
+  },
+  "radio.result.lap": "“{name}”",
+  "radio.result.lapPaused": "“{name}” · Duraklatıldı",
+  "radio.result.lapResumed": "“{name}” · Sürdürüldü",
   "radio.result.refused": "Reddedildi",
+  "radio.result.notRunning": "“{name}” çalışmıyordu",
+  "radio.result.sessions": {
+    "one": "{count} oturum",
+    "other": "{count} oturum"
+  },
+  "radio.result.noFuel": "Okuma yok",
   "radio.kind.codex": "Codex MCP sunucusu",
   "radio.hint.codex": "Codex sunucuyu kendisi başlatmak yerine Pitwall'a sorar.",
   "radio.missing.codex": "Codex bulunamadı.",

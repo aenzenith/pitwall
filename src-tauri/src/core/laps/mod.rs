@@ -285,12 +285,17 @@ impl Laps {
     /// May this Pitwall change the laps now: it holds the lock (taken now if need be) and isn't
     /// quitting.
     fn writable(&mut self, now: u64) -> Result<(), String> {
+        self.open(now).map_err(String::from)
+    }
+
+    /// `writable`, saying why not as the radio needs it told.
+    fn open(&mut self, now: u64) -> Result<(), Barred> {
         if self.quit {
-            return Err(t!("core.laps.error.unsaved"));
+            return Err(Barred::Unsaved);
         }
         match self.ensure_lock(now) {
             Some(_) => Ok(()),
-            None => Err(t!("core.laps.error.elsewhere")),
+            None => Err(Barred::Elsewhere),
         }
     }
 
@@ -302,6 +307,112 @@ impl Laps {
 
 fn not_found() -> String {
     t!("core.laps.error.notFound")
+}
+
+/// Why a job wasn't saved, changed or deleted. The window meets the first four, in its own words
+/// (`String::from`); the others are the radio's gates (`core/radio/lap_tools.rs`), which none of
+/// the window's calls has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Barred {
+    /// No such job: none of that id, or (for the radio) not one of the caller's project's.
+    NotFound,
+    /// Another Pitwall holds the laps (`laps.lock`).
+    Elsewhere,
+    /// `laps.json` couldn't be written, or Pitwall quits.
+    Unsaved,
+    /// Refused as `lap_save` refuses it: the catalog key `lap_refused` gave.
+    Check(&'static str),
+    /// A job the user made: only one an agent added over the radio is changed or deleted there.
+    Users,
+    /// A run of it goes: an agent's script doesn't change under it.
+    Going,
+    /// Held for the user to read its script: only the window's Sürdür lets it go.
+    Review,
+    /// Paused after failures: the user looks at them first.
+    Failures,
+    /// Switched off: only the user switches it on.
+    Off,
+    /// Changed since the radio read it (`RadioSave::from`): the change is made to it again.
+    Changed,
+}
+
+impl From<Barred> for String {
+    fn from(barred: Barred) -> Self {
+        t!(match barred {
+            Barred::Elsewhere => "core.laps.error.elsewhere",
+            Barred::Unsaved => "core.laps.error.unsaved",
+            Barred::Check(key) => key,
+            Barred::Going => "core.laps.error.running",
+            // The radio's own, which no call of the window's gives.
+            Barred::NotFound | Barred::Users | Barred::Review | Barred::Failures | Barred::Off | Barred::Changed => "core.laps.error.notFound",
+        })
+    }
+}
+
+/// A job an agent saves over the radio (`Core::lap_save_radio`).
+pub(crate) struct RadioSave<'a> {
+    /// Whose call it is: a new job is that agent's (`Lap::by`).
+    pub agent: Agent,
+    /// The caller's project: the job is one of its own, and of no other place.
+    pub project: &'a str,
+    /// Its script is a line the agent wrote now: the job waits, paused, for the user to read it
+    /// (`Lap::review`).
+    pub held: bool,
+    /// The job as it was kept when the change was made to it; none for a new one. Kept otherwise
+    /// now (the window changed it meanwhile, switched it off…), the save is refused
+    /// (`Barred::Changed`), so what the user did is never undone.
+    pub from: Option<&'a Lap>,
+}
+
+/// `lap` without what its runs change: its next moment, its failures in a row, its runs done.
+fn unrun(lap: &Lap) -> Lap {
+    Lap { next_at: None, streak: 0, runs_done: 0, ..lap.clone() }
+}
+
+/// `lap` as the user sets it in the dialog: without what the switch, the pauses, the calendar's
+/// days off and the runs change, nor whose it is (`by`, `review`).
+fn as_set(lap: &Lap) -> Lap {
+    Lap { on: false, paused: None, days_off: Vec::new(), weekdays_off: Vec::new(), created_at: 0, by: None, review: false, ..unrun(lap) }
+}
+
+/// `lap` is bound to the listed project at `project`: the only jobs the radio sees from there. A
+/// folder's job, even one inside the project's folder, is none of them.
+pub(crate) fn of_project(lap: &Lap, project: &str) -> bool {
+    matches!(&lap.place, Place::Project { path } if same_path(path, project))
+}
+
+/// An agent added `lap` over the radio (`Lap::by`): the only kind of job the radio changes or
+/// deletes.
+pub(crate) fn radio_made(lap: &Lap) -> bool {
+    lap.by.is_some()
+}
+
+/// What keeps the radio from resuming `lap`: its script waits for the user, it paused itself
+/// after failures, or the user switched it off. None: only a pause holds it.
+pub(crate) fn unresumable(lap: &Lap) -> Option<Barred> {
+    if lap.review {
+        Some(Barred::Review)
+    } else if lap.paused == Some(PausedBy::Failures) {
+        Some(Barred::Failures)
+    } else if !lap.on {
+        Some(Barred::Off)
+    } else {
+        None
+    }
+}
+
+/// The radio's gate on a save of `lap` (`stored`: the job as kept, none for a new one; `going`: a
+/// run of it goes): the caller's project's job, and one an agent added, whose script doesn't
+/// change under a run.
+fn radio_may_save(lap: &Lap, stored: Option<&Lap>, radio: &RadioSave, going: bool) -> Result<(), Barred> {
+    if !of_project(lap, radio.project) || stored.is_some_and(|stored| !of_project(stored, radio.project)) {
+        return Err(Barred::NotFound);
+    }
+    match stored {
+        Some(stored) if !radio_made(stored) => Err(Barred::Users),
+        Some(_) if radio.held && going => Err(Barred::Going),
+        _ => Ok(()),
+    }
 }
 
 /// `~` and `~/…` under the home folder.
@@ -601,12 +712,40 @@ impl Core {
 
     /// Saves `lap` (a new one when its id is empty), checked whole first; the saved job, or why not.
     pub fn lap_save(&self, lap: Lap) -> Result<Lap, String> {
+        self.lap_store(lap, None).map_err(String::from)
+    }
+
+    /// `lap_save` for an agent over the radio (`core/radio/lap_tools.rs`), past its gate
+    /// (`radio_may_save`): a new job is the agent's (`Lap::by`), and with `held` the job waits,
+    /// paused, for the user to read its script (`Lap::review`), a run of it going or not.
+    pub(crate) fn lap_save_radio(&self, lap: Lap, radio: &RadioSave) -> Result<Lap, Barred> {
+        self.lap_store(lap, Some(radio))
+    }
+
+    /// Saves `lap` for the window (`radio` none) or the radio. Whose job it is (`by`) and whether
+    /// it waits for the user (`review`) are the core's own: only the window's Sürdür lets a held
+    /// job go (`lap_pause`), and a job the radio added is the user's once they save a change to
+    /// it (`as_set`; a save as it was, a pause or the switch keeps it the radio's).
+    fn lap_store(&self, mut lap: Lap, radio: Option<&RadioSave>) -> Result<Lap, Barred> {
         let now = now_ms();
-        let mut lap = self.lap_checked(lap, now)?;
+        self.lap_refused(&mut lap, now, &self.laps_known(), Check::Save).map_err(|(key, _)| Barred::Check(key))?;
         let saved = {
             let mut laps = self.laps();
-            laps.writable(now)?;
-            let stored = if lap.id.is_empty() { None } else { Some(laps.lap(&lap.id).cloned().ok_or_else(not_found)?) };
+            laps.open(now)?;
+            let stored = if lap.id.is_empty() { None } else { Some(laps.lap(&lap.id).cloned().ok_or(Barred::NotFound)?) };
+            if let Some(radio) = radio {
+                if radio.from.is_some_and(|from| stored.as_ref().map(unrun) != Some(unrun(from))) {
+                    return Err(Barred::Changed);
+                }
+                radio_may_save(&lap, stored.as_ref(), radio, laps.going.contains_key(&lap.id))?;
+            }
+            let held = radio.is_some_and(|radio| radio.held);
+            lap.by = match (&stored, radio) {
+                (Some(stored), None) if as_set(&lap) != as_set(stored) => None,
+                (Some(stored), _) => stored.by,
+                (None, radio) => radio.map(|radio| radio.agent),
+            };
+            lap.review = stored.as_ref().is_some_and(|stored| stored.review) || held;
             match &stored {
                 Some(stored) => {
                     lap.days_off = stored.days_off.clone();
@@ -626,6 +765,10 @@ impl Core {
                     lap.created_at = now;
                 }
             }
+            // A line an agent just wrote runs on no moment until the user has read it.
+            if held {
+                lap.paused = Some(PausedBy::User);
+            }
             lap.next_at = laps.next_moment(&lap, now);
             let before = laps.laps.clone();
             match laps.laps.iter_mut().find(|kept| kept.id == lap.id) {
@@ -635,7 +778,7 @@ impl Core {
             laps.held.remove(&lap.id);
             if !laps.save() {
                 laps.laps = before;
-                return Err(t!("core.laps.error.unsaved"));
+                return Err(Barred::Unsaved);
             }
             lap
         };
@@ -644,40 +787,58 @@ impl Core {
     }
 
     /// Changes the job `id` through `change`, gives it its next moment again and writes
-    /// `laps.json`; as it was when that can't be written.
-    fn lap_change(&self, id: &str, change: impl FnOnce(&mut Lap) -> Result<(), String>) -> Result<(), String> {
+    /// `laps.json`; as it was when that can't be written. The job as it is then.
+    fn lap_change<E: From<Barred>>(&self, id: &str, change: impl FnOnce(&mut Lap) -> Result<(), E>) -> Result<Lap, E> {
         let now = now_ms();
-        {
+        let lap = {
             let mut laps = self.laps();
-            laps.writable(now)?;
-            let before = laps.lap(id).cloned().ok_or_else(not_found)?;
+            laps.open(now)?;
+            let before = laps.lap(id).cloned().ok_or(Barred::NotFound)?;
             let mut lap = before.clone();
             change(&mut lap)?;
             lap.next_at = laps.next_moment(&lap, now);
             if lap == before {
-                return Ok(());
+                return Ok(lap);
             }
-            *laps.lap_mut(id).ok_or_else(not_found)? = lap;
+            *laps.lap_mut(id).ok_or(Barred::NotFound)? = lap.clone();
             if !laps.save() {
-                *laps.lap_mut(id).ok_or_else(not_found)? = before;
-                return Err(t!("core.laps.error.unsaved"));
+                *laps.lap_mut(id).ok_or(Barred::NotFound)? = before;
+                return Err(Barred::Unsaved.into());
             }
-        }
+            lap
+        };
         self.laps_changed();
-        Ok(())
+        Ok(lap)
     }
 
     /// The job goes, with its runs and their output. A run of it that goes is stopped.
     pub fn lap_delete(&self, id: &str) -> Result<(), String> {
+        self.lap_delete_if(id, |_| Ok(())).map(drop).map_err(String::from)
+    }
+
+    /// For the radio (`core/radio/lap_tools.rs`): the job `id` goes as `lap_delete` takes it, only
+    /// when it is one the agents added (`Lap::by`) to the listed project at `project`. The job
+    /// deleted.
+    pub(crate) fn lap_delete_radio(&self, id: &str, project: &str) -> Result<Lap, Barred> {
+        self.lap_delete_if(id, |lap| match lap {
+            lap if !of_project(lap, project) => Err(Barred::NotFound),
+            lap if !radio_made(lap) => Err(Barred::Users),
+            _ => Ok(()),
+        })
+    }
+
+    /// `lap_delete` once `allowed` lets the job as it is kept go. The job deleted.
+    fn lap_delete_if(&self, id: &str, allowed: impl FnOnce(&Lap) -> Result<(), Barred>) -> Result<Lap, Barred> {
         let now = now_ms();
-        {
+        let deleted = {
             let mut laps = self.laps();
-            laps.writable(now)?;
-            let index = laps.laps.iter().position(|lap| lap.id == id).ok_or_else(not_found)?;
+            laps.open(now)?;
+            let index = laps.laps.iter().position(|lap| lap.id == id).ok_or(Barred::NotFound)?;
+            allowed(&laps.laps[index])?;
             let lap = laps.laps.remove(index);
             if !laps.save() {
                 laps.laps.insert(index, lap);
-                return Err(t!("core.laps.error.unsaved"));
+                return Err(Barred::Unsaved);
             }
             if let Some(going) = laps.going.remove(id) {
                 *going.stop.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Reason::Stopped);
@@ -688,9 +849,10 @@ impl Core {
             }
             laps.runs.remove(id);
             laps.store.forget(id);
-        }
+            lap
+        };
         self.laps_changed();
-        Ok(())
+        Ok(deleted)
     }
 
     /// The jobs in the user's order (the tower dragged), which is the order of `laps.json` and of
@@ -719,12 +881,13 @@ impl Core {
         }
         self.lap_change(id, |lap| {
             lap.on = on;
-            Ok(())
+            Ok::<(), String>(())
         })
+        .map(drop)
     }
 
     /// Duraklat / Sürdür. Sürdür starts the failures in a row anew, for a job `lap_save` would
-    /// take as it is.
+    /// take as it is; it is the user's word on a script an agent wrote too (`Lap::review`).
     pub fn lap_pause(&self, id: &str, paused: bool) -> Result<(), String> {
         if !paused {
             self.lap_fits(id)?;
@@ -735,9 +898,57 @@ impl Core {
             } else {
                 lap.paused = None;
                 lap.streak = 0;
+                lap.review = false;
+            }
+            Ok::<(), String>(())
+        })
+        .map(drop)
+    }
+
+    /// For the radio (`core/radio/lap_tools.rs`): pauses or resumes (`paused`) the job `id` of the
+    /// listed project at `project`. Any of its jobs is paused, one paused already keeping why (a
+    /// pause after failures stays one); one is resumed only while a pause alone holds it
+    /// (`unresumable`), as Sürdür takes it otherwise. The job as it is then.
+    pub(crate) fn lap_pause_radio(&self, id: &str, project: &str, paused: bool) -> Result<Lap, Barred> {
+        // Nothing is said of a job of another place, not even why it couldn't be resumed.
+        let kept = self.lap_of(id, project).ok_or(Barred::NotFound)?;
+        if !paused {
+            if let Some(barred) = unresumable(&kept) {
+                return Err(barred);
+            }
+            if kept.paused.is_some() {
+                self.lap_refused(&mut kept.clone(), now_ms(), &self.laps_known(), Check::Save).map_err(|(key, _)| Barred::Check(key))?;
+            }
+        }
+        self.lap_change(id, |lap| {
+            if !of_project(lap, project) {
+                return Err(Barred::NotFound);
+            }
+            if paused {
+                lap.paused.get_or_insert(PausedBy::User);
+            } else {
+                if let Some(barred) = unresumable(lap) {
+                    return Err(barred);
+                }
+                if lap.paused.take().is_some() {
+                    lap.streak = 0;
+                }
             }
             Ok(())
         })
+    }
+
+    /// The job `id` of the listed project at `project` (`of_project`), as it is kept now.
+    pub(crate) fn lap_of(&self, id: &str, project: &str) -> Option<Lap> {
+        self.laps().lap(id).filter(|lap| of_project(lap, project)).cloned()
+    }
+
+    /// The jobs bound to the listed project at `project`, as the page has them (`of_project`): the
+    /// only ones the radio sees from there.
+    pub(crate) fn laps_of(&self, project: &str) -> LapsState {
+        let mut state = self.laps_state();
+        state.laps.retain(|view| of_project(&view.lap, project));
+        state
     }
 
     /// The job `id` as it is kept passes the checks of `lap_save` (one from a backup or a
@@ -823,8 +1034,9 @@ impl Core {
             } else if !lap.days_off.iter().any(|off| off == date) {
                 lap.days_off.push(date.to_string());
             }
-            Ok(())
+            Ok::<(), String>(())
         })
+        .map(drop)
     }
 
     /// "geri aç": `date`'s day off, or its weekday's, is taken back.
@@ -837,8 +1049,9 @@ impl Core {
                 lap.when = when::with_weekday(&lap.when, day);
                 lap.weekdays_off.retain(|&off| off != day);
             }
-            Ok(())
+            Ok::<(), String>(())
         })
+        .map(drop)
     }
 
     /// The next four moments of `when` for a job of `kind`, or why it is refused. A refill's
@@ -1452,6 +1665,27 @@ fn weekday_of(date: &str) -> Option<u8> {
     }
     let (of, weekday) = when::date_of(crate::clock::local_midnight(year, month, day)?);
     (of == date).then_some(weekday)
+}
+
+/// What the radio's tests (`core/radio/tests/laps.rs`) do to the laps from outside.
+#[cfg(test)]
+impl Core {
+    /// A kept run of `lap` that holds `session`, as one a run left: a session of the laps' own
+    /// (`lap_sessions`).
+    pub(in crate::core) fn lap_test_session(&self, lap: &str, session: &str) {
+        let now = now_ms();
+        let mut laps = self.laps();
+        let run = laps.new_id("r", now);
+        let record = LapRun { id: run, lap: lap.to_string(), due: now, started_at: now, ended_at: Some(now), result: Some(RunResult::Ok), session: Some(session.to_string()), agent: Some(Agent::Claude), ..Default::default() };
+        laps.runs.entry(lap.to_string()).or_default().push(record);
+    }
+
+    /// The loop's second at `now`: the jobs whose runs it began (none of them is run).
+    pub(in crate::core) fn laps_test_due(self: &Arc<Self>, now: u64) -> Vec<String> {
+        let mut begun = Vec::new();
+        self.laps_due_at(now, &mut |_, planned| begun.push(planned.lap));
+        begun
+    }
 }
 
 #[cfg(test)]

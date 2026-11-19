@@ -392,8 +392,22 @@ impl Notifications {
 pub struct RadioSettings {
     /// Its endpoint is open, and Pitwall is one of Claude Code's MCP servers.
     pub on: bool,
-    /// Each tool's switch, by the tool's name (`mcp::TOOLS`). One not named here is off.
+    /// Each tool's switch, by the tool's name (`mcp::TOOLS`). One not named here is off; read
+    /// from a file, a tool the file doesn't name (one that came after it was written) takes its
+    /// default (`switches_or_default`).
+    #[serde(deserialize_with = "switches_or_default")]
     pub tools: BTreeMap<String, bool>,
+}
+
+/// The radio's switches as a settings file has them, and each tool it doesn't name as that tool
+/// starts: a file written before a tool came has never had a word on it, while one the user
+/// switched off is named, `false`.
+fn switches_or_default<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<BTreeMap<String, bool>, D::Error> {
+    let mut tools = BTreeMap::<String, bool>::deserialize(deserializer)?;
+    for tool in crate::mcp::TOOLS {
+        tools.entry(tool.name.to_string()).or_insert(tool.default_on);
+    }
+    Ok(tools)
 }
 
 impl Default for RadioSettings {
@@ -1182,6 +1196,22 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    /// A tool that came after the settings were written starts as it starts for everyone, on or
+    /// off; one the user switched off stays off, and nothing a file lacks turns a tool on that
+    /// starts off.
+    #[test]
+    fn a_radio_tool_the_settings_never_named_takes_its_default_and_the_users_word_stays() {
+        let read: RadioSettings = serde_json::from_value(json!({ "on": true, "tools": { "board_add": false, "run_command": true } })).unwrap();
+        for tool in crate::mcp::TOOLS {
+            let expected = match tool.name {
+                "board_add" => false,
+                "run_command" => true,
+                _ => tool.default_on,
+            };
+            assert_eq!(read.allows(tool.name), expected, "{}", tool.name);
+        }
+    }
 
     #[test]
     fn an_older_double_click_still_opens_the_places_it_did() {

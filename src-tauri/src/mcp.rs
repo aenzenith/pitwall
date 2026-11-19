@@ -67,7 +67,7 @@ pub struct Tool {
     required: &'static [&'static str],
 }
 
-pub const TOOLS: [Tool; 6] = [
+pub const TOOLS: &[Tool] = &[
     Tool {
         name: "server_status",
         description: "The state of this project's dev server as Pitwall runs it: running, stopped, crashed or busy, its address and port, the \
@@ -80,13 +80,15 @@ pub const TOOLS: [Tool; 6] = [
     },
     Tool {
         name: "server_output",
-        description: "The last lines the dev server printed. Use this to read its errors instead of starting the server yourself.",
+        description: "The last lines the dev server printed, of its current run. Use this to read its errors instead of starting the server \
+                      yourself. With `since_read`, only what it printed since you last read it: use that to check what your change did.",
         acts: false,
         default_on: true,
         arguments: || {
             json!({
-                "lines": { "type": "integer", "minimum": 1, "maximum": 200, "description": "How many lines, from the end. 40 when left out." },
+                "lines": { "type": "integer", "minimum": 1, "maximum": 200, "description": "How many lines at most, from the end. 40 when left out." },
                 "command": { "type": "string", "description": "The name of one of the project's saved commands, to read its output instead." },
+                "since_read": { "type": "boolean", "description": "Only the lines that came since this session last read the same output (any read of it moves your place); a new run's from its beginning." },
             })
         },
         required: &[],
@@ -104,6 +106,16 @@ pub const TOOLS: [Tool; 6] = [
         name: "run_command",
         description: "Runs one of the project's saved commands by its name (`server_status` lists them). Commands the user marked \"ask \
                       first\" are refused.",
+        acts: true,
+        default_on: false,
+        arguments: || json!({ "name": { "type": "string", "description": "The command's name as Pitwall lists it." } }),
+        required: &["name"],
+    },
+    // [seam C1 server tools]
+    Tool {
+        name: "stop_command",
+        description: "Stops one of the project's saved commands that is running, by its name (`server_status` lists them), as its Stop \
+                      button in Pitwall does. It never stops the dev server: use `server_restart` for that.",
         acts: true,
         default_on: false,
         arguments: || json!({ "name": { "type": "string", "description": "The command's name as Pitwall lists it." } }),
@@ -131,6 +143,211 @@ pub const TOOLS: [Tool; 6] = [
         default_on: true,
         arguments: || json!({ "note": { "type": "string" } }),
         required: &["note"],
+    },
+    // [seam A board tools]
+    Tool {
+        name: "board_list",
+        description: "Lists this project's board in Pitwall: its cards by column, each with its id, or one card whole with its note when \
+                      `card` names it. Use this before changing, moving or taking a card.",
+        acts: false,
+        default_on: true,
+        arguments: || json!({ "card": { "type": "string", "description": "A card's id, to read that card whole." } }),
+        required: &[],
+    },
+    Tool {
+        name: "board_edit",
+        description: "Changes a card on this project's board: adds to its note, or on a card added over the radio replaces its title or \
+                      note. The user's cards, those they wrote or changed in Pitwall, only take a signed note at their end. The card stays where it is.",
+        acts: true,
+        default_on: true,
+        arguments: || {
+            json!({
+                "card": { "type": "string", "description": "The card's id, as board_list gives it." },
+                "title": { "type": "string", "description": "A new title of one short line, for a card added over the radio." },
+                "note": { "type": "string", "description": "What to write on the card." },
+                "mode": {
+                    "type": "string",
+                    "enum": ["append", "replace"],
+                    "description": "append (when left out) adds the note under the card's own; replace puts it in its place, on a card added over the radio.",
+                },
+            })
+        },
+        required: &["card"],
+    },
+    Tool {
+        name: "board_move",
+        description: "Moves a card within \"Up next\", or between \"Up next\" and \"Done\": to put the work in order, to close a card \
+                      that is done elsewhere, obsolete or a duplicate, or to open one again. A card with an agent or in review stays where \
+                      it is.",
+        acts: true,
+        default_on: true,
+        arguments: || {
+            json!({
+                "card": { "type": "string", "description": "The card's id, as board_list gives it." },
+                "column": { "type": "string", "enum": ["queued", "done"], "description": "queued is \"Up next\", done is \"Done\"." },
+                "index": { "type": "integer", "minimum": 0, "description": "Its place among that column's cards, 0 at the top. At the bottom when left out." },
+            })
+        },
+        required: &["card", "column"],
+    },
+    Tool {
+        name: "board_delete",
+        description: "Deletes a card that was added over the radio, from \"Up next\" or \"Done\". The user's cards, those they wrote or \
+                      changed in Pitwall, are never deleted: move one to \"Done\" with board_move instead.",
+        acts: true,
+        default_on: false,
+        arguments: || json!({ "card": { "type": "string", "description": "The card's id, as board_list gives it." } }),
+        required: &["card"],
+    },
+    Tool {
+        name: "board_take",
+        description: "Takes a card from \"Up next\" for this session when you start on its work now: it goes to your column on the \
+                      board, and to review when this turn ends. Say what you did with board_note.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({ "card": { "type": "string", "description": "The card's id, as board_list gives it. The top card of \"Up next\" that waits for nothing when left out." } })
+        },
+        required: &[],
+    },
+    // [seam B lap tools]
+    Tool {
+        name: "lap_list",
+        description: "This project's laps in Pitwall: the jobs it runs on a schedule (an agent given a prompt, a script, or a script then an agent), \
+                      when each runs next and how its last run went. Name one by its id to read its prompt, script, last runs and last result.",
+        acts: false,
+        default_on: true,
+        arguments: || json!({ "lap": { "type": "string", "description": "A job's id, as this list gives it, to read that job whole." } }),
+        required: &[],
+    },
+    Tool {
+        name: "lap_add",
+        description: "Adds a lap to this project in Pitwall: a job it runs on a schedule while it is open. Use this when the user asks for \
+                      something to happen every day, every so often, once later or at the agent's next refill. A command line you write \
+                      as its script keeps the job paused until the user has read it.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "name": { "type": "string", "description": "One short line, 200 characters at most." },
+                "kind": { "type": "string", "enum": ["agent", "script", "script_agent"], "description": "An agent given the prompt, a script alone, or a script whose output then goes to the agent with the prompt." },
+                "prompt": { "type": "string", "description": "What the agent does at each run. Needed with an agent." },
+                "script": {
+                    "type": "object",
+                    "description": "Needed with a script: {\"command\": \"<a saved command's name>\"} (server_status lists them; none marked \"ask first\") or {\"text\": \"<a command line>\"}, run in the project's folder.",
+                    "properties": { "command": { "type": "string" }, "text": { "type": "string" } },
+                },
+                "when": {
+                    "type": "object",
+                    "description": "When it runs, on this Mac's clock: {\"kind\":\"daily\",\"at\":\"09:00\",\"days\":[1,2,3,4,5]} (days 1 Monday to 7 Sunday, none: every day), {\"kind\":\"every\",\"minutes\":30,\"from\":\"09:00\",\"to\":\"18:00\",\"days\":[]}, {\"kind\":\"once\",\"at\":\"2026-11-20 14:00\"}, {\"kind\":\"refill\"} (when the agent's usage limit refills) or {\"kind\":\"cron\",\"expr\":\"0 9 * * 1\"}. With an agent, runs are at least 15 minutes apart.",
+                    "properties": {
+                        "kind": { "type": "string", "enum": ["daily", "every", "once", "refill", "cron"] },
+                        "at": { "type": "string" },
+                        "days": { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 7 } },
+                        "minutes": { "type": "integer", "minimum": 1 },
+                        "from": { "type": "string" },
+                        "to": { "type": "string" },
+                        "expr": { "type": "string" },
+                    },
+                    "required": ["kind"],
+                },
+                "agent": { "type": "string", "enum": ["claude", "codex"], "description": "The agent it gives the prompt to. Yours when left out." },
+                "model": { "type": "string", "description": "Claude: fable, opus, sonnet or haiku. Codex: gpt-6.1-sol, gpt-6.1-terra, gpt-6-astra or gpt-6-luna. default: the agent's own choice. The project's when left out." },
+                "mode": { "type": "string", "enum": ["normal", "plan", "acceptEdits", "readOnly"], "description": "Claude: normal, plan or acceptEdits. Codex: normal or readOnly. The project's when left out." },
+                "where": { "type": "string", "enum": ["tab", "background"], "description": "In a tab of Pitwall's, where it may ask for permissions (the default), or in the background, read-only." },
+                "carry": { "type": "boolean", "description": "The last run's result goes into the next run's prompt." },
+                "ends_after": { "type": "integer", "minimum": 0, "description": "It switches itself off after this many runs. 0, or left out: no end." },
+                "timeout_min": { "type": "integer", "minimum": 0, "maximum": 1440, "description": "A run is stopped after this many minutes. 0, or left out: no limit." },
+            })
+        },
+        required: &["name", "kind", "when"],
+    },
+    Tool {
+        name: "lap_edit",
+        description: "Changes a lap of this project that was added over the radio and that the user hasn't changed in Pitwall since: the \
+                      fields given replace the job's own, `when` and `script` whole. A new command line as its script pauses the job again \
+                      until the user has read it.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "lap": { "type": "string", "description": "The job's id, as lap_list gives it." },
+                "name": { "type": "string", "description": "One short line, 200 characters at most." },
+                "kind": { "type": "string", "enum": ["agent", "script", "script_agent"] },
+                "prompt": { "type": "string" },
+                "script": {
+                    "type": "object",
+                    "description": "{\"command\": \"<a saved command's name>\"} or {\"text\": \"<a command line>\"}.",
+                    "properties": { "command": { "type": "string" }, "text": { "type": "string" } },
+                },
+                "when": {
+                    "type": "object",
+                    "description": "As lap_add takes it.",
+                    "properties": {
+                        "kind": { "type": "string", "enum": ["daily", "every", "once", "refill", "cron"] },
+                        "at": { "type": "string" },
+                        "days": { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 7 } },
+                        "minutes": { "type": "integer", "minimum": 1 },
+                        "from": { "type": "string" },
+                        "to": { "type": "string" },
+                        "expr": { "type": "string" },
+                    },
+                    "required": ["kind"],
+                },
+                "agent": { "type": "string", "enum": ["claude", "codex"] },
+                "model": { "type": "string", "description": "As lap_add takes it." },
+                "mode": { "type": "string", "enum": ["normal", "plan", "acceptEdits", "readOnly"] },
+                "where": { "type": "string", "enum": ["tab", "background"] },
+                "carry": { "type": "boolean" },
+                "ends_after": { "type": "integer", "minimum": 0, "description": "How many runs before it switches itself off. 0 takes the end off." },
+                "timeout_min": { "type": "integer", "minimum": 0, "maximum": 1440, "description": "A run is stopped after this many minutes. 0 takes the limit off." },
+            })
+        },
+        required: &["lap"],
+    },
+    Tool {
+        name: "lap_pause",
+        description: "Pauses one of this project's laps, or resumes one that is paused. A job waiting for the user to read its script, one \
+                      paused after failures and one switched off are the user's to turn on.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "lap": { "type": "string", "description": "The job's id, as lap_list gives it." },
+                "paused": { "type": "boolean", "description": "true pauses it, false resumes it." },
+            })
+        },
+        required: &["lap", "paused"],
+    },
+    Tool {
+        name: "lap_delete",
+        description: "Deletes a lap of this project that was added over the radio, with its runs. Those the user made or changed in \
+                      Pitwall are theirs to delete: pause one with lap_pause instead.",
+        acts: true,
+        default_on: false,
+        arguments: || json!({ "lap": { "type": "string", "description": "The job's id, as lap_list gives it." } }),
+        required: &["lap"],
+    },
+    // [seam C2 team tools]
+    Tool {
+        name: "team_status",
+        description: "Who else works in this project right now: each Claude and Codex session Pitwall counts here, where it stands, where \
+                      it runs and the board card it was given. Use this before large or shared changes, so that parallel sessions don't \
+                      undo each other's work.",
+        acts: false,
+        default_on: true,
+        arguments: || json!({}),
+        required: &[],
+    },
+    Tool {
+        name: "fuel_status",
+        description: "How much of your usage limits is used, as Pitwall last read them for the account in use: the 5-hour session's and \
+                      the week's share, when each refills, and how old the reading is. Use this to pace a big job, or to leave the rest as \
+                      a board card for after the refill.",
+        acts: false,
+        default_on: false,
+        arguments: || json!({}),
+        required: &[],
     },
 ];
 

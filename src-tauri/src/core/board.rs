@@ -2,8 +2,8 @@
 //! card given to Claude opens a Claude Code tab in one of Pitwall's terminals with its text as
 //! the first prompt, then follows that session: it stays in `claude` while Claude works or waits
 //! on a permission or a question, and goes to `review` once the turn is over or the session has
-//! ended. From `review` it goes back to `claude` when its session goes to work again. The user
-//! moves it to `done`.
+//! ended. From `review` it goes back to `claude` when its session goes to work again, but for a
+//! card a session took for itself over the radio (`Card::taken`). The user moves it to `done`.
 //!
 //! A card follows the process its session runs in: a session that takes a new id there (`/clear`)
 //! is still the card's. Claude Code's own `busy` / `waiting` outranks a hook gone quiet through a
@@ -288,6 +288,25 @@ pub struct Card {
     /// line. This run's only: never read from the file, written only while true.
     #[serde(default, skip_serializing_if = "std::ops::Not::not", skip_deserializing)]
     pub starting: bool,
+    /// The agent whose session added it over the team radio (`board_add`); none for a card the
+    /// user wrote, and for every card of a file that names none. The radio changes and deletes
+    /// only cards of its own whole: a user's takes no more than a signed note at its end. A card
+    /// the user edits and saves with other words or images in the window is theirs from then on
+    /// (`board_edit`); a move, a give or a link there keeps it.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "agent_or_none")]
+    pub by: Option<Agent>,
+    /// A session took it for itself over the radio (`Board::take`): one at work on many things,
+    /// not one started for the card. Once in `review` it stays there when that session works again
+    /// (`follow_board`), so the user reviews it in peace. Given or linked again, or moved into
+    /// `claude`, by the user, it follows its session back as any card does (`Board::place`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub taken: bool,
+}
+
+/// `by` as the file has it: one of the agents there are, nothing for anything else. A word this
+/// version doesn't know leaves the card the user's, which the radio changes the least.
+fn agent_or_none<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Agent>, D::Error> {
+    Ok(Value::deserialize(deserializer)?.as_str().and_then(Agent::parse))
 }
 
 impl Card {
@@ -430,10 +449,64 @@ impl Board {
         self.cards.iter_mut().find(|card| card.id == id)
     }
 
+    /// Card `id` is on its way to an agent right now (a tab is opening for it).
+    pub(super) fn is_giving(&self, id: &str) -> bool {
+        self.giving.contains(id)
+    }
+
+    /// The board's file says card `id` waits for its moment, though it waits no more here: the
+    /// wait was called off while the file couldn't be written (`filed_waiting`). Given now, it
+    /// would be given again at that moment, by this run or the next.
+    pub(super) fn waits_on_file(&self, id: &str) -> bool {
+        self.filed_waiting.contains(id)
+    }
+
+    /// Card `id`'s title and note set to `title` and `note` as an edit with no image pasted sets
+    /// them (`board_edit`): an image stays while the note names it, and the file of one it no
+    /// longer names goes. Nothing else of the card changes: its place, its session, its
+    /// schedule. False when there is no such card.
+    pub(super) fn retext(&mut self, id: &str, title: &str, note: &str) -> bool {
+        let Some(card) = self.find_mut(id) else {
+            return false;
+        };
+        let gone: Vec<CardImage> = card.images.iter().copied().filter(|image| !names(note, image.n)).collect();
+        card.images.retain(|image| names(note, image.n));
+        card.title = title.to_string();
+        card.note = note.to_string();
+        self.remove_images(id, &gone);
+        true
+    }
+
+    /// Card `id` taken by `session` for itself (the radio's `board_take`): into the agent's column,
+    /// following that session as `board_link` ties one, but with the turn under way the card's
+    /// own, for the session took it in that turn: its end sends the card to review
+    /// (`follow_board`), never only the next one's. Seen at work now (`busy`), it has been worked
+    /// on; its state not read since that turn began, a turn that ends after the take is the
+    /// card's all the same (`given_at`), and an earlier one's end is not. Once in review it stays
+    /// there when the session works on (`Card::taken`). `ran`: the session is among the running
+    /// ones. `start`: the agent's, when the card's own start is another agent's.
+    pub(super) fn take(&mut self, id: &str, session: &str, start: Option<Start>, busy: bool, ran: bool, now: u64) -> Option<&Card> {
+        let card = self.place(id, Column::Claude, usize::MAX, now)?;
+        if let Some(start) = start {
+            card.start = Some(start);
+        }
+        card.session = Some(session.to_string());
+        card.terminal = None;
+        card.given_at = Some(now);
+        card.worked = busy;
+        card.ran = ran;
+        card.schedule = None;
+        card.taken = true;
+        self.linked_busy.remove(id);
+        self.find(id)
+    }
+
     /// Takes the card out and puts it at `index` among its project's cards in `column` (past the
     /// last one: at the end), as the board shows them. A new column sets `moved_at`, and the
     /// card is no longer `rested`: that is told anew where it got to. Nor does it wait for a
-    /// moment any more (`schedule`): only a card left in `queued` does.
+    /// moment any more (`schedule`): only a card left in `queued` does. Into `claude` it is no
+    /// longer `taken`: given, linked or moved there, it follows its session back from review
+    /// (`Board::take` marks its own after this).
     pub(super) fn place(&mut self, id: &str, column: Column, index: usize, now: u64) -> Option<&mut Card> {
         let at = self.cards.iter().position(|card| card.id == id)?;
         let mut card = self.cards.remove(at);
@@ -443,6 +516,9 @@ impl Board {
             card.rested = false;
             card.schedule = None;
             card.starting = false;
+            if column == Column::Claude {
+                card.taken = false;
+            }
         }
 
         let slots: Vec<usize> =
@@ -755,6 +831,12 @@ impl Core {
     /// A new card, at the end of `queued`. `images`: those pasted into its note; it takes the
     /// ones the note still names.
     pub fn board_add(&self, path: &str, title: &str, note: &str, images: &[NewImage]) -> Result<Card, String> {
+        self.board_add_by(path, title, note, images, None)
+    }
+
+    /// `board_add`, the card marked as added by `by`'s session over the radio (`Card::by`); none:
+    /// the user's.
+    pub(super) fn board_add_by(&self, path: &str, title: &str, note: &str, images: &[NewImage], by: Option<Agent>) -> Result<Card, String> {
         let title = title.trim();
         if title.is_empty() {
             return Err("a card needs a title".into());
@@ -792,6 +874,8 @@ impl Core {
             start: None,
             schedule: None,
             starting: false,
+            by,
+            taken: false,
         };
         board.cards.push(card.clone());
         board.place(&card.id, Column::Queued, usize::MAX, now);
@@ -802,7 +886,8 @@ impl Core {
     /// A card's new text. `images`: those pasted into its note since it was saved. An image
     /// stays while the note names it (`[Image #n]`), and its file goes once the note no longer
     /// does; a new one under a held number takes that one's place. A card that waited for its
-    /// moment no longer does: what was to be given then was the text as it stood.
+    /// moment no longer does: what was to be given then was the text as it stood. A card the radio
+    /// added (`Card::by`) is the user's once its words or images changed here.
     pub fn board_edit(&self, id: &str, title: &str, note: &str, images: &[NewImage]) -> Result<(), String> {
         let title = title.trim();
         if title.is_empty() {
@@ -823,6 +908,9 @@ impl Core {
         let gone: Vec<CardImage> = before.into_iter().filter(|image| !held.contains(image)).collect();
 
         let card = board.find_mut(id).ok_or_else(|| no_card(id))?;
+        if card.title != title || card.note != note || card.images != held || !added.is_empty() {
+            card.by = None;
+        }
         card.title = title.to_string();
         card.note = note.to_string();
         card.images = held;
@@ -1579,7 +1667,8 @@ impl Core {
     /// work) or the session ended; one whose turn the user interrupted goes there without a
     /// word. A card in `review` goes back to `claude` when its session,
     /// seen at rest since the card got there, is at work again; a session several cards hold
-    /// works for the one given last, and only that one follows it back. A card's session is looked
+    /// works for the one given last, and only that one follows it back, unless that session took it
+    /// for itself (`Card::taken`): it stays in review. A card's session is looked
     /// for among its own agent's running ones only (`running_of`). Runs after every refresh of
     /// Claude's state (`refresh_claude`: each heartbeat and each change to Claude's files, Codex's
     /// merged into it),
@@ -1720,8 +1809,9 @@ impl Core {
             let state = stand(session, scanned.get(session), running, ran);
             if card.column == Column::Review {
                 match state {
-                    // At work again after the rest that left the card here: its session went on.
-                    Stand::Busy if card.rested && latest.get(session).is_some_and(|(_, id)| *id == card.id) => again.push(card.id.clone()),
+                    // At work again after the rest that left the card here: its session went on. Not
+                    // so for a card a session took for itself: that session works on other things.
+                    Stand::Busy if card.rested && !card.taken && latest.get(session).is_some_and(|(_, id)| *id == card.id) => again.push(card.id.clone()),
                     Stand::Over(_) | Stand::Interrupted | Stand::Ended if !card.rested => {
                         card.rested = true;
                         changed = true;
@@ -1826,6 +1916,8 @@ mod tests {
             start: None,
             schedule: None,
             starting: false,
+            by: None,
+            taken: false,
         }
     }
 

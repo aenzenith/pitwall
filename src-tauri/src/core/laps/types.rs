@@ -260,6 +260,16 @@ pub struct Lap {
     /// Runs started on schedule so far (for `ends.after`).
     pub runs_done: u32,
     pub created_at: u64,
+    /// The agent whose radio call added the job (`core/radio/lap_tools.rs`); none: the user made
+    /// it, or changed it and saved it in the window since. Only such a job is changed or deleted
+    /// over the radio; a pause, the switch or a save with nothing changed keeps it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub by: Option<Agent>,
+    /// The job holds a script line an agent wrote over the radio that the user hasn't read yet: it
+    /// stays paused until the user resumes it in the window (`Core::lap_pause`), which alone lets
+    /// it go. A window save keeps it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub review: bool,
 }
 
 impl Default for Lap {
@@ -296,6 +306,8 @@ impl Default for Lap {
             streak: 0,
             runs_done: 0,
             created_at: 0,
+            by: None,
+            review: false,
         }
     }
 }

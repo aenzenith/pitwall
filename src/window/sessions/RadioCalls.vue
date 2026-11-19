@@ -2,7 +2,9 @@
 import { computed, ref, watch } from "vue";
 
 import { clock } from "../../lib/day";
-import { t } from "../../lib/i18n";
+import { percentText } from "../../lib/fuel";
+import { agentKey } from "../../lib/format";
+import { language, t } from "../../lib/i18n";
 import { api, snapshot } from "../../lib/store";
 import type { RadioCall } from "../../lib/types";
 
@@ -50,6 +52,41 @@ function result(call: RadioCall): string {
       return t("board.column.review");
     case "ran":
       return came.name;
+    // [seam A board results]
+    case "listed":
+      // One card read is named by its title; a list, by how many it named.
+      return came.title === null ? t("radio.result.listed", { count: came.count }) : t("radio.result.read", { title: came.title });
+    case "edited":
+      return t("radio.result.edited", { title: came.title });
+    case "moved":
+      return t("radio.result.card", { title: came.title, column: t(`board.column.${came.column}`) });
+    case "deleted":
+      return t("radio.result.deleted", { title: came.title });
+    case "taken":
+      return t("radio.result.card", { title: came.title, column: t(agentKey("board.column.claude", came.agent)) });
+    // [seam B lap results]
+    case "lapList":
+      return t("radio.result.laps", { count: came.count });
+    case "lapRead":
+    case "lapDeleted":
+      return t("radio.result.lap", { name: came.name });
+    case "lapAdded":
+    case "lapEdited":
+      // Held: an agent's script waits, paused, for the user.
+      return t(came.held ? "radio.result.lapPaused" : "radio.result.lap", { name: came.name });
+    case "lapPaused":
+      return t(came.paused ? "radio.result.lapPaused" : "radio.result.lapResumed", { name: came.name });
+    // [seam C server and team results]
+    case "stopped":
+      return came.running ? came.name : t("radio.result.notRunning", { name: came.name });
+    case "team":
+      return t("radio.result.sessions", { count: came.count });
+    case "fuel": {
+      // What is left of each, in the catalog's own words for a limit and its share left.
+      const left = (name: string, used: number | null): string[] => (used === null ? [] : [t("fuel.gauge.label", { name, value: percentText(Math.max(0, 100 - used), language.value) })]);
+      const parts = [...left(t("fuel.name.sessionShort"), came.session), ...left(t("fuel.name.weekShort"), came.week)];
+      return parts.length ? parts.join(" · ") : t("radio.result.noFuel");
+    }
     case "refused":
       return t("radio.result.refused");
   }

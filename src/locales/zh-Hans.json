@@ -1518,6 +1518,9 @@
   "laps.paused.failures": {
     "other": "失败 {count} 次后已暂停"
   },
+  "laps.paused.review": "这个任务是 Claude 添加的。请先阅读它的脚本，再继续。",
+  "laps.paused.review.codex": "这个任务是 Codex 添加的。请先阅读它的脚本，再继续。",
+  "laps.paused.reviewChanged": "请先阅读这个任务的脚本，再继续。",
   "laps.off": "已关闭",
   "laps.ring.at": "{time} 运行",
   "laps.ring.atDay": "{day} {time} 运行",
@@ -1780,8 +1783,21 @@
   "radio.tool.server_output": "服务器输出的最后几行",
   "radio.tool.server_restart": "启动、停止和重启服务器",
   "radio.tool.run_command": "运行项目已保存的命令，标记为“运行前询问”的除外",
+  "radio.tool.stop_command": "停止项目中正在运行的已保存命令",
   "radio.tool.board_add": "在看板的“待办”中添加卡片",
   "radio.tool.board_note": "在自己的卡片上留备注，并移到“待审查”",
+  "radio.tool.board_list": "读取看板上的卡片及其备注",
+  "radio.tool.board_edit": "编辑通过无线电添加的卡片；在你的卡片上只追加带签名的备注",
+  "radio.tool.board_move": "调整“待办”的顺序，并在“待办”和“已完成”之间移动卡片",
+  "radio.tool.board_delete": "从“待办”或“已完成”中删除通过无线电添加的卡片",
+  "radio.tool.board_take": "从“待办”中领取一张卡片，并在自己的会话中处理",
+  "radio.tool.team_status": "还有谁在这个项目里工作：每个会话的状态、运行位置和卡片",
+  "radio.tool.fuel_status": "自己的限额（Pitwall 最近读取的值）及恢复时间",
+  "radio.tool.lap_list": "列出项目的圈次，读取任务的运行记录和最近结果",
+  "radio.tool.lap_add": "向项目的圈次添加任务；它自己写了脚本的任务会保持暂停，直到你继续",
+  "radio.tool.lap_edit": "只修改通过无线电添加的任务",
+  "radio.tool.lap_pause": "暂停和继续项目的任务，等待你审查的任务除外",
+  "radio.tool.lap_delete": "只删除通过无线电添加的任务",
   "radio.calls": "无线电",
   "radio.callsToday": {
     "other": "今天 {count} 次调用"
@@ -1790,7 +1806,24 @@
     "other": "{count} 行"
   },
   "radio.result.card": "“{title}” · {column}",
+  "radio.result.listed": {
+    "other": "{count} 张卡片"
+  },
+  "radio.result.read": "“{title}”",
+  "radio.result.edited": "“{title}” · 已编辑",
+  "radio.result.deleted": "“{title}” · 已删除",
+  "radio.result.laps": {
+    "other": "{count} 个任务"
+  },
+  "radio.result.lap": "“{name}”",
+  "radio.result.lapPaused": "“{name}” · 已暂停",
+  "radio.result.lapResumed": "“{name}” · 已继续",
   "radio.result.refused": "已拒绝",
+  "radio.result.notRunning": "“{name}”未在运行",
+  "radio.result.sessions": {
+    "other": "{count} 个会话"
+  },
+  "radio.result.noFuel": "无读数",
   "radio.kind.codex": "Codex 的 MCP 服务器",
   "radio.hint.codex": "Codex 向 Pitwall 询问开发服务器，而不是自己启动。",
   "radio.missing.codex": "未找到 Codex。",

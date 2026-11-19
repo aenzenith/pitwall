@@ -71,8 +71,12 @@ const ring = computed<{ big: string; small: string; arc: number }>(() => {
     return { big: countdown(props.now - lap.running.startedAt).replace(/^00:/, ""), small: phaseText(lap.running, lap), arc: 1 };
   }
   if (!scheduled(lap) || lap.nextAt === null) {
-    const small =
-      lap.paused === "failures"
+    // Held for its script: the agent that added it, unless the user has changed it since.
+    const small = lap.review
+      ? lap.by
+        ? t(agentKey("laps.paused.review", lap.by))
+        : t("laps.paused.reviewChanged")
+      : lap.paused === "failures"
         ? t("laps.paused.failures", { count: Math.max(lap.streak, lap.pauseAfter ?? 0) })
         : lap.paused === "user"
           ? t("laps.paused.user")
@@ -102,6 +106,17 @@ const scriptName = computed(() => {
   const project = snapshot.value?.projects.find((p) => p.path === props.lap.place.path);
   const command = project?.commands.find((c) => c.id === script.id);
   return command?.command ?? command?.name ?? script.id;
+});
+
+/** A held job's script whole, each line as a run's output shows it (`$ npm test`): what Sürdür lets run. */
+const heldScript = computed(() => {
+  const script = props.lap.script;
+  if (!props.lap.review || !script) return "";
+  const text = script.kind === "text" ? script.text : scriptName.value;
+  return text
+    .split("\n")
+    .map((line) => `$ ${line}`)
+    .join("\n");
 });
 
 type Fact = { label: string; text: string; script?: boolean };
@@ -286,6 +301,9 @@ function more(event: MouseEvent): void {
       </div>
     </div>
 
+    <!-- Held for its script: the lines Sürdür lets run, beside the ring that says so. -->
+    <pre v-if="heldScript" class="held-script selectable" :aria-label="t('laps.edit.script')">{{ heldScript }}</pre>
+
     <div class="rule"></div>
 
     <div class="facts">
@@ -401,6 +419,22 @@ function more(event: MouseEvent): void {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+}
+
+.held-script {
+  flex-shrink: 0;
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-log);
+  color: var(--text-log);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre;
 }
 
 .ring {

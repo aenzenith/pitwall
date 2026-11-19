@@ -9,6 +9,7 @@ use super::super::output::MARKER;
 use super::super::routing::{start_done, to_stop};
 use super::super::sessions::{lineage, Running};
 use super::super::signals::Signal;
+use super::team_tools;
 use super::*;
 use crate::claude::inside;
 
@@ -30,9 +31,9 @@ const RUN_LINES: usize = 20;
 /// A card's title is one line of this many characters at most; what Claude writes into a note
 /// at once is bounded too, and a card's whole note is as long as its dialog's field takes
 /// (`CardDialog.vue`: the note's `maxlength`), or the user could add nothing to it there.
-const TITLE_MAX: usize = 120;
-const NOTE_MAX: usize = 4_000;
-const CARD_NOTE_MAX: usize = 8_000;
+pub(super) const TITLE_MAX: usize = 120;
+pub(super) const NOTE_MAX: usize = 4_000;
+pub(super) const CARD_NOTE_MAX: usize = 8_000;
 
 const NO_PROJECT: &str = "This folder isn't one of Pitwall's projects, so there is nothing here to ask Pitwall about.";
 const SWITCHED_OFF: &str = "The user has switched this tool off in Pitwall (Settings › Claude).";
@@ -40,9 +41,9 @@ const NO_CARD: &str = "This session was given no card on Pitwall's board, so the
 /// Codex's own words: its radio is its own switch, in its own part of Settings.
 const CODEX_SWITCHED_OFF: &str = "The user has switched this tool off in Pitwall (Settings › Agents › Codex).";
 
-type Outcome = (Reply, CallResult);
+pub(super) type Outcome = (Reply, CallResult);
 
-fn refused(text: impl Into<String>) -> Outcome {
+pub(super) fn refused(text: impl Into<String>) -> Outcome {
     (Reply::refused(text), CallResult::Refused)
 }
 
@@ -79,7 +80,7 @@ pub(in crate::core) fn saved<'a>(project: &'a ProjectView, name: &str) -> Option
     project.commands.iter().find(|command| command.name == name).or_else(|| project.commands.iter().find(|command| command.name.eq_ignore_ascii_case(name)))
 }
 
-fn no_such_command(project: &ProjectView) -> Outcome {
+pub(super) fn no_such_command(project: &ProjectView) -> Outcome {
     let names: Vec<&str> = project.commands.iter().map(|command| command.name.as_str()).collect();
     if names.is_empty() {
         refused("This project has no saved commands in Pitwall.")
@@ -102,7 +103,7 @@ pub(in crate::core) fn last_lines(lines: &[String], count: usize) -> Vec<&str> {
 /// `lines` as one answer, and how many of them are in it: each cut to `LINE_CHARS`, and of the
 /// lot the last that fit `ANSWER_BYTES` as they are sent (a control character goes as six,
 /// `\u0001`). What was cut is said where it was.
-fn fitted(lines: &[&str]) -> (String, usize) {
+pub(super) fn fitted(lines: &[&str]) -> (String, usize) {
     let mut kept: Vec<String> = Vec::new();
     let mut bytes = 0;
     for line in lines.iter().rev() {
@@ -129,8 +130,19 @@ fn fitted(lines: &[&str]) -> (String, usize) {
 }
 
 /// An argument's text; an empty one counts as left out.
-fn text<'a>(args: &'a Value, name: &str) -> Option<&'a str> {
+pub(super) fn text<'a>(args: &'a Value, name: &str) -> Option<&'a str> {
     args.get(name).and_then(Value::as_str).map(str::trim).filter(|text| !text.is_empty())
+}
+
+/// `note` under `before`, a card's note, with `agent`'s name, the day and the time over it and a
+/// blank line between: how the radio writes on a card, the user's too.
+pub(super) fn signed(agent: Agent, before: &str, note: &str, now: u64) -> String {
+    let signed = format!("{} · {} {}\n{note}", agent.name(), crate::clock::day_name(now), crate::clock::clock(now as i64));
+    if before.is_empty() {
+        signed
+    } else {
+        format!("{before}\n\n{signed}")
+    }
 }
 
 impl Core {
@@ -152,25 +164,40 @@ impl Core {
         };
 
         let session = self.radio_session(caller.ppid);
+        // Who reads an output, for `since_read`: the session, else Claude Code's own process.
+        let reader = team_tools::reader(session.as_deref(), caller.ppid, false);
         let (reply, result) = match self.radio_project(&caller.cwd) {
             None => refused(NO_PROJECT),
             Some(_) if !allowed => refused(SWITCHED_OFF),
-            Some(project) => self.radio_dispatch(Agent::Claude, &project, tool.name, session.as_deref(), args),
+            Some(project) => self.radio_dispatch(Agent::Claude, &project, tool.name, session.as_deref(), args, reader.as_deref()),
         };
 
         self.radio_note(session.as_deref(), tool.name, result);
         reply
     }
 
-    /// The tool `name` for `agent`'s session, its gates passed.
-    fn radio_dispatch(self: &Arc<Self>, agent: Agent, project: &ProjectView, name: &str, session: Option<&str>, args: &Value) -> Outcome {
+    /// The tool `name` for `agent`'s session, its gates passed. `reader`: who reads an output, for
+    /// `server_output`'s `since_read` (`team_tools::reader`).
+    fn radio_dispatch(self: &Arc<Self>, agent: Agent, project: &ProjectView, name: &str, session: Option<&str>, args: &Value, reader: Option<&str>) -> Outcome {
         match name {
             "server_status" => status(project),
-            "server_output" => self.radio_output(agent, project, args),
+            "server_output" => self.radio_output(agent, project, args, reader),
             "server_restart" => self.radio_act(agent, project, args),
             "run_command" => self.radio_run(project, args),
-            "board_add" => self.radio_card(project, args),
+            "board_add" => self.radio_card(agent, project, args),
             "board_note" => self.radio_card_note(agent, project, session, args),
+            // [seam A board dispatch]
+            "board_list" => self.radio_board_list(project, session, args),
+            "board_edit" => self.radio_board_edit(agent, project, session, args),
+            "board_move" => self.radio_board_move(project, args),
+            "board_delete" => self.radio_board_delete(project, args),
+            "board_take" => self.radio_board_take(agent, project, session, args),
+            // [seam B lap dispatch]
+            "lap_list" | "lap_add" | "lap_edit" | "lap_pause" | "lap_delete" => self.radio_lap(agent, project, name, session, args),
+            // [seam C server and team dispatch]
+            "stop_command" => self.radio_stop(project, args),
+            "team_status" => self.radio_team(project, session),
+            "fuel_status" => self.radio_fuel(agent),
             _ => refused(format!("Unknown tool: {name}")),
         }
     }
@@ -204,10 +231,12 @@ impl Core {
         };
 
         let session = self.radio_codex_session(caller, daemon);
+        // Who reads an output: the session, else Codex's own process, but its shared server's.
+        let reader = team_tools::reader(session.as_deref(), caller.ppid, daemon);
         let (reply, result) = match self.radio_project(&caller.cwd) {
             None => refused(NO_PROJECT),
             Some(_) if !allowed => refused(CODEX_SWITCHED_OFF),
-            Some(project) => self.radio_dispatch(Agent::Codex, &project, tool.name, session.as_deref(), args),
+            Some(project) => self.radio_dispatch(Agent::Codex, &project, tool.name, session.as_deref(), args, reader.as_deref()),
         };
 
         self.radio_note(session.as_deref(), tool.name, result);
@@ -231,6 +260,26 @@ impl Core {
             return None;
         }
         Some(session)
+    }
+
+    /// The call can't be told from one of the laps' own, a layer of its own that adds, changes or
+    /// takes no lap and takes no card: its session is one their runs hold (`Core::lap_sessions`),
+    /// or runs in one of their tabs before its run has tied it (a Codex session is tied once the
+    /// hook tells of it), or Pitwall can't tell its session at all (a lap's Codex in the
+    /// background, `codex exec`, is no session it follows).
+    pub(super) fn radio_lap_layer(&self, agent: Agent, session: Option<&str>) -> bool {
+        let Some(session) = session else {
+            return true;
+        };
+        if self.lap_sessions().contains(session) {
+            return true;
+        }
+        let running = match agent {
+            Agent::Claude => self.running_cached(),
+            Agent::Codex => self.codex_running(),
+        };
+        let lineage = running.and_then(|running| running.get(session).map(|run| run.lineage.clone()));
+        lineage.is_some_and(|lineage| self.pitwall_terminal(&lineage).is_some_and(|(tab, _)| self.terminal_apart(tab)))
     }
 
     /// The listed project that holds `cwd`: the longest match, each folder taken as the file
@@ -282,25 +331,31 @@ impl Core {
         }
     }
 
-    fn radio_output(&self, agent: Agent, project: &ProjectView, args: &Value) -> Outcome {
+    /// The server's output, or a saved command's: its current run's last lines, or with
+    /// `since_read` what came since `reader` last read it (`team_tools.rs`). Every read moves the
+    /// reader's place to the end.
+    fn radio_output(&self, agent: Agent, project: &ProjectView, args: &Value, reader: Option<&str>) -> Outcome {
         let count = args.get("lines").and_then(Value::as_u64).map_or(OUTPUT_LINES_DEFAULT, |count| (count as usize).clamp(1, OUTPUT_LINES_MAX));
+        let since = args.get("since_read").and_then(Value::as_bool).unwrap_or(false);
 
-        let lines = match text(args, "command") {
+        let command = match text(args, "command") {
             Some(name) => match saved(project, name) {
-                Some(command) => self.command_output(&project.path, &command.id),
+                Some(command) => Some(command),
                 None => return no_such_command(project),
             },
-            None => {
-                let lines = self.output(&project.path);
-                // Marked in the output Claude read, each time: of several in a row the output
-                // keeps the last (`output.rs`: `keep_line`). The marks say Claude: Codex's
-                // reading leaves none.
-                if !lines.is_empty() && agent == Agent::Claude {
-                    self.push_marker(&project.path, "claude-read", None);
-                }
-                lines
-            }
+            None => None,
         };
+        let key = command.map_or_else(|| project.path.clone(), |command| job_key(&project.path, &command.id));
+        let (lines, unread) = self.radio_read(&project.path, &key, reader);
+        // Marked in the server's output Claude read, each time: of several in a row the output
+        // keeps the last (`output.rs`: `keep_line`). The marks say Claude: Codex's reading leaves
+        // none.
+        if command.is_none() && !lines.is_empty() && agent == Agent::Claude {
+            self.push_marker(&project.path, "claude-read", None);
+        }
+        if since {
+            return team_tools::unread_answer(unread, &lines, count);
+        }
 
         let (text, count) = fitted(&last_lines(&lines, count));
         let reply = if count == 0 { Reply::ok("(no output)") } else { Reply::ok(text) };
@@ -390,8 +445,8 @@ impl Core {
         (Reply::ok(format!("\"{name}\" ended (exit code {code}).\n{}", fitted(&last_lines(&output, RUN_LINES)).0)), ran)
     }
 
-    /// A card in the first column of the project's board.
-    fn radio_card(&self, project: &ProjectView, args: &Value) -> Outcome {
+    /// A card in the first column of the project's board, marked as `agent`'s (`Card::by`).
+    fn radio_card(&self, agent: Agent, project: &ProjectView, args: &Value) -> Outcome {
         let title = text(args, "title").map(|title| title.split_whitespace().collect::<Vec<_>>().join(" ")).unwrap_or_default();
         let note = text(args, "note").unwrap_or_default();
         if title.is_empty() || title.chars().count() > TITLE_MAX {
@@ -401,7 +456,7 @@ impl Core {
             return refused(format!("A card's `note` is {NOTE_MAX} characters at most."));
         }
 
-        match self.board_add(&project.path, &title, note, &[]) {
+        match self.board_add_by(&project.path, &title, note, &[], Some(agent)) {
             Ok(card) => (Reply::ok(format!("Added to the board's first column: {}", card.title)), CallResult::Card { title: card.title }),
             Err(error) => refused(error),
         }
@@ -430,8 +485,7 @@ impl Core {
         let Some((id, column, before)) = held else {
             return refused(NO_CARD);
         };
-        let signed = format!("{} · {} {}\n{note}", agent.name(), crate::clock::day_name(now), crate::clock::clock(now as i64));
-        let noted = if before.is_empty() { signed } else { format!("{before}\n\n{signed}") };
+        let noted = signed(agent, &before, note, now);
         // Counted as the dialog's field counts.
         let over = noted.encode_utf16().count().saturating_sub(CARD_NOTE_MAX);
         if over > 0 {

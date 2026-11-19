@@ -68,6 +68,11 @@ export type Lap = {
   file: string | null;
   ends: LapEnds;
   /* The core's own: what the window sends of them is ignored. */
+  /** The agent that added the job over the team radio; absent in a job the user made, or changed
+   * and saved here since. */
+  by?: Agent;
+  /** An agent wrote its script: it stays paused until the user resumes it here. */
+  review?: boolean;
   nextAt: number | null;
   streak: number;
   runsDone: number;
