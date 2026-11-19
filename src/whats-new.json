@@ -1,235 +1,25 @@
 {
-  "since": "1.22.0",
+  "since": "1.23.0",
   "notes": [
     {
-      "kind": "fix",
-      "title": {
-        "en": "Lighter in the background",
-        "tr": "Arka planda daha hafif",
-        "de": "Leichter im Hintergrund",
-        "es": "Más ligero en segundo plano",
-        "ru": "Легче в фоне",
-        "ja": "バックグラウンドで軽く",
-        "zh-Hans": "后台更轻快"
-      },
-      "body": {
-        "en": "Pitwall does less work while it watches your sessions, with many tabs open or its window minimized. A chat left idle rests and picks up where it left off at your next message.",
-        "tr": "Pitwall oturumlarını izlerken artık daha az iş yapıyor; çok sekme açıkken de, penceresi küçültülmüşken de bilgisayarını yormuyor. Boşta kalan sohbet dinlenmeye geçiyor, yeni mesajınla kaldığı yerden sürüyor.",
-        "de": "Pitwall arbeitet sparsamer, während es deine Sitzungen im Blick behält, auch mit vielen offenen Tabs oder minimiertem Fenster. Ein Chat, der länger nichts zu tun hat, ruht und macht mit deiner nächsten Nachricht dort weiter, wo er war.",
-        "es": "Pitwall trabaja menos mientras vigila tus sesiones, tengas muchas pestañas abiertas o la ventana minimizada. Un chat que lleva un rato parado descansa y sigue donde lo dejaste con tu siguiente mensaje.",
-        "ru": "Pitwall делает меньше работы, пока следит за вашими сессиями, даже когда открыто много вкладок или окно свёрнуто. Чат, который давно простаивает, засыпает и с вашим следующим сообщением продолжает с того же места.",
-        "ja": "Pitwall はセッションを見守る間の処理が減り、タブをたくさん開いていても、ウィンドウを最小化していても軽くなりました。しばらく使っていないチャットは休み、次のメッセージで続きから再開します。",
-        "zh-Hans": "Pitwall 盯着你的会话时做的事更少了，标签页开得再多、窗口最小化时都一样轻。闲置一阵的对话会先歇着，你再发消息时接着原来的地方继续。"
-      }
-    },
-    {
       "kind": "new",
       "title": {
-        "en": "Search inside your files",
-        "tr": "Dosyaların içinde ara",
-        "de": "Suche in deinen Dateien",
-        "es": "Busca dentro de tus archivos",
-        "ru": "Поиск внутри файлов",
-        "ja": "ファイルの中身も検索",
-        "zh-Hans": "在文件内容中搜索"
+        "en": "GPT-6.2 has a cost",
+        "tr": "GPT-6.2'nin maliyeti görünüyor",
+        "de": "GPT-6.2 hat Kosten",
+        "es": "GPT-6.2 ya tiene coste",
+        "ru": "У GPT-6.2 есть стоимость",
+        "ja": "GPT-6.2 のコストを表示",
+        "zh-Hans": "GPT-6.2 有费用了"
       },
       "body": {
-        "en": "The search box in the Files window now finds words inside the project's files too, not just names. Click a line and the file opens right there.",
-        "tr": "Dosyalar penceresindeki arama kutusu artık yalnız adları değil, dosyaların içini de arıyor. Bir satıra basınca dosya tam o satırda açılıyor.",
-        "de": "Das Suchfeld im Fenster Dateien findet jetzt auch Wörter in den Dateien des Projekts, nicht nur Namen. Ein Klick auf eine Zeile öffnet die Datei genau dort.",
-        "es": "El buscador de la ventana Archivos ahora encuentra también palabras dentro de los archivos del proyecto, no solo nombres. Haz clic en una línea y el archivo se abre justo ahí.",
-        "ru": "Поле поиска в окне «Файлы» теперь находит слова и внутри файлов проекта, а не только имена. Нажмите на строку, и файл откроется прямо на ней.",
-        "ja": "ファイルウィンドウの検索ボックスで、名前だけでなくプロジェクトのファイルの中の言葉も見つかるようになりました。行をクリックすると、その行でファイルが開きます。",
-        "zh-Hans": "“文件”窗口的搜索框现在不只搜名字，还能找到项目文件里的文字。点一行，文件就在那一行打开。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Terminals that float",
-        "tr": "Terminaller artık yüzebiliyor",
-        "de": "Terminals, die schweben",
-        "es": "Terminales flotantes",
-        "ru": "Плавающие терминалы",
-        "ja": "ターミナルを浮かせて使える",
-        "zh-Hans": "终端可以浮动了"
-      },
-      "body": {
-        "en": "The terminal panel can float as a card you move and resize over any page, or open in a window of its own. Drag its tab row up, or pick the spot from the icons at the row's end.",
-        "tr": "Terminal paneli artık her sayfanın üstünde taşıyıp boyutlandırabileceğin bir kart olarak yüzebiliyor ya da kendi penceresinde açılabiliyor. Sekme satırını yukarı sürükle ya da satırın sonundaki simgelerden yerini seç.",
-        "de": "Der Terminalbereich kann jetzt als Karte über jeder Seite schweben, die du verschiebst und größer ziehst, oder in einem eigenen Fenster aufgehen. Zieh seine Tab-Leiste nach oben oder wähl den Platz über die Symbole am Ende.",
-        "es": "El panel de terminales ahora puede flotar como una tarjeta que mueves y ajustas sobre cualquier página, o abrirse en su propia ventana. Arrastra su fila de pestañas hacia arriba o elige el sitio con los iconos del final.",
-        "ru": "Панель терминалов теперь можно сделать плавающей карточкой поверх любой страницы, которую легко двигать и растягивать, или открыть в отдельном окне. Потяните строку вкладок вверх или выберите место значками в её конце.",
-        "ja": "ターミナルパネルを、どのページの上でも動かしたり大きさを変えたりできるカードとして浮かせたり、専用のウィンドウで開いたりできるようになりました。タブの列を上へドラッグするか、列の端のアイコンで置き場所を選べます。",
-        "zh-Hans": "终端面板现在可以变成一张浮在任何页面上的卡片，随意移动、调整大小，也可以在单独的窗口里打开。把标签栏往上拖，或者用栏尾的图标选位置就行。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Chat with Claude",
-        "tr": "Claude ile sohbet",
-        "de": "Mit Claude chatten",
-        "es": "Chatea con Claude",
-        "ru": "Чат с Claude",
-        "ja": "Claude とチャット",
-        "zh-Hans": "与 Claude 对话"
-      },
-      "body": {
-        "en": "Open a chat from the terminal's + menu. Claude's commands and file changes stay on the side, and you answer its questions and permissions with a click.",
-        "tr": "Terminaldeki + menüsünden bir sohbet açabilirsin. Claude'un komutları ve dosya değişiklikleri yanda durur, sorularını ve izinlerini tek tıkla yanıtlarsın.",
-        "de": "Über das +-Menü im Terminal öffnest du jetzt einen Chat. Claudes Befehle und Dateiänderungen stehen daneben, und Fragen oder Freigaben beantwortest du mit einem Klick.",
-        "es": "Abre un chat desde el menú + de la terminal. Los comandos de Claude y los cambios en tus archivos quedan a un lado, y respondes a sus preguntas y permisos con un clic.",
-        "ru": "Откройте чат из меню + в терминале. Команды Claude и изменения файлов видны сбоку, а на его вопросы и запросы разрешений вы отвечаете одним щелчком.",
-        "ja": "ターミナルの + メニューからチャットを開けるようになりました。Claude のコマンドとファイルの変更は横に並び、質問や許可にはワンクリックで答えられます。",
-        "zh-Hans": "现在可以从终端的 + 菜单打开对话。Claude 的命令和文件改动就在一旁，它的提问和权限请求点一下就能回复。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Terminal settings",
-        "tr": "Terminal ayarları",
-        "de": "Terminal-Einstellungen",
-        "es": "Ajustes de la terminal",
-        "ru": "Настройки терминала",
-        "ja": "ターミナルの設定",
-        "zh-Hans": "终端设置"
-      },
-      "body": {
-        "en": "Settings has a Terminal tab now: pick what a double click on the tab row does, how the folded panel opens, and whether a past session opens in the terminal or in a chat.",
-        "tr": "Ayarlar'da artık bir Terminal sekmesi var. Sekme çubuğuna çift tıklayınca ne olacağını, katlı panelin nasıl açılacağını ve eski bir oturumun terminalde mi sohbette mi açılacağını oradan seçersin.",
-        "de": "In den Einstellungen gibt es jetzt den Tab „Terminal“. Dort legst du fest, was ein Doppelklick auf die Tab-Leiste tut, wie der eingeklappte Bereich aufgeht und ob eine alte Sitzung im Terminal oder im Chat weiterläuft.",
-        "es": "Los ajustes tienen ahora una pestaña Terminal. Ahí eliges qué hace un doble clic en la fila de pestañas, cómo se abre el panel plegado y si una sesión pasada se abre en la terminal o en un chat.",
-        "ru": "В настройках появилась вкладка «Терминал». В ней можно выбрать, что делает двойной щелчок по строке вкладок, как открывается свёрнутая панель и где открывается прошлая сессия: в терминале или в чате.",
-        "ja": "設定に「ターミナル」タブができました。タブ列をダブルクリックしたときの動き、折りたたんだパネルの開き方、過去のセッションをターミナルとチャットのどちらで開くかを選べます。",
-        "zh-Hans": "设置里新增了“终端”标签页。可以选择双击标签栏时做什么、收起的面板怎样展开，以及过去的会话在终端还是在对话中打开。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Keep the Files window open",
-        "tr": "Dosyalar penceresi açık kalabilir",
-        "de": "Das Dateien-Fenster bleibt offen",
-        "es": "La ventana de archivos se queda abierta",
-        "ru": "Окно файлов остаётся открытым",
-        "ja": "ファイルウィンドウを開いたままに",
-        "zh-Hans": "文件窗口可以一直开着"
-      },
-      "body": {
-        "en": "Settings has a Files tab now. Turn its switch off and the Files window stays open when you click somewhere else in Pitwall.",
-        "tr": "Ayarlar'da artık bir Dosyalar sekmesi var. Oradaki kutuyu kapatırsan Pitwall'da başka bir yere tıkladığında Dosyalar penceresi açık kalır.",
-        "de": "In den Einstellungen gibt es jetzt den Tab Dateien. Schaltest du ihn dort aus, bleibt das Dateien-Fenster offen, wenn du woanders in Pitwall klickst.",
-        "es": "Los ajustes tienen ahora una pestaña Archivos. Desmarca su casilla y la ventana de archivos sigue abierta aunque hagas clic en otra parte de Pitwall.",
-        "ru": "В настройках появилась вкладка «Файлы». Снимите там флажок, и окно файлов останется открытым, когда вы щёлкаете в другом месте Pitwall.",
-        "ja": "設定に「ファイル」タブができました。そこのチェックを外すと、Pitwall のほかの場所をクリックしてもファイルウィンドウが開いたままになります。",
-        "zh-Hans": "设置里新增了“文件”标签页。取消那里的勾选后，在 Pitwall 别处点击时，文件窗口会一直开着。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Start right from the empty panel",
-        "tr": "Boş panelden hemen başla",
-        "de": "Direkt im leeren Bereich loslegen",
-        "es": "Empieza desde el panel vacío",
-        "ru": "Старт прямо с пустой панели",
-        "ja": "空のパネルからすぐ始める",
-        "zh-Hans": "从空面板直接开始"
-      },
-      "body": {
-        "en": "When a project has no terminal, pick Shell, Chat, Claude or Codex and type what to do: it starts with your words. Your last pick is waiting there next time.",
-        "tr": "Projede terminal yokken Kabuk, Sohbet, Claude ya da Codex'i seç ve ne yapılacağını yaz, yazdığınla başlasın. Son seçimin bir dahaki sefere de seni bekler.",
-        "de": "Hat ein Projekt kein Terminal, wählst du Shell, Chat, Claude oder Codex und schreibst gleich, was zu tun ist. Deine letzte Wahl ist beim nächsten Mal schon ausgewählt.",
-        "es": "Si un proyecto no tiene terminal, elige Shell, Chat, Claude o Codex y escribe qué hay que hacer: arranca con tus palabras. La próxima vez, tu última elección ya estará marcada.",
-        "ru": "Если в проекте нет терминала, выберите оболочку, чат, Claude или Codex и сразу напишите, что сделать. В следующий раз ваш последний выбор уже будет отмечен.",
-        "ja": "ターミナルのないプロジェクトでは、シェル・チャット・Claude・Codex を選んで、やることをそのまま書けば始まります。前回選んだものは次も選ばれたままです。",
-        "zh-Hans": "项目里没有终端时，选好 Shell、对话、Claude 或 Codex，直接写下要做的事就能开始。上次的选择下次还会替你选好。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "⌘T takes you to the terminal",
-        "tr": "⌘T artık terminale götürüyor",
-        "de": "⌘T bringt dich ins Terminal",
-        "es": "⌘T te lleva a la terminal",
-        "ru": "⌘T ведёт в терминал",
-        "ja": "⌘T でターミナルへ",
-        "zh-Hans": "⌘T 直达终端"
-      },
-      "body": {
-        "en": "⌘T (Ctrl+Shift+T on Windows and Linux) now opens the terminal panel and puts you right in it, instead of opening a new tab. Press it again and the panel folds away.",
-        "tr": "⌘T (Windows ve Linux'ta Ctrl+Shift+T) artık yeni sekme açmıyor; terminal panelini açıp seni doğrudan içine alıyor. Bir daha basınca panel yeniden küçülüyor.",
-        "de": "⌘T (unter Windows und Linux Ctrl+Shift+T) öffnet jetzt keinen neuen Tab mehr, sondern klappt den Terminalbereich auf und setzt dich direkt hinein. Drückst du noch einmal, klappt er wieder zu.",
-        "es": "⌘T (Ctrl+Shift+T en Windows y Linux) ya no abre una pestaña nueva: despliega el panel de terminales y te deja dentro. Si lo pulsas otra vez, el panel se vuelve a plegar.",
-        "ru": "⌘T (Ctrl+Shift+T в Windows и Linux) больше не открывает новую вкладку: он разворачивает панель терминалов и сразу переводит вас в неё. Нажмите ещё раз, и панель снова свернётся.",
-        "ja": "⌘T（Windows と Linux では Ctrl+Shift+T）を押すと、新しいタブを開く代わりにターミナルパネルが開き、そのまま入力できます。もう一度押すとパネルはまた折りたたまれます。",
-        "zh-Hans": "⌘T（在 Windows 和 Linux 上是 Ctrl+Shift+T）不再新建标签页，而是展开终端面板，让你直接在里面输入。再按一次，面板就会重新收起。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Tidier output tabs",
-        "tr": "Daha sade çıktı sekmeleri",
-        "de": "Aufgeräumte Ausgabe-Tabs",
-        "es": "Pestañas de salida más limpias",
-        "ru": "Вкладки вывода стали чище",
-        "ja": "出力タブがすっきり",
-        "zh-Hans": "输出标签页更清爽"
-      },
-      "body": {
-        "en": "The Dev server tab only shows while the server runs, and an output's search, filter and copy buttons now sit in its top right corner.",
-        "tr": "Dev sunucusu sekmesi artık yalnız sunucu çalışırken görünüyor. Çıktının arama, filtre ve kopyalama düğmeleri de sağ üst köşesine geçti.",
-        "de": "Der Tab „Dev-Server“ erscheint nur noch, solange der Server läuft. Suchen, Filtern und Kopieren sitzen jetzt oben rechts in der Ausgabe.",
-        "es": "La pestaña Servidor de desarrollo solo aparece mientras el servidor está en marcha, y los botones de buscar, filtrar y copiar están ahora en la esquina superior derecha de la salida.",
-        "ru": "Вкладка Dev-сервер видна, только пока сервер работает, а кнопки поиска, фильтра и копирования теперь в правом верхнем углу вывода.",
-        "ja": "開発サーバーのタブは、サーバーが動いているあいだだけ表示されます。検索・フィルタ・コピーのボタンは出力の右上に移りました。",
-        "zh-Hans": "开发服务器标签页只在服务器运行时出现，搜索、筛选和复制按钮也挪到了输出的右上角。"
-      }
-    },
-    {
-      "kind": "fix",
-      "title": {
-        "en": "Panes land where you drop them",
-        "tr": "Bölmeler bıraktığın yerde",
-        "de": "Teilfenster landen, wo du sie loslässt",
-        "es": "Las divisiones caen donde las sueltas",
-        "ru": "Области встают туда, где их отпустили",
-        "ja": "ペインは離した場所へ",
-        "zh-Hans": "窗格落在你松手的地方"
-      },
-      "body": {
-        "en": "Drop a pane or a tab at another pane's edge and it goes right there, even beside a narrow one, as long as everything still fits.",
-        "tr": "Bir bölmeyi ya da sekmeyi başka bir bölmenin kenarına bırakınca, her şey sığdığı sürece tam oraya yerleşir. Dar bir bölmenin yanına da geçebilir.",
-        "de": "Lass ein Teilfenster oder einen Tab am Rand eines anderen los, und es kommt genau dorthin, auch neben ein schmales, solange alles noch passt.",
-        "es": "Suelta una división o una pestaña en el borde de otra y se queda justo ahí, incluso junto a una estrecha, mientras todo siga cabiendo.",
-        "ru": "Отпустите область или вкладку у края другой области, и она встанет именно там, даже рядом с узкой, если всё ещё помещается.",
-        "ja": "ペインやタブを別のペインの端で離すと、全体が収まるかぎり、狭いペインの隣でもそこに入ります。",
-        "zh-Hans": "把窗格或标签页拖到另一个窗格的边缘松开，只要整体还放得下，它就会放到那里，哪怕旁边是很窄的窗格。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Subagents on the Track",
-        "tr": "Pist'te alt ajanlar",
-        "de": "Subagenten auf der Strecke",
-        "es": "Subagentes en la Pista",
-        "ru": "Субагенты на трассе",
-        "ja": "コースにサブエージェント",
-        "zh-Hans": "赛道上的子代理"
-      },
-      "body": {
-        "en": "When Claude or Codex sends out subagents, bright orange dots circle its light on the Track, one for each that's still at work.",
-        "tr": "Claude ya da Codex alt ajan çalıştırınca Pist'teki ışığının başında parlak turuncu noktalar döner. Hâlâ çalışan her alt ajan için bir nokta vardır.",
-        "de": "Schickt Claude oder Codex Subagenten los, kreisen helle orange Punkte um sein Licht auf der Strecke, einer für jeden, der noch arbeitet.",
-        "es": "Cuando Claude o Codex lanza subagentes, unos puntos naranjas brillantes giran alrededor de su luz en la Pista, uno por cada uno que sigue trabajando.",
-        "ru": "Когда Claude или Codex запускает субагентов, вокруг его огонька на трассе кружат яркие оранжевые точки, по одной на каждого, кто ещё работает.",
-        "ja": "Claude や Codex がサブエージェントを動かすと、コース上のライトの周りを明るいオレンジの点が回ります。まだ働いているサブエージェントごとに一つです。",
-        "zh-Hans": "Claude 或 Codex 派出子代理时，赛道上它的光点周围会有明亮的橙色小点在转，每个还在工作的子代理一个。"
+        "en": "The tokens of Codex's new GPT-6.2 Sol and Astra now count in the API-equivalent cost.",
+        "tr": "Codex'in yeni modelleri GPT-6.2 Sol ve Astra'nın tokenları artık API karşılığı maliyete katılıyor.",
+        "de": "Die Tokens von GPT-6.2 Sol und Astra, den neuen Modellen von Codex, zählen jetzt bei den API-äquivalenten Kosten mit.",
+        "es": "Los tokens de GPT-6.2 Sol y Astra, los nuevos modelos de Codex, ya cuentan en el coste equivalente en API.",
+        "ru": "Токены новых моделей Codex, GPT-6.2 Sol и Astra, теперь учитываются в стоимости по ценам API.",
+        "ja": "Codex の新しいモデル GPT-6.2 Sol と Astra のトークンが、API 換算のコストに含まれるようになりました。",
+        "zh-Hans": "Codex 的新模型 GPT-6.2 Sol 和 Astra 的 token 现在会计入 API 等价费用。"
       }
     }
   ]

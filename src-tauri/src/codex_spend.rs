@@ -52,8 +52,11 @@ const fn price(input: f64, cached: f64, output: f64) -> Price {
     Price { input, cached, output }
 }
 
-/// From developers.openai.com/api/docs/pricing (Standard, up to 272K of context), read 2 Nov 2026.
+/// From developers.openai.com/api/docs/pricing (Standard, up to 272K of context), read 2 Nov 2026;
+/// gpt-6.2's rows (Standard) read 19 Nov 2026.
 const PRICES: &[(&str, Price)] = &[
+    ("gpt-6.2-astra", price(8.0, 0.40, 40.0)),
+    ("gpt-6.2-sol", price(2.0, 0.10, 10.0)),
     ("gpt-6-astra", price(10.0, 1.0, 50.0)),
     ("gpt-6.1-sol", price(2.0, 0.10, 10.0)),
     ("gpt-6.1-terra", price(1.0, 0.05, 5.0)),
