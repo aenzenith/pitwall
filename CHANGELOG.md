@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.24.0](https://github.com/aenzenith/pitwall/compare/v1.23.0...v1.24.0) (2026-11-19)
+
+
+### Features
+
+* **radio:** agents tidied the board and planned laps over the radio ([e791752](https://github.com/aenzenith/pitwall/commit/e791752c6b08e2495a93cf0de10ca44e3f6224ca))
+
+
+### Improvements
+
+* **fuel:** Codex's GPT-6.2 Sol and Astra were priced ([2350223](https://github.com/aenzenith/pitwall/commit/23502234328925f1079245f47fd05ccf720989ae))
+
 ## [1.23.0](https://github.com/aenzenith/pitwall/compare/v1.22.0...v1.23.0) (2026-11-18)
 
 
