@@ -6,5 +6,8 @@
        asks the browser through osascript for the tab that already shows the project. -->
   <key>com.apple.security.automation.apple-events</key>
   <true/>
+  <!-- With the hardened runtime the microphone is refused without this: the chat's voice messages. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
 </dict>
 </plist>

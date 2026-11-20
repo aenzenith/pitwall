@@ -48,6 +48,11 @@ sha2 = "0.10"
 tauri-plugin-updater = { version = "2.13.1", default-features = false, features = ["native-tls"] }
 # The Files window's search of the files' text walks the project as ripgrep does: .gitignore kept.
 ignore = "0.4.34"
+# Voice messages in the chat (`voice/`): the microphone, and whisper.cpp writing the take down on
+# this machine (built by cmake; `.cargo/config.toml` keeps it off `-march=native`). The models
+# aren't in the app: each is downloaded once, when the user asks for it.
+cpal = "0.17"
+whisper-rs = "0.16"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -69,6 +74,8 @@ objc2 = "0.6.4"
 block2 = "0.6.2"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSArray", "NSError", "NSData", "NSAttributedString", "NSGeometry", "NSRange"] }
 objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "bitflags", "UNUserNotificationCenter", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationAttachment", "UNNotificationTrigger", "UNNotificationSettings"] }
+# whisper.cpp on the GPU (Metal) on a Mac.
+whisper-rs = { version = "0.16", features = ["metal"] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication", "NSApplication", "NSResponder", "NSWindow", "NSPanel", "NSScreen", "NSEvent", "NSSound", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSImage", "NSFont", "NSColor", "NSAppearance", "NSAttributedString", "objc2-core-foundation", "block2", "libc"] }
 
 # Pitwall's sounds elsewhere: WAV only. On Linux cpal links ALSA (`libasound2-dev` to build).

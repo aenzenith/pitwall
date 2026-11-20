@@ -3,7 +3,7 @@
 // the ones the conversation and its column need that the app's set doesn't have.
 withDefaults(
   defineProps<{
-    name: "file" | "file-plus" | "terminal" | "pencil" | "search" | "globe" | "plug" | "spark" | "agent" | "list" | "question" | "plan" | "tool" | "column" | "bookmark" | "bookmark-on" | "fork" | "rewind" | "brain" | "compact" | "copy" | "edit" | "shield" | "zap" | "ban";
+    name: "file" | "file-plus" | "terminal" | "pencil" | "search" | "globe" | "plug" | "spark" | "agent" | "list" | "question" | "plan" | "tool" | "column" | "bookmark" | "bookmark-on" | "fork" | "rewind" | "brain" | "compact" | "copy" | "edit" | "shield" | "zap" | "ban" | "mic" | "mic-off";
     size?: number;
   }>(),
   { size: 14 },
@@ -34,6 +34,8 @@ withDefaults(
     <g v-else-if="name === 'compact'"><path d="M8 4.5 12 8.5l4-4M8 19.5l4-4 4 4" /><path d="M5 12h14" /></g>
     <path v-else-if="name === 'shield'" d="M12 4 5.5 6.5V11c0 4.2 2.7 7.2 6.5 8.8 3.8-1.6 6.5-4.6 6.5-8.8V6.5z" />
     <path v-else-if="name === 'zap'" d="M13 3.5 5.5 13.5H12l-1 7 7.5-10H12z" />
+    <g v-else-if="name === 'mic'"><rect x="9" y="3.5" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" /></g>
+    <g v-else-if="name === 'mic-off'"><path d="M15 10.5V6.5a3 3 0 0 0-5.6-1.5M9 9v2.5a3 3 0 0 0 4.9 2.3M5.5 11.5a6.5 6.5 0 0 0 10.6 5M18.4 13a6.5 6.5 0 0 0 .1-1.5M12 18v2.5M4.5 4.5l15 15" /></g>
     <g v-else-if="name === 'ban'"><circle cx="12" cy="12" r="7.5" /><path d="m6.7 6.7 10.6 10.6" /></g>
     <g v-else-if="name === 'copy'"><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" /></g>
   </svg>

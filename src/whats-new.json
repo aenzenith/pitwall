@@ -42,6 +42,27 @@
         "ja": "ターミナルパネルの左にプロジェクトが並ぶようになりました。検索では、まだ追加していないフォルダも見つかります。右クリックで、サーバーやコマンド、リンクにすぐ届きます。",
         "zh-Hans": "终端面板左侧现在会列出你的项目，搜索还能找到尚未添加的文件夹。右键点击项目，就能直接操作它的服务器、命令和链接。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Voice messages in the chat",
+        "tr": "Sohbette sesli mesaj",
+        "de": "Sprachnachrichten im Chat",
+        "es": "Mensajes de voz en el chat",
+        "ru": "Голосовые сообщения в чате",
+        "ja": "チャットで音声メッセージ",
+        "zh-Hans": "在对话中发语音"
+      },
+      "body": {
+        "en": "Tap the mic or hold it and speak: your words land in the box as text and go on their own. It all happens on your computer, so your voice never leaves it.",
+        "tr": "Mikrofona dokun ya da basılı tutup konuş; söylediklerin kutuya yazı olarak düşer ve kendiliğinden gider. Hepsi bilgisayarında olur, sesin hiçbir yere gitmez.",
+        "de": "Tipp aufs Mikrofon oder halte es und sprich: Deine Worte landen als Text im Feld und gehen von selbst los. Alles passiert auf deinem Computer, deine Stimme verlässt ihn nie.",
+        "es": "Toca el micrófono o mantenlo pulsado y habla: tus palabras aparecen como texto en el cuadro y se envían solas. Todo ocurre en tu ordenador, así que tu voz nunca sale de él.",
+        "ru": "Нажмите на микрофон или удерживайте его и говорите: слова появятся в поле текстом и отправятся сами. Всё происходит на вашем компьютере, голос никуда не уходит.",
+        "ja": "マイクをタップするか長押しして話すと、言葉が入力欄に文字で入り、そのまま送信されます。処理はすべてこのコンピュータの中で行われ、音声が外に出ることはありません。",
+        "zh-Hans": "轻点或按住麦克风说话，你的话会以文字出现在输入框里并自动发送。一切都在你的电脑上完成，声音不会离开它。"
+      }
     }
   ]
 }

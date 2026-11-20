@@ -30,13 +30,36 @@ import {
   TEXT_MAX,
   type FileHit,
 } from "../../lib/chat/composer";
+import {
+  cancelDownload,
+  cancelTake,
+  downloadModel,
+  holdTake,
+  HOLD_MS,
+  isVoiceKey,
+  megabytes,
+  modelBytes,
+  modelReady,
+  onDownloaded,
+  promptOf,
+  startTake,
+  stopTake,
+  takeTime,
+  tapTake,
+  useVoice,
+  voice,
+  type DownloadProblem,
+  type TakeEnd,
+  type VoiceProblem,
+} from "../../lib/chat/voice";
 import { MODE_ICONS, type ComposerApi, type ComposerEmits, type ComposerProps, type TerminalRef } from "../../lib/chat/ui";
+import { voiceDelayOf } from "../../lib/chat/wire";
 import type { Shot } from "../../lib/cardImages";
 import { sizeText } from "../../lib/explorer";
 import { modelName, percentText } from "../../lib/fuel";
 import { fuzzy } from "../../lib/fuzzy";
 import { language, t, type Key } from "../../lib/i18n";
-import { isMac } from "../../lib/platform";
+import { isLinux, isMac, keys } from "../../lib/platform";
 import { api } from "../../lib/store";
 import ImageLightbox from "../board/ImageLightbox.vue";
 import AttachMenu from "./AttachMenu.vue";
@@ -110,6 +133,7 @@ function syncFromField(): void {
 }
 
 function onInput(): void {
+  stopCountdown(false);
   recalled.value = false;
   menuOff.value = false;
   walk = null;
@@ -493,12 +517,15 @@ const contextFile = computed(() => {
 /* ---------- notices ---------- */
 
 const notice = ref<string | null>(null);
+/** A notice's way out, a link at its end (the microphone's permission: the system's page). */
+const noticeAction = ref<{ label: string; run: () => void } | null>(null);
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 
-function say(text: string): void {
+function say(text: string, action: { label: string; run: () => void } | null = null): void {
   notice.value = text;
+  noticeAction.value = action;
   clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => (notice.value = null), 7000);
+  noticeTimer = setTimeout(() => (notice.value = null), action ? 12000 : 7000);
 }
 
 /* ---------- sending ---------- */
@@ -599,6 +626,7 @@ function submit(priority: "next" | "now"): void {
 }
 
 function onSendButton(): void {
+  stopCountdown(false);
   if (running.value && !hasContent.value) emit("interrupt");
   else submit("next");
   field.value?.focus();
@@ -858,6 +886,339 @@ watch([modelLabel, effortText, modeLabel, contextText, shell, language], () => {
 /** The model's chip, narrow: its name and effort said on hover. */
 const modelTitle = computed(() => (effortText.value ? `${modelLabel.value} · ${effortText.value}` : modelLabel.value));
 
+/* ---------- voice messages ---------- */
+
+// The mic beside Send (SM2 + SM3 + SMK + SMD, the user's word, 20 Nov; lib/chat/voice). Tapped,
+// the take ends by itself once the speaker is quiet; held, it ends when let go, and nothing goes
+// when it is let go away from the button or after Esc. The text lands in the field and, unless
+// Settings say otherwise, goes after the wait Settings set (`voiceDelay`; none at all sends it
+// at once), shown as a ring on Send: a key, a click in the field or Send itself ends the wait,
+// and Esc takes the text back out.
+useVoice();
+
+/** A hold let go this far (px) out of the mic's box goes for nothing. */
+const CANCEL_REACH = 40;
+/** A bar of the meter and the gap after it (px), as `.wave i` draws them. */
+const BAR_STEP = 5;
+/** The row's first bars fade in from its left. */
+const FADE_BARS = 8;
+const MODIFIERS = new Set(["Shift", "Meta", "Control", "Alt", "CapsLock", "Fn"]);
+const DOWNLOAD_PROBLEMS: Record<DownloadProblem, Key> = {
+  network: "chatInput.voice.download.network",
+  http: "chatInput.voice.download.http",
+  size: "chatInput.voice.download.size",
+  hash: "chatInput.voice.download.size",
+  write: "chatInput.voice.download.write",
+};
+
+const root = ref<HTMLElement | null>(null);
+const micBtn = ref<HTMLButtonElement | null>(null);
+let alive = true;
+const voiceModel = computed(() => props.settings.voiceModel);
+/** Hidden only once the core said this processor can't run the engine. */
+const micShown = computed(() => voice.status?.supported !== false);
+const myTake = computed(() => (voice.take?.chat === props.id ? voice.take : null));
+const recording = computed(() => myTake.value?.phase === "recording");
+const writing = computed(() => myTake.value?.phase === "transcribing");
+/** The row in the field's place, for a tap and a hold alike (the board's row, the user's word, 20 Nov). */
+const takeRow = computed(() => !!myTake.value);
+const cancelArmed = computed(() => !!myTake.value?.cancelArmed);
+/** What the row's end can say: a tap ends on quiet, a hold when let go (for nothing once armed so).
+ * All of them stand in one cell, the one in force seen, so the row keeps its width as it changes. */
+const rowHints = computed((): Key[] => [
+  "chatInput.voice.endsOnQuiet",
+  props.settings.voiceSend ? "chatInput.voice.letGoSends" : "chatInput.voice.letGoWrites",
+  "chatInput.voice.letGoCancels",
+]);
+const rowHint = computed((): Key | null => {
+  const take = myTake.value;
+  if (!take) return null;
+  if (take.cancelArmed) return "chatInput.voice.letGoCancels";
+  if (take.how === "hold") return rowHints.value[1];
+  return take.how === "tap" ? "chatInput.voice.endsOnQuiet" : null;
+});
+const micTitle = computed(() => (recording.value ? t("chatInput.voice.stop") : t("chatInput.voice.title", { keys: keys("mod+Shift+M") })));
+
+const tick = ref(Date.now());
+let ticking: ReturnType<typeof setInterval> | undefined;
+watch(recording, (on) => {
+  clearInterval(ticking);
+  if (!on) return;
+  tick.value = Date.now();
+  ticking = setInterval(() => (tick.value = Date.now()), 250);
+});
+const takeClock = computed(() => (myTake.value ? takeTime(tick.value - myTake.value.started) : ""));
+/** The newest `count` levels, the row filled from its right as the take begins. */
+function bars(count: number): number[] {
+  const shown = (myTake.value?.levels ?? []).slice(-count);
+  return [...Array<number>(count - shown.length).fill(0), ...shown];
+}
+const barHeight = (level: number, most: number): string => `${3 + Math.round(level * most)}px`;
+/** A bar of the row: its height, and at the left edge its fade. */
+const rowBar = (level: number, i: number): Record<string, string> =>
+  i < FADE_BARS ? { height: barHeight(level, 17), opacity: String(0.35 + (0.65 * i) / FADE_BARS) } : { height: barHeight(level, 17) };
+
+/* The row's wave fills the room between the clock and the hint, its oldest level at the left. */
+const rowWave = ref<HTMLElement | null>(null);
+const rowBars = ref(36);
+let waveWatch: ResizeObserver | null = null;
+watch(rowWave, (el) => {
+  waveWatch?.disconnect();
+  waveWatch = null;
+  if (!el) return;
+  waveWatch = new ResizeObserver(() => (rowBars.value = Math.max(1, Math.floor((el.clientWidth + 2) / BAR_STEP))));
+  waveWatch.observe(el);
+});
+
+/* The model's card (SMK): offered at the first press without the model, fetched from it. */
+
+const card = ref(false);
+/** The press that opened the card starts a take once the model is in. */
+let takeAfter = false;
+const cardDownload = computed(() => (voice.download?.model === voiceModel.value ? voice.download : null));
+const cardFailed = computed(() => (voice.downloadFailed?.model === voiceModel.value ? voice.downloadFailed.problem : null));
+const cardSize = computed(() => megabytes(modelBytes(voiceModel.value), language.value));
+const cardShare = computed(() => (cardDownload.value?.total ? Math.min(1, cardDownload.value.done / cardDownload.value.total) : 0));
+const cardProgress = computed(() =>
+  cardDownload.value ? t("chatInput.voice.card.progress", { done: megabytes(cardDownload.value.done, language.value), total: megabytes(cardDownload.value.total, language.value) }) : "",
+);
+
+function offerModel(): void {
+  card.value = true;
+  takeAfter = true;
+}
+
+function closeCard(): void {
+  if (cardDownload.value) cancelDownload();
+  card.value = false;
+  takeAfter = false;
+}
+
+const offDownloaded = onDownloaded((model, ok) => {
+  if (!card.value || model !== voiceModel.value || !ok) return;
+  card.value = false;
+  if (takeAfter && alive) {
+    takeAfter = false;
+    begin("tap");
+  }
+});
+
+/* A take. */
+
+/** The press under way: the mic's (the pointer's) or the shortcut's (`key`). */
+let press: { id: string; at: number; key: boolean; timer: ReturnType<typeof setTimeout> } | null = null;
+
+/** Starts a take for this chat; a press is followed until it is let go. */
+function begin(how: "press" | "tap", key = false): void {
+  if (props.disabled) return;
+  if (!modelReady(voiceModel.value)) return offerModel();
+  stopCountdown(false);
+  // The keyboard stays in the chat, so Esc and the shortcut reach the take.
+  field.value?.focus();
+  const chat = props.id;
+  void startTake(chat, how, language.value, promptOf(props.path), (end) => took(chat, end)).then((word) => word && unstarted(word));
+  const id = voice.take?.chat === chat ? voice.take.id : null;
+  if (how !== "press" || !id) return;
+  press = { id, at: Date.now(), key, timer: setTimeout(() => holdTake(id), HOLD_MS) };
+}
+
+/** The press ends: a tap goes on by itself, a hold is stopped, or cancelled when it was armed so. */
+function letGo(): void {
+  if (!press) return;
+  const { id, at, timer } = press;
+  press = null;
+  clearTimeout(timer);
+  const take = voice.take;
+  if (take?.id !== id || take.phase !== "recording") return;
+  if (take.cancelArmed) cancelTake(id);
+  else if (take.how === "press" && Date.now() - at < HOLD_MS) tapTake(id);
+  else stopTake(id);
+}
+
+/** The press is lost to the system (its permission question took the window): the take goes on by itself. */
+function pressLost(): void {
+  if (!press) return;
+  const { id, timer } = press;
+  press = null;
+  clearTimeout(timer);
+  tapTake(id);
+}
+
+function micDown(event: PointerEvent): void {
+  if (event.button !== 0 || props.disabled) return;
+  // The field keeps the keyboard.
+  event.preventDefault();
+  const take = myTake.value;
+  if (take) {
+    if (take.phase === "recording" && !press) stopTake(take.id);
+    return;
+  }
+  if (press) return;
+  try {
+    micBtn.value?.setPointerCapture(event.pointerId);
+  } catch {
+    // A pointer the page doesn't know: the press is followed all the same.
+  }
+  begin("press");
+}
+
+function micMove(event: PointerEvent): void {
+  const take = myTake.value;
+  if (!press || press.key || take?.id !== press.id || take.how !== "hold") return;
+  const edge = micBtn.value?.getBoundingClientRect();
+  if (!edge) return;
+  take.cancelArmed =
+    event.clientX < edge.left - CANCEL_REACH || event.clientX > edge.right + CANCEL_REACH || event.clientY < edge.top - CANCEL_REACH || event.clientY > edge.bottom + CANCEL_REACH;
+}
+
+function micUp(): void {
+  if (press && !press.key) letGo();
+}
+
+function micCancelled(): void {
+  if (!press || press.key) return;
+  const { id, timer } = press;
+  press = null;
+  clearTimeout(timer);
+  cancelTake(id);
+}
+
+/** Return or Space on the mic: a tap. */
+function micKey(): void {
+  const take = myTake.value;
+  if (take) {
+    if (take.phase === "recording") stopTake(take.id);
+  } else begin("tap");
+}
+
+/** Whether the keyboard is in this composer's chat. */
+function ours(): boolean {
+  const view = root.value?.closest(".chat-view") ?? root.value;
+  const active = document.activeElement;
+  return !!view && !!active && view.contains(active);
+}
+
+// On the window and before anyone else: the shortcut works from anywhere in the chat, and Esc
+// ends a take before it would stop Claude's turn.
+function onWindowKey(event: KeyboardEvent): void {
+  if (event.isComposing) return;
+  if (isVoiceKey(event, isMac)) {
+    if (!ours()) return;
+    stop(event);
+    if (event.repeat || press || !micShown.value) return;
+    const take = myTake.value;
+    if (take) {
+      if (take.phase === "recording") stopTake(take.id);
+      return;
+    }
+    begin("press", true);
+    return;
+  }
+  if (!ours()) return;
+  if (event.key === "Escape") {
+    const take = myTake.value;
+    if (take) {
+      stop(event);
+      // Held, it is let go for nothing; tapped or being written down, it ends now.
+      if (press?.id === take.id) take.cancelArmed = true;
+      else cancelTake(take.id);
+      return;
+    }
+    if (countdown.value) stop(event, () => stopCountdown(true));
+    return;
+  }
+  if (countdown.value && !MODIFIERS.has(event.key)) stopCountdown(false);
+}
+
+// The shortcut held: let go when any of its keys is (⌘ held, macOS sends no key up for M).
+function onWindowKeyUp(event: KeyboardEvent): void {
+  if (press?.key && (event.code === "KeyM" || MODIFIERS.has(event.key))) letGo();
+}
+
+/* What a take came to. */
+
+function took(chat: number, end: TakeEnd): void {
+  const here = alive && chat === props.id;
+  if (end.kind === "text") return placeText(chat, end.text, end.limit, here);
+  if (!here) return;
+  if (end.kind === "empty") say(t("chatInput.voice.nothing"));
+  else if (end.kind === "failed") failed(end.problem);
+}
+
+/** The text after what is typed; it waits a moment and goes, unless Settings keep it in the box. */
+function placeText(chat: number, text: string, limit: boolean, here: boolean): void {
+  const kept = draftOf(chat);
+  const before = kept.text;
+  const joined = before.trim() ? `${before.trimEnd()} ${text}` : text;
+  if (!here) {
+    kept.text = joined;
+    return;
+  }
+  setFieldText(joined);
+  field.value?.focus();
+  if (limit) say(t("chatInput.voice.limit"));
+  if (!props.settings.voiceSend || props.disabled) return;
+  const wait = voiceDelayOf(props.settings.voiceDelay);
+  if (wait) startCountdown(before, wait);
+  else submit("next");
+}
+
+function failed(problem: VoiceProblem): void {
+  if (problem === "missing") return offerModel();
+  if (problem === "noDevice") return say(t("chatInput.voice.noDevice"));
+  if (problem === "failed") return say(t("chatInput.voice.failed"));
+  if (isLinux) return say(t("chatInput.voice.micFailed"));
+  say(t("chatInput.voice.denied"), { label: t(isMac ? "chatInput.voice.privacy" : "chatInput.voice.privacy.windows"), run: () => void api.voicePrivacy() });
+}
+
+function unstarted(word: string): void {
+  if (word === "missing") offerModel();
+  else if (word === "unsupported") say(t("chatInput.voice.unsupported"));
+  else say(t("chatInput.voice.failed"));
+}
+
+/* The moment in the box (SM3). */
+
+/** Counting down to the send (`ms` long, the ring's turn), with the text as it was before the take
+ * (Esc puts it back). */
+const countdown = ref<{ before: string; ms: number } | null>(null);
+let countdownTimer: ReturnType<typeof setTimeout> | undefined;
+
+function startCountdown(before: string, ms: number): void {
+  clearTimeout(countdownTimer);
+  countdown.value = { before, ms };
+  countdownTimer = setTimeout(() => {
+    countdown.value = null;
+    submit("next");
+  }, ms);
+}
+
+function stopCountdown(revert: boolean): void {
+  if (!countdown.value) return;
+  clearTimeout(countdownTimer);
+  if (revert) setFieldText(countdown.value.before);
+  countdown.value = null;
+}
+
+/** A take or a press left behind when the composer shows another chat or goes. */
+function leaveVoice(chat: number): void {
+  stopCountdown(false);
+  if (press) {
+    clearTimeout(press.timer);
+    cancelTake(press.id);
+    press = null;
+  }
+  const take = voice.take;
+  if (take?.chat === chat && take.phase === "recording") cancelTake(take.id);
+  card.value = false;
+  takeAfter = false;
+}
+
+watch(
+  () => props.id,
+  (_, before) => leaveVoice(before),
+);
+
 /* ---------- the composer's own ways in ---------- */
 
 const exposed: ComposerApi = {
@@ -906,28 +1267,81 @@ onMounted(() => {
     refsWatch.observe(refsIn.value);
   }
   settleRefs();
+  window.addEventListener("keydown", onWindowKey, true);
+  window.addEventListener("keyup", onWindowKeyUp, true);
+  window.addEventListener("blur", pressLost);
 });
 
 onBeforeUnmount(() => {
+  alive = false;
+  leaveVoice(props.id);
+  offDownloaded();
+  clearInterval(ticking);
+  window.removeEventListener("keydown", onWindowKey, true);
+  window.removeEventListener("keyup", onWindowKeyUp, true);
+  window.removeEventListener("blur", pressLost);
   clearTimeout(noticeTimer);
   clearTimeout(readingTimer);
   clearTimeout(mentionTimer);
   window.removeEventListener("resize", placeMenus);
   chipsWatch?.disconnect();
   refsWatch?.disconnect();
+  waveWatch?.disconnect();
   // An empty draft with nothing kept needn't outlive its view.
   if (isBlank(draft.value)) forgetDraft(props.id);
 });
 </script>
 
 <template>
-  <div :class="['composer', { off: disabled }]">
+  <div ref="root" :class="['composer', { off: disabled }]">
     <div v-if="queued.length" class="queue" role="list" :aria-label="t('chatInput.queue')">
       <div v-for="each in queued" :key="each.uuid" class="qrow" role="listitem">
         <span class="qtag">{{ t(each.priority === "now" ? "chatInput.queue.now" : each.priority === "later" ? "chatInput.queue.later" : "chatInput.queue") }}</span>
         <span class="qtext">{{ each.text }}</span>
         <button class="qx" type="button" :title="t('chatInput.queue.cancel')" :aria-label="t('chatInput.queue.cancel')" @click="emit('cancelQueued', each.uuid)"><Icon name="close" :size="12" /></button>
       </div>
+    </div>
+
+    <!-- The speech model, offered at the first press without it and fetched here (SMK). -->
+    <div v-if="card" class="vcard" role="group" :aria-label="t('chatInput.voice.card.title')">
+      <div class="vhead">
+        <Spinner v-if="cardDownload" :size="13" />
+        <ChatIcon v-else name="mic" :size="15" class="vic" />
+        <span class="vtitle">{{ t(cardDownload ? "chatInput.voice.card.downloading" : cardFailed ? "chatInput.voice.card.failed" : "chatInput.voice.card.title") }}</span>
+        <button
+          class="vx"
+          type="button"
+          :title="t(cardDownload ? 'chatInput.voice.card.stop' : 'chatInput.voice.card.close')"
+          :aria-label="t(cardDownload ? 'chatInput.voice.card.stop' : 'chatInput.voice.card.close')"
+          @click="closeCard"
+        >
+          <Icon name="close" :size="12" />
+        </button>
+      </div>
+      <template v-if="cardDownload">
+        <div class="vprog"><i :style="{ width: `${cardShare * 100}%` }"></i></div>
+        <div class="vmeta">
+          <span>{{ cardProgress }}</span>
+          <span class="vafter">{{ t("chatInput.voice.card.after") }}</span>
+        </div>
+      </template>
+      <template v-else>
+        <p>{{ cardFailed ? t(DOWNLOAD_PROBLEMS[cardFailed]) : t("chatInput.voice.card.body", { size: cardSize }) }}</p>
+        <div class="vacts">
+          <button class="vbtn pri" type="button" @click="downloadModel(voiceModel)">
+            <Icon name="download" :size="13" />{{ t(cardFailed ? "chatInput.voice.card.retry" : "chatInput.voice.card.download") }}
+          </button>
+          <button class="vbtn ghost" type="button" @click="closeCard">{{ t("chatInput.voice.card.notNow") }}</button>
+          <span class="vwhere">{{ t("chatInput.voice.card.where") }}</span>
+        </div>
+      </template>
+    </div>
+
+    <!-- The text of a take, about to go (SM3). -->
+    <div v-if="countdown" class="vline" role="status">
+      <ChatIcon name="mic" :size="12" />
+      <span>{{ t("chatInput.voice.soon") }}</span>
+      <span class="g">· {{ t("chatInput.voice.soonHint") }}</span>
     </div>
 
     <div ref="box" :class="['box', { shell, dropping }]" @dragover="onDragOver" @dragleave="dropping = false" @drop="onDrop">
@@ -985,7 +1399,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <ImageLightbox v-if="shotShown !== null" :images="shots" :start="shotShown" :thumb="shotThumb" @close="shotShown = null" />
-      <div class="field">
+      <div :class="['field', { hushed: takeRow }]">
         <div ref="mirror" :class="['mirror', { mono: shell }]" aria-hidden="true">
           <template v-for="(part, i) in drawn" :key="i">
             <span v-if="part.kind === 'plain'">{{ part.text }}</span>
@@ -1001,6 +1415,7 @@ onBeforeUnmount(() => {
           :spellcheck="!shell"
           :placeholder="placeholder"
           :disabled="disabled"
+          :readonly="takeRow"
           :aria-label="t('chatInput.field')"
           role="combobox"
           aria-autocomplete="list"
@@ -1015,13 +1430,29 @@ onBeforeUnmount(() => {
           @focus="onCaret"
           @scroll="onScroll"
           @paste="onPaste"
+          @pointerdown="stopCountdown(false)"
         ></textarea>
+        <!-- A take in the field's place, tapped or held (SM1's row), and while it is written down (SMD);
+             red once letting go would send nothing. -->
+        <div v-if="takeRow" :class="['takerow', { cancel: cancelArmed }]" role="status">
+          <template v-if="recording">
+            <span class="rmark"><Icon v-if="cancelArmed" name="close" :size="12" class="rx" /><span v-else class="rdot"></span></span>
+            <span class="rlab">{{ t("chatInput.voice.listening") }}</span>
+            <span class="rtm">{{ takeClock }}</span>
+            <span ref="rowWave" class="wave" aria-hidden="true"><i v-for="(level, i) in bars(rowBars)" :key="i" :style="rowBar(level, i)"></i></span>
+            <span class="rhint"><span v-for="each in rowHints" :key="each" :class="{ on: each === rowHint }">{{ t(each) }}</span></span>
+          </template>
+          <span v-else class="shim">{{ t("chatInput.voice.writing") }}</span>
+        </div>
       </div>
 
 
       <div v-if="notice" class="notice" role="status">
         <Icon name="info" :size="12" />
-        <span>{{ notice }}</span>
+        <span>
+          {{ notice }}
+          <button v-if="noticeAction" class="nlink" type="button" @click="noticeAction.run()">{{ noticeAction.label }}</button>
+        </span>
       </div>
 
       <div ref="chipsRow" :class="['chips', { narrow }]">
@@ -1078,6 +1509,28 @@ onBeforeUnmount(() => {
           </svg>
           <span>{{ narrow ? contextText : t("chatInput.context", { share: contextText }) }}</span>
         </button>
+        <!-- Tapped, the take ends once you are quiet; held, when you let go (SM2). -->
+        <button
+          v-if="micShown"
+          ref="micBtn"
+          :class="['mic', { rec: recording }]"
+          type="button"
+          :disabled="disabled || writing"
+          :title="micTitle"
+          :aria-label="micTitle"
+          :aria-pressed="recording"
+          @pointerdown="micDown"
+          @pointermove="micMove"
+          @pointerup="micUp"
+          @pointercancel="micCancelled"
+          @click.prevent
+          @keydown.enter.prevent="micKey"
+          @keydown.space.prevent="micKey"
+        >
+          <Icon v-if="recording" name="stop" :size="11" />
+          <Spinner v-else-if="writing" :size="12" />
+          <ChatIcon v-else name="mic" :size="15" />
+        </button>
         <button
           :class="['send', { stop: running && !hasContent }]"
           type="button"
@@ -1088,6 +1541,10 @@ onBeforeUnmount(() => {
         >
           <Icon v-if="running && !hasContent" name="stop" :size="11" />
           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg>
+          <svg v-if="countdown" class="ring" width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+            <circle cx="17" cy="17" r="15" class="ring-track" />
+            <circle cx="17" cy="17" r="15" class="ring-arc" :style="{ animationDuration: `${countdown.ms}ms` }" transform="rotate(-90 17 17)" />
+          </svg>
         </button>
       </div>
     </div>
@@ -1661,5 +2118,374 @@ button.chip-btn:hover:not(:disabled) {
 
 .send.stop:hover {
   background: var(--line-strong);
+}
+
+/* ---- voice messages (SM2, SM3, SMK, SMD) ---- */
+
+/* The mic beside Send, as round and as large; red while it records, its stop inside. */
+.mic {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-nav);
+  touch-action: none;
+}
+
+.mic:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+  color: var(--text);
+}
+
+.mic:disabled {
+  opacity: 0.5;
+}
+
+.mic.rec,
+.mic.rec:hover {
+  background: color-mix(in srgb, var(--crash) 16%, transparent);
+  color: var(--crash-text);
+}
+
+/* The wait before the text goes: a ring filling round Send in Claude's colour. */
+.send {
+  position: relative;
+}
+
+.send .ring {
+  position: absolute;
+  inset: -3px;
+  pointer-events: none;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--claude-line);
+  stroke-width: 2;
+}
+
+.ring-arc {
+  fill: none;
+  stroke: var(--claude);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 94.25;
+  stroke-dashoffset: 94.25;
+  animation: ring-fill linear forwards;
+}
+
+@keyframes ring-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.vline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--claude-text);
+}
+
+.vline .g {
+  color: var(--text-faint);
+}
+
+/* A tapped take over the field: the field keeps its place (and the keyboard), unseen. */
+.field.hushed .mirror,
+.field.hushed .input {
+  opacity: 0;
+}
+
+.takerow {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 22px;
+  padding: 0 2px;
+}
+
+.rdot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--crash);
+  animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--crash) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--crash) 0%, transparent);
+  }
+}
+
+.rlab {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: var(--crash-text);
+}
+
+.rtm {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.wave {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  overflow: hidden;
+}
+
+.wave i {
+  display: block;
+  flex-shrink: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--text-soft);
+  transition: height 0.08s linear;
+}
+
+.rhint {
+  flex-shrink: 0;
+  display: grid;
+  justify-items: end;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* Every hint in the one cell, the widest giving its width; the one in force alone seen. */
+.rhint > span {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.rhint > span.on {
+  visibility: visible;
+}
+
+/* The dot and the cancel's × in a box of one width. */
+.rmark {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 12px;
+}
+
+.shim {
+  font-size: 13.5px;
+  background: linear-gradient(90deg, var(--text-faint) 0%, var(--text-faint) 40%, var(--text) 50%, var(--text-faint) 60%, var(--text-faint) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shim 1.6s linear infinite;
+}
+
+@keyframes shim {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* A hold that letting go would cancel: the row says so in red, its wave greyed. */
+.takerow .rx {
+  color: var(--crash-text);
+}
+
+.takerow.cancel .rhint {
+  color: var(--crash-text);
+}
+
+.takerow.cancel .wave i {
+  background: var(--text-faint);
+}
+
+/* The model's card over the box. */
+.vcard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-panel);
+}
+
+.vhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.vic {
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+
+.vtitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.vx {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-subtle);
+}
+
+.vx:hover {
+  background: var(--bg-icon-hover);
+  color: var(--text);
+}
+
+.vcard p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.vacts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bg-control);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.vbtn:hover {
+  background: var(--bg-control-hover);
+}
+
+.vbtn.pri {
+  border-color: var(--text-strong);
+  background: var(--text-strong);
+  color: var(--bg-app);
+}
+
+.vbtn.pri:hover {
+  background: var(--text-lit);
+}
+
+.vbtn.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.vbtn.ghost:hover {
+  background: var(--bg-control-hover);
+  color: var(--text);
+}
+
+.vwhere {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.vprog {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-control-hover);
+}
+
+.vprog i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text-soft);
+  transition: width 0.2s linear;
+}
+
+.vmeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.vafter {
+  margin-left: auto;
+}
+
+/* A notice's way out: a link at its end. */
+.nlink {
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text-link, var(--text));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rdot,
+  .shim {
+    animation: none;
+  }
+
+  .shim {
+    color: var(--text-faint);
+  }
+
+  .wave i,
+  .vprog i {
+    transition: none;
+  }
 }
 </style>

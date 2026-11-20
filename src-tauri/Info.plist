@@ -5,6 +5,9 @@
   <!-- Asked once per browser: "Open in browser" brings forward the tab that already shows the project. -->
   <key>NSAppleEventsUsageDescription</key>
   <string>Pitwall brings forward the browser tab that already shows your project instead of opening another one.</string>
+  <!-- Asked once, at the chat's first voice message: the take is written down on this Mac and never sent. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Pitwall listens while you record a voice message in the chat and writes it down on this Mac. Your voice is never sent anywhere.</string>
   <!-- The languages Pitwall speaks (src/locales); macOS's own dialogs follow the system's one of these. -->
   <key>CFBundleLocalizations</key>
   <array>

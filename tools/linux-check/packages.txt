@@ -16,3 +16,5 @@ pkg-config
 # Pitwall's own crates
 libasound2-dev   # sound: rodio -> cpal -> alsa-sys
 libdbus-1-dev    # notifications: notify-rust's D-Bus backend
+cmake            # voice messages: whisper-rs builds whisper.cpp with CMake
+libclang-dev     # voice messages: whisper-rs-sys makes its bindings with libclang

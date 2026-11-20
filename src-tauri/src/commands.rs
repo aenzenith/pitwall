@@ -2089,6 +2089,77 @@ pub fn set_chat_examples(state: State<'_, AppState>, examples: Vec<String>) {
     state.core.set_chat_examples(examples);
 }
 
+// Voice messages (`src-tauri/src/voice`): a take is named by the window's id, the model and the
+// language spoken come from the chat's settings.
+
+/// A take's id as the window makes it: a short word of letters, digits, `-` and `_`.
+fn voice_id(id: &str) -> Result<(), String> {
+    let fine = !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    fine.then_some(()).ok_or_else(|| "bad id".into())
+}
+
+fn voice_model(word: &str) -> Result<crate::voice::models::Model, String> {
+    crate::voice::models::Model::parse(word).ok_or_else(|| "unknown model".into())
+}
+
+#[tauri::command]
+pub fn voice_status(state: State<'_, AppState>) -> crate::voice::Status {
+    state.voice.status()
+}
+
+#[tauri::command]
+pub fn voice_download(app: AppHandle, state: State<'_, AppState>, model: String) -> Result<(), String> {
+    state.voice.download(&app, voice_model(&model)?)
+}
+
+#[tauri::command]
+pub fn voice_download_cancel(state: State<'_, AppState>) {
+    state.voice.cancel_download();
+}
+
+#[tauri::command]
+pub fn voice_delete(state: State<'_, AppState>, model: String) -> Result<(), String> {
+    state.voice.delete(voice_model(&model)?)
+}
+
+/// `language` is the window's (used when the setting says `app`), `prompt` the chat's project's name.
+#[tauri::command]
+pub fn voice_start(app: AppHandle, state: State<'_, AppState>, id: String, language: String, prompt: String) -> Result<(), String> {
+    voice_id(&id)?;
+    let chat = state.core.settings().chat;
+    let model = crate::voice::models::Model::parse(&chat.voice_model).unwrap_or(crate::voice::models::Model::Small);
+    let language = crate::voice::language_of(&chat.voice_language, &language);
+    state.voice.start(&app, id, model, language, prompt)
+}
+
+#[tauri::command]
+pub fn voice_by_itself(state: State<'_, AppState>, id: String) {
+    state.voice.by_itself(&id);
+}
+
+#[tauri::command]
+pub fn voice_stop(state: State<'_, AppState>, id: String) {
+    state.voice.stop(&id);
+}
+
+#[tauri::command]
+pub fn voice_cancel(state: State<'_, AppState>, id: String) {
+    state.voice.cancel(&id);
+}
+
+/// The system's own page for the microphone's permission (macOS, Windows).
+#[tauri::command]
+pub fn voice_privacy(app: AppHandle) -> Result<(), String> {
+    let page = if cfg!(target_os = "macos") {
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+    } else if cfg!(windows) {
+        "ms-settings:privacy-microphone"
+    } else {
+        return Err("no such page here".into());
+    };
+    app.opener().open_url(page, None::<&str>).map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 pub fn sessions_meta(state: State<'_, AppState>) -> crate::chat::meta::SessionsMeta {
     state.core.sessions_meta()

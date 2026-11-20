@@ -18,7 +18,7 @@ import { revealTab } from "../panel";
 import { projectSettings } from "../projectSettings";
 import { api, snapshot } from "../store";
 import type { AgentStartChoice, TerminalOpened } from "../types";
-import { CHAT_DEFAULTS, type ChatOutgoing, type ChatSettings } from "./wire";
+import { CHAT_DEFAULTS, voiceDelayOf, type ChatOutgoing, type ChatSettings } from "./wire";
 
 export type StartChatOptions = {
   start?: AgentStartChoice | null;
@@ -43,6 +43,8 @@ export const chatSettings = computed<ChatSettings>(() => {
   if (out.open !== "chat") out.open = "terminal";
   if (out.sendKey !== "mod-enter") out.sendKey = "enter";
   if (out.mode !== "auto") out.mode = "default";
+  if (out.voiceModel !== "large") out.voiceModel = "small";
+  out.voiceDelay = voiceDelayOf(out.voiceDelay);
   return out;
 });
 

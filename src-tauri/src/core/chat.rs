@@ -2243,7 +2243,13 @@ impl Core {
                 }
             }
             let next: crate::settings::ChatSettings = serde_json::from_value(merged).map_err(|_| refused())?;
-            if !matches!(next.open.as_str(), "terminal" | "chat") || !matches!(next.send_key.as_str(), "enter" | "mod-enter") || !matches!(next.mode.as_str(), "default" | "auto") {
+            if !matches!(next.open.as_str(), "terminal" | "chat")
+                || !matches!(next.send_key.as_str(), "enter" | "mod-enter")
+                || !matches!(next.mode.as_str(), "default" | "auto")
+                || crate::voice::models::Model::parse(&next.voice_model).is_none()
+                || !crate::settings::VOICE_DELAYS.contains(&next.voice_delay)
+                || (next.voice_language != "app" && !crate::voice::engine::LANGUAGES.contains(&next.voice_language.as_str()))
+            {
                 return Err(refused());
             }
             if inner.settings.chat == next {

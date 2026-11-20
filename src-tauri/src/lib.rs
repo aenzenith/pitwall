@@ -45,6 +45,7 @@ mod codex;
 mod codex_hooks;
 mod codex_usage;
 mod codex_spend;
+mod voice;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -80,6 +81,8 @@ pub struct AppState {
     /// The CSV file the Today page saved last (`commands::day_export`): the one "Show in Finder"
     /// shows. In memory only.
     pub export: std::sync::Mutex<Option<PathBuf>>,
+    /// Voice messages in the chat: the takes, the models and their download (`voice`).
+    pub voice: voice::Voice,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -361,6 +364,7 @@ pub fn run() {
                 update,
                 backup: std::sync::Mutex::new(None),
                 export: std::sync::Mutex::new(None),
+                voice: voice::Voice::new(app.path().app_data_dir()?.join("voice")),
             });
             fuel::Fuel::start(app.handle());
             sessions::Sessions::start(app.handle());
@@ -558,6 +562,15 @@ pub fn run() {
             commands::chat_terminal_text,
             commands::set_chat_settings,
             commands::set_chat_examples,
+            commands::voice_status,
+            commands::voice_download,
+            commands::voice_download_cancel,
+            commands::voice_delete,
+            commands::voice_start,
+            commands::voice_by_itself,
+            commands::voice_stop,
+            commands::voice_cancel,
+            commands::voice_privacy,
             commands::sessions_meta,
             commands::set_sessions_meta,
             commands::terminal_buffer,

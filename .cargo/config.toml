@@ -1,0 +1,5 @@
+# whisper.cpp (the chat's voice messages, `whisper-rs-sys`) is built by cmake, which would tune it
+# to the machine that builds it (`-march=native`): a release built on CI must run on every user's
+# processor. Off, it takes AVX2/FMA/F16C on x86-64 (`voice::engine::supported` checks them).
+[env]
+GGML_NATIVE = "OFF"

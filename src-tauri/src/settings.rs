@@ -845,7 +845,20 @@ pub struct ChatSettings {
     /// right-click or its add button); none until a chat first shows them, which writes the three
     /// of the language Pitwall showed then, so they stay in it (`src/lib/chat/examples.ts`).
     pub examples: Option<Vec<String>>,
+    /// Voice messages (Settings › Terminal › Sohbet › Sesli mesaj, `src-tauri/src/voice`): the
+    /// model a take is written down with (`small` or `large`, `voice::models::Model`), whether its
+    /// text goes by itself after the composer's short wait, how long that wait is (ms, one of
+    /// `VOICE_DELAYS`; 0 sends at once), and the language spoken (`app`: the window's; else one
+    /// of `voice::engine::LANGUAGES`).
+    pub voice_model: String,
+    pub voice_send: bool,
+    pub voice_delay: u32,
+    pub voice_language: String,
 }
+
+/// The waits (ms) a voice message's text may stand in the box before it goes, as Settings offers
+/// them (`VOICE_DELAYS` in `src/lib/chat/wire.ts`).
+pub const VOICE_DELAYS: [u32; 5] = [0, 1000, 1500, 3000, 5000];
 
 impl Default for ChatSettings {
     fn default() -> Self {
@@ -862,6 +875,10 @@ impl Default for ChatSettings {
             attach_file: true,
             attach_selection: true,
             examples: None,
+            voice_model: "small".into(),
+            voice_send: true,
+            voice_delay: 1500,
+            voice_language: "app".into(),
         }
     }
 }

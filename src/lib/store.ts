@@ -47,6 +47,7 @@ import type { PhoneConfig, PhoneView } from "./types";
 import type { CalendarDay, DayRow, Lap, LapKind, LapResult, LapRun, LapsState, LapTerminal, LapWhen } from "./laps";
 import type { Found } from "./explorer";
 import type { ChatAnswer, ChatBuffer, ChatControl, ChatInterruptReceipt, ChatOutgoing, ChatSettings, SessionsMeta, SessionsMetaPatch } from "./chat/wire";
+import type { VoiceModel, VoiceStatus } from "./chat/voice";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -407,6 +408,16 @@ export const api = {
   chatTerminalText: (id: number) => invoke<string>("chat_terminal_text", { id }),
   setChatSettings: (patch: Partial<ChatSettings>) => invoke("set_chat_settings", { patch }),
   setChatExamples: (examples: string[]) => invoke("set_chat_examples", { examples }),
+  // Voice messages (src-tauri/src/voice; lib/chat/voice.ts).
+  voiceStatus: () => invoke<VoiceStatus>("voice_status"),
+  voiceDownload: (model: VoiceModel) => invoke("voice_download", { model }),
+  voiceDownloadCancel: () => invoke("voice_download_cancel"),
+  voiceDelete: (model: VoiceModel) => invoke("voice_delete", { model }),
+  voiceStart: (id: string, language: string, prompt: string) => invoke("voice_start", { id, language, prompt }),
+  voiceByItself: (id: string) => invoke("voice_by_itself", { id }),
+  voiceStop: (id: string) => invoke("voice_stop", { id }),
+  voiceCancel: (id: string) => invoke("voice_cancel", { id }),
+  voicePrivacy: () => invoke("voice_privacy"),
   sessionsMeta: () => invoke<SessionsMeta>("sessions_meta"),
   setSessionsMeta: (patch: SessionsMetaPatch) => invoke<SessionsMeta>("set_sessions_meta", { patch }),
   setFavourite: (path: string, on: boolean) => invoke("set_favourite", { path, on }),

@@ -268,7 +268,21 @@ export type ChatSettings = {
   focusView: boolean;
   attachFile: boolean;
   attachSelection: boolean;
+  /** Voice messages (Settings › Terminal › Sohbet › Sesli mesaj): the model, whether the text
+   * goes by itself after the short wait, how long that wait is (ms, one of `VOICE_DELAYS`; 0
+   * sends at once), the language spoken (`app`: the window's). */
+  voiceModel: "small" | "large";
+  voiceSend: boolean;
+  voiceDelay: number;
+  voiceLanguage: string;
 };
+/** The waits (ms) Settings offers for a voice message's text before it goes (the core's
+ * `settings::VOICE_DELAYS`). */
+export const VOICE_DELAYS = [0, 1000, 1500, 3000, 5000] as const;
+/** A stored wait as the composer takes it: one Settings offers, else the default. */
+export function voiceDelayOf(value: unknown): number {
+  return (VOICE_DELAYS as readonly unknown[]).includes(value) ? (value as number) : CHAT_DEFAULTS.voiceDelay;
+}
 export const CHAT_DEFAULTS: ChatSettings = {
   open: "terminal",
   sendKey: "enter",
@@ -280,6 +294,10 @@ export const CHAT_DEFAULTS: ChatSettings = {
   focusView: false,
   attachFile: true,
   attachSelection: true,
+  voiceModel: "small",
+  voiceSend: true,
+  voiceDelay: 1500,
+  voiceLanguage: "app",
 };
 
 export type SessionsMeta = { archived: string[]; groups: { id: string; name: string; sessions: string[] }[]; unread: string[] };
