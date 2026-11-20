@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.25.0](https://github.com/aenzenith/pitwall/compare/v1.24.0...v1.25.0) (2026-11-20)
+
+
+### Features
+
+* **chat:** voice messages in the chat were written down on this Mac ([1d905c1](https://github.com/aenzenith/pitwall/commit/1d905c1bbb8e68fadba3e88b367fc974e2905efb))
+* **laps:** jobs on the Laps page got a right-click menu ([838ea2a](https://github.com/aenzenith/pitwall/commit/838ea2ab581ed09b07e5609b36574281297e7a46))
+* **terminal:** the terminal panel got a project column on its left ([43c6a0a](https://github.com/aenzenith/pitwall/commit/43c6a0ac9b167a2dcb6e41e2c17cb2ca040177b6))
+
 ## [1.24.0](https://github.com/aenzenith/pitwall/compare/v1.23.0...v1.24.0) (2026-11-19)
 
 
