@@ -31,7 +31,26 @@ fn free_port() -> u16 {
     TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
 }
 
+/// `cargo test` puts on `PATH` every folder a build script names for linking inside the target
+/// folder, and whisper-rs-sys names each folder of whisper.cpp's cmake build: on Windows that
+/// `PATH` grows past what `cmd.exe` searches, and neither `npm` nor `node` is found. The tests'
+/// servers run without those folders, as an installed app's do.
+#[cfg(windows)]
+fn drop_build_folders_from_path() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let Some(path) = std::env::var_os("PATH") else { return };
+        // target\debug\deps\pitwall-<hash>.exe → target\debug\build
+        let exe = std::env::current_exe().unwrap();
+        let Some(build) = exe.parent().and_then(Path::parent).map(|profile| profile.join("build")) else { return };
+        let kept: Vec<_> = std::env::split_paths(&path).filter(|folder| !folder.starts_with(&build)).collect();
+        std::env::set_var("PATH", std::env::join_paths(kept).unwrap());
+    });
+}
+
 fn fixture(script: &str, files: &[(&str, &str)]) -> Fixture {
+    #[cfg(windows)]
+    drop_build_folders_from_path();
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().join("paddock");
     let registry_dir = tmp.path().join("registry");
