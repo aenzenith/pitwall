@@ -31,7 +31,38 @@ fn free_port() -> u16 {
     TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
 }
 
+/// `cargo test` puts on `PATH`, first, every folder a build script names for linking inside the
+/// build folder, and whisper-rs-sys names each folder of whisper.cpp's cmake build: on Windows
+/// that `PATH` (16 000 characters on CI) is longer than `cmd.exe` reads, and neither `npm` nor
+/// `node` is found. The tests' servers run without those folders, as an installed app's do.
+#[cfg(windows)]
+fn drop_build_folders_from_path() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let (Some(build), Some(path)) = (cargo_build_folder(), std::env::var_os("PATH")) else { return };
+        let kept: Vec<_> = std::env::split_paths(&path).filter(|folder| !within(folder, &build)).collect();
+        std::env::set_var("PATH", std::env::join_paths(kept).unwrap());
+    });
+}
+
+/// The folder cargo builds the packages' build scripts in: the nearest `build` above this
+/// package's own `OUT_DIR` (`<target>\debug\build\pitwall-<hash>\out`, or
+/// `…\build\pitwall/<hash>\out` in cargo's newer layout).
+#[cfg(windows)]
+fn cargo_build_folder() -> Option<std::path::PathBuf> {
+    Path::new(env!("OUT_DIR")).ancestors().find(|folder| folder.file_name().is_some_and(|name| name.eq_ignore_ascii_case("build"))).map(Path::to_path_buf)
+}
+
+/// Whether `folder` is `outer` or inside it, whichever slashes and letter case either is written with.
+#[cfg(windows)]
+fn within(folder: &Path, outer: &Path) -> bool {
+    let plain = |path: &Path| format!("{}\\", path.to_string_lossy().trim_start_matches(r"\\?\").replace('/', "\\").trim_end_matches('\\').to_lowercase());
+    plain(folder).starts_with(&plain(outer))
+}
+
 fn fixture(script: &str, files: &[(&str, &str)]) -> Fixture {
+    #[cfg(windows)]
+    drop_build_folders_from_path();
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().join("paddock");
     let registry_dir = tmp.path().join("registry");
@@ -79,7 +110,8 @@ fn shell_probe() -> String {
     let dir = std::env::temp_dir();
     let core_shell = said(crate::process::spawn_shell("node --version", &dir.to_string_lossy()).and_then(|child| child.wait_with_output()));
     format!(
-        "\nenvironment: {} variables, {size} chars: {names:?}\nPATH: {} chars, {} folders, {in_target} in a target folder; the first: {:?}\ncore shell: {core_shell}\ncmd: {}\nwhere: {}\nnode: {}",
+        "\nbuild folder: {:?}\nenvironment: {} variables, {size} chars: {names:?}\nPATH: {} chars, {} folders, {in_target} in a target folder; the first: {:?}\ncore shell: {core_shell}\ncmd: {}\nwhere: {}\nnode: {}",
+        cargo_build_folder(),
         vars.len(),
         path.len(),
         folders.len(),
