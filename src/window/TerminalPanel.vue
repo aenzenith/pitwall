@@ -821,6 +821,33 @@ const columnShown = computed(() => !collapsed.value && (columnNarrow.value ? col
 const columnSide = ref<InstanceType<typeof TerminalProjects> | null>(null);
 const columnOver = ref<InstanceType<typeof TerminalProjects> | null>(null);
 
+/** The row's head, which reaches over the column while it is beside the terminal. */
+const head = ref<HTMLElement | null>(null);
+let headSlide: Animation | null = null;
+
+// The head widens with the column's room and narrows back with it (`.lead`'s 220 ms, after its
+// 120 ms on the way back), from the width it had to the one it takes now, its picker or its name
+// clipped meanwhile.
+watch(lead, async (open) => {
+  const el = head.value;
+  if (!el || !settled.value || stillMotion()) return;
+  const from = el.getBoundingClientRect().width;
+  headSlide?.cancel();
+  await nextTick();
+  const to = el.getBoundingClientRect().width;
+  if (head.value !== el || Math.abs(to - from) < 1) return;
+  el.style.overflow = "clip";
+  const slide = el.animate({ width: [`${from}px`, `${to}px`] }, { duration: 220, delay: open ? 0 : 120, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "backwards" });
+  headSlide = slide;
+  const done = () => {
+    if (headSlide !== slide) return;
+    headSlide = null;
+    el.style.overflow = "";
+  };
+  slide.onfinish = done;
+  slide.oncancel = done;
+});
+
 /** The column's button: beside the terminal, kept for the next start; a narrow panel's over it,
  * for now. Shown, the keyboard goes to its search, and a collapsed panel comes up with it. */
 async function toggleColumn(): Promise<void> {
@@ -1903,11 +1930,12 @@ const tabElsewhere = {
   },
 };
 
-/** The tab row's empty part (between and after the tabs), not a tab, a name or a button; the
- * card's handle is part of it. */
+/** The tab row's empty part (between and after the tabs), not a tab, the picker or a button; the
+ * card's handle and the head (the project's name over the column, which is no button) are part of
+ * it. */
 function emptyPart(event: MouseEvent): boolean {
   const target = event.target as HTMLElement;
-  return target === event.currentTarget || target === tablist.value || target.classList.contains("grow") || !!target.closest(".mover");
+  return target === event.currentTarget || target === tablist.value || target === head.value || target.classList.contains("grow") || target.classList.contains("head-name") || !!target.closest(".mover");
 }
 
 /* ---------- the panel's stand: the row's buttons and menu, the card moved and resized ---------- */
@@ -2179,7 +2207,7 @@ let unfoldedBy = false;
  * (`doubleClick`, nothing by default), and one on the handle takes the panel up to the page's bar
  * and back (the user's word), only on a panel open all the way: folded or still coming up, a double
  * click is no more than the click that opens it (the user's word). A tab's own double click renames
- * it, and the project's name and the buttons keep theirs.
+ * it, and the project's picker and the buttons keep theirs.
  */
 function onRowClick(event: MouseEvent): void {
   // A double click begins with a click: one that brought the panel up is all its double click does,
@@ -2809,7 +2837,7 @@ defineExpose({ openTerminal, closeShown });
   <section
     ref="panel"
     :class="['term-panel', stand, { animated: !dragging && !moving, collapsed, leaving: dropTo === 'window', tucked }]"
-    :style="{ ...panelStyle, ...morph, '--edge': `${edge}px` }"
+    :style="{ ...panelStyle, ...morph, '--edge': `${edge}px`, '--projects-width': `${PROJECTS_WIDTH}px` }"
     :aria-label="t('terminal.panel', { name: project.name })"
     @focusin="onFocusIn"
     @focusout="onFocusOut"
@@ -2842,21 +2870,27 @@ defineExpose({ openTerminal, closeShown });
     >
       <!-- The card's handle: it moves the card, as the row's empty part does. -->
       <span v-if="floating" class="mover" :title="t('terminal.move')" aria-hidden="true"><Icon name="grip" :size="12" /></span>
-      <!-- The project column's button, at the row's start as the history's is at its end. -->
-      <button
-        type="button"
-        :class="['icon', 'column-toggle', { on: columnShown }]"
-        :aria-pressed="columnShown"
-        :aria-label="t('terminal.projectsTitle')"
-        :title="t('terminal.projectsTitle')"
-        @click="toggleColumn"
-      >
-        <Icon name="sidebar" :size="13" />
-      </button>
-      <!-- The panel's project: the page's, or another picked here; the column beside the terminal
-           lists them in its place. -->
-      <div v-if="!lead" class="where">
-        <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain working @pick="pickProject" />
+      <!-- The row's head: the project column's button (at the row's start as the history's is at
+           its end) and the panel's project, set off from the tabs by a line. With the column beside
+           the terminal the head reaches over it, with no line (the user's word), so the tabs begin
+           where the terminal does. -->
+      <div ref="head" :class="['head', { open: lead }]">
+        <button
+          type="button"
+          :class="['icon', 'column-toggle', { on: columnShown }]"
+          :aria-pressed="columnShown"
+          :aria-label="t('terminal.projectsTitle')"
+          :title="t('terminal.projectsTitle')"
+          @click="toggleColumn"
+        >
+          <Icon name="sidebar" :size="13" />
+        </button>
+        <!-- The page's project, or another picked here; the column picks them in its place, and
+             its name alone stays. -->
+        <div v-if="!lead" class="where">
+          <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain working @pick="pickProject" />
+        </div>
+        <span v-else class="head-name" :title="project.name">{{ project.name }}</span>
       </div>
       <span id="terminal-tab-keys" class="sr-only">{{ t("terminal.tabKeys") }}</span>
       <!-- Each tab and its close button side by side, never one inside the other; the list holds
@@ -2995,7 +3029,7 @@ defineExpose({ openTerminal, closeShown });
       <!-- A pane dragged over the row: where it goes in among the tabs. -->
       <span v-if="rowMarkLeft !== null" class="row-mark" :style="{ left: `${rowMarkLeft}px` }" aria-hidden="true"></span>
     </div>
-    <div ref="body" class="body" :style="{ '--history-width': `${historyShown}px`, '--projects-width': `${PROJECTS_WIDTH}px` }">
+    <div ref="body" class="body" :style="{ '--history-width': `${historyShown}px` }">
       <!-- The project column's room before the terminal: the panel's left margin alone while it is
            hidden; shown, it grows to the right and the terminal gives up that width as it goes. -->
       <div :class="['lead', { open: lead, still: !settled }]">
@@ -3252,6 +3286,8 @@ defineExpose({ openTerminal, closeShown });
 }
 
 .term-panel.float .tabs {
+  /* Its handle first: 16 px and 2 px of margin, then the row's 2 px gap. */
+  --row-start: 26px;
   padding-left: 6px;
 }
 
@@ -3280,7 +3316,8 @@ defineExpose({ openTerminal, closeShown });
   cursor: grab;
 }
 
-.term-panel.float:not(.collapsed) .tabs > :where(:not(.tablist, .grow, .mover, button, [role="button"])) {
+.term-panel.float:not(.collapsed) .tabs > :where(:not(.tablist, .grow, .mover, .head, button, [role="button"])),
+.term-panel.float:not(.collapsed) .head > .where {
   cursor: default;
 }
 
@@ -3359,6 +3396,8 @@ defineExpose({ openTerminal, closeShown });
 
 /* A fixed height: renaming a tab (its input) never pushes the terminal down. */
 .tabs {
+  /* Where the head begins, from the panel's left edge: the row's padding (and a card's handle). */
+  --row-start: 14px;
   position: relative;
   container-type: inline-size;
   flex-shrink: 0;
@@ -3540,11 +3579,45 @@ defineExpose({ openTerminal, closeShown });
   flex-grow: 1;
 }
 
-/* The project column's button, first in the row: lit while the column shows. */
-.column-toggle {
-  margin-right: 4px;
+/* The row's head, set off from the tabs by its line; its project's name is cut only once the tabs
+   have no more room to give. */
+.head {
+  flex: 0 1 auto;
+  /* The button, the gap, the picker's least and the line with its padding. */
+  min-width: calc(24px + 6px + 64px + 7px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  padding-right: 6px;
+  border-right: 1px solid var(--line);
+  transition: border-color 160ms ease;
 }
 
+/* Beside the terminal, the column below it: the head reaches to the middle of the gap between them
+   with no line there (the user's word: the gap sets them apart), and the tabs' names begin where
+   the terminal's lines do (the screen's border and padding, less a tab's own). */
+.head.open {
+  flex: 0 0 auto;
+  width: calc(var(--edge) + var(--projects-width) + 7px - var(--row-start));
+  margin-right: 8px;
+  border-right-color: transparent;
+}
+
+/* The project's name over the column, as the picker writes it, but with nothing to press. */
+.head-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* The project column's button, first in the row: lit while the column shows. */
 .column-toggle.on,
 .column-toggle.on:hover:not(:disabled) {
   color: var(--text-lit);
@@ -3601,16 +3674,12 @@ defineExpose({ openTerminal, closeShown });
   }
 }
 
-/* The project, first in the row, set off from its tabs; its name is cut only once they have no
-   more room to give. */
+/* The project's picker in the head. */
 .where {
   flex: 0 1 auto;
   min-width: 64px;
   max-width: 200px;
   display: flex;
-  margin-right: 6px;
-  padding-right: 6px;
-  border-right: 1px solid var(--line);
 }
 
 /* The shown output's tools, in its box's top right corner, clear of the scrollbar (10 px): on the
@@ -3686,7 +3755,8 @@ defineExpose({ openTerminal, closeShown });
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .divider {
+  .divider,
+  .head {
     transition: none;
   }
 }
