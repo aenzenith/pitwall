@@ -4,11 +4,15 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import Spinner from "../components/Spinner.vue";
 import { dayName } from "../lib/day";
+import { showFiles } from "../lib/explorer";
 import { t } from "../lib/i18n";
-import { lapAsked, towerOrder, type LapPlace, type LapView } from "../lib/laps";
+import { lapAsked, scheduled, towerOrder, towerPart, type LapPlace, type LapView } from "../lib/laps";
+import { useNativeMenu, type MenuEntry, type MenuPoint } from "../lib/nativeMenu";
 import { panelPath, usePanelFollow } from "../lib/panel";
-import { dragRegion } from "../lib/platform";
+import { dayLong } from "../lib/period";
+import { dragRegion, isMac, isWindows } from "../lib/platform";
 import { api, laps, loadLaps, snapshot, visible } from "../lib/store";
+import DayOffDialog from "./laps/DayOffDialog.vue";
 import LapCalendar from "./laps/LapCalendar.vue";
 import LapDeleteDialog from "./laps/LapDeleteDialog.vue";
 import LapDetail from "./laps/LapDetail.vue";
@@ -22,8 +26,10 @@ import LapTower from "./laps/LapTower.vue";
  * Takvim opens the month over it; Yeni iş, under the tower (on the empty page, in its middle),
  * the wide dialog: the head has no second one (the user's word, 2026-11-06). The panel follows
  * the job picked, its project or the folder it runs in; a run's own terminal shows in its dialog
- * alone.
+ * alone. A right-click on a job in the tower picks it and opens its menu (`towerMenu`).
  */
+
+const emit = defineEmits<{ openProject: [path: string] }>();
 
 onMounted(() => void loadLaps());
 
@@ -149,6 +155,98 @@ function deleted(): void {
   void loadLaps();
 }
 
+/* ---------- the tower's right-click menu ---------- */
+
+const detail = ref<InstanceType<typeof LapDetail> | null>(null);
+const menu = useNativeMenu();
+/** "Bir günü izinli yap": the day picked in the menu, asked about as the calendar asks it. */
+const dayOff = ref<{ lap: string; name: string; date: string; at: number | null; weekly: boolean } | null>(null);
+
+const revealKey = isMac ? "laps.menu.reveal.mac" : isWindows ? "laps.menu.reveal.windows" : "laps.menu.reveal.linux";
+
+/** The days of the coming week the job still runs on and that aren't off yet, each with its first
+ * moment still to come, as the calendar's day rows have them (`lap_day`). */
+async function runDays(lap: LapView): Promise<Array<{ date: string; at: number }>> {
+  if (!scheduled(lap) || lap.nextAt === null) return [];
+  const from = new Date();
+  const dates = Array.from({ length: 7 }, (_, i) => dayName(new Date(from.getFullYear(), from.getMonth(), from.getDate() + i, 12).getTime()));
+  const rows = await Promise.all(dates.map((date) => api.lapDay(date).then((list) => list.find((row) => row.lap === lap.id) ?? null, () => null)));
+  const moment = Date.now();
+  return dates.flatMap((date, i) => {
+    const row = rows[i];
+    const first = row && row.off === null ? row.at.find((at) => at > moment) : undefined;
+    return first === undefined ? [] : [{ date, at: first }];
+  });
+}
+
+/** A job's menu: it is picked first, so the detail beside shows it (a held job's script too, which
+ * Sürdür lets run). What writes is dimmed while another Pitwall holds the laps. */
+async function towerMenu(id: string, at: MenuPoint): Promise<void> {
+  if (!byId.value.has(id)) return;
+  selectedId.value = id;
+  const days = await runDays(byId.value.get(id)!);
+  // The job may have gone while its days were asked.
+  const lap = byId.value.get(id);
+  if (!lap) return;
+  const off = elsewhere.value;
+  const fail = (reason: unknown): void => detail.value?.fail(reason);
+  const kept = (act: (now: LapView) => void) => () => {
+    const now = byId.value.get(id);
+    if (now) act(now);
+  };
+  const done = [...lap.last].reverse().find((mark) => mark.result !== null);
+  const project = lap.place.kind === "project" ? (snapshot.value?.projects.find((p) => p.path === lap.place.path) ?? null) : null;
+  const part = ordered.value.filter((other) => towerPart(other) === towerPart(lap));
+  const top = part[0];
+  const bottom = part[part.length - 1];
+  const weekly = lap.when.kind !== "once" && lap.when.kind !== "refill";
+  const running = lap.running;
+
+  const entries: MenuEntry[] = [
+    running ? { text: t("common.stop"), enabled: !off, action: () => detail.value?.stop() } : { text: t("laps.runNow"), enabled: !off, action: () => detail.value?.runNow() },
+  ];
+  if (running) entries.push({ text: t("laps.runs.terminal"), action: () => openRun(id, running.run) });
+  entries.push({ text: t("laps.menu.lastResult"), enabled: done !== undefined, action: () => done && openRun(id, done.id) });
+
+  entries.push(
+    "separator",
+    { text: t("laps.skipNext"), enabled: scheduled(lap) && lap.nextAt !== null && !off, action: () => void api.lapSkipNext(id).catch(fail) },
+    lap.paused !== null
+      ? { text: t("laps.resume"), enabled: !off, action: () => void api.lapPause(id, false).catch(fail) }
+      : !lap.on
+        ? { text: t("laps.switchOn"), enabled: !off, action: () => void api.lapSwitch(id, true).catch(fail) }
+        : { text: t("laps.pause"), enabled: !off, action: () => void api.lapPause(id, true).catch(fail) },
+    days.length && !off
+      ? {
+          text: t("laps.menu.dayOff"),
+          items: days.map((day) => ({
+            text: day.date === today.value ? t("laps.cal.today", { day: dayLong(day.date) }) : dayLong(day.date),
+            action: () => (dayOff.value = { lap: id, name: lap.name, date: day.date, at: day.at, weekly }),
+          })),
+        }
+      : { text: t("laps.menu.dayOff"), enabled: false },
+  );
+
+  entries.push(
+    "separator",
+    { text: t("common.edit"), action: kept((now) => (editing.value = { lap: now })) },
+    { text: t("laps.menu.duplicate"), enabled: !off, action: () => void api.lapDuplicate(id).then((copy) => saved(copy.id), fail) },
+    { text: t("laps.menu.top"), enabled: !off && top !== undefined && top.id !== id, action: () => top && move(id, top.id, false) },
+    { text: t("laps.menu.bottom"), enabled: !off && bottom !== undefined && bottom.id !== id, action: () => bottom && move(id, bottom.id, true) },
+  );
+
+  entries.push("separator");
+  if (project) {
+    entries.push({ text: t("laps.menu.project"), action: () => emit("openProject", project.path) }, { text: t("files.show"), action: () => showFiles(project.path) });
+  }
+  entries.push({ text: t("common.openInEditor"), action: () => void api.openEditor(lap.place.path) }, { text: t(revealKey), action: () => void api.lapReveal(id).catch(fail) });
+
+  if (lap.unread) entries.push("separator", { text: t("laps.menu.readAll"), enabled: !off, action: () => void api.lapReadAll(id).catch(fail) });
+
+  entries.push("separator", { text: t("laps.delete"), enabled: !off, action: kept((now) => (removing.value = now)) });
+  await menu.popup(at, entries);
+}
+
 /* ---------- the order: dragged in the tower ---------- */
 
 /** A job dragged beside another (`after`: under it), in its own part of the tower: the jobs' own
@@ -220,9 +318,11 @@ function move(moved: string, beside: string, after: boolean): void {
         @open-run="openRun"
         @new="editing = { lap: null }"
         @move="move"
+        @menu="(id, at) => void towerMenu(id, at)"
       />
       <LapDetail
         v-if="selected"
+        ref="detail"
         :lap="selected"
         :now="now"
         :elsewhere="elsewhere"
@@ -250,6 +350,7 @@ function move(moved: string, beside: string, after: boolean): void {
       @close="editing = null"
     />
     <LapResultDialog v-if="result" :run="result.run" :lap="byId.get(result.lap) ?? null" :elsewhere="elsewhere" @close="result = null" />
+    <DayOffDialog v-if="dayOff" :lap="dayOff.lap" :name="dayOff.name" :date="dayOff.date" :at="dayOff.at" :weekly="dayOff.weekly" @close="dayOff = null" />
     <LapDeleteDialog v-if="removing" :id="removing.id" :name="removing.name" :running="removing.running !== null" @deleted="deleted" @close="removing = null" />
   </main>
 </template>

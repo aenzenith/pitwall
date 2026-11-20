@@ -248,6 +248,10 @@ function more(event: MouseEvent): void {
     { text: t("laps.delete"), action: () => emit("remove") },
   ]);
 }
+
+// The tower's right-click menu (LapsView) picks the job first, then acts through these: the head's
+// buttons show their spinner, and what was refused is said under them.
+defineExpose({ runNow, stop, fail: (reason: unknown) => void (error.value = refusalText(reason)) });
 </script>
 
 <template>

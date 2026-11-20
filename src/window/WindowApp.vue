@@ -1158,7 +1158,7 @@ function server(project: Project): string {
       @open-claude="openClaudeTerminal"
     />
     <BoardView v-else-if="view === 'board'" :project-path="selected?.path ?? null" @open-settings="openSettings('claude')" />
-    <LapsView v-else-if="view === 'laps'" />
+    <LapsView v-else-if="view === 'laps'" @open-project="revealProject" />
     <DepsView v-else-if="view === 'deps'" @open-project="revealProject" @open-output="revealOutput" />
 
     <template v-else>

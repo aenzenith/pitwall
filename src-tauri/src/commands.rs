@@ -1871,6 +1871,28 @@ pub fn lap_reorder(state: State<'_, AppState>, ids: Vec<String>) -> Result<(), S
     state.core.lap_reorder(&ids)
 }
 
+/// Çoğalt: a paused copy of the job right after it (`Core::lap_duplicate`).
+#[tauri::command]
+pub fn lap_duplicate(state: State<'_, AppState>, id: String) -> Result<crate::core::laps::Lap, String> {
+    state.core.lap_duplicate(&id)
+}
+
+/// Sonuçları okundu say: every kept run of the job is read (`Core::lap_read_all`).
+#[tauri::command]
+pub fn lap_read_all(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state.core.lap_read_all(&id)
+}
+
+/// The folder the job runs in, opened in Finder (Explorer, the file manager) as an account's is;
+/// the page never names a path (`Core::lap_dir`).
+#[tauri::command]
+pub fn lap_reveal(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+
+    let dir = state.core.lap_dir(&id)?;
+    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|error| error.to_string())
+}
+
 /* ---------- chats (core/chat.rs) ---------- */
 
 /// A session a chat forks: its id, and the entry it is cut after.

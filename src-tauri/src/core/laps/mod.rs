@@ -433,6 +433,24 @@ fn shown(path: &str) -> String {
     }
 }
 
+/// A copy's name (`Core::lap_duplicate`): `<name> (2)`, the first number from 2 no job's name
+/// has; a copy of a copy counts on from its own name's base (`X (2)` gives `X (3)`). Cut to
+/// stay within the 200 characters a name may have.
+fn copy_name(name: &str, laps: &[Lap]) -> String {
+    let base = match name.strip_suffix(')').and_then(|rest| rest.rsplit_once(" (")) {
+        Some((base, number)) if !base.trim().is_empty() && !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()) => base,
+        _ => name,
+    };
+    (2u32..)
+        .map(|n| {
+            let tail = format!(" ({n})");
+            let cut: String = base.chars().take(200usize.saturating_sub(tail.chars().count())).collect();
+            format!("{}{tail}", cut.trim_end())
+        })
+        .find(|candidate| !laps.iter().any(|lap| lap.name == *candidate))
+        .unwrap_or_default()
+}
+
 /// `path` (resolved) is in one of `roots` (Claude's, Codex's, Pitwall's own folders), or in a
 /// folder of the home folder named as theirs (`.claude*`, `.codex*`, `.pitwall`).
 fn refused_place(path: &Path, home: &Path, roots: &[PathBuf]) -> bool {
@@ -874,6 +892,49 @@ impl Core {
         Ok(())
     }
 
+    /// Çoğalt (the tower's right-click menu): a copy of the job `id` right after it, paused and
+    /// with no runs, named `<name> (2)` (the next number free). It is the user's (`by` none), but a
+    /// job held for a script an agent wrote stays held in its copy (`Lap::review`): a copy never
+    /// lets that line run before the user read it. The copy.
+    pub fn lap_duplicate(&self, id: &str) -> Result<Lap, String> {
+        let now = now_ms();
+        let copy = {
+            let mut laps = self.laps();
+            laps.writable(now)?;
+            let index = laps.laps.iter().position(|lap| lap.id == id).ok_or_else(not_found)?;
+            let mut copy = laps.laps[index].clone();
+            copy.id = laps.new_id("l", now);
+            copy.name = copy_name(&copy.name, &laps.laps);
+            copy.paused = Some(PausedBy::User);
+            copy.by = None;
+            copy.streak = 0;
+            copy.runs_done = 0;
+            copy.created_at = now;
+            copy.next_at = None;
+            let before = laps.laps.clone();
+            laps.laps.insert(index + 1, copy.clone());
+            if !laps.save() {
+                laps.laps = before;
+                return Err(t!("core.laps.error.unsaved"));
+            }
+            copy
+        };
+        self.laps_changed();
+        Ok(copy)
+    }
+
+    /// The folder the job `id` runs in, for Finder: a project's job its project's folder, a
+    /// folder's job its folder, as kept; none that isn't there, or that ends, its links followed,
+    /// where no lap may run (`refused_place`).
+    pub fn lap_dir(&self, id: &str) -> Result<PathBuf, String> {
+        let path = self.laps().lap(id).map(|lap| PathBuf::from(lap.place.path())).ok_or_else(not_found)?;
+        let resolved = path.canonicalize().ok().filter(|dir| dir.is_dir()).ok_or_else(|| t!("core.laps.error.place"))?;
+        if refused_place(&resolved, &dirs::home_dir().unwrap_or_default(), &self.laps_refused_roots()) {
+            return Err(t!("core.laps.error.placeRefused"));
+        }
+        Ok(path)
+    }
+
     /// The switch. A job is switched on only as `lap_save` would take it.
     pub fn lap_switch(&self, id: &str, on: bool) -> Result<(), String> {
         if on {
@@ -1222,6 +1283,25 @@ impl Core {
             };
             record.unread = false;
             laps.save_runs(&lap);
+        }
+        self.laps_changed();
+        Ok(())
+    }
+
+    /// Sonuçları okundu say (the tower's right-click menu): every kept run of the job `id` is read
+    /// from now on, as `lap_read` reads one. A job with none unread is no error.
+    pub fn lap_read_all(&self, id: &str) -> Result<(), String> {
+        let now = now_ms();
+        {
+            let mut laps = self.laps();
+            if !laps.runs.get(id).is_some_and(|runs| runs.iter().any(|run| run.unread)) {
+                return Ok(());
+            }
+            laps.writable(now)?;
+            for record in laps.runs.get_mut(id).into_iter().flatten() {
+                record.unread = false;
+            }
+            laps.save_runs(id);
         }
         self.laps_changed();
         Ok(())

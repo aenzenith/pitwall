@@ -6,6 +6,7 @@ import Icon from "../../components/Icon.vue";
 import { parseKey, rowKey, useGroupReorder, type Drop } from "../../lib/groupReorder";
 import { t } from "../../lib/i18n";
 import { countdown, dayOffTag, markTone, phaseShort, phaseText, phaseTone, resultLabel, runMoment, scheduled, towerPart, type LapView, type RunMark } from "../../lib/laps";
+import type { MenuPoint } from "../../lib/nativeMenu";
 
 /**
  * The tower (TN1): the jobs on the schedule in the user's order, numbered; Kalan counting down
@@ -15,10 +16,11 @@ import { countdown, dayOffTag, markTone, phaseShort, phaseText, phaseTone, resul
  * words. The paused jobs and those that are off at the foot, dimmed. A row is picked whole; the
  * arrows move the pick. A row dragged moves among the rows of its own part (`move`), as the
  * project list's rows do. An orange dot beside a job's name: a result of it not opened yet. Under
- * the rows, a faint Yeni iş, which never moves.
+ * the rows, a faint Yeni iş, which never moves. A right-click on a row (⇧F10 or the menu key on the
+ * row picked) asks the page for its menu (`menu`), at the click or the row's corner.
  */
 const props = defineProps<{ laps: LapView[]; selected: string | null; now: number; today: string; elsewhere: boolean }>();
-const emit = defineEmits<{ select: [id: string]; openRun: [lap: string, run: string]; new: []; move: [moved: string, beside: string, after: boolean] }>();
+const emit = defineEmits<{ select: [id: string]; openRun: [lap: string, run: string]; new: []; move: [moved: string, beside: string, after: boolean]; menu: [id: string, at: MenuPoint] }>();
 
 type Row = {
   lap: LapView;
@@ -73,8 +75,17 @@ function pick(id: string): void {
   if (drag.isClick()) emit("select", id);
 }
 
-/** ↑/↓ (and Home/End) move the pick, the keyboard going with it. */
+/** ↑/↓ (and Home/End) move the pick, the keyboard going with it; ⇧F10 or the menu key opens the
+ * picked row's menu at its corner. */
 function onKey(event: KeyboardEvent): void {
+  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+    event.preventDefault();
+    const row = props.selected ? list.value?.querySelector<HTMLElement>(`[data-lap="${props.selected}"]`) : null;
+    if (!row || !props.selected) return;
+    const box = row.getBoundingClientRect();
+    emit("menu", props.selected, { clientX: box.left + 24, clientY: box.bottom - 8 });
+    return;
+  }
   const at = props.laps.findIndex((lap) => lap.id === props.selected);
   let to = at;
   if (event.key === "ArrowDown") to = Math.min(props.laps.length - 1, at + 1);
@@ -117,6 +128,7 @@ function squareLabel(mark: RunMark): string {
         :tabindex="row.lap.id === selected ? 0 : -1"
         @pointerdown="press($event, row.lap.id)"
         @click="pick(row.lap.id)"
+        @contextmenu.prevent="emit('menu', row.lap.id, $event)"
       >
         <span v-if="row.place !== null" class="place">{{ row.place }}</span>
         <span v-else class="place idle"><Icon :name="row.lap.paused ? 'pause' : 'minus'" :size="11" /></span>

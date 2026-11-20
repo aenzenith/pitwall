@@ -1,46 +1,25 @@
 {
-  "since": "1.23.0",
+  "since": "1.24.0",
   "notes": [
     {
       "kind": "new",
       "title": {
-        "en": "GPT-6.2 has a cost",
-        "tr": "GPT-6.2'nin maliyeti görünüyor",
-        "de": "GPT-6.2 hat Kosten",
-        "es": "GPT-6.2 ya tiene coste",
-        "ru": "У GPT-6.2 есть стоимость",
-        "ja": "GPT-6.2 のコストを表示",
-        "zh-Hans": "GPT-6.2 有费用了"
+        "en": "Right-click a job",
+        "tr": "İşlere sağ tık",
+        "de": "Rechtsklick auf Aufgaben",
+        "es": "Clic derecho en las tareas",
+        "ru": "Меню задачи по правому клику",
+        "ja": "タスクを右クリック",
+        "zh-Hans": "右键点击任务"
       },
       "body": {
-        "en": "The tokens of Codex's new GPT-6.2 Sol and Astra now count in the API-equivalent cost.",
-        "tr": "Codex'in yeni modelleri GPT-6.2 Sol ve Astra'nın tokenları artık API karşılığı maliyete katılıyor.",
-        "de": "Die Tokens von GPT-6.2 Sol und Astra, den neuen Modellen von Codex, zählen jetzt bei den API-äquivalenten Kosten mit.",
-        "es": "Los tokens de GPT-6.2 Sol y Astra, los nuevos modelos de Codex, ya cuentan en el coste equivalente en API.",
-        "ru": "Токены новых моделей Codex, GPT-6.2 Sol и Astra, теперь учитываются в стоимости по ценам API.",
-        "ja": "Codex の新しいモデル GPT-6.2 Sol と Astra のトークンが、API 換算のコストに含まれるようになりました。",
-        "zh-Hans": "Codex 的新模型 GPT-6.2 Sol 和 Astra 的 token 现在会计入 API 等价费用。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Agents tidy the board and plan laps",
-        "tr": "Ajanlar panoyu toparlıyor, tur kuruyor",
-        "de": "Agenten räumen das Board auf und planen Runden",
-        "es": "Los agentes ordenan el tablero y crean vueltas",
-        "ru": "Агенты наводят порядок на доске и заводят круги",
-        "ja": "エージェントがボードを整理し、ラップを作成",
-        "zh-Hans": "智能体会整理看板、添加圈次"
-      },
-      "body": {
-        "en": "Over the team radio, Claude and Codex can now read and tidy the board, take the next card and add the laps you ask for. A lap with a script they wrote waits until you've read it.",
-        "tr": "Claude ve Codex artık takım radyosu üzerinden panoya bakıp kartları toparlayabiliyor, sıradaki kartı alabiliyor ve istediğin turları ekleyebiliyor. Kendi yazdıkları betikle gelen tur, sen okuyana kadar bekliyor.",
-        "de": "Über den Teamfunk können Claude und Codex jetzt das Board lesen und aufräumen, sich die nächste Karte nehmen und Runden anlegen, um die du sie bittest. Eine Runde mit einem Skript von ihnen wartet, bis du es gelesen hast.",
-        "es": "Con la radio del equipo, Claude y Codex ya pueden leer y ordenar el tablero, tomar la siguiente tarjeta y añadir las vueltas que les pidas. Una vuelta con un script escrito por ellos espera hasta que lo leas.",
-        "ru": "Через командное радио Claude и Codex теперь могут читать доску и наводить на ней порядок, брать следующую карточку и добавлять круги, о которых вы попросите. Круг со скриптом, который написал агент, ждёт, пока вы его не прочтёте.",
-        "ja": "チーム無線を通じて、Claude と Codex がボードを読んで整理したり、次のカードを引き受けたり、頼んだラップを追加したりできるようになりました。エージェントが書いたスクリプト付きのラップは、あなたが確認するまで待機します。",
-        "zh-Hans": "通过车队无线电，Claude 和 Codex 现在可以查看并整理看板、领取下一张卡片，还能按你的要求添加圈次。它们自己写了脚本的圈次，会等你看过之后再运行。"
+        "en": "On the Laps page, right-click a job to open its menu: run, pause or duplicate it, give it a day off, or open its folder from there.",
+        "tr": "Turlar sayfasında bir işe sağ tıklayınca menüsü açılır; oradan işi çalıştırabilir, çoğaltabilir, bir gün izin verebilir ya da klasörünü açabilirsin.",
+        "de": "Unter Runden öffnet ein Rechtsklick auf eine Aufgabe ihr Menü: Dort startest, pausierst oder duplizierst du sie, gibst ihr einen Tag frei oder öffnest ihren Ordner.",
+        "es": "En Vueltas, un clic derecho sobre una tarea abre su menú: desde ahí puedes ejecutarla, pausarla, duplicarla, darle un día libre o abrir su carpeta.",
+        "ru": "На странице «Круги» правый клик по задаче открывает её меню: оттуда её можно запустить, приостановить, дублировать, дать ей выходной или открыть её папку.",
+        "ja": "ラップのページでタスクを右クリックするとメニューが開き、実行・一時停止・複製のほか、1日休みにしたりフォルダを開いたりできます。",
+        "zh-Hans": "在圈次页面右键点击任务即可打开菜单，可以运行、暂停、创建副本、让它休息一天，或打开它的文件夹。"
       }
     }
   ]

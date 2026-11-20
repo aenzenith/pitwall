@@ -797,6 +797,12 @@ export const api = {
   /** The jobs in the order the tower was dragged into: those named first, as named, the rest
    * after them as they stood. */
   lapReorder: (ids: string[]) => invoke("lap_reorder", { ids }),
+  /** Çoğalt: a paused copy of the job right after it, held still when the job is held; the copy. */
+  lapDuplicate: (id: string) => invoke<Lap>("lap_duplicate", { id }),
+  /** Every kept run of the job read from now on. */
+  lapReadAll: (id: string) => invoke("lap_read_all", { id }),
+  /** The folder the job runs in, opened in Finder (Explorer, the file manager). */
+  lapReveal: (id: string) => invoke("lap_reveal", { id }),
   /** "Klasör seç…" for a job in a folder: the folder picked (absolute, and as shown), or null. */
   lapPickFolder: () => invoke<{ path: string; shown: string } | null>("lap_pick_folder"),
 };
