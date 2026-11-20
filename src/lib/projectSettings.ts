@@ -1,4 +1,4 @@
-import { shallowReactive, watch } from "vue";
+import { ref, shallowReactive, watch } from "vue";
 
 import { api, snapshot } from "./store";
 import type { Project, ProjectSettings } from "./types";
@@ -12,6 +12,10 @@ import type { Project, ProjectSettings } from "./types";
  * the copy is dropped once a snapshot shows it, or once the core has answered and the snapshot
  * has had time to catch up.
  */
+
+/** A project whose settings were asked for from outside its details (the terminal panel's project
+ * menu): its details open on them once they show it (ProjectDetail), and this goes back to null. */
+export const settingsAsked = ref<string | null>(null);
 
 /** Per project path: settings sent but not yet seen in a snapshot. */
 const pending = shallowReactive(new Map<string, ProjectSettings>());

@@ -706,6 +706,8 @@ pub struct Settings {
     /// The Files window shows a Markdown or SVG file as its preview rather than its text, from
     /// the moment its eye is pressed until it is pressed again.
     pub files_preview: bool,
+    /// The terminal panel's project column is shown, as the user last left it; shown at first.
+    pub projects_column: bool,
     /// The list shows the favourites and the projects at work only ("Only favourites and open").
     pub favourites_only: bool,
     /// A press on the page folds the open terminal panel to its tab row (Settings › General).
@@ -900,6 +902,7 @@ impl Default for Settings {
             board_scope: None,
             board_view: None,
             files_preview: false,
+            projects_column: true,
             favourites_only: false,
             panel_fold_outside: true,
             files_fold_outside: true,

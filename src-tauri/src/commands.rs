@@ -605,6 +605,12 @@ pub fn set_files_preview(state: State<'_, AppState>, on: bool) {
     state.core.set_files_preview(on);
 }
 
+/// Whether the terminal panel's project column shows, kept as the user last left it.
+#[tauri::command]
+pub fn set_projects_column(state: State<'_, AppState>, on: bool) {
+    state.core.set_projects_column(on);
+}
+
 /// What the empty terminal panel's box opened, by its word (`shell`, `chat`, `claude`, `codex`),
 /// picked again at its next start.
 #[tauri::command]
@@ -1432,6 +1438,17 @@ pub async fn explorer_commit_diff(app: AppHandle, path: String, id: String, file
 pub async fn explorer_reveal(app: AppHandle, path: String, file: String) -> bool {
     let core = std::sync::Arc::clone(&app.state::<AppState>().core);
     let Ok(Some(found)) = tauri::async_runtime::spawn_blocking(move || core.explorer_path(&path, &file)).await else {
+        return false;
+    };
+    tauri_plugin_opener::reveal_item_in_dir(found).is_ok()
+}
+
+/// A folder of the terminal panel's project column shown in Finder (Explorer, the file manager):
+/// a listed project's, or one right inside the projects folder (`Core::folder_to_show`).
+#[tauri::command]
+pub async fn reveal_folder(app: AppHandle, path: String) -> bool {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    let Ok(Some(found)) = tauri::async_runtime::spawn_blocking(move || core.folder_to_show(&path)).await else {
         return false;
     };
     tauri_plugin_opener::reveal_item_in_dir(found).is_ok()

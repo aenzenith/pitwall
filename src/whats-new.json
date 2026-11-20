@@ -21,6 +21,27 @@
         "ja": "ラップのページでタスクを右クリックするとメニューが開き、実行・一時停止・複製のほか、1日休みにしたりフォルダを開いたりできます。",
         "zh-Hans": "在圈次页面右键点击任务即可打开菜单，可以运行、暂停、创建副本、让它休息一天，或打开它的文件夹。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Projects beside the terminal",
+        "tr": "Terminalin yanında projeler",
+        "de": "Projekte neben dem Terminal",
+        "es": "Proyectos junto a la terminal",
+        "ru": "Проекты рядом с терминалом",
+        "ja": "ターミナルの横にプロジェクト",
+        "zh-Hans": "终端旁的项目列表"
+      },
+      "body": {
+        "en": "The terminal panel now lists your projects on its left, and its search finds folders you haven't added yet too. Right-click one to reach its server, commands and links.",
+        "tr": "Terminal panelinin solunda artık projelerin duruyor; arama, henüz eklemediğin klasörleri de buluyor. Bir projeye sağ tıklarsan sunucusuna, komutlarına ve bağlantılarına oradan ulaşırsın.",
+        "de": "Links im Terminalbereich stehen jetzt deine Projekte, und die Suche findet auch Ordner, die du noch nicht hinzugefügt hast. Ein Rechtsklick führt zu Server, Befehlen und Links eines Projekts.",
+        "es": "El panel de terminales muestra ahora tus proyectos a la izquierda, y su búsqueda también encuentra carpetas que aún no has añadido. Con un clic derecho llegas a su servidor, sus comandos y sus enlaces.",
+        "ru": "Слева в панели терминалов теперь видны ваши проекты, а поиск находит и папки, которые вы ещё не добавили. Правый клик ведёт к серверу, командам и ссылкам проекта.",
+        "ja": "ターミナルパネルの左にプロジェクトが並ぶようになりました。検索では、まだ追加していないフォルダも見つかります。右クリックで、サーバーやコマンド、リンクにすぐ届きます。",
+        "zh-Hans": "终端面板左侧现在会列出你的项目，搜索还能找到尚未添加的文件夹。右键点击项目，就能直接操作它的服务器、命令和链接。"
+      }
     }
   ]
 }

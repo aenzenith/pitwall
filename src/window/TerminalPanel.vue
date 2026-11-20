@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { emitTo } from "@tauri-apps/api/event";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 
 import AgentMark from "../components/AgentMark.vue";
@@ -8,6 +9,7 @@ import ProjectPicker from "../components/ProjectPicker.vue";
 import { agentOn } from "../lib/agents";
 import { opensChat, startChat } from "../lib/chat/open";
 import { depJobName, depJobs } from "../lib/deps";
+import { showFiles } from "../lib/explorer";
 import { commandFaded } from "../lib/format";
 import { shellRequest } from "../lib/flag";
 import { holding, moving as movingCard } from "../lib/holding";
@@ -16,6 +18,7 @@ import { plainText, shownLines } from "../lib/outputLines";
 import { useOutputSearch } from "../lib/outputSearch";
 import { useOutputStream, type OutputLine } from "../lib/outputStream";
 import { useNativeMenu, type MenuEntry } from "../lib/nativeMenu";
+import { listRequest } from "../lib/open";
 import { openOrAtWork } from "../lib/pages";
 import {
   cardGrown,
@@ -97,6 +100,7 @@ import {
 import { isWindows, primary } from "../lib/platform";
 import { sessionWaits, statusLine } from "../lib/sessions";
 import { shellIcon } from "../lib/shells";
+import { settingsAsked, updateProjectSettings } from "../lib/projectSettings";
 import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames } from "../lib/tabs";
@@ -105,19 +109,22 @@ import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
 import { peekChat } from "../lib/chat/store";
 import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, showTabs, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { EmptyStart } from "../lib/terminalEmpty";
-import type { Agent, AgentStartChoice, Project, Shell, ShellChoice } from "../lib/types";
+import type { Agent, AgentStartChoice, CustomCommand, Project, Shell, ShellChoice } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
 import ChatView from "./chat/ChatView.vue";
 import CardDialog from "./board/CardDialog.vue";
+import CommandDialog from "./CommandDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
 import LayoutMenu from "./LayoutMenu.vue";
 import OutputsMenu, { type OutputItem } from "./OutputsMenu.vue";
+import ProjectMenu from "./ProjectMenu.vue";
 import RenameDialog from "./RenameDialog.vue";
 import TerminalFind from "./TerminalFind.vue";
 import TerminalEmpty from "./TerminalEmpty.vue";
 import TerminalHistory from "./TerminalHistory.vue";
 import TerminalPanes from "./TerminalPanes.vue";
+import TerminalProjects from "./TerminalProjects.vue";
 
 /** How long a `reveal-terminal` request waits for its project and tab to show up. */
 const REQUEST_MS = 5_000;
@@ -787,12 +794,158 @@ function startDrag(event: PointerEvent): void {
   if (!collapsed.value) resizer.start(event);
 }
 
+/* ---------- the projects column ---------- */
+
+const panelWidth = ref(0);
+/** The column's width, and what it takes beside the terminal: that and the gap after it. */
+const PROJECTS_WIDTH = 220;
+const LEAD = PROJECTS_WIDTH + 12;
+/** Below this width the panel has no room for the column beside the terminal: asked for, it lies
+ * over the terminal's left side instead, and goes once a project is picked. */
+const PROJECTS_ROOM = 600;
+/** Shown beside the terminal as the user last left it (`projectsColumn` in the settings, on until
+ * they hide it); their click is taken at once, before the snapshot shows it. */
+const columnPicked = ref<boolean | null>(null);
+const columnOn = computed(() => columnPicked.value ?? snapshot.value?.settings.projectsColumn ?? true);
+watch(
+  () => snapshot.value?.settings.projectsColumn,
+  () => (columnPicked.value = null),
+);
+const columnNarrow = computed(() => panelWidth.value < PROJECTS_ROOM);
+/** The narrow panel's column, over the terminal. */
+const columnOverlay = ref(false);
+/** The column beside the terminal: never while the panel is collapsed, where the picker is. */
+const lead = computed(() => columnOn.value && !columnNarrow.value && !collapsed.value);
+/** Shown, as its button says it. */
+const columnShown = computed(() => !collapsed.value && (columnNarrow.value ? columnOverlay.value : columnOn.value));
+const columnSide = ref<InstanceType<typeof TerminalProjects> | null>(null);
+const columnOver = ref<InstanceType<typeof TerminalProjects> | null>(null);
+
+/** The column's button: beside the terminal, kept for the next start; a narrow panel's over it,
+ * for now. Shown, the keyboard goes to its search, and a collapsed panel comes up with it. */
+async function toggleColumn(): Promise<void> {
+  const open = !columnShown.value;
+  if (open && collapsed.value) {
+    toggleCollapsed();
+    await nextTick();
+  }
+  if (columnNarrow.value) {
+    columnOverlay.value = open;
+    // Over the terminal, one at a time: the history's would lie under it.
+    if (open) overlayOpen.value = false;
+  } else if (columnOn.value !== open) {
+    columnPicked.value = open;
+    void api.setProjectsColumn(open).catch(() => (columnPicked.value = null));
+  }
+  if (!open) return backToTerminal();
+  await nextTick();
+  (columnNarrow.value ? columnOver : columnSide).value?.focus();
+}
+
+function closeColumnOverlay(): void {
+  columnOverlay.value = false;
+  backToTerminal();
+}
+
+/** A project picked in the column: the panel's; the one over the terminal goes, the keyboard back
+ * in the project's terminal. */
+function pickFromColumn(path: string): void {
+  const over = columnOverlay.value;
+  columnOverlay.value = false;
+  void turnTo(path).then((turned) => {
+    if (turned && over) backToTerminal();
+  });
+}
+
+/** A folder the menu added: shown, and the search that found it emptied. */
+function pickAdded(path: string): void {
+  columnSide.value?.clear();
+  columnOver.value?.clear();
+  pickFromColumn(path);
+}
+
+// Wide again, the column is as the settings say; narrow again or collapsed, the one over the
+// terminal waits for its button.
+watch([columnNarrow, collapsed], () => {
+  columnOverlay.value = false;
+});
+
+/* ---------- a project's menu (the column's right click) ---------- */
+
+const projectMenuView = ref<InstanceType<typeof ProjectMenu> | null>(null);
+
+function showProjectMenu(event: MouseEvent, target: Parameters<InstanceType<typeof ProjectMenu>["show"]>[1]): void {
+  projectMenuView.value?.show(event, target);
+}
+
+/** The panel turned to `path`'s project, its view of it there before anything opens in it. */
+async function turnTo(path: string): Promise<boolean> {
+  if (props.project.path === path) return true;
+  panelPath.value = path;
+  for (let frame = 0; frame < 30 && props.project.path !== path; frame++) await new Promise((done) => requestAnimationFrame(() => done(null)));
+  return props.project.path === path;
+}
+
+/** The menu's "New tab", "New chat", "New Claude", "New Codex": opened as "+" opens them. */
+async function openFromMenu(path: string, kind: "shell" | "chat" | Agent): Promise<void> {
+  if (!(await turnTo(path))) return;
+  if (kind === "shell") void openTerminal(false);
+  else if (kind === "chat") void openChat();
+  else void openTerminal(true, kind === "codex" ? projectCodexChoice(props.project) : null);
+}
+
+/** The dev server's output, in the panel; shown already, it stays. */
+async function outputFromMenu(path: string): Promise<void> {
+  if (!(await turnTo(path))) return;
+  if (showsOutput.value && job.value === null) {
+    if (collapsed.value) toggleCollapsed();
+    return;
+  }
+  openOutput(null);
+}
+
+/** Its Files window, which Pitwall's own window holds: from the panel's own window, that one comes
+ * up with it. */
+function filesFromMenu(path: string): void {
+  if (windowed.value) {
+    void emitTo("main", "reveal-files", { path });
+    void api.openWindow();
+  } else showFiles(path);
+}
+
+/** Its settings, in its details on the Projects page (WindowApp: `revealProject`). */
+function settingsFromMenu(path: string): void {
+  if (windowed.value) {
+    void emitTo("main", "reveal-project", { path, settings: true });
+    void api.openWindow();
+    return;
+  }
+  settingsAsked.value = path;
+  listRequest.value = { path, at: Date.now() };
+}
+
+/** "New command…": the dialog the details' Commands open, its command added to the project's. */
+const commandFor = ref<{ path: string; name: string } | null>(null);
+
+function newCommandFromMenu(path: string): void {
+  const name = snapshot.value?.projects.find((p) => p.path === path)?.name ?? "";
+  commandFor.value = { path, name };
+}
+
+function saveCommandFromMenu(command: CustomCommand): void {
+  const to = commandFor.value;
+  commandFor.value = null;
+  if (!to) return;
+  const added = { ...command, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` };
+  void updateProjectSettings(to.path, (settings) => ({ ...settings, commands: [...(settings.commands ?? []), added] }));
+}
+
 /* ---------- the history ---------- */
 
 /** Below this width the panel has no room for the history beside the terminal: it lies over the
  * terminal's right side instead, and goes once a session is picked. */
 const HISTORY_ROOM = 760;
-const narrow = ref(false);
+const narrow = computed(() => panelWidth.value < HISTORY_ROOM + (lead.value ? LEAD : 0));
 /** The narrow panel's history, over the terminal. */
 const overlayOpen = ref(false);
 /** Shown, as "History" says it: never while the panel is collapsed. The column beside the terminal
@@ -809,9 +962,9 @@ const settled = ref(false);
  * around the two (the edge left, 12 between, the edge right). */
 const TERMINAL_ROOM = 320;
 const margins = computed(() => edge.value * 2 + 12);
-const panelWidth = ref(0);
-/** The history's width as the panel allows it: what it was dragged to, the terminal's room kept. */
-const widest = computed(() => Math.max(HISTORY_MIN, panelWidth.value - TERMINAL_ROOM - margins.value));
+/** The history's width as the panel allows it: what it was dragged to, the terminal's room (and
+ * the project column's, beside it) kept. */
+const widest = computed(() => Math.max(HISTORY_MIN, panelWidth.value - TERMINAL_ROOM - margins.value - (lead.value ? LEAD : 0)));
 const historyShown = computed(() => Math.min(historyWidth.value, widest.value));
 /** The room opens in this long; closing, it waits as long again for the list to fade (CSS). */
 const SLIDE_MS = COLLAPSE_MS + 120;
@@ -819,9 +972,9 @@ let slid: ReturnType<typeof setTimeout> | undefined;
 const side = ref<InstanceType<typeof TerminalHistory> | null>(null);
 const over = ref<InstanceType<typeof TerminalHistory> | null>(null);
 
-// While the history's room opens or closes, the terminal follows its width frame by frame; the
-// shell is told the size it ends at.
-watch([beside, historyShown], () => {
+// While the history's room (or the project column's) opens or closes, the terminal follows its
+// width frame by frame; the shell is told the size it ends at.
+watch([beside, historyShown, lead], () => {
   if (!settled.value) return;
   sliding.value = true;
   clearTimeout(slid);
@@ -840,8 +993,10 @@ async function toggleHistory(): Promise<void> {
     toggleCollapsed();
     await nextTick();
   }
-  if (narrow.value) overlayOpen.value = open;
-  else terminalHistoryShown.value = open;
+  if (narrow.value) {
+    overlayOpen.value = open;
+    if (open) columnOverlay.value = false;
+  } else terminalHistoryShown.value = open;
   if (!open) return backToTerminal();
   await nextTick();
   (narrow.value ? over : side).value?.focus();
@@ -897,6 +1052,7 @@ function resetWidth(): void {
 function pressScreen(): void {
   seeFinished(active.value?.id);
   overlayOpen.value = false;
+  columnOverlay.value = false;
 }
 
 /**
@@ -1204,7 +1360,7 @@ async function openClaude(start: AgentStartChoice | null = null, where: Place | 
 const fresh = new Set<number>();
 
 /** The stage's width: the panel's, less its margins and the history beside it. */
-const stageWidth = computed(() => Math.max(0, panelWidth.value - edge.value - (beside.value ? historyShown.value + 12 + edge.value : edge.value)));
+const stageWidth = computed(() => Math.max(0, panelWidth.value - (lead.value ? edge.value + LEAD : edge.value) - (beside.value ? historyShown.value + 12 + edge.value : edge.value)));
 
 /** The room panes would have with the panel `tall` px high. */
 function roomAt(tall: number): { w: number; h: number } {
@@ -2570,7 +2726,6 @@ onMounted(() => {
   if (tablist.value) tabsObserver.observe(tablist.value);
   const measure = (): void => {
     panelWidth.value = panel.value?.clientWidth ?? 0;
-    narrow.value = panelWidth.value < HISTORY_ROOM;
     if (windowed.value) ownHeight.value = panel.value?.clientHeight ?? 0;
     // As it slides too, frame by frame: the page's room under its lists follows. A card and a
     // window take none of the page's.
@@ -2687,8 +2842,20 @@ defineExpose({ openTerminal, closeShown });
     >
       <!-- The card's handle: it moves the card, as the row's empty part does. -->
       <span v-if="floating" class="mover" :title="t('terminal.move')" aria-hidden="true"><Icon name="grip" :size="12" /></span>
-      <!-- The panel's project: the page's, or another picked here. -->
-      <div class="where">
+      <!-- The project column's button, at the row's start as the history's is at its end. -->
+      <button
+        type="button"
+        :class="['icon', 'column-toggle', { on: columnShown }]"
+        :aria-pressed="columnShown"
+        :aria-label="t('terminal.projectsTitle')"
+        :title="t('terminal.projectsTitle')"
+        @click="toggleColumn"
+      >
+        <Icon name="sidebar" :size="13" />
+      </button>
+      <!-- The panel's project: the page's, or another picked here; the column beside the terminal
+           lists them in its place. -->
+      <div v-if="!lead" class="where">
         <ProjectPicker :projects="projects" :scope="project.path" :waits="waits" label="terminal.projectLabel" :every="false" plain working @pick="pickProject" />
       </div>
       <span id="terminal-tab-keys" class="sr-only">{{ t("terminal.tabKeys") }}</span>
@@ -2828,7 +2995,23 @@ defineExpose({ openTerminal, closeShown });
       <!-- A pane dragged over the row: where it goes in among the tabs. -->
       <span v-if="rowMarkLeft !== null" class="row-mark" :style="{ left: `${rowMarkLeft}px` }" aria-hidden="true"></span>
     </div>
-    <div ref="body" class="body" :style="{ '--history-width': `${historyShown}px` }">
+    <div ref="body" class="body" :style="{ '--history-width': `${historyShown}px`, '--projects-width': `${PROJECTS_WIDTH}px` }">
+      <!-- The project column's room before the terminal: the panel's left margin alone while it is
+           hidden; shown, it grows to the right and the terminal gives up that width as it goes. -->
+      <div :class="['lead', { open: lead, still: !settled }]">
+        <Transition name="fade">
+          <TerminalProjects
+            v-if="lead"
+            ref="columnSide"
+            :project="project"
+            :projects="projects"
+            :waits="waits"
+            @pick="pickFromColumn"
+            @menu="showProjectMenu"
+            @leave="backToTerminal"
+          />
+        </Transition>
+      </div>
       <!-- The terminal, and over it the output shown in its place (one per output, each starting
            at its end, following); collapsed, out of the keyboard's way. -->
       <div ref="stageEl" class="stage">
@@ -2838,7 +3021,7 @@ defineExpose({ openTerminal, closeShown });
           <ChatView v-if="active?.kind === 'chat' && !panesOn" :key="active.id" class="chat-host" :view="active" @pointerdown="pressScreen" @settings="emit('openSettings')" />
           <TerminalFind v-if="active && !panesOn && active.kind !== 'chat'" :key="active.id" :id="active.id" />
           <Transition name="empty-go" :css="emptyGoing" @after-leave="emptyLeft">
-            <div v-if="!active" class="empty" @pointerdown="overlayOpen = false">
+            <div v-if="!active" class="empty" @pointerdown="overlayOpen = false; columnOverlay = false">
               <!-- What opens and its first job, at hand where there is nothing yet. -->
               <TerminalEmpty ref="emptyBox" :project="project" :draft-key="project.path" :opening="opening" :shells="shells" :launch="(request) => launchEmpty(request)" />
             </div>
@@ -2876,7 +3059,7 @@ defineExpose({ openTerminal, closeShown });
         <div v-if="!panesOn && landing && !landing.pane" :class="['landing', landing.side ?? 'whole']" aria-hidden="true">
           <span>{{ landingLabel }}</span>
         </div>
-        <div v-if="showsOutput" class="output" @keydown="onOutputKeys" @pointerdown="overlayOpen = false">
+        <div v-if="showsOutput" class="output" @keydown="onOutputKeys" @pointerdown="overlayOpen = false; columnOverlay = false">
           <OutputSearch v-if="searching" ref="field" v-model:query="query" :position="position" :count="matches" @step="step" @close="closeSearch" />
           <OutputLog
             ref="log"
@@ -2941,7 +3124,31 @@ defineExpose({ openTerminal, closeShown });
       <Transition name="pop">
         <TerminalHistory v-if="narrow && overlayOpen" ref="over" :project="project" overlay @close="closeOverlay" @leave="backToTerminal" @drag="sessionDragged" @drop="sessionDropped" />
       </Transition>
+      <Transition name="pop-left">
+        <TerminalProjects
+          v-if="columnNarrow && columnOverlay && !collapsed"
+          ref="columnOver"
+          :project="project"
+          :projects="projects"
+          :waits="waits"
+          overlay
+          @pick="pickFromColumn"
+          @menu="showProjectMenu"
+          @close="closeColumnOverlay"
+          @leave="closeColumnOverlay"
+        />
+      </Transition>
     </div>
+    <ProjectMenu
+      ref="projectMenuView"
+      @output="outputFromMenu"
+      @open="openFromMenu"
+      @files="filesFromMenu"
+      @settings="settingsFromMenu"
+      @new-command="newCommandFromMenu"
+      @pick="pickAdded"
+    />
+    <CommandDialog v-if="commandFor" :command="null" :project-name="commandFor.name" @save="saveCommandFromMenu" @close="commandFor = null" />
     <!-- After an administrator's shell was asked for, or a start that put none back: a line of its
          own under the terminals (they give up its height), until it is closed. -->
     <Transition name="fade">
@@ -3333,6 +3540,16 @@ defineExpose({ openTerminal, closeShown });
   flex-grow: 1;
 }
 
+/* The project column's button, first in the row: lit while the column shows. */
+.column-toggle {
+  margin-right: 4px;
+}
+
+.column-toggle.on,
+.column-toggle.on:hover:not(:disabled) {
+  color: var(--text-lit);
+}
+
 /* "History", drawn as the outputs' tabs are: no ground, its colour alone says it is hovered or
    shown. */
 .action {
@@ -3642,9 +3859,30 @@ defineExpose({ openTerminal, closeShown });
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  margin: 6px 0 var(--edge) var(--edge);
+  margin: 6px 0 var(--edge) 0;
   display: flex;
   transition: opacity 160ms ease;
+}
+
+/* The project column's room, the history's twin on the left: closed, the panel's left margin. */
+.lead {
+  position: relative;
+  flex-shrink: 0;
+  width: var(--edge);
+  overflow: hidden;
+  transition: width 220ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms;
+}
+
+/* Open: the margin, the column and the gap before the terminal. */
+.lead.open {
+  width: calc(var(--edge) + var(--projects-width) + 12px);
+  transition-delay: 0ms;
+}
+
+.lead.still,
+.lead.still .fade-enter-active,
+.lead.still .fade-leave-active {
+  transition: none;
 }
 
 .screen {
@@ -3743,6 +3981,20 @@ defineExpose({ openTerminal, closeShown });
 .pop-leave-to {
   opacity: 0;
   transform: translateX(12px);
+}
+
+/* A narrow panel's project column comes in over the terminal from its left edge. */
+.pop-left-enter-active,
+.pop-left-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pop-left-enter-from,
+.pop-left-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
 }
 
 /* An output in its place: the terminal keeps its size (it is measured) out of sight. */
@@ -3852,10 +4104,13 @@ defineExpose({ openTerminal, closeShown });
   .stage,
   .screen,
   .side,
+  .lead,
   .fade-enter-active,
   .fade-leave-active,
   .pop-enter-active,
   .pop-leave-active,
+  .pop-left-enter-active,
+  .pop-left-leave-active,
   .collapse :deep(svg) {
     transition: none;
   }

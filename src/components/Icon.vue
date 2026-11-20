@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex" | "laps" | "pause" | "zap" | "panel-dock" | "panel-float" | "panel-window" | "pin" | "enter";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex" | "laps" | "pause" | "zap" | "panel-dock" | "panel-float" | "panel-window" | "pin" | "enter" | "sidebar";
     size?: number;
   }>(),
   { size: 15 },
@@ -99,6 +99,8 @@ withDefaults(
     <g v-else-if="name === 'pin'"><path d="M9.5 4h5l-.8 5.5 3.3 3.3H7l3.3-3.3z" /><path d="M12 12.8V20" /></g>
     <!-- The return key: what is written is kept. -->
     <path v-else-if="name === 'enter'" d="M19 5v7a3 3 0 0 1-3 3H6M10 11l-4 4 4 4" />
+    <!-- The terminal panel's project column, on its left. -->
+    <g v-else-if="name === 'sidebar'"><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M9.5 5v14" /></g>
     <g v-else-if="name === 'laps'"><path d="M17 3l3 3-3 3" /><path d="M4 11v-1a4 4 0 0 1 4-4h12" /><path d="M7 21l-3-3 3-3" /><path d="M20 13v1a4 4 0 0 1-4 4H4" /></g>
   </svg>
 </template>

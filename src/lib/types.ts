@@ -189,6 +189,8 @@ export type Settings = {
   boardView?: string;
   /** The Files window shows a Markdown or SVG file as its preview, until its eye is pressed again. */
   filesPreview?: boolean;
+  /** The terminal panel's project column beside its terminal; on until the user hides it. */
+  projectsColumn?: boolean;
   /** What the empty terminal panel's box picked last (`shell`, `chat`, `claude`, `codex`); this
    * Mac's own. Unset before the first pick. */
   terminalStart?: string;

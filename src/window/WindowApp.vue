@@ -29,6 +29,7 @@ import { shellRequest } from "../lib/flag";
 import { closeChord, dragRegion, isMac, isWindows, keys, terminalChord } from "../lib/platform";
 import { closeFiles, closeShownTab, filesWindows, frontFiles, minimizeFiles, openFile, projectFiles, raiseFiles, revealInTree, showFiles, toggleFiles, type FilesWin } from "../lib/explorer";
 import { focusTerminal, listRequest, openInWindow, openTarget, pickOnPage, pickRequest } from "../lib/open";
+import { settingsAsked } from "../lib/projectSettings";
 import { rowKeys } from "../lib/rows";
 import { needsAttention } from "../lib/deps";
 import { api, board, connectBoard, connectDeps, connectFuel, connectLaps, connectSessions, connectUpdate, deps, fuel, laps, loadBoard, loadSessions, now, sessions, snapshot, update, visible } from "../lib/store";
@@ -907,7 +908,11 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey);
   window.addEventListener("focus", lookForAgents);
   unlistenReveal = await listen<{ path: string; job: string }>("reveal-output", (event) => revealOutput(event.payload.path, event.payload.job));
-  unlistenProject = await listen<{ path: string }>("reveal-project", (event) => revealProject(event.payload.path));
+  // `settings`: the project's settings asked for (the terminals' own window's project menu).
+  unlistenProject = await listen<{ path: string; settings?: boolean }>("reveal-project", (event) => {
+    if (event.payload.settings) settingsAsked.value = event.payload.path;
+    revealProject(event.payload.path);
+  });
   // Opened from the popover, the switcher or the mini tower where Settings › Projects says Files;
   // a chat's "Show in Files" in the terminals' own window, on its file.
   unlistenFiles = await listen<{ path: string; file?: string }>("reveal-files", (event) => revealFiles(event.payload.path, event.payload.file));

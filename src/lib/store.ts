@@ -456,6 +456,8 @@ export const api = {
   /** How a project's board is drawn: `columns` or `list`. */
   setBoardView: (view: string) => invoke("set_board_view", { view }),
   setFilesPreview: (on: boolean) => invoke("set_files_preview", { on }),
+  /** The terminal panel's project column shown or hidden, kept for the next start. */
+  setProjectsColumn: (on: boolean) => invoke("set_projects_column", { on }),
   /** What the empty terminal panel's box has picked last, kept for the next start. */
   setTerminalStart: (kind: "shell" | "chat" | "claude" | "codex") => invoke("set_terminal_start", { kind }),
   /** The list's "Only favourites and open". */
@@ -668,6 +670,8 @@ export const api = {
   explorerCommitDiff: (path: string, id: string, file: string, from: string | null) => invoke<string | null>("explorer_commit_diff", { path, id, file, from }),
   /** A file or folder of the project shown in Finder. */
   explorerReveal: (path: string, file: string) => invoke<boolean>("explorer_reveal", { path, file }),
+  /** A listed project's folder, or one right inside the projects folder, in Finder; false when refused. */
+  revealFolder: (path: string) => invoke<boolean>("reveal_folder", { path }),
   /* The chequered flag (core/flag.rs): what is still open, before a quit and from Today's bar. */
   /** What is open, and whether a quit waits on the dialog. `fresh`: the projects' Git state is
    * read again first, so the answer takes a moment. */

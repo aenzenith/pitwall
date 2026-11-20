@@ -4,7 +4,7 @@ import { computed, ref, watch } from "vue";
 import { useAddress } from "../lib/address";
 import { t } from "../lib/i18n";
 import { chooseTab, chosenTab, panelPath, showOutput } from "../lib/panel";
-import { forgetProjectSettings, projectSettings, updateProjectSettings } from "../lib/projectSettings";
+import { forgetProjectSettings, projectSettings, settingsAsked, updateProjectSettings } from "../lib/projectSettings";
 import { api } from "../lib/store";
 import type { CustomCommand, LinkSuggestion, Project } from "../lib/types";
 import CommandDialog from "./CommandDialog.vue";
@@ -113,6 +113,18 @@ watch(
     confirming.value = null;
   },
   { immediate: true },
+);
+
+// Its settings asked for from the terminal panel's project menu: shown, once it is this project.
+// After the render, so after the reset above whichever of the two changed first.
+watch(
+  () => [settingsAsked.value, props.project.path] as const,
+  ([asked, path]) => {
+    if (!asked || asked !== path) return;
+    settingsOpen.value = true;
+    settingsAsked.value = null;
+  },
+  { immediate: true, flush: "post" },
 );
 </script>
 

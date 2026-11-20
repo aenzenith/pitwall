@@ -122,6 +122,7 @@ impl Core {
                 board_scope: kept.board_scope,
                 board_view: kept.board_view,
                 files_preview: kept.files_preview,
+                projects_column: kept.projects_column,
                 favourites_only: kept.favourites_only,
                 added: kept.added,
                 track: kept.track,
@@ -264,6 +265,20 @@ impl Core {
         self.notify();
     }
 
+    /// Whether the terminal panel's project column shows, kept as the user last left it.
+    pub fn set_projects_column(&self, on: bool) {
+        {
+            let mut inner = self.lock();
+            if inner.settings.projects_column == on {
+                return;
+            }
+            inner.settings.projects_column = on;
+        }
+
+        self.save_settings();
+        self.notify();
+    }
+
     /// What the empty terminal panel's box opened (`shell`, `chat`, `claude` or `codex`), picked
     /// again at its next start. Any other word changes nothing.
     pub fn set_terminal_start(&self, kind: &str) {
@@ -376,6 +391,23 @@ impl Core {
         folders.sort_by_key(|folder| folder.name.to_lowercase());
         folders
     }
+
+    /// The folder `path` names as the system spells it, when the terminal panel's project column
+    /// may show it in Finder: a listed project's own folder, or a folder right inside the
+    /// projects folder whose name doesn't start with a dot. Links and `..` are followed first, so
+    /// neither takes it anywhere else. A file, a path that isn't there, the projects folder
+    /// itself and a folder deeper in it are none.
+    pub fn folder_to_show(&self, path: &str) -> Option<PathBuf> {
+        let real = fs::canonicalize(path).ok().filter(|real| real.is_dir())?;
+        if self.listed_paths().iter().any(|listed| fs::canonicalize(listed).is_ok_and(|own| own == real)) {
+            return Some(real);
+        }
+
+        let dir = self.lock().settings.projects_dir.clone()?;
+        let dir = fs::canonicalize(dir).ok()?;
+        let hidden = real.file_name().is_none_or(|name| name.to_string_lossy().starts_with('.'));
+        (real.parent() == Some(dir.as_path()) && !hidden).then_some(real)
+    }
 }
 
 /// The new order of the listed projects, keeping the place of projects that aren't listed right
@@ -397,4 +429,55 @@ pub(super) fn merge_order(old: &[String], listed: Vec<String>) -> Vec<String> {
     }
 
     merged
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// The window names the folder to show in Finder: only a listed project's own folder or a
+    /// visible one right inside the projects folder is shown, whatever a link or `..` makes of
+    /// the path, and nothing that isn't a folder.
+    #[test]
+    fn only_a_listed_project_or_a_folder_of_the_projects_folder_is_shown() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = root.join("projects");
+        for folder in ["projects/paddock/src", "projects/.hidden", "outside", "elsewhere/garage"] {
+            fs::create_dir_all(root.join(folder)).unwrap();
+        }
+        fs::write(dir.join("notes.txt"), "notes").unwrap();
+        std::os::unix::fs::symlink(root.join("outside"), dir.join("shortcut")).unwrap();
+
+        let core = Core::new(
+            CoreConfig {
+                registry_dir: root.join("registry"),
+                claude_dir: root.join("claude"),
+                codex_home: root.join("codex"),
+                settings_file: root.join("settings.json"),
+                claude_settings: root.join("claude-settings.json"),
+                legacy_registries: Vec::new(),
+                title: "Pitwall".into(),
+            },
+            Arc::new(|_| {}),
+        );
+        core.set_projects_dir(Some(dir.to_string_lossy().into_owned()));
+        let garage = root.join("elsewhere").join("garage");
+        core.add_project(&garage.to_string_lossy()).unwrap();
+
+        let real = |path: &Path| Some(fs::canonicalize(path).unwrap());
+        for (path, shown) in [
+            (dir.join("paddock"), real(&dir.join("paddock"))),
+            (garage.clone(), real(&garage)),
+            (dir.clone(), None),
+            (dir.join("paddock").join("src"), None),
+            (dir.join("paddock/../../outside"), None),
+            (dir.join("shortcut"), None),
+            (dir.join(".hidden"), None),
+            (dir.join("missing"), None),
+            (dir.join("notes.txt"), None),
+        ] {
+            assert_eq!(core.folder_to_show(&path.to_string_lossy()), shown, "{path:?}");
+        }
+    }
 }
