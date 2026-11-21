@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.3](https://github.com/aenzenith/pitwall/compare/v1.25.2...v1.25.3) (2026-11-21)
+
+
+### Bug Fixes
+
+* **windows:** the chat and commands found programs on a new terminal's PATH ([bc88ab6](https://github.com/aenzenith/pitwall/commit/bc88ab65339f7f419fa77d86f98f8b9abef0f028))
+
 ## [1.25.2](https://github.com/aenzenith/pitwall/compare/v1.25.1...v1.25.2) (2026-11-21)
 
 
