@@ -27,6 +27,31 @@ export const isMac = platform === "mac";
 export const isWindows = platform === "windows";
 export const isLinux = platform === "linux";
 
+/** Windows 10's last build and Windows 11's first; ConPTY reflows wrapped lines from 21376 on. */
+const WINDOWS_10_LAST = 19045;
+const WINDOWS_11_FIRST = 22000;
+
+type Hints = { getHighEntropyValues?: (hints: string[]) => Promise<{ platformVersion?: string }> };
+
+/**
+ * A Windows build the terminals' xterm can go by (lib/terminals: `windowsPty`), or null where none
+ * is told. WebView2 tells no build number, only Windows 11 apart from 10: the User-Agent Client
+ * Hints' `platformVersion` is 13 or more on 11 and less on 10, as Microsoft documents it. That is
+ * all xterm asks of the build (is it 21376 or later), so 11 counts as its first build, 10 as its last.
+ */
+export async function windowsBuild(nav: { userAgentData?: Hints } | undefined = typeof navigator === "undefined" ? undefined : (navigator as { userAgentData?: Hints })): Promise<number | null> {
+  const data = nav?.userAgentData;
+  if (!data?.getHighEntropyValues) return null;
+  try {
+    const { platformVersion } = await data.getHighEntropyValues(["platformVersion"]);
+    const major = Number.parseInt(platformVersion ?? "", 10);
+    if (Number.isNaN(major)) return null;
+    return major >= 13 ? WINDOWS_11_FIRST : WINDOWS_10_LAST;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The platform's primary modifier is held: ⌘ on macOS, Ctrl on Windows and Linux. Not with Alt
  * there: Windows reports AltGr as Ctrl+Alt, and AltGr+C is a letter (ć) on some keyboards.

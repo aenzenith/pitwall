@@ -1,67 +1,25 @@
 {
-  "since": "1.24.0",
+  "since": "1.25.0",
   "notes": [
     {
-      "kind": "new",
+      "kind": "fix",
       "title": {
-        "en": "Right-click a job",
-        "tr": "İşlere sağ tık",
-        "de": "Rechtsklick auf Aufgaben",
-        "es": "Clic derecho en las tareas",
-        "ru": "Меню задачи по правому клику",
-        "ja": "タスクを右クリック",
-        "zh-Hans": "右键点击任务"
+        "en": "No more stuck letters on Windows",
+        "tr": "Windows'ta takılı harfler gitti",
+        "de": "Keine hängenden Buchstaben mehr unter Windows",
+        "es": "Adiós a las letras atascadas en Windows",
+        "ru": "В Windows больше не застревают буквы",
+        "ja": "Windows で文字が残らなくなりました",
+        "zh-Hans": "Windows 上不再残留字符"
       },
       "body": {
-        "en": "On the Laps page, right-click a job to open its menu: run, pause or duplicate it, give it a day off, or open its folder from there.",
-        "tr": "Turlar sayfasında bir işe sağ tıklayınca menüsü açılır; oradan işi çalıştırabilir, çoğaltabilir, bir gün izin verebilir ya da klasörünü açabilirsin.",
-        "de": "Unter Runden öffnet ein Rechtsklick auf eine Aufgabe ihr Menü: Dort startest, pausierst oder duplizierst du sie, gibst ihr einen Tag frei oder öffnest ihren Ordner.",
-        "es": "En Vueltas, un clic derecho sobre una tarea abre su menú: desde ahí puedes ejecutarla, pausarla, duplicarla, darle un día libre o abrir su carpeta.",
-        "ru": "На странице «Круги» правый клик по задаче открывает её меню: оттуда её можно запустить, приостановить, дублировать, дать ей выходной или открыть её папку.",
-        "ja": "ラップのページでタスクを右クリックするとメニューが開き、実行・一時停止・複製のほか、1日休みにしたりフォルダを開いたりできます。",
-        "zh-Hans": "在圈次页面右键点击任务即可打开菜单，可以运行、暂停、创建副本、让它休息一天，或打开它的文件夹。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Projects beside the terminal",
-        "tr": "Terminalin yanında projeler",
-        "de": "Projekte neben dem Terminal",
-        "es": "Proyectos junto a la terminal",
-        "ru": "Проекты рядом с терминалом",
-        "ja": "ターミナルの横にプロジェクト",
-        "zh-Hans": "终端旁的项目列表"
-      },
-      "body": {
-        "en": "The terminal panel now lists your projects on its left, and its search finds folders you haven't added yet too. Right-click one to reach its server, commands and links.",
-        "tr": "Terminal panelinin solunda artık projelerin duruyor; arama, henüz eklemediğin klasörleri de buluyor. Bir projeye sağ tıklarsan sunucusuna, komutlarına ve bağlantılarına oradan ulaşırsın.",
-        "de": "Links im Terminalbereich stehen jetzt deine Projekte, und die Suche findet auch Ordner, die du noch nicht hinzugefügt hast. Ein Rechtsklick führt zu Server, Befehlen und Links eines Projekts.",
-        "es": "El panel de terminales muestra ahora tus proyectos a la izquierda, y su búsqueda también encuentra carpetas que aún no has añadido. Con un clic derecho llegas a su servidor, sus comandos y sus enlaces.",
-        "ru": "Слева в панели терминалов теперь видны ваши проекты, а поиск находит и папки, которые вы ещё не добавили. Правый клик ведёт к серверу, командам и ссылкам проекта.",
-        "ja": "ターミナルパネルの左にプロジェクトが並ぶようになりました。検索では、まだ追加していないフォルダも見つかります。右クリックで、サーバーやコマンド、リンクにすぐ届きます。",
-        "zh-Hans": "终端面板左侧现在会列出你的项目，搜索还能找到尚未添加的文件夹。右键点击项目，就能直接操作它的服务器、命令和链接。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Voice messages in the chat",
-        "tr": "Sohbette sesli mesaj",
-        "de": "Sprachnachrichten im Chat",
-        "es": "Mensajes de voz en el chat",
-        "ru": "Голосовые сообщения в чате",
-        "ja": "チャットで音声メッセージ",
-        "zh-Hans": "在对话中发语音"
-      },
-      "body": {
-        "en": "Tap the mic or hold it and speak: your words land in the box as text and go on their own. It all happens on your computer, so your voice never leaves it.",
-        "tr": "Mikrofona dokun ya da basılı tutup konuş; söylediklerin kutuya yazı olarak düşer ve kendiliğinden gider. Hepsi bilgisayarında olur, sesin hiçbir yere gitmez.",
-        "de": "Tipp aufs Mikrofon oder halte es und sprich: Deine Worte landen als Text im Feld und gehen von selbst los. Alles passiert auf deinem Computer, deine Stimme verlässt ihn nie.",
-        "es": "Toca el micrófono o mantenlo pulsado y habla: tus palabras aparecen como texto en el cuadro y se envían solas. Todo ocurre en tu ordenador, así que tu voz nunca sale de él.",
-        "ru": "Нажмите на микрофон или удерживайте его и говорите: слова появятся в поле текстом и отправятся сами. Всё происходит на вашем компьютере, голос никуда не уходит.",
-        "ja": "マイクをタップするか長押しして話すと、言葉が入力欄に文字で入り、そのまま送信されます。処理はすべてこのコンピュータの中で行われ、音声が外に出ることはありません。",
-        "zh-Hans": "轻点或按住麦克风说话，你的话会以文字出现在输入框里并自动发送。一切都在你的电脑上完成，声音不会离开它。"
+        "en": "A letter could stick at the start of Claude's prompt on Windows 10, and no key would delete it. Terminals there now stay in step with what runs in them.",
+        "tr": "Windows 10'da Claude'un satırının başında bir harf takılı kalabiliyor ve hiçbir tuşla silinmiyordu. Artık terminaller, içlerinde çalışan programla aynı ekranı gösteriyor.",
+        "de": "Unter Windows 10 konnte am Anfang von Claudes Eingabezeile ein Buchstabe hängen bleiben, den keine Taste mehr löschte. Jetzt zeigen die Terminals dort genau das, was das Programm darin sieht.",
+        "es": "En Windows 10 podía quedarse una letra atascada al principio de la línea de Claude, y no había tecla que la borrara. Ahora las terminales muestran lo mismo que ve el programa que corre en ellas.",
+        "ru": "В Windows 10 в начале строки ввода Claude могла застрять буква, которую не стирала ни одна клавиша. Теперь терминалы показывают ровно то же, что видит запущенная в них программа.",
+        "ja": "Windows 10 では、Claude の入力行の先頭に、どのキーでも消せない文字が残ることがありました。今はターミナルの表示が、中で動いているプログラムと常に一致します。",
+        "zh-Hans": "在 Windows 10 上，Claude 输入行的开头有时会卡住一个怎么也删不掉的字符。现在终端显示的内容会始终与其中运行的程序保持一致。"
       }
     }
   ]

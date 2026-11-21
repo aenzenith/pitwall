@@ -2,13 +2,13 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { listen } from "@tauri-apps/api/event";
-import { Terminal, type ITheme } from "@xterm/xterm";
+import { Terminal, type ITheme, type IWindowsPty } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { computed, reactive, watch } from "vue";
 
 import { accountLabel, accountName, codexAccounts } from "./accounts";
 import { t } from "./i18n";
-import { isLinux, isMac, isWindows, keys, primary, terminalChord } from "./platform";
+import { isLinux, isMac, isWindows, keys, primary, terminalChord, windowsBuild } from "./platform";
 import { api, snapshot } from "./store";
 import { resolvedTheme, themeAt, type ResolvedTheme } from "./theme";
 import type { ClaudeAccount, TerminalView } from "./types";
@@ -125,7 +125,7 @@ void listen<{ id: number; seq: number; data: string }>("terminal", (event) => {
   if (view.queue) view.queue.push(event.payload);
   else if (event.payload.seq > view.seq) {
     view.seq = event.payload.seq;
-    view.term.write(event.payload.data);
+    view.term.write(fromConpty(event.payload.data));
   }
 });
 
@@ -171,6 +171,43 @@ const options = {
   // Where they show beside the scrollbar: as wide as xterm's scrollbar is anyway, so nothing moves.
   overviewRuler: { width: 14 },
 };
+
+/**
+ * Windows 10's own ConPTY has no Shift In or Shift Out (SI, SO), which Windows 11's has: it keeps
+ * each as a character in a cell, its cursor a column on, and passes it through, where xterm takes
+ * it as a control that moves nothing. The two cursors part by a column and ConPTY's next move ends
+ * a column short: Claude Code writes SI before the first key after a pause (since 2.1.152), and
+ * that key's letter lands on the space after its `❯`, where nothing paints over it again. There
+ * each is written as the space ConPTY counts it as; not before the build is known, as on Windows 11
+ * that space would part them the other way.
+ */
+let shiftsAsCells = false;
+const WINDOWS_11 = 22000;
+const SHIFTS = /[\u000e\u000f]/g;
+
+/** What a terminal's output is drawn as: as it came, but for the shifts above. */
+function fromConpty(data: string): string {
+  return shiftsAsCells ? data.replace(SHIFTS, " ") : data;
+}
+
+/**
+ * Windows: the terminals run on ConPTY, which keeps a screen of its own and sends only what changed
+ * on it. xterm is told so, or the two drift apart: a terminal that grows takes lines back from its
+ * scrollback where ConPTY adds empty rows, and a letter left in a cell ConPTY takes for blank is
+ * never painted over, one the program running there can't delete. Below build 21376 ConPTY doesn't
+ * reflow wrapped lines and xterm mustn't either, which xterm reads from the build (lib/platform:
+ * `windowsBuild`). Until the build is known, or without it, ConPTY alone; a terminal made before
+ * it hears it then.
+ */
+let windowsPty: IWindowsPty | undefined = isWindows ? { backend: "conpty" } : undefined;
+if (isWindows) {
+  void windowsBuild().then((buildNumber) => {
+    if (buildNumber === null) return;
+    windowsPty = { backend: "conpty", buildNumber };
+    shiftsAsCells = buildNumber < WINDOWS_11;
+    for (const view of views.values()) view.term.options.windowsPty = windowsPty;
+  });
+}
 
 /** How many columns and rows a terminal in `host` would have, before any shell starts. */
 export function measure(host: HTMLElement): { cols: number; rows: number } | null {
@@ -230,7 +267,7 @@ function create(id: number): View {
   // The app's theme for now; `attach` looks again once it stands in its panel.
   const theme = resolvedTheme.value;
   const hint = linkHint(element);
-  const term = new Terminal({ ...options, theme: THEMES[theme], minimumContrastRatio: CONTRAST[theme], linkHandler: { activate: openLink, ...hint } });
+  const term = new Terminal({ ...options, windowsPty, theme: THEMES[theme], minimumContrastRatio: CONTRAST[theme], linkHandler: { activate: openLink, ...hint } });
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon(openLink, hint));
@@ -312,12 +349,12 @@ function create(id: number): View {
 
   // History first; chunks that arrived meanwhile are kept only if they are newer than it.
   void api.terminalBuffer(id).then((buffer) => {
-    term.write(buffer.data);
+    term.write(fromConpty(buffer.data));
     view.seq = buffer.seq;
     for (const chunk of view.queue ?? []) {
       if (chunk.seq > view.seq) {
         view.seq = chunk.seq;
-        term.write(chunk.data);
+        term.write(fromConpty(chunk.data));
       }
     }
     view.queue = null;
