@@ -7,9 +7,7 @@
 //! Supervision on top of this (one start at a time, crash restarts) lives in `supervise.rs`.
 
 use std::collections::HashMap;
-use std::ffi::OsStr;
-#[cfg(unix)]
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -172,20 +170,38 @@ pub fn reread_terminal_env() {
     terminal_env(true);
 }
 
-/// On Windows a command runs with the app's own environment.
+/// On Windows a command runs with the app's own environment, its `PATH` read at each use
+/// (`windows_path`): nothing is kept to read again.
 #[cfg(windows)]
 pub fn reread_terminal_env() {}
 
-/// The folders of the terminal's `PATH` as the shell gave it, in its order (`terminal_env`);
-/// none when the shell gave nothing (it didn't answer in time), which says nothing about what
-/// is on it.
+/// The folders of the terminal's `PATH` as the shell gave it, in its order (`terminal_env`; on
+/// Windows `windows_path`); none when the shell gave nothing (it didn't answer in time), which
+/// says nothing about what is on it.
 pub fn shell_path() -> Option<Vec<std::path::PathBuf>> {
     #[cfg(unix)]
     let shells = terminal_env(false).iter().find(|(name, _)| name == "PATH").map(|(_, value)| value.clone());
-    #[cfg(not(unix))]
-    let shells: Option<std::ffi::OsString> = None;
+    #[cfg(windows)]
+    let shells = Some(windows_path());
 
     shells.map(|path| std::env::split_paths(&path).collect())
+}
+
+/// The `PATH` a new terminal tab gets on Windows: the system's and the user's `Path` as the
+/// registry holds them now (portable-pty reads them for every tab it opens), then whatever
+/// folders of the app's own `PATH` they lack. The app's own is what it was started with, and an
+/// update's restart hands it on, so alone it never sees a program installed after that (Claude
+/// Code's installer puts its folder on the user's `Path`): a tab would find it and a chat would
+/// not. Read at each use, as a tab reads it.
+#[cfg(windows)]
+fn windows_path() -> OsString {
+    let own = std::env::var_os("PATH").unwrap_or_default();
+    let fresh = portable_pty::CommandBuilder::new("cmd.exe").get_env("PATH").map(OsStr::to_os_string).unwrap_or_default();
+    let key = |dir: &Path| dir.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
+    let mut seen = std::collections::HashSet::new();
+    let dirs: Vec<std::path::PathBuf> =
+        std::env::split_paths(&fresh).chain(std::env::split_paths(&own)).filter(|dir| !dir.as_os_str().is_empty() && seen.insert(key(dir))).collect();
+    std::env::join_paths(dirs).unwrap_or(own)
 }
 
 /// The folders of the terminal's `PATH`, in its order (`shell_path`); the app's own `PATH`
@@ -204,12 +220,14 @@ pub fn terminal_program(name: &str) -> Option<std::path::PathBuf> {
 }
 
 /// `program` run directly, no shell between: its arguments reach it as they are, whatever they
-/// hold. With the terminal's environment (`terminal_env`; the app's own on Windows) and `extra`
-/// over it.
+/// hold. With the terminal's environment (`terminal_env`; on Windows the app's own, its `PATH` a
+/// terminal tab's, `windows_path`) and `extra` over it.
 pub fn terminal_command(program: &Path, extra: &[(&str, &str)]) -> Command {
     let mut command = command(program);
     #[cfg(unix)]
     command.envs(terminal_env(false).iter().map(|(name, value)| (name, value)));
+    #[cfg(windows)]
+    command.env("PATH", windows_path());
     command.envs(extra.iter().copied()).env("FORCE_COLOR", "0").env("NO_COLOR", "1");
     command
 }
@@ -328,7 +346,8 @@ pub fn spawn_shell(command_line: &str, cwd: &str) -> std::io::Result<Child> {
     spawn_shell_with(command_line, cwd, &[])
 }
 
-/// `spawn_shell` with `extra` set over the app's environment.
+/// `spawn_shell` with `extra` set over the app's environment, its `PATH` a terminal tab's
+/// (`windows_path`).
 #[cfg(windows)]
 pub fn spawn_shell_with(command_line: &str, cwd: &str, extra: &[(&str, &str)]) -> std::io::Result<Child> {
     use std::os::windows::process::CommandExt;
@@ -336,6 +355,7 @@ pub fn spawn_shell_with(command_line: &str, cwd: &str, extra: &[(&str, &str)]) -
     let mut child = command(win::comspec())
         .args(["/D", "/S", "/C"])
         .raw_arg(cmd_argument(command_line))
+        .env("PATH", windows_path())
         .envs(extra.iter().copied())
         .current_dir(cwd)
         .env("FORCE_COLOR", "0")
@@ -667,11 +687,15 @@ pub fn seen_with(pid: u32, word: &str) -> bool {
     }
 }
 
-/// Where `name` is on `PATH`: on Windows as `name.exe`, `.cmd` or `.bat` (the launchers editors
-/// install are `.cmd` files), elsewhere under its own name. Relative entries are skipped.
+/// Where `name` is on `PATH` (on Windows a terminal tab's, `windows_path`): on Windows as
+/// `name.exe`, `.cmd` or `.bat` (the launchers editors install are `.cmd` files), elsewhere under
+/// its own name. Relative entries are skipped.
 #[cfg(not(target_os = "macos"))]
 pub fn find_program(name: &str) -> Option<std::path::PathBuf> {
     let extensions: &[&str] = if cfg!(windows) { &[".exe", ".cmd", ".bat"] } else { &[""] };
+    #[cfg(windows)]
+    let path = windows_path();
+    #[cfg(not(windows))]
     let path = std::env::var_os("PATH")?;
 
     std::env::split_paths(&path)
