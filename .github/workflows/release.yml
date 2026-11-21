@@ -45,10 +45,18 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # The PR release-please opened or updated a moment ago, as it says itself: the label search
+      # doesn't find a PR made in the same second yet, and the release waited for the next push.
+      # Else the open one with the label.
       - name: Find the release PR
         id: pr
+        env:
+          MADE: ${{ steps.release.outputs.pr }}
         run: |
-          number="$(gh pr list --state open --base main --label 'autorelease: pending' --json number --jq '.[0].number // empty')"
+          number="$(jq -r '.number // empty' <<< "${MADE:-null}")"
+          if [ -z "$number" ]; then
+            number="$(gh pr list --state open --base main --label 'autorelease: pending' --json number --jq '.[0].number // empty')"
+          fi
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
       # CI starts alongside this run, so its run may not be listed yet. Anything but a pass (a
