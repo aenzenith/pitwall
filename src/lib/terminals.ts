@@ -179,7 +179,8 @@ const options = {
  * a column short: Claude Code writes SI before the first key after a pause (since 2.1.152), and
  * that key's letter lands on the space after its `❯`, where nothing paints over it again. There
  * each is written as the space ConPTY counts it as; not before the build is known, as on Windows 11
- * that space would part them the other way.
+ * that space would part them the other way, and never on the ConPTY bundled with the app, which
+ * has them (`windowsPty` below).
  */
 let shiftsAsCells = false;
 const WINDOWS_11 = 22000;
@@ -198,10 +199,17 @@ function fromConpty(data: string): string {
  * reflow wrapped lines and xterm mustn't either, which xterm reads from the build (lib/platform:
  * `windowsBuild`). Until the build is known, or without it, ConPTY alone; a terminal made before
  * it hears it then.
+ *
+ * The app brings a ConPTY of its own (`src-tauri/windows/conpty`), Windows Terminal's, which the
+ * core's terminals run on whenever it lies beside the app (`conpty_bundled`): Windows 10's own
+ * passes no mouse to a program, so Claude Code's fullscreen view couldn't be scrolled with the
+ * wheel. Newer than Windows 11's, it reflows and has SI and SO on any Windows, so xterm goes by
+ * Windows 11's build for it; Windows' own only where it is missing (a dev build without it).
  */
 let windowsPty: IWindowsPty | undefined = isWindows ? { backend: "conpty" } : undefined;
 if (isWindows) {
-  void windowsBuild().then((buildNumber) => {
+  void Promise.all([api.conptyBundled().catch(() => false), windowsBuild()]).then(([bundled, build]) => {
+    const buildNumber = bundled ? WINDOWS_11 : build;
     if (buildNumber === null) return;
     windowsPty = { backend: "conpty", buildNumber };
     shiftsAsCells = buildNumber < WINDOWS_11;

@@ -1,25 +1,25 @@
 {
-  "since": "1.25.2",
+  "since": "1.25.3",
   "notes": [
     {
       "kind": "fix",
       "title": {
-        "en": "Fixed “Claude Code isn't installed” on Windows",
-        "tr": "Windows'taki “Claude Code kurulu değil” hatası giderildi",
-        "de": "Fehler „Claude Code ist nicht installiert“ unter Windows behoben",
-        "es": "Corregido el error “Claude Code no está instalado” en Windows",
-        "ru": "Исправлена ошибка «Claude Code не установлен» в Windows",
-        "ja": "Windows の「Claude Code がインストールされていない」エラーを修正しました",
-        "zh-Hans": "修复了 Windows 上“Claude Code 未安装”的错误"
+        "en": "Fixed wheel scrolling in Claude on Windows 10",
+        "tr": "Windows 10'da Claude'da tekerlekle kaydırma sorunu giderildi",
+        "de": "Scrollen mit dem Mausrad in Claude unter Windows 10 behoben",
+        "es": "Corregido el desplazamiento con la rueda en Claude en Windows 10",
+        "ru": "Исправлена прокрутка колесом в Claude в Windows 10",
+        "ja": "Windows 10 で Claude をホイールでスクロールできない問題を修正しました",
+        "zh-Hans": "修复了 Windows 10 上无法用滚轮滚动 Claude 的问题"
       },
       "body": {
-        "en": "If you install Claude Code or another tool while Pitwall is open, the chat and your commands now find it right away, as a new terminal does.",
-        "tr": "Pitwall açıkken Claude Code'u ya da başka bir aracı kurarsan, sohbet ve komutların artık onu yeni açılan bir terminal gibi hemen buluyor.",
-        "de": "Wenn du Claude Code oder ein anderes Tool installierst, während Pitwall offen ist, finden Chat und Befehle es jetzt sofort, so wie ein neues Terminal.",
-        "es": "Si instalas Claude Code u otra herramienta con Pitwall abierto, el chat y tus comandos ya la encuentran al momento, igual que una terminal nueva.",
-        "ru": "Если установить Claude Code или другой инструмент при открытом Pitwall, чат и ваши команды теперь сразу его находят, как новый терминал.",
-        "ja": "Pitwall を開いたまま Claude Code などのツールをインストールしても、チャットやコマンドが新しいターミナルと同じようにすぐ見つけます。",
-        "zh-Hans": "在 Pitwall 开着时安装 Claude Code 或其他工具，对话和你的命令现在会像新开的终端一样立刻找到它。"
+        "en": "In Pitwall's terminals the mouse wheel now scrolls Claude's fullscreen view, and other programs that use the mouse get it there too.",
+        "tr": "Pitwall'ın terminallerinde fare tekerleği artık Claude'un tam ekran görünümünü kaydırıyor; fareyi kullanan diğer programlar da onu alıyor.",
+        "de": "In Pitwalls Terminals scrollt das Mausrad jetzt Claudes Vollbildansicht, und auch andere Programme bekommen dort die Maus.",
+        "es": "En las terminales de Pitwall, la rueda del ratón ya desplaza la vista a pantalla completa de Claude, y otros programas también reciben el ratón.",
+        "ru": "В терминалах Pitwall колесо мыши теперь прокручивает полноэкранный режим Claude, а другие программы тоже получают мышь.",
+        "ja": "Pitwall のターミナルで、マウスホイールで Claude のフルスクリーン表示をスクロールできるようになりました。マウスを使うほかのプログラムにもマウス操作が届きます。",
+        "zh-Hans": "在 Pitwall 的终端里，鼠标滚轮现在可以滚动 Claude 的全屏视图，其他用到鼠标的程序也能收到鼠标操作。"
       }
     }
   ]

@@ -364,6 +364,8 @@ export const api = {
   /** How the panel lays a project's terminals out; null: one at a time. */
   setTerminalLayout: (path: string, layout: TerminalLayout | null) => invoke("set_terminal_layout", { path, layout }),
   terminalBuffer: (id: number) => invoke<{ data: string; seq: number }>("terminal_buffer", { id }),
+  /** Windows: the terminals run on the ConPTY bundled beside the app, not Windows' own (lib/terminals: `windowsPty`). */
+  conptyBundled: () => invoke<boolean>("conpty_bundled"),
   /** The panel to `mode` (lib/panelStand): the core opens or closes the terminals' window. `panel`,
    * the panel's state handed to the page that shows it next; `at`, where on the screen the card
    * was let go (the window's place). */

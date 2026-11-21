@@ -85,7 +85,7 @@ pub use backup::{BackupInfo, BackupParts, ImportReport, MissingProject};
 pub use board::{Card, Give, NewImage};
 pub use discover::{Candidate, Discovery};
 pub use resume::ResumeOffer;
-pub use terminal::{TerminalBuffer, TerminalView};
+pub use terminal::{conpty_bundled, TerminalBuffer, TerminalView};
 pub use shells::{installed_shells, Shell, TerminalOpened, TerminalShells};
 pub use layout::TerminalLayout;
 pub use jobs::CommandView;

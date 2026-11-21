@@ -379,6 +379,12 @@ pub fn terminal_buffer(state: State<'_, AppState>, id: u64) -> crate::core::Term
     state.core.terminal_buffer(id)
 }
 
+/// Whether the terminals run on the ConPTY bundled beside the app (Windows only).
+#[tauri::command]
+pub fn conpty_bundled() -> bool {
+    crate::core::conpty_bundled()
+}
+
 /* ---------- the board ---------- */
 
 #[tauri::command]

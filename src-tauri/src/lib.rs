@@ -574,6 +574,7 @@ pub fn run() {
             commands::sessions_meta,
             commands::set_sessions_meta,
             commands::terminal_buffer,
+            commands::conpty_bundled,
             commands::set_tabs_shown,
             commands::board_state,
             commands::laps_state,

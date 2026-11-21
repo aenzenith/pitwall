@@ -1243,6 +1243,16 @@ fn take_text(pending: &mut Vec<u8>) -> String {
     }
 }
 
+/// Whether the terminals run on the ConPTY bundled beside the app (`conpty.dll` and
+/// `OpenConsole.exe`, Microsoft's, `src-tauri/windows/conpty`), which portable-pty loads before
+/// Windows' own when it is there. Windows 10's own passes no mouse to a program and keeps SI and
+/// SO as characters; the window's xterm is set for the one its terminals talk to
+/// (`lib/terminals`). Never anywhere but Windows.
+pub fn conpty_bundled() -> bool {
+    cfg!(windows)
+        && std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf)).is_some_and(|dir| dir.join("conpty.dll").is_file() && dir.join("OpenConsole.exe").is_file())
+}
+
 /// Keeps the scrollback under its limit, cutting at a line start. It grows to half as long again
 /// before it is cut back to the limit: cut back on every chunk, the whole of it moved each time.
 fn trim_scrollback(scrollback: &mut String) {
