@@ -114,7 +114,8 @@
     "category": "DeveloperTool",
     "macOS": {
       "signingIdentity": "Developer ID Application: MUSTAFA SARI (7ACQ67T7A7)",
-      "entitlements": "./Entitlements.plist"
+      "entitlements": "./Entitlements.plist",
+      "minimumSystemVersion": "10.15"
     },
     "windows": {
       "nsis": {
