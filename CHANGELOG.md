@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.4](https://github.com/aenzenith/pitwall/compare/v1.25.3...v1.25.4) (2026-11-21)
+
+
+### Bug Fixes
+
+* **windows:** the terminals ran on the ConPTY bundled with the app ([5960149](https://github.com/aenzenith/pitwall/commit/59601498a1d25f57d3aa1538940a583c76280f33))
+
 ## [1.25.3](https://github.com/aenzenith/pitwall/compare/v1.25.2...v1.25.3) (2026-11-21)
 
 
