@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.1](https://github.com/aenzenith/pitwall/compare/v1.25.0...v1.25.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **terminal:** Windows 10 terminals counted SI and SO as their ConPTY does ([b3023f8](https://github.com/aenzenith/pitwall/commit/b3023f854f6d64c7916e0cfd9a6478b6b58fcb0a))
+
 ## [1.25.0](https://github.com/aenzenith/pitwall/compare/v1.24.0...v1.25.0) (2026-11-20)
 
 
