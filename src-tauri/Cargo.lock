@@ -3449,7 +3449,7 @@ dependencies = [
 
 [[package]]
 name = "pitwall"
-version = "1.25.0"
+version = "1.25.1"
 dependencies = [
  "auto-launch",
  "base64 0.22.1",
