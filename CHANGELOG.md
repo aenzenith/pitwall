@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.2](https://github.com/aenzenith/pitwall/compare/v1.25.1...v1.25.2) (2026-11-21)
+
+
+### Bug Fixes
+
+* **macos:** the Mac release linked clang's runtime for whisper.cpp's version checks ([8db5bd9](https://github.com/aenzenith/pitwall/commit/8db5bd9c9978bdb54e3923d78cf9e8755a06c4e4))
+
 ## [1.25.1](https://github.com/aenzenith/pitwall/compare/v1.25.0...v1.25.1) (2026-11-21)
 
 
