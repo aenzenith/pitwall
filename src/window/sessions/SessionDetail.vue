@@ -233,7 +233,7 @@ const fuel = computed(() => {
 
       <section v-if="note" class="block" :aria-label="t('board.dialog.note')">
         <div class="section-label">{{ t("board.dialog.note") }}</div>
-        <p class="card-note">{{ note }}</p>
+        <Markdown :text="note" />
         <CardImages v-if="images?.length" :images="images" />
       </section>
 

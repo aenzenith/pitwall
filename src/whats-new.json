@@ -1,25 +1,25 @@
 {
-  "since": "1.25.3",
+  "since": "1.25.4",
   "notes": [
     {
-      "kind": "fix",
+      "kind": "new",
       "title": {
-        "en": "Fixed wheel scrolling in Claude on Windows 10",
-        "tr": "Windows 10'da Claude'da tekerlekle kaydırma sorunu giderildi",
-        "de": "Scrollen mit dem Mausrad in Claude unter Windows 10 behoben",
-        "es": "Corregido el desplazamiento con la rueda en Claude en Windows 10",
-        "ru": "Исправлена прокрутка колесом в Claude в Windows 10",
-        "ja": "Windows 10 で Claude をホイールでスクロールできない問題を修正しました",
-        "zh-Hans": "修复了 Windows 10 上无法用滚轮滚动 Claude 的问题"
+        "en": "Cards open like a page",
+        "tr": "Kartlar sayfa gibi açılıyor",
+        "de": "Karten öffnen sich wie eine Seite",
+        "es": "Las tarjetas se abren como una página",
+        "ru": "Карточки открываются как страница",
+        "ja": "カードがページのように開くようになりました",
+        "zh-Hans": "卡片现在像页面一样打开"
       },
       "body": {
-        "en": "In Pitwall's terminals the mouse wheel now scrolls Claude's fullscreen view, and other programs that use the mouse get it there too.",
-        "tr": "Pitwall'ın terminallerinde fare tekerleği artık Claude'un tam ekran görünümünü kaydırıyor; fareyi kullanan diğer programlar da onu alıyor.",
-        "de": "In Pitwalls Terminals scrollt das Mausrad jetzt Claudes Vollbildansicht, und auch andere Programme bekommen dort die Maus.",
-        "es": "En las terminales de Pitwall, la rueda del ratón ya desplaza la vista a pantalla completa de Claude, y otros programas también reciben el ratón.",
-        "ru": "В терминалах Pitwall колесо мыши теперь прокручивает полноэкранный режим Claude, а другие программы тоже получают мышь.",
-        "ja": "Pitwall のターミナルで、マウスホイールで Claude のフルスクリーン表示をスクロールできるようになりました。マウスを使うほかのプログラムにもマウス操作が届きます。",
-        "zh-Hans": "在 Pitwall 的终端里，鼠标滚轮现在可以滚动 Claude 的全屏视图，其他用到鼠标的程序也能收到鼠标操作。"
+        "en": "While you write a note, its headings, lists and pictures already look the way they will, and typing / adds a block.",
+        "tr": "Notu yazarken başlıklar, listeler ve görseller olacakları gibi görünüyor. / yazarak da blok ekleyebilirsin.",
+        "de": "Schon beim Schreiben sehen Überschriften, Listen und Bilder deiner Notiz so aus, wie sie bleiben, und mit / fügst du einen Block ein.",
+        "es": "Mientras escribes la nota, los títulos, las listas y las imágenes ya se ven como quedarán, y con / añades un bloque.",
+        "ru": "Пока вы пишете заметку, заголовки, списки и картинки уже выглядят так, как останутся, а через / можно добавить блок.",
+        "ja": "メモを書いているうちから、見出しやリスト、画像が仕上がりどおりに表示されます。/ を入力するとブロックを追加できます。",
+        "zh-Hans": "写备注时，标题、列表和图片会直接显示成最终的样子，输入 / 就能添加一个块。"
       }
     }
   ]

@@ -11,10 +11,11 @@ export default defineConfig(() => ({
   // The Files window's colouring worker loads each language's grammar as a chunk of its own.
   worker: { format: "es" as const },
 
-  // The Markdown preview's libraries, loaded with the first preview: bundled ahead in dev, so
-  // that first preview doesn't reload the page while Vite finds them.
+  // The Markdown preview's libraries, loaded with the first preview, and the card dialog's editor
+  // (CodeMirror), loaded with the first card written: bundled ahead in dev, so that first use
+  // doesn't reload the page while Vite finds them.
   optimizeDeps: {
-    include: ["markdown-it", "markdown-it-anchor", "markdown-it-emoji", "markdown-it-footnote", "markdown-it-front-matter", "markdown-it-github-alerts", "markdown-it-task-lists", "@vscode/markdown-it-katex", "katex", "dompurify", "mermaid"],
+    include: ["markdown-it", "markdown-it-anchor", "markdown-it-emoji", "markdown-it-footnote", "markdown-it-front-matter", "markdown-it-github-alerts", "markdown-it-task-lists", "@vscode/markdown-it-katex", "katex", "dompurify", "mermaid", "@codemirror/state", "@codemirror/view", "@codemirror/language", "@codemirror/commands", "@codemirror/lang-markdown"],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

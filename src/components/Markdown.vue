@@ -5,6 +5,10 @@ import { blocks, type Block, type Span } from "../lib/markdown";
 
 const TAGS = { strong: "strong", em: "em", strike: "s" } as const;
 
+/** A done to-do's tick. */
+const tick = (): VNode =>
+  h("svg", { width: 9, height: 9, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 3.4, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" }, [h("path", { d: "m5 12.5 4.5 4.5L19 7.5" })]);
+
 function inline(spans: Span[]): (VNode | string)[] {
   return spans.map((span) => ("spans" in span ? h(TAGS[span.kind], inline(span.spans)) : span.kind === "code" ? h("code", span.text) : span.text));
 }
@@ -23,7 +27,13 @@ function block(b: Block): VNode {
     case "paragraph":
       return h("p", { class: "md-text" }, inline(b.spans));
     case "item":
-      return h("div", { class: "md-item", style: { paddingLeft: `${b.depth * 16}px` } }, [h("span", { class: "md-marker" }, b.marker), h("span", { class: "md-body" }, inline(b.spans))]);
+      return h("div", { class: ["md-item", { "md-done": b.task?.done }], style: { paddingLeft: `${b.depth * 16}px` } }, [
+        // A to-do's box shows whether it is done; here it is read, not ticked.
+        b.task
+          ? h("span", { class: ["md-check", { on: b.task.done }], role: "img", "aria-label": b.task.done ? "[x]" : "[ ]" }, b.task.done ? [tick()] : [])
+          : h("span", { class: "md-marker" }, b.marker),
+        h("span", { class: "md-body" }, inline(b.spans)),
+      ]);
     case "quote":
       return h("p", { class: "md-text md-quote" }, inline(b.spans));
     case "code":
@@ -98,6 +108,31 @@ export default defineComponent({
 
 .md-body {
   min-width: 0;
+}
+
+/* A to-do's box, as the card dialog's note draws it. */
+.md-check {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  margin: 0.2em 1px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--line-dotted);
+  border-radius: 3.5px;
+}
+
+.md-check.on {
+  border-color: var(--btn-primary-line);
+  background: var(--btn-primary-line);
+  color: var(--btn-primary-text);
+}
+
+.md-done .md-body {
+  color: var(--text-subtle);
+  text-decoration: line-through;
 }
 
 .md strong {

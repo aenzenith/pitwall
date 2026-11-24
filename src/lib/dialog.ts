@@ -5,9 +5,10 @@ import type { Ref } from "vue";
  * Esc does). Both the press and the release must land outside the dialog's box: a press that
  * starts inside (selecting an input's text) and ends outside keeps it open.
  *
- * Bind `down` to the dialog's `pointerdown` and `click` to its `click`.
+ * Bind `down` to the dialog's `pointerdown` and `click` to its `click`. `close`: what a click
+ * outside does instead, for a dialog that asks before something is lost.
  */
-export function useBackdropClose(dialog: Ref<HTMLDialogElement | null>) {
+export function useBackdropClose(dialog: Ref<HTMLDialogElement | null>, close: () => void = () => dialog.value?.close()) {
   let pressed = false;
 
   /** The backdrop is the dialog's own pseudo-element: its events target the dialog itself. */
@@ -23,7 +24,7 @@ export function useBackdropClose(dialog: Ref<HTMLDialogElement | null>) {
       pressed = outside(event);
     },
     click(event: MouseEvent): void {
-      if (pressed && outside(event)) dialog.value?.close();
+      if (pressed && outside(event)) close();
       pressed = false;
     },
   };

@@ -9,8 +9,9 @@ export type Span = { kind: "text" | "code"; text: string } | { kind: "strong" | 
 export type Block =
   | { kind: "heading"; level: number; spans: Span[] }
   | { kind: "paragraph"; spans: Span[] }
-  /** A list's item: `depth` under the items above it, `marker` its number as written or a bullet. */
-  | { kind: "item"; depth: number; marker: string; spans: Span[] }
+  /** A list's item: `depth` under the items above it, `marker` its number as written or a bullet;
+   * `task` a to-do's box (`- [ ]`, `- [x]`), ticked or not. */
+  | { kind: "item"; depth: number; marker: string; spans: Span[]; task?: { done: boolean } }
   | { kind: "quote"; spans: Span[] }
   | { kind: "code"; text: string }
   | { kind: "table"; head: Span[][] | null; rows: Span[][][] }
@@ -89,7 +90,9 @@ export function blocks(text: string): Block[] {
       while (indents.length && indents[indents.length - 1] >= indent) indents.pop();
       const depth = indents.length;
       indents.push(indent);
-      out.push({ kind: "item", depth, marker: /^\d/.test(item[2]) ? item[2].replace(")", ".") : "•", spans: spans(run(item[3])) });
+      const task = /^\[([ xX])\]\s+/.exec(item[3]);
+      const text = task ? item[3].slice(task[0].length) : item[3];
+      out.push({ kind: "item", depth, marker: /^\d/.test(item[2]) ? item[2].replace(")", ".") : "•", spans: spans(run(text)), ...(task ? { task: { done: task[1] !== " " } } : {}) });
       continue;
     }
     indents = [];
@@ -133,4 +136,34 @@ export function blocks(text: string): Block[] {
   }
 
   return out;
+}
+
+/** What spans say, without their marks. */
+function plainText(parts: Span[]): string {
+  return parts.map((part) => ("spans" in part ? plainText(part.spans) : part.text)).join("");
+}
+
+/**
+ * A note as a card on the board shows it, a few lines: what its Markdown says without the marks
+ * (`## `, `**`, a task's `[ ]`), a list's items behind a bullet or their number. Lines only; the
+ * card cuts them.
+ */
+export function notePreview(note: string): string {
+  return blocks(note)
+    .flatMap((block): string[] => {
+      switch (block.kind) {
+        case "item": {
+          return [`${block.marker} ${plainText(block.spans)}`];
+        }
+        case "code":
+          return block.text.split("\n");
+        case "table":
+          return [...(block.head ? [block.head] : []), ...block.rows].map((cells) => cells.map(plainText).join(" · "));
+        case "rule":
+          return [];
+        default:
+          return [plainText(block.spans)];
+      }
+    })
+    .join("\n");
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { emitTo } from "@tauri-apps/api/event";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 
 import AgentMark from "../components/AgentMark.vue";
 import ClaudeDot from "../components/ClaudeDot.vue";
@@ -112,7 +112,6 @@ import type { EmptyStart } from "../lib/terminalEmpty";
 import type { Agent, AgentStartChoice, CustomCommand, Project, Shell, ShellChoice } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
 import ChatView from "./chat/ChatView.vue";
-import CardDialog from "./board/CardDialog.vue";
 import CommandDialog from "./CommandDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
@@ -125,6 +124,9 @@ import TerminalEmpty from "./TerminalEmpty.vue";
 import TerminalHistory from "./TerminalHistory.vue";
 import TerminalPanes from "./TerminalPanes.vue";
 import TerminalProjects from "./TerminalProjects.vue";
+
+/** A card made from an output's error: the card dialog loads apart, as on the board. */
+const CardDialog = defineAsyncComponent(() => import("./board/CardDialog.vue"));
 
 /** How long a `reveal-terminal` request waits for its project and tab to show up. */
 const REQUEST_MS = 5_000;

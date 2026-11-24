@@ -86,14 +86,23 @@ export async function imageData(file: Blob): Promise<string> {
   return url;
 }
 
+/** Where a note is written, as far as a pasted image needs it: a text field, or the card dialog's
+ * editor (lib/noteEditor), which offers the same members. */
+export type NoteField = {
+  readonly value: string;
+  readonly selectionStart: number;
+  readonly selectionEnd: number;
+  setRangeText(text: string, start: number, end: number, mode: "end"): void;
+};
+
 /**
  * The images pasted into a note being written (the card dialog's, the quick switcher's): a paste
  * that carries one puts `[Image #n]` at the caret of `field()` at once, as Claude Code's prompt
  * does, and the picture once it is read. An image stays while the note names it. `say`: told why
  * one was refused (too many, too large, not a picture), and "" when the next one is taken.
- * `saved`: the images the card holds already (an edit), which the note's strip draws with them.
+ * `saved`: the images the card holds already (an edit), which the note draws with them.
  */
-export function useNoteImages(note: Ref<string>, field: () => HTMLTextAreaElement | null, say: (message: string) => void, saved: () => Shot[] = () => []) {
+export function useNoteImages(note: Ref<string>, field: () => NoteField | null, say: (message: string) => void, saved: () => Shot[] = () => []) {
   /** Those pasted here (not saved yet; `src` null while one is read). */
   const pasted = ref<Shot[]>([]);
   /** Each pasted image being read: saving waits for them. */

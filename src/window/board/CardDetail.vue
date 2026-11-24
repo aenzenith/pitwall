@@ -54,7 +54,7 @@ function showTerminal(): void {
 
       <section v-if="card.note" class="block" :aria-label="t('board.dialog.note')">
         <div class="section-label">{{ t("board.dialog.note") }}</div>
-        <p class="card-note">{{ card.note }}</p>
+        <Markdown :text="card.note" />
         <CardImages v-if="images.length" :images="images" />
       </section>
 

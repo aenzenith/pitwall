@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRaw, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, provide, ref, toRaw, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
 import PeriodPicker from "../components/PeriodPicker.vue";
@@ -40,12 +40,16 @@ import BoardCard from "./board/BoardCard.vue";
 import BoardColumns from "./board/BoardColumns.vue";
 import BoardLanes from "./board/BoardLanes.vue";
 import CardDetail from "./board/CardDetail.vue";
-import CardDialog from "./board/CardDialog.vue";
 import { BOARD_ACTIONS, type BoardActions, type CardBusy } from "./board/context";
 import DeleteDialog from "./board/DeleteDialog.vue";
 import GivePanel from "./board/GivePanel.vue";
 import SessionDetail from "./sessions/SessionDetail.vue";
 import SessionNotice from "./sessions/SessionNotice.vue";
+
+/** The card dialog and its note's editor (CodeMirror) load apart from the window, the first time a
+ * card is written; once the board shows, they are fetched while nothing else happens. */
+const loadCardDialog = () => import("./board/CardDialog.vue");
+const CardDialog = defineAsyncComponent(loadCardDialog);
 
 /**
  * The board: cards of work per project, given to Claude and followed through review to done.
@@ -877,6 +881,7 @@ function onBoardKey(event: KeyboardEvent): void {
 /* ---------- life ---------- */
 
 onMounted(() => window.addEventListener("keydown", onWindowKey));
+onMounted(() => setTimeout(() => void loadCardDialog().catch(() => {}), 1500));
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onWindowKey);

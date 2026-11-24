@@ -11,6 +11,7 @@ import { cardAgent, type CardStatus } from "../../lib/board";
 import { moneyText } from "../../lib/fuel";
 import { language, t } from "../../lib/i18n";
 import { places, waitText } from "../../lib/line";
+import { notePreview } from "../../lib/markdown";
 import { stamp } from "../../lib/period";
 import { keys } from "../../lib/platform";
 import { useGrow } from "../../lib/slide";
@@ -68,6 +69,8 @@ const cost = computed(() => {
 
 /** Its note shows under the title: on a project's board, as a card or as a row. */
 const noted = computed(() => !!props.card.note && (props.variant === "full" || props.variant === "row"));
+/** Its note as the card shows it: what its Markdown says, without the marks. */
+const preview = computed(() => (noted.value ? notePreview(props.card.note) : ""));
 
 /** Where its session runs shows, and what it cost today. */
 const located = computed(() => (props.variant === "full" || props.variant === "row") && props.card.column === "claude" && !!props.row && !props.status?.closed);
@@ -174,7 +177,7 @@ function giveMenu(event: Event): void {
       <!-- A row lays these out itself; on a card they are the card's own lines (bcard-text). -->
       <div class="bcard-text">
         <span class="bcard-title">{{ card.title }}</span>
-        <span v-if="noted" class="bcard-note">{{ card.note }}</span>
+        <span v-if="noted" class="bcard-note">{{ preview }}</span>
       </div>
 
       <!-- Told to wait: when it is given (or that it waits its turn), and the model and the mode
