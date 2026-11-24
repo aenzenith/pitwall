@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.26.0](https://github.com/aenzenith/pitwall/compare/v1.25.4...v1.26.0) (2026-11-24)
+
+
+### Features
+
+* **board:** a card opened like a page, its note written in live Markdown ([3e3fc01](https://github.com/aenzenith/pitwall/commit/3e3fc0140b24efb231c4ea6fe59443adc406dbb0))
+* **picker:** the project picker searched its projects by name ([8b2f4c1](https://github.com/aenzenith/pitwall/commit/8b2f4c1ce2d1d0aa15a6f3c20fa7be9721dbb013))
+* **terminal:** the project column showed each project's Git state and fetched its remote ([c44b79c](https://github.com/aenzenith/pitwall/commit/c44b79cba439d7dc84842fbbbbb783a5a1fd0586))
+
 ## [1.25.4](https://github.com/aenzenith/pitwall/compare/v1.25.3...v1.25.4) (2026-11-21)
 
 
