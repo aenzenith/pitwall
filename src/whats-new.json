@@ -21,6 +21,27 @@
         "ja": "メモを書いているうちから、見出しやリスト、画像が仕上がりどおりに表示されます。/ を入力するとブロックを追加できます。",
         "zh-Hans": "写备注时，标题、列表和图片会直接显示成最终的样子，输入 / 就能添加一个块。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Search in the project list",
+        "tr": "Proje listesinde arama",
+        "de": "Suche in der Projektliste",
+        "es": "Búsqueda en la lista de proyectos",
+        "ru": "Поиск в списке проектов",
+        "ja": "プロジェクト一覧で検索できるようになりました",
+        "zh-Hans": "项目列表可以搜索了"
+      },
+      "body": {
+        "en": "The project list on the Board and Sessions pages has a search box at its top now, so a few letters bring up the project you want.",
+        "tr": "Pano ve Oturumlar'daki proje listesinin üstünde artık bir arama kutusu var. Birkaç harf yazınca aradığın proje karşına çıkıyor.",
+        "de": "Die Projektliste auf Board und Sitzungen hat jetzt oben ein Suchfeld. Ein paar Buchstaben reichen, und das gesuchte Projekt steht da.",
+        "es": "La lista de proyectos de Tablero y Sesiones ahora tiene un buscador arriba. Con unas pocas letras aparece el proyecto que buscas.",
+        "ru": "Теперь у списка проектов на страницах «Доска» и «Сессии» есть поле поиска. Пара букв — и нужный проект уже перед вами.",
+        "ja": "ボードとセッションのプロジェクト一覧の上に検索欄が付きました。数文字打つだけで、探しているプロジェクトが見つかります。",
+        "zh-Hans": "看板和会话页面的项目列表顶部多了一个搜索框，输入几个字母就能找到想要的项目。"
+      }
     }
   ]
 }

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 import ClaudeDot from "./ClaudeDot.vue";
+import Highlight from "./Highlight.vue";
 import Icon from "./Icon.vue";
 import { WAIT_LABELS } from "../lib/board";
 import { agentKey, namesAgent, rowAgent } from "../lib/format";
-import { language, t, type Key } from "../lib/i18n";
+import { fuzzy } from "../lib/fuzzy";
+import { t, type Key } from "../lib/i18n";
 import type { Agent, Project, Turn } from "../lib/types";
 
 /**
@@ -17,7 +19,10 @@ import type { Agent, Project, Turn } from "../lib/types";
  * marks it; the Sessions page leaves that to the row).
  *
  * The list is drawn here rather than as a native menu: a menu's line holds a check mark or an
- * image, never both, and none in Claude's colour.
+ * image, never both, and none in Claude's colour. A search heads it, which has the keyboard while
+ * it is open: what is typed narrows the list to the projects whose name it matches, as the quick
+ * switcher matches a name (lib/fuzzy), best first, the matched letters stressed. Their paths and
+ * branches count for nothing here: every path holds most letters.
  *
  * Where the page has no room for its name, the page's container query hides `ppick-text` and
  * `ppick-more` and shows `ppick-every` (every project's icon, out of sight otherwise): its icon
@@ -47,10 +52,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ pick: [path: string | null] }>();
 
-/** A typed name is forgotten this long after its last letter (ms). */
-const TYPED_MS = 700;
-
-type Option = { path: string | null; name: string; label: string; phase: "waiting" | "working" | null };
+type Option = { path: string | null; name: string; label: string; phase: "waiting" | "working" | null; hits?: Set<number> };
 
 /** Whose state a project's line reads out: Claude's alone as it always was; once the places name
  * agents, the agent's whose state its row shows. */
@@ -67,6 +69,21 @@ const options = computed<Option[]>(() => [
     return { path: p.path, name: p.name, label: p.name, phase: null };
   }),
 ]);
+
+/** What the search holds, and the options it leaves: every option while it is empty; else the
+ * projects whose name matches, best first, equals in the list's order (every project is none). */
+const query = ref("");
+const typed = computed(() => query.value.trim());
+const listed = computed<Option[]>(() => {
+  if (!typed.value) return options.value;
+  return options.value
+    .flatMap((option, at) => {
+      const match = option.path === null ? null : fuzzy(option.name, typed.value);
+      return match ? [{ option: { ...option, hits: new Set(match.hits) }, score: match.score, at }] : [];
+    })
+    .sort((a, b) => b.score - a.score || a.at - b.at)
+    .map((each) => each.option);
+});
 
 const shown = computed(() => props.projects.find((p) => p.path === props.scope) ?? null);
 const name = computed(() => shown.value?.name ?? t("board.allProjects"));
@@ -88,7 +105,9 @@ const label = computed(() => {
 
 const root = ref<HTMLElement | null>(null);
 const button = ref<HTMLButtonElement | null>(null);
+const pop = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
+const field = ref<HTMLInputElement | null>(null);
 
 const open = ref(false);
 /** The option under the pointer or the keyboard. */
@@ -100,13 +119,17 @@ function optionId(index: number): string {
   return `project-picker-${index}`;
 }
 
+/** The list's id, which the search names as what it controls. */
+const LIST_ID = "project-picker-list";
+
 function move(index: number): void {
   active.value = index;
   void nextTick(() => list.value?.querySelector(".on")?.scrollIntoView({ block: "nearest" }));
 }
 
-/** How far in from the window's edges a list stays. */
+/** How far in from the window's edges a list stays, and how narrow it may be (room for its search). */
 const EDGE = 8;
+const MIN_WIDTH = 240;
 
 function show(): void {
   const box = button.value?.getBoundingClientRect();
@@ -118,9 +141,10 @@ function show(): void {
   place.value = {
     ...(above ? { bottom: `${window.innerHeight - box.top + 4}px` } : { top: `${box.bottom + 4}px` }),
     ...side,
-    minWidth: `${box.width}px`,
-    maxHeight: `${Math.max(120, above ? box.top - 16 : window.innerHeight - box.bottom - 16)}px`,
+    minWidth: `${Math.max(box.width, MIN_WIDTH)}px`,
+    maxHeight: `${Math.max(160, above ? box.top - 16 : window.innerHeight - box.bottom - 16)}px`,
   };
+  query.value = "";
   open.value = true;
   move(Math.max(0, options.value.findIndex((option) => option.path === props.scope)));
   window.addEventListener("pointerdown", onOutside, true);
@@ -128,13 +152,20 @@ function show(): void {
   window.addEventListener("resize", hide);
   void nextTick(() => {
     fit();
-    list.value?.focus();
+    // Opened above, it keeps the height it opened with: a list cut short by what is typed never
+    // pulls the search field down under the pointer.
+    const height = above ? pop.value?.getBoundingClientRect().height : undefined;
+    if (height) place.value = { ...place.value, height: `${height}px` };
+    field.value?.focus();
   });
 }
 
+// What is typed puts the best match under the keyboard; emptied, the project shown again.
+watch(typed, (text) => move(text ? 0 : Math.max(0, options.value.findIndex((option) => option.path === props.scope))));
+
 /** A list that would run past the window's left or right edge comes in, whole, never cut. */
 function fit(): void {
-  const at = list.value?.getBoundingClientRect();
+  const at = pop.value?.getBoundingClientRect();
   if (!at || (at.left >= EDGE && at.right <= window.innerWidth - EDGE)) return;
   const next: Record<string, string> = { ...place.value, left: `${Math.max(EDGE, Math.min(at.left, window.innerWidth - EDGE - at.width))}px` };
   delete next.right;
@@ -143,7 +174,7 @@ function fit(): void {
 
 function hide(): void {
   open.value = false;
-  typed = "";
+  query.value = "";
   window.removeEventListener("pointerdown", onOutside, true);
   window.removeEventListener("blur", hide);
   window.removeEventListener("resize", hide);
@@ -160,6 +191,12 @@ function onOutside(event: PointerEvent): void {
   if (!(event.target instanceof Node && root.value?.contains(event.target))) hide();
 }
 
+/** A press in the list (an option, the search's edge) leaves the keyboard in the search; one in the
+ * search places its caret. */
+function keepField(event: MouseEvent): void {
+  if (event.target !== field.value) event.preventDefault();
+}
+
 /** `keyed`: picked with the keyboard, which then goes back to the picker; a click leaves it
  * nowhere, as a click on the picker does. */
 function pick(option: Option, keyed = false): void {
@@ -168,24 +205,11 @@ function pick(option: Option, keyed = false): void {
   if (option.path !== props.scope) emit("pick", option.path);
 }
 
-let typed = "";
-let typedTimer: number | undefined;
-
-/** Letters go to the first project whose name starts with them, as in a menu. */
-function type(letter: string): void {
-  const lower = (text: string): string => text.toLocaleLowerCase(language.value);
-  window.clearTimeout(typedTimer);
-  typed += lower(letter);
-  typedTimer = window.setTimeout(() => (typed = ""), TYPED_MS);
-  const found = options.value.findIndex((option) => lower(option.name).startsWith(typed));
-  if (found >= 0) move(found);
-}
-
-/** In the list: arrows, Home and End move, ↵ or Space picks, Esc and Tab close; a shortcut closes
- * it and stays the page's. */
+/** In the search: ↑/↓ move along the list, ↵ picks, Esc empties the search and then closes, Tab
+ * closes; anything else is typed (⌘A, ⌘V… included). */
 function onKey(event: KeyboardEvent): void {
-  if (event.metaKey || event.ctrlKey || event.altKey) return hide();
-  const last = options.value.length - 1;
+  if (event.isComposing) return;
+  const last = listed.value.length - 1;
 
   switch (event.key) {
     case "ArrowDown":
@@ -194,32 +218,26 @@ function onKey(event: KeyboardEvent): void {
     case "ArrowUp":
       move(Math.max(0, active.value - 1));
       break;
-    case "Home":
-      move(0);
+    case "Enter": {
+      const option = listed.value[active.value];
+      if (option) pick(option, true);
       break;
-    case "End":
-      move(last);
-      break;
-    case "Enter":
-    case " ":
-      pick(options.value[active.value], true);
-      break;
+    }
     case "Escape":
+      if (query.value) query.value = "";
+      else close();
+      break;
     case "Tab":
       close();
       break;
     default:
-      if (event.key.length !== 1) return;
-      type(event.key);
+      return;
   }
   event.preventDefault();
   event.stopPropagation();
 }
 
-onBeforeUnmount(() => {
-  hide();
-  window.clearTimeout(typedTimer);
-});
+onBeforeUnmount(hide);
 </script>
 
 <template>
@@ -245,38 +263,48 @@ onBeforeUnmount(() => {
       <span v-if="elsewhere.length" class="ppick-mark" aria-hidden="true"></span>
     </button>
 
-    <!-- A press on an option leaves the keyboard in the list. -->
-    <ul
-      v-if="open"
-      ref="list"
-      class="ppick-list"
-      role="listbox"
-      tabindex="-1"
-      :aria-label="t('common.projects')"
-      :aria-activedescendant="optionId(active)"
-      :style="place"
-      @keydown="onKey"
-      @mousedown.prevent
-    >
-      <template v-for="(option, i) in options" :key="option.path ?? ''">
-        <!-- Every project, then a line, then the projects. -->
-        <li v-if="every && i === 1" class="ppick-line" role="presentation"></li>
-        <li
-          :id="optionId(i)"
-          :class="['ppick-option', { on: i === active }]"
-          role="option"
-          :aria-selected="option.path === scope"
-          :aria-label="option.label"
-          :title="option.phase ? option.label : undefined"
-          @mousemove="active = i"
-          @click="pick(option)"
-        >
-          <span class="ppick-check"><Icon v-if="option.path === scope" name="check" :size="12" /></span>
-          <span class="ppick-name">{{ option.name }}</span>
-          <ClaudeDot v-if="option.phase" :live="{ phase: option.phase, text: '' }" />
-        </li>
-      </template>
-    </ul>
+    <!-- A press on an option leaves the keyboard in the search. -->
+    <div v-if="open" ref="pop" class="ppick-pop" :style="place" @mousedown="keepField">
+      <label class="ppick-search">
+        <Icon name="search" :size="13" />
+        <input
+          ref="field"
+          v-model="query"
+          type="text"
+          role="combobox"
+          spellcheck="false"
+          autocomplete="off"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          :aria-controls="LIST_ID"
+          :aria-activedescendant="listed.length ? optionId(active) : undefined"
+          :aria-label="t('common.searchProjects')"
+          :placeholder="t('common.searchProjects')"
+          @keydown="onKey"
+        />
+      </label>
+      <ul :id="LIST_ID" ref="list" class="ppick-list" role="listbox" :aria-label="t('common.projects')">
+        <li v-if="typed && !listed.length" class="ppick-none" role="presentation">{{ t("switcher.noMatch", { query: typed }) }}</li>
+        <template v-for="(option, i) in listed" :key="option.path ?? ''">
+          <!-- Every project, then a line, then the projects. -->
+          <li v-if="every && !typed && i === 1" class="ppick-line" role="presentation"></li>
+          <li
+            :id="optionId(i)"
+            :class="['ppick-option', { on: i === active }]"
+            role="option"
+            :aria-selected="option.path === scope"
+            :aria-label="option.label"
+            :title="option.phase ? option.label : undefined"
+            @mousemove="active = i"
+            @click="pick(option)"
+          >
+            <span class="ppick-check"><Icon v-if="option.path === scope" name="check" :size="12" /></span>
+            <span class="ppick-name"><Highlight v-if="option.hits" :text="option.name" :hits="option.hits" /><template v-else>{{ option.name }}</template></span>
+            <ClaudeDot v-if="option.phase" :live="{ phase: option.phase, text: '' }" />
+          </li>
+        </template>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -368,26 +396,73 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 2px var(--bg-app);
 }
 
-/* Over the page, wherever the bar's edges are: only the list scrolls. */
-.ppick-list {
+/* Over the page, wherever the bar's edges are: the search stays, only the list scrolls. */
+.ppick-pop {
   position: fixed;
   z-index: 60;
   max-width: min(320px, calc(100vw - 16px));
-  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   padding: 4px;
-  list-style: none;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-card);
   background: var(--bg-control);
   box-shadow: var(--shadow-menu);
 }
 
-/* The keyboard's place is the lit option, not a ring round the list. */
-.ppick-list:focus-visible {
+/* The terminal column's search, a size smaller. */
+.ppick-search {
+  height: 28px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  margin-bottom: 4px;
+  border: 1px solid var(--line-dialog);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  cursor: text;
+}
+
+/* No ring when it has the keyboard: the caret is enough. */
+.ppick-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
   outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ppick-search input::placeholder {
+  color: var(--text-faint);
+}
+
+.ppick-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ppick-none {
+  padding: 14px 10px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: normal;
+  color: var(--text-subtle);
 }
 
 .ppick-option {
