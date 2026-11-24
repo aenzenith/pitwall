@@ -120,6 +120,10 @@ const SWEEP_EVERY: u64 = 60;
 /// Claude's logs, the hook's events and Git are read again in full this often, in case a
 /// file-system event was missed; otherwise they are read when they change.
 const POLL_EVERY: u64 = 60;
+/// The listed projects' remotes are fetched this long after a start, then this often
+/// (`Core::fetch_remotes`).
+const FETCH_FIRST: u64 = 30;
+const FETCH_EVERY: u64 = 300;
 
 pub enum CoreEvent {
     /// The snapshot changed; read it with `Core::snapshot`.
@@ -329,6 +333,8 @@ pub struct Core {
     /// poll.
     watch: Mutex<Option<watch::Watch>>,
     git_busy: AtomicBool,
+    /// A round of `fetch_remotes` goes.
+    fetch_busy: AtomicBool,
     /// Held while the pids file is built and written, so it is never stale or torn.
     pids_lock: Mutex<()>,
     /// Our servers as our registry record last said; held while it is written (`peers.rs`).
@@ -433,6 +439,7 @@ impl Core {
             hook,
             watch: Mutex::new(None),
             git_busy: AtomicBool::new(false),
+            fetch_busy: AtomicBool::new(false),
             pids_lock: Mutex::new(()),
             published: Mutex::new(Vec::new()),
             outbox: Arc::new(Mutex::new(Outbox::default())),
@@ -521,6 +528,10 @@ impl Core {
         if tick.is_multiple_of(POLL_EVERY) {
             self.poll_files();
             self.look_for_projects();
+        }
+
+        if tick == FETCH_FIRST || (tick > 0 && tick.is_multiple_of(FETCH_EVERY)) {
+            self.fetch_remotes();
         }
 
         if tick.is_multiple_of(HEARTBEAT_EVERY) {

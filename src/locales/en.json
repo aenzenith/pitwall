@@ -66,6 +66,14 @@
     "one": "{count} changed",
     "other": "{count} changed"
   },
+  "git.ahead": {
+    "one": "{count} outgoing commit",
+    "other": "{count} outgoing commits"
+  },
+  "git.behind": {
+    "one": "{count} incoming commit",
+    "other": "{count} incoming commits"
+  },
   "editor.fallback": "Editor",
   "popover.noProjects": "No projects yet",
   "popover.running": "{count} running",
@@ -518,6 +526,7 @@
   "settings.extDownload": "Download .vsix",
   "settings.appearance": "Appearance",
   "settings.suggestProjects": "Suggest new projects that appear in this folder",
+  "settings.gitFetch": "Fetch remotes now and then for incoming commits",
   "settings.barProjects": "Projects in the menu bar",
   "settings.barProjectsHint": "What the menu bar's window lists: every project, or your favourites and the projects at work (a server or a command running, Claude working or waiting).",
   "settings.barAll": "All",

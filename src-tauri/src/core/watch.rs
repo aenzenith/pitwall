@@ -494,6 +494,30 @@ impl Core {
         });
     }
 
+    /// Each listed project whose branch has an upstream is fetched from it (`git::fetch`), one
+    /// at a time and off the caller's thread, while Settings › Projects says so; those fetched
+    /// are read again after, so the commits that came in show as the branch's `behind`. A round
+    /// still going when the next is due is let be.
+    pub(super) fn fetch_remotes(self: &Arc<Self>) {
+        let paths: Vec<String> = {
+            let inner = self.lock();
+            if !inner.settings.git_fetch {
+                return;
+            }
+            inner.git.iter().filter(|(_, info)| info.upstream).map(|(path, _)| path.clone()).collect()
+        };
+        if paths.is_empty() || self.fetch_busy.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        let core = Arc::clone(self);
+        thread::spawn(move || {
+            let fetched: Vec<String> = paths.into_iter().filter(|path| git::fetch(path)).collect();
+            core.fetch_busy.store(false, Ordering::SeqCst);
+            core.refresh_git(fetched);
+        });
+    }
+
     /// Settings stopped naming the package manager: each listed project's lock file is looked
     /// for now (`detect_managers`), not at the next poll, as its row shows npm until then.
     pub(super) fn managers_unnamed(self: &Arc<Self>) {

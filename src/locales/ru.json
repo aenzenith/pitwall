@@ -70,6 +70,18 @@
     "many": "{count} изменений",
     "other": "{count} изменения"
   },
+  "git.ahead": {
+    "one": "{count} исходящий коммит",
+    "few": "{count} исходящих коммита",
+    "many": "{count} исходящих коммитов",
+    "other": "{count} исходящих коммита"
+  },
+  "git.behind": {
+    "one": "{count} входящий коммит",
+    "few": "{count} входящих коммита",
+    "many": "{count} входящих коммитов",
+    "other": "{count} входящих коммита"
+  },
   "editor.fallback": "Редактор",
   "popover.noProjects": "Проектов пока нет",
   "popover.running": "Запущено: {count}",
@@ -532,6 +544,7 @@
   "settings.extDownload": "Скачать .vsix",
   "settings.appearance": "Оформление",
   "settings.suggestProjects": "Предлагать новые проекты, появившиеся в этой папке",
+  "settings.gitFetch": "Время от времени делать fetch, чтобы видеть входящие коммиты",
   "settings.barProjects": "Проекты в строке меню",
   "settings.barProjectsHint": "Что показывает окно строки меню: все проекты или избранное и проекты в работе (запущен сервер или команда, Claude работает или ждёт вас).",
   "settings.barAll": "Все",

@@ -65,6 +65,14 @@
     "one": "{count} değişiklik",
     "other": "{count} değişiklik"
   },
+  "git.ahead": {
+    "one": "Giden {count} commit",
+    "other": "Giden {count} commit"
+  },
+  "git.behind": {
+    "one": "Gelen {count} commit",
+    "other": "Gelen {count} commit"
+  },
   "editor.fallback": "Editör",
   "popover.noProjects": "Henüz proje yok",
   "popover.running": "{count} çalışıyor",
@@ -516,6 +524,7 @@
   "settings.extDownload": ".vsix indir",
   "settings.appearance": "Görünüm",
   "settings.suggestProjects": "Bu klasörde yeni proje belirince öner",
+  "settings.gitFetch": "Gelen commit'ler için arada fetch yap",
   "settings.barProjects": "Menü çubuğundaki projeler",
   "settings.barProjectsHint": "Menü çubuğu penceresinde hangi projeler listelensin: bütün projeler ya da favorilerin ve çalışan projeler (sunucusu ya da bir komutu çalışan, Claude'u çalışan ya da seni bekleyen).",
   "settings.barAll": "Tümü",

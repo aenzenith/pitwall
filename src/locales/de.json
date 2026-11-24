@@ -66,6 +66,14 @@
     "one": "{count} Änderung",
     "other": "{count} Änderungen"
   },
+  "git.ahead": {
+    "one": "{count} ausgehender Commit",
+    "other": "{count} ausgehende Commits"
+  },
+  "git.behind": {
+    "one": "{count} eingehender Commit",
+    "other": "{count} eingehende Commits"
+  },
   "editor.fallback": "Editor",
   "popover.noProjects": "Noch keine Projekte",
   "popover.running": "Aktiv: {count}",
@@ -518,6 +526,7 @@
   "settings.extDownload": ".vsix laden",
   "settings.appearance": "Erscheinungsbild",
   "settings.suggestProjects": "Neue Projekte in diesem Ordner vorschlagen",
+  "settings.gitFetch": "Remotes ab und zu abrufen, um eingehende Commits zu sehen",
   "settings.barProjects": "Projekte in der Menüleiste",
   "settings.barProjectsHint": "Was das Fenster der Menüleiste auflistet: alle Projekte oder deine Favoriten und die Projekte, die arbeiten (ein Server oder Befehl läuft, Claude arbeitet oder wartet).",
   "settings.barAll": "Alle",

@@ -425,7 +425,7 @@ mod tests {
 
     /// Each kind of thing left open, put into a core that has nothing open, by its name.
     fn leave_open(core: &Arc<Core>, project: &str, kind: &str) {
-        let git = |changes, ahead| GitInfo { branch: "main".into(), changes, ahead, behind: 0 };
+        let git = |changes, ahead| GitInfo { branch: "main".into(), changes, ahead, ..GitInfo::default() };
         match kind {
             "commit" => drop(core.lock().git.insert(project.into(), git(2, 0))),
             "push" => drop(core.lock().git.insert(project.into(), git(0, 3))),
@@ -457,7 +457,7 @@ mod tests {
         let (clean, project) = core(tmp.path());
         // What is no reason to ask: a branch behind its upstream, a session at work, cards in
         // every other column.
-        clean.lock().git.insert(project.clone(), GitInfo { branch: "main".into(), changes: 0, ahead: 0, behind: 4 });
+        clean.lock().git.insert(project.clone(), GitInfo { branch: "main".into(), behind: 4, ..GitInfo::default() });
         clean.lock().scanned.push(SessionState { phase: SessionPhase::Working, turn: None, ..waiting(&project, TurnKind::Finished, None) });
         clean.board().cards.extend([Column::Queued, Column::Claude, Column::Done].map(|column| card(&project, column)));
         assert_eq!(clean.flag(), Flag::default());

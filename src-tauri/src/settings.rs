@@ -751,6 +751,9 @@ pub struct Settings {
     /// A project that appears in the projects folder is offered under the list
     /// (`core/discover.rs`).
     pub suggest_projects: bool,
+    /// Every few minutes each listed project whose branch has an upstream is fetched from its
+    /// remote, for the commits coming in (`Core::fetch_remotes`); Settings › Projects.
+    pub git_fetch: bool,
     /// The projects folder's subfolders known so far, by name: none of them is offered.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub seen_folders: Vec<String>,
@@ -934,6 +937,7 @@ impl Default for Settings {
             update_told: None,
             onboarded: false,
             suggest_projects: false,
+            git_fetch: true,
             seen_folders: Vec::new(),
             notifications: Notifications::default(),
             radio: RadioSettings::default(),

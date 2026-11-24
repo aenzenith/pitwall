@@ -4,6 +4,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Incoming and outgoing commits in the project column",
+        "tr": "Proje sütununda gelen giden commit'ler",
+        "de": "Ein- und ausgehende Commits in der Projektspalte",
+        "es": "Commits entrantes y salientes en la columna de proyectos",
+        "ru": "Входящие и исходящие коммиты в колонке проектов",
+        "ja": "プロジェクト列で送受信コミットが見えるようになりました",
+        "zh-Hans": "项目栏里能看到传入和传出的提交了"
+      },
+      "body": {
+        "en": "Under each project beside the terminal you see its branch, its changes and the commits to push or pull. Pitwall fetches now and then, so new commits show up by themselves.",
+        "tr": "Terminalin yanındaki her projenin altında dalını, değişikliklerini ve gelen giden commit'leri görürsün. Pitwall arada kendisi fetch ettiği için yeni commit'ler kendiliğinden belirir.",
+        "de": "Unter jedem Projekt neben dem Terminal siehst du seinen Branch, seine Änderungen und was zu pushen oder zu holen ist. Pitwall ruft zwischendurch selbst ab, neue Commits tauchen also von allein auf.",
+        "es": "Bajo cada proyecto junto a la terminal ves su rama, sus cambios y los commits por subir o por traer. Pitwall hace fetch de vez en cuando, así que los nuevos aparecen solos.",
+        "ru": "Под каждым проектом рядом с терминалом видны его ветка, изменения и коммиты, которые ждут push или pull. Pitwall время от времени сам делает fetch, так что новые коммиты появляются сами.",
+        "ja": "ターミナル横の各プロジェクトの下に、ブランチと変更、プッシュ待ちと取り込み待ちのコミットが表示されます。Pitwall がときどき fetch するので、新しいコミットは自然に現れます。",
+        "zh-Hans": "终端旁的每个项目下方会显示分支、更改，以及待推送和待拉取的提交。Pitwall 会不时自己执行 fetch，新提交会自动出现。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Cards open like a page",
         "tr": "Kartlar sayfa gibi açılıyor",
         "de": "Karten öffnen sich wie eine Seite",

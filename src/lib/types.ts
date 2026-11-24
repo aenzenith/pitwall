@@ -222,6 +222,9 @@ export type Settings = {
   onboarded: boolean;
   /** A project that appears in the projects folder is offered under the list. */
   suggestProjects: boolean;
+  /** Each listed project's branch is fetched from its remote every few minutes, for the commits
+   * coming in (the project column's Git line). On unless turned off. */
+  gitFetch?: boolean;
   /** The projects folder's subfolders known so far; the core's own. */
   seenFolders?: string[];
   /** What is told, the quiet hours and the muted projects; changed through their own commands

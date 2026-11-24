@@ -67,6 +67,16 @@
     "many": "{count} cambios",
     "other": "{count} cambios"
   },
+  "git.ahead": {
+    "one": "{count} commit saliente",
+    "many": "{count} commits salientes",
+    "other": "{count} commits salientes"
+  },
+  "git.behind": {
+    "one": "{count} commit entrante",
+    "many": "{count} commits entrantes",
+    "other": "{count} commits entrantes"
+  },
   "editor.fallback": "Editor",
   "popover.noProjects": "Aún no hay proyectos",
   "popover.running": "{count} en ejecución",
@@ -521,6 +531,7 @@
   "settings.extDownload": "Descargar .vsix",
   "settings.appearance": "Apariencia",
   "settings.suggestProjects": "Sugerir los proyectos nuevos que aparezcan en esta carpeta",
+  "settings.gitFetch": "Hacer fetch de vez en cuando para ver los commits entrantes",
   "settings.barProjects": "Proyectos en la barra de menús",
   "settings.barProjectsHint": "Qué lista la ventana de la barra de menús: todos los proyectos, o tus favoritos y los proyectos en marcha (con un servidor o un comando en ejecución, con Claude trabajando o esperándote).",
   "settings.barAll": "Todos",

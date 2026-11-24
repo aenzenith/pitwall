@@ -64,6 +64,12 @@
   "git.changed": {
     "other": "{count} 项更改"
   },
+  "git.ahead": {
+    "other": "{count} 个传出提交"
+  },
+  "git.behind": {
+    "other": "{count} 个传入提交"
+  },
   "editor.fallback": "编辑器",
   "popover.noProjects": "还没有项目",
   "popover.running": "{count} 个运行中",
@@ -511,6 +517,7 @@
   "settings.extDownload": "下载 .vsix",
   "settings.appearance": "外观",
   "settings.suggestProjects": "此文件夹中出现新项目时提示添加",
+  "settings.gitFetch": "不时执行 fetch，以便看到传入的提交",
   "settings.barProjects": "菜单栏中的项目",
   "settings.barProjectsHint": "菜单栏窗口列出什么：所有项目，或你的收藏和正在运行的项目（服务器或命令在运行、Claude 正在工作或在等你）。",
   "settings.barAll": "全部",

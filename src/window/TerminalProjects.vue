@@ -249,7 +249,7 @@ defineExpose({ focus, clear });
           <div
             v-if="line.kind === 'project'"
             :id="rowId(line.key)"
-            :class="['row', { on: line.project.path === project.path, picked: picked === line.key }]"
+            :class="['row', { on: line.project.path === project.path, picked: picked === line.key, repo: line.project.git }]"
             role="option"
             :aria-selected="line.project.path === project.path"
             :title="line.project.name"
@@ -261,9 +261,17 @@ defineExpose({ focus, clear });
               <span v-else-if="server(line.project)" :class="['dot', server(line.project)]" aria-hidden="true"></span>
             </span>
             <span class="name"><Highlight v-if="line.hits" :text="line.project.name" :hits="line.hits" /><template v-else>{{ line.project.name }}</template></span>
-            <span v-if="line.project.status === 'running' && line.project.port" class="meta">:{{ line.project.port }}</span>
-            <span v-else-if="line.project.terminals.length" class="meta" :aria-label="t('window.openTerminals', { count: line.project.terminals.length })">
+            <span v-if="line.project.terminals.length" class="meta" :aria-label="t('window.openTerminals', { count: line.project.terminals.length })">
               <Icon name="terminal" :size="11" />{{ line.project.terminals.length }}
+            </span>
+            <span v-if="line.project.git" class="git">
+              <span class="branch">{{ line.project.git.branch }}</span>
+              <span v-if="line.project.git.changes" class="changes">· {{ t("git.changed", { count: line.project.git.changes }) }}</span>
+              <span v-if="line.project.git.ahead || line.project.git.behind" class="sync">
+                ·
+                <span v-if="line.project.git.ahead" :title="t('git.ahead', { count: line.project.git.ahead })">↑{{ line.project.git.ahead }}</span>
+                <span v-if="line.project.git.behind" :title="t('git.behind', { count: line.project.git.behind })">↓{{ line.project.git.behind }}</span>
+              </span>
             </span>
           </div>
           <div
@@ -402,6 +410,65 @@ defineExpose({ focus, clear });
   padding: 0 8px 0 6px;
   border-radius: 6px;
   cursor: pointer;
+}
+
+/* A project in a Git repository takes a second line under its name: its branch, its changes and
+   the commits going out and coming in. The dot stays on the name's line. */
+.row.repo {
+  height: auto;
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "mark name meta"
+    ". git meta";
+  column-gap: 8px;
+  row-gap: 1px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.row.repo .mark {
+  grid-area: mark;
+  height: 18px;
+}
+
+.row.repo .name {
+  grid-area: name;
+  line-height: 18px;
+}
+
+/* The tab count is the row's, between its two lines: never over a count of the Git line. */
+.row.repo .meta {
+  grid-area: meta;
+  align-self: center;
+}
+
+.git {
+  grid-area: git;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 15px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* A long branch gives way; the counts never do. */
+.branch {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.changes,
+.sync {
+  flex-shrink: 0;
+  color: var(--text-subtle);
 }
 
 .row:hover,

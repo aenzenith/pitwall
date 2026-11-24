@@ -192,6 +192,7 @@ const form = reactive<Settings>({
   resume: "ask",
   onboarded: false,
   suggestProjects: false,
+  gitFetch: true,
   open: { list: "terminal", pages: "terminal", outside: "terminal" },
 });
 const error = ref("");
@@ -768,6 +769,11 @@ function setTheme(theme: Theme): void {
               </button>
             </span>
           </div>
+          <!-- For the project column's incoming commits (core/watch.rs: fetch_remotes). -->
+          <label class="check">
+            <input type="checkbox" :checked="form.gitFetch !== false" @change="form.gitFetch = ($event.target as HTMLInputElement).checked" />
+            <span>{{ t("settings.gitFetch") }}</span>
+          </label>
 
           <div class="section section-label">{{ t("open.title") }}</div>
           <label v-for="place in OPEN_FROM" :key="place.from" class="field">
