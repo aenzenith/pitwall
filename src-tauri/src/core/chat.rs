@@ -1028,6 +1028,7 @@ impl Core {
                 unasked: made.unasked,
                 account: made.account.as_ref().map(|(id, _)| id.clone()),
                 apart: false,
+                pinned: false,
             };
             inner.terminal_list.push(view.clone());
             view

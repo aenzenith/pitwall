@@ -21,6 +21,27 @@
         "ja": "チャットで Claude の計画を承認すると、自動モードで進み、手順ごとに確認を求めなくなります。ボタン横の矢印からほかのモードも選べます。",
         "zh-Hans": "在对话里批准 Claude 的计划后，它会以自动模式继续，不再每一步都来询问。想换别的模式，仍可以点按钮旁的箭头。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Pin your tabs, hop back with ⌃⇥",
+        "tr": "Sabit sekmeler, ⌃⇥ ile hızlı geçiş",
+        "de": "Tabs anheften, mit ⌃⇥ zurückspringen",
+        "es": "Fija pestañas y vuelve con ⌃⇥",
+        "ru": "Закреплённые вкладки и ⌃⇥",
+        "ja": "タブの固定と ⌃⇥ での切り替え",
+        "zh-Hans": "固定标签页，⌃⇥ 快速切回"
+      },
+      "body": {
+        "en": "Right-click a terminal tab to pin it up front, where ⌘W won't close it. Hold ⌃⇥ (Ctrl+Tab on Windows and Linux) to hop between the tabs you looked at last, in any project.",
+        "tr": "Bir terminal sekmesine sağ tıklayıp sabitlersen satırın başına geçer, ⌘W de onu kapatmaz. ⌃⇥ tuşlarını basılı tutarsan (Windows ve Linux'ta Ctrl+Tab) hangi projede olursa olsun son baktığın sekmelere dönersin.",
+        "de": "Mit einem Rechtsklick heftest du einen Terminal-Tab vorne an, dann schließt ⌘W ihn nicht mehr. Halte ⌃⇥ (unter Windows und Linux Strg+Tab), um zwischen deinen zuletzt angesehenen Tabs zu springen, egal in welchem Projekt.",
+        "es": "Haz clic derecho en una pestaña de terminal para fijarla al principio, donde ⌘W ya no la cierra. Mantén ⌃⇥ (Ctrl+Tab en Windows y Linux) para saltar entre las pestañas que viste hace poco, sea cual sea el proyecto.",
+        "ru": "Закрепите вкладку терминала через правый щелчок: она встанет в начало ряда, и ⌘W её не закроет. Удерживайте ⌃⇥ (Ctrl+Tab в Windows и Linux), чтобы переходить между недавними вкладками любых проектов.",
+        "ja": "ターミナルのタブを右クリックで固定すると先頭に並び、⌘W でも閉じなくなります。⌃⇥（Windows と Linux では Ctrl+Tab）を押したままにすると、どのプロジェクトでも最近見たタブへすぐ移れます。",
+        "zh-Hans": "右键点按终端标签页即可把它固定在最前面，⌘W 也不会关掉它。按住 ⌃⇥（Windows 和 Linux 上是 Ctrl+Tab），就能在最近看过的标签页之间来回切换，不论属于哪个项目。"
+      }
     }
   ]
 }

@@ -81,6 +81,10 @@ pub struct TerminalView {
     /// it.
     #[serde(skip)]
     pub apart: bool,
+    /// Pinned by the user (`pin_terminal`): the panel keeps it at the start of its tab row, as its
+    /// mark alone, and closes it from its menu only. The records of a quit and of an update's
+    /// restart keep it (`resume.rs`, `restore.rs`). A laps' tab is never pinned.
+    pub pinned: bool,
 }
 
 /// A terminal's recent output and the number of its last chunk, so a view can draw the history
@@ -434,7 +438,7 @@ impl Core {
                 None => format!("{base} {}", same + 1),
             };
             let account = account.map(|(id, _)| id);
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), chat: None, shell, elevated, renamed, unasked, account, apart };
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), chat: None, shell, elevated, renamed, unasked, account, apart, pinned: false };
             inner.terminal_list.push(view.clone());
             view
         };
@@ -661,6 +665,25 @@ impl Core {
         };
 
         if renamed {
+            self.notify();
+        }
+    }
+
+    /// The user pinned a tab, or took its pin off. A laps' tab (`apart`) shows in no panel: it is
+    /// never pinned.
+    pub fn pin_terminal(&self, id: u64, pinned: bool) {
+        let changed = {
+            let mut inner = self.lock();
+            match inner.terminal_list.iter_mut().find(|t| t.id == id && !t.apart && t.pinned != pinned) {
+                Some(view) => {
+                    view.pinned = pinned;
+                    true
+                }
+                None => false,
+            }
+        };
+
+        if changed {
             self.notify();
         }
     }

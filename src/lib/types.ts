@@ -297,6 +297,8 @@ export type TerminalView = {
   /** The id of the Claude account the tab runs with (its `claude` uses it, a shell tab's too);
    * null for the main one. Another account's tab shows its name beside the tab's. */
   account: string | null;
+  /** Pinned by the user: first in the row, its mark alone, closed from its menu only. */
+  pinned: boolean;
 };
 
 /** A shell a new terminal can start on Windows, by the core's word for it (core/shells.rs). */

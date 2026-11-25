@@ -16,10 +16,12 @@ import {
   outputFrom,
   panelPath,
   panelStand,
+  recentTabs,
   revealTab,
   showOutput,
   terminalHistoryShown,
   terminalOrder,
+  type Looked,
   type PanelAsk,
   type PanelStand,
   type PanelTab,
@@ -31,8 +33,8 @@ import type { TerminalLayout } from "./types";
 /**
  * Where the panel stands, and what goes with it from one window to the other: the main window's
  * bottom or a card over its page, or the terminals' own window (TerminalsApp). The terminals stay
- * the core's; what the panel shows of them (the project, the tab picked, the tabs' order, the
- * panes, the history column) is the page's, so it is handed over as the panel moves, through the
+ * the core's; what the panel shows of them (the project, the tab picked, the tabs' order, the ones
+ * last looked at, the panes, the history column) is the page's, so it is handed over as the panel moves, through the
  * core's memory only (`set_terminal_place`, `keep_panel_state`, `panel-state`).
  */
 
@@ -42,6 +44,7 @@ type PanelState = {
   chosen: Record<string, PanelTab>;
   from: Record<string, number>;
   order: Record<string, number[]>;
+  recent: Looked[];
   historyWidth: number;
   historyShown: boolean;
   errorsOnly: Record<string, boolean>;
@@ -59,6 +62,7 @@ export function panelState(): string {
     chosen: chosenTab.value,
     from: { ...outputFrom },
     order: terminalOrder.value,
+    recent: recentTabs.value,
     historyWidth: historyWidth.value,
     historyShown: terminalHistoryShown.value,
     errorsOnly: outputErrorsOnly.value,
@@ -85,6 +89,7 @@ export function takePanelState(text: string | null | undefined): void {
     Object.assign(outputFrom, state.from);
   }
   if (state.order) terminalOrder.value = state.order;
+  if (Array.isArray(state.recent)) recentTabs.value = state.recent.filter((each) => typeof each?.id === "number" && typeof each.at === "number");
   if (typeof state.historyWidth === "number") historyWidth.value = state.historyWidth;
   if (typeof state.historyShown === "boolean") terminalHistoryShown.value = state.historyShown;
   if (state.errorsOnly) outputErrorsOnly.value = state.errorsOnly;
@@ -213,7 +218,7 @@ function doAsk(ask: PanelAsk): void {
 export function keepPanelState(): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const stop = watch(
-    [panelPath, chosenTab, terminalOrder, historyWidth, terminalHistoryShown, outputErrorsOnly, paneLayouts, panesHeight, depJobs],
+    [panelPath, chosenTab, terminalOrder, recentTabs, historyWidth, terminalHistoryShown, outputErrorsOnly, paneLayouts, panesHeight, depJobs],
     () => {
       clearTimeout(timer);
       timer = setTimeout(() => void api.keepPanelState(panelState()).catch(() => undefined), 250);

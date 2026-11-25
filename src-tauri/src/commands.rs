@@ -297,6 +297,12 @@ pub fn rename_terminal(state: State<'_, AppState>, id: u64, name: String) {
     state.core.rename_terminal(id, &name);
 }
 
+/// A tab pinned from its menu, or its pin taken off.
+#[tauri::command]
+pub fn pin_terminal(state: State<'_, AppState>, id: u64, pinned: bool) {
+    state.core.pin_terminal(id, pinned);
+}
+
 /// The terminal panel's height for its panes, kept for the next start.
 #[tauri::command]
 pub fn set_panes_height(state: State<'_, AppState>, height: u32) {

@@ -3,8 +3,8 @@
 //! session, `claude --resume`, a Codex tab with its own, `codex resume`, unless that session isn't
 //! known to have ended: it may run somewhere else by then; a shell tab as a new shell). Unlike a restart for an update
 //! (`restore.rs`) nothing a terminal showed is kept: the record names projects, command ids,
-//! session ids, the tab names the user gave and how the panel laid the tabs out (by their
-//! places, `layout.rs`), and is read once and deleted at the next start. An administrator's tab
+//! session ids, the tab names the user gave, which tabs were pinned and how the panel laid the
+//! tabs out (by their places, `layout.rs`), and is read once and deleted at the next start. An administrator's tab
 //! (Windows) is never written down, only counted: Windows asks for its permission each time, and
 //! nothing but the user opens one.
 //!
@@ -42,6 +42,9 @@ struct OpenTab {
     /// `chat` for a chat tab, which comes back as a chat on its session; none for every other.
     #[serde(skip_serializing_if = "Option::is_none")]
     kind: Option<String>,
+    /// The user pinned it; written only when so, as no record before pins has it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pinned: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -159,7 +162,7 @@ impl Core {
         }
         for tab in &standing.tabs {
             let name = tab.renamed.then(|| tab.name.clone());
-            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), agent: tab.agent, shell: tab.shell, account: tab.account.clone(), kind: tab.kind.clone() })));
+            filled.push((entry(&tab.path), false, None, Some(OpenTab { name, session: tab.session.clone(), agent: tab.agent, shell: tab.shell, account: tab.account.clone(), kind: tab.kind.clone(), pinned: tab.pinned })));
         }
         let elevated: Vec<usize> = standing.elevated.iter().map(|(path, _)| entry(path)).collect();
         for (at, server, command, tab) in filled {
@@ -335,6 +338,9 @@ impl Core {
                     },
                     _ => open().ok().map(|view| view.id),
                 };
+                if let Some(id) = id.filter(|_| tab.pinned) {
+                    self.pin_terminal(id, true);
+                }
                 opened.push(id);
             }
             if let Some(saved) = project.layout.clone() {
@@ -511,6 +517,63 @@ mod tests {
         assert_eq!(core.lock().terminal_list.len(), 1);
 
         core.dispose();
+    }
+
+    /// A pinned tab comes back pinned, by the quit's record and by an update's. Both are read once
+    /// and deleted before anything opens, so a record that didn't read would lose every tab: one
+    /// written before pins (no `pinned` in it) puts its tabs back all the same, none pinned.
+    #[test]
+    fn a_pinned_tab_comes_back_pinned_and_an_older_record_still_reads() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("paddock");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.to_string_lossy().into_owned();
+        let core = core_in(tmp.path());
+        core.add_project(&project).unwrap();
+        let update_file = core.cfg.settings_file.with_file_name("restore.json");
+
+        let open = || core.open_terminal_as(&project, &Launch::Shell { shell: None, elevated: false }, None, false, None, false).unwrap().id;
+        open();
+        let pinned = open();
+        core.pin_terminal(pinned, true);
+        core.save_last_session();
+        core.save_restore("9.9.9", false).unwrap();
+        let written = format!("{} {}", fs::read_to_string(core.resume_file()).unwrap(), fs::read_to_string(&update_file).unwrap());
+
+        // What is open now, by its pins, each tab closed after.
+        let pins = || -> Vec<bool> {
+            let views = core.lock().terminal_list.clone();
+            for view in &views {
+                core.close_terminal(view.id);
+            }
+            views.iter().map(|view| view.pinned).collect()
+        };
+        pins();
+        core.resume_start(false);
+        core.resume_restore(false);
+        let resumed = pins();
+        core.restore();
+        let restored = pins();
+
+        // The same records as a version before pins wrote them.
+        let quit = format!(r#"{{"v":1,"at":{},"projects":[{{"path":{},"server":false,"commands":[],"tabs":[{{}},{{"name":"logs"}}]}}]}}"#, now_ms(), serde_json::to_string(&project).unwrap());
+        write_private(&core.resume_file(), &quit).unwrap();
+        core.resume_start(false);
+        core.resume_restore(false);
+        let resumed_old = pins();
+        let tab = serde_json::json!({ "path": project, "name": "zsh", "session": null, "cut": false, "cols": 80, "rows": 24, "scrollback": "" });
+        let update = serde_json::json!({ "v": 1, "at": now_ms(), "version": "9.9.9", "window": false, "servers": [], "commands": [], "tabs": [tab.clone(), tab] });
+        write_private(&update_file, &update.to_string()).unwrap();
+        let restored_old = core.restore().map(|restored| restored.terminals);
+        let pins_old = pins();
+        core.dispose();
+
+        assert_eq!(written.matches(r#""pinned":true"#).count(), 2, "once in each record, for the pinned tab: {written}");
+        assert!(!written.contains(r#""pinned":false"#), "an unpinned tab writes nothing of it: {written}");
+        assert_eq!(resumed, [false, true], "put back by the quit's record");
+        assert_eq!(restored, [false, true], "put back by the update's record");
+        assert_eq!(resumed_old, [false, false], "an older quit's record");
+        assert_eq!((restored_old, pins_old), (Some(2), vec![false, false]), "an older update's record");
     }
 
     /// An administrator's shell (Windows) opens only when the user picks it, Windows asking for

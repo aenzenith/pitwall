@@ -533,6 +533,7 @@ pub fn run() {
             commands::open_sudo_settings,
             commands::admin_not_restored_seen,
             commands::rename_terminal,
+            commands::pin_terminal,
             commands::set_terminal_layout,
             commands::set_panes_height,
             commands::set_terminal_place,

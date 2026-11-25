@@ -278,6 +278,30 @@ export const historyWidth = ref(HISTORY_WIDTH);
  */
 export const terminalOrder = ref<Record<string, number[]>>({});
 
+/** A terminal looked at: its id, and when it was last on screen (ms). */
+export type Looked = { id: number; at: number };
+
+/** How many terminals `recentTabs` keeps. */
+export const RECENT_MAX = 50;
+
+/**
+ * The terminals last looked at, every project's, the latest first: one goes to the front once it
+ * has been on screen for a second (the tab shown, the focused pane, the panel open), and its time
+ * is when it was last there. ⌃⇥ lists them (MruSwitcher). Kept in the page's memory only and handed
+ * to the panel's other window as the tabs' order is; never written down.
+ */
+export const recentTabs = ref<Looked[]>([]);
+
+/** `id` is looked at now: to the front. */
+export function lookedAt(id: number, at = Date.now()): void {
+  recentTabs.value = [{ id, at }, ...recentTabs.value.filter((each) => each.id !== id)].slice(0, RECENT_MAX);
+}
+
+/** `id` was on screen until now: its time, in its place. */
+export function lookedUntil(id: number, at = Date.now()): void {
+  if (recentTabs.value.some((each) => each.id === id)) recentTabs.value = recentTabs.value.map((each) => (each.id === id ? { id, at } : each));
+}
+
 /**
  * Handle behaviour for the panel: drag, arrow keys or a double click change its `height`, up to what `max()`
  * allows (the room under the page's bar) and down to what `least()` does (its panes at their least).

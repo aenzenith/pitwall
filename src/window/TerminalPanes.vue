@@ -83,6 +83,8 @@ const emit = defineEmits<{
   open: [place: Place, claude: boolean, start: AgentStartChoice | null, shell: ShellChoice | null];
   close: [id: number];
   rename: [id: number];
+  /** Its terminal pinned, or its pin taken off (TerminalPanel's `pin`). */
+  pin: [id: number, pinned: boolean];
   /** A pane picked: `keyboard`, the keyboard goes into its terminal. */
   focus: [key: string, keyboard: boolean];
   /** A pane taken out of the panes (its terminal stays open, waiting). */
@@ -293,9 +295,10 @@ function toggleZoom(key: string): void {
   emit("focus", key, true);
 }
 
-/** A pane's head, right-clicked: split, zoom, take it out of the panes, close its terminal. */
+/** A pane's head, right-clicked: split, zoom, take it out of the panes, pin or close its terminal. */
 function paneMenu(event: MouseEvent, key: string, id: number): void {
   const zoomed = zoom.value === key;
+  const pinned = !!views.value.get(id)?.pinned;
   const entries: MenuEntry[] = [
     { text: t("panes.splitRight"), accelerator: PANE_ACCELERATORS.right, enabled: splits(key, "row"), action: () => split(key, "row") },
     { text: t("panes.splitDown"), accelerator: PANE_ACCELERATORS.down, enabled: splits(key, "col"), action: () => split(key, "col") },
@@ -303,6 +306,7 @@ function paneMenu(event: MouseEvent, key: string, id: number): void {
     { text: t(zoomed ? "panes.unzoom" : "panes.zoom"), accelerator: PANE_ACCELERATORS.zoom, action: () => toggleZoom(key) },
     { text: t("panes.detach"), action: () => emit("remove", key) },
     "separator",
+    { text: t(pinned ? "terminal.unpin" : "terminal.pin"), action: () => emit("pin", id, !pinned) },
     { text: t("common.close"), accelerator: PANE_ACCELERATORS.close, action: () => emit("close", id) },
   ];
   void menu.popup(event, entries);
@@ -525,7 +529,7 @@ defineExpose({ placed, shown, seen, rectOf, dropAt, focusEmpty });
           @pointerdown="startMove($event, pane.leaf.key, nameOf(pane.leaf.terminal))"
           @dblclick="emit('rename', pane.leaf.terminal)"
           @mousedown.middle.prevent
-          @mouseup.middle="emit('close', pane.leaf.terminal)"
+          @mouseup.middle="!views.get(pane.leaf.terminal)?.pinned && emit('close', pane.leaf.terminal)"
           @contextmenu.prevent="paneMenu($event, pane.leaf.key, pane.leaf.terminal)"
         >
           <AgentMark v-if="views.get(pane.leaf.terminal) && views.get(pane.leaf.terminal)?.kind !== 'shell'" :agent="views.get(pane.leaf.terminal)!.kind === 'codex' ? 'codex' : 'claude'" :size="11" />
@@ -572,7 +576,9 @@ defineExpose({ placed, shown, seen, rectOf, dropAt, focusEmpty });
               <Icon :name="zoom === pane.leaf.key ? 'minimize' : 'maximize'" :size="12" />
             </button>
           </span>
-          <button type="button" class="x" tabindex="-1" :aria-label="t('common.close')" :title="t('common.close')" @click.stop="emit('close', pane.leaf.terminal)" @dblclick.stop>×</button>
+          <!-- A pinned terminal's head has its pin where the close button would be: its menu closes it. -->
+          <span v-if="views.get(pane.leaf.terminal)?.pinned" class="pinned" role="img" :aria-label="t('terminal.pinnedTip')" :title="t('terminal.pinnedTip')"><Icon name="pin" :size="11" /></span>
+          <button v-else type="button" class="x" tabindex="-1" :aria-label="t('common.close')" :title="t('common.close')" @click.stop="emit('close', pane.leaf.terminal)" @dblclick.stop>×</button>
         </div>
         <!-- A chat draws itself where a terminal's xterm would go (no PTY, nothing to size). A tab
              the core's list doesn't show yet (just opened) waits for it: until then nobody knows
@@ -787,6 +793,14 @@ body.grabbing .head {
 }
 
 .pane.on .x {
+  color: var(--text-faint);
+}
+
+.pinned {
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
   color: var(--text-faint);
 }
 

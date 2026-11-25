@@ -33,6 +33,8 @@ import {
   HISTORY_WIDTH,
   historyWidth,
   keyboardAsks,
+  lookedAt,
+  lookedUntil,
   openRequest,
   outputErrorsOnly,
   panelAsks,
@@ -45,6 +47,7 @@ import {
   panelPath,
   panelStand,
   panelTyping,
+  revealTab,
   TAB_CHROME,
   TAB_ROOM,
   terminalCollapsed,
@@ -71,6 +74,7 @@ import {
   minSize,
   movePane,
   paneAction,
+  PANE_ACCELERATORS,
   paneLayouts,
   PANES_CHROME,
   PANES_HEIGHT,
@@ -98,24 +102,25 @@ import {
   type SplitDir,
 } from "../lib/panes";
 import { isWindows, primary } from "../lib/platform";
-import { sessionWaits, statusLine } from "../lib/sessions";
+import { sessionWaits } from "../lib/sessions";
 import { shellIcon } from "../lib/shells";
 import { settingsAsked, updateProjectSettings } from "../lib/projectSettings";
 import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames } from "../lib/tabs";
+import { tabStates } from "../lib/tabStates";
 import { useTabReorder } from "../lib/tabReorder";
 import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
-import { peekChat } from "../lib/chat/store";
 import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, showTabs, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { EmptyStart } from "../lib/terminalEmpty";
-import type { Agent, AgentStartChoice, CustomCommand, Project, Shell, ShellChoice } from "../lib/types";
+import type { Agent, AgentStartChoice, CustomCommand, Project, Shell, ShellChoice, TerminalView } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
 import ChatView from "./chat/ChatView.vue";
 import CommandDialog from "./CommandDialog.vue";
 import OutputLog from "./detail/OutputLog.vue";
 import OutputSearch from "./detail/OutputSearch.vue";
 import LayoutMenu from "./LayoutMenu.vue";
+import MruSwitcher from "./MruSwitcher.vue";
 import OutputsMenu, { type OutputItem } from "./OutputsMenu.vue";
 import ProjectMenu from "./ProjectMenu.vue";
 import RenameDialog from "./RenameDialog.vue";
@@ -308,14 +313,15 @@ const opening = panelOpening;
 /** The tab being renamed: double-click opens the rename dialog for it. */
 const renaming = ref<{ id: number; name: string } | null>(null);
 
-/** The project's terminals, in the order their tabs were dragged into (lib/panel), new ones last. */
+/** The project's terminals, in the order their tabs were dragged into (lib/panel), new ones last;
+ * the pinned ones before the others, each in that order. */
 const terminals = computed(() => {
   const list = props.project.terminals;
   const order = terminalOrder.value[props.project.path];
-  if (!order) return list;
-  const rank = new Map(order.map((id, i) => [id, i]));
+  const rank = new Map((order ?? []).map((id, i) => [id, i]));
   const unranked = Number.MAX_SAFE_INTEGER;
-  return [...list].sort((a, b) => (rank.get(a.id) ?? unranked) - (rank.get(b.id) ?? unranked));
+  const sorted = order ? [...list].sort((a, b) => (rank.get(a.id) ?? unranked) - (rank.get(b.id) ?? unranked)) : list;
+  return sorted.some((term) => term.pinned) ? [...sorted.filter((term) => term.pinned), ...sorted.filter((term) => !term.pinned)] : sorted;
 });
 
 /** The project's panes (lib/panes), or none: one terminal at a time. */
@@ -390,24 +396,7 @@ watch(
 
 /** Claude in a tab's terminal, by the terminal's id: at work, or waiting on you (a turn finished
  * and not looked at yet, a question, a permission prompt). Nothing for a tab with neither. */
-const live = computed(() => {
-  const states = new Map<number, { phase: "waiting" | "working"; text: string }>();
-  for (const row of sessions.value?.sessions ?? []) {
-    if (row.origin.kind !== "pitwall" || (row.phase !== "waiting" && row.phase !== "working")) continue;
-    // Two in one terminal (one left running in the background): the one that waits on you tells.
-    if (row.phase === "working" && states.get(row.origin.terminal)?.phase === "waiting") continue;
-    states.set(row.origin.terminal, { phase: row.phase, text: statusLine(row, now.value).text });
-  }
-  // A chat tells its own state (its frames), where no session row of the hook's tells it.
-  for (const term of props.project.terminals) {
-    if (term.kind !== "chat" || states.has(term.id)) continue;
-    const chat = peekChat(term.id);
-    const state = chat?.state ?? term.chat?.state;
-    if (state === "running") states.set(term.id, { phase: "working", text: t("chat.tab.working") });
-    else if (state === "requires_action" || (chat?.pending.length ?? 0) > 0) states.set(term.id, { phase: "waiting", text: t("chat.tab.waiting") });
-  }
-  return states;
-});
+const live = computed(() => tabStates(props.project.terminals));
 /** The tab chosen in this project (lib/panel), if any. */
 const chosen = computed(() => chosenTab.value[props.project.path]);
 /** The terminal shown: the one chosen, else (one chosen that closed, or nothing chosen) the last;
@@ -2348,6 +2337,8 @@ function closeShown(): void {
   if (pane && pane.terminal === null) return takeOut(pane.key);
   const id = active.value?.id;
   if (id === undefined) return windowed.value ? emit("empty") : foldPanel();
+  // A pinned tab stays: the panel folds instead, and in a window of its own nothing closes.
+  if (active.value?.pinned) return windowed.value ? undefined : foldPanel();
   closing = id;
   close(id);
 }
@@ -2361,6 +2352,78 @@ function endRename(): void {
   const id = renaming.value?.id;
   renaming.value = null;
   if (id !== undefined) focusView(id);
+}
+
+/* ---------- pinned tabs, and the tab's menu ---------- */
+
+/** A tab pinned, or its pin taken off: either way it takes the place between the pinned tabs and
+ * the others, last of the pinned or first of the others. */
+function pin(id: number, pinned: boolean): void {
+  const ids = terminals.value.map((term) => term.id).filter((each) => each !== id);
+  ids.splice(terminals.value.filter((term) => term.pinned && term.id !== id).length, 0, id);
+  terminalOrder.value = { ...terminalOrder.value, [props.project.path]: ids };
+  void api.pinTerminal(id, pinned);
+}
+
+/** A tab's right click: rename it, pin it, close it or the others. What closes many leaves the
+ * pinned tabs; an agent at work in one closes as ⌘W closes it, without a question. Left and right
+ * are the row's. */
+function tabMenu(event: MouseEvent, term: TerminalView): void {
+  const row = rowTabs.value;
+  const at = row.findIndex((each) => each.id === term.id);
+  const loose = (list: TerminalView[]): TerminalView[] => list.filter((each) => !each.pinned && each.id !== term.id);
+  const others = loose(terminals.value);
+  const right = loose(row.slice(at + 1));
+  const left = at > 0 ? loose(row.slice(0, at)) : [];
+  const all = terminals.value.filter((each) => !each.pinned);
+  const closeAll = (list: TerminalView[]) => () => list.forEach((each) => close(each.id));
+  void popup(event, [
+    { text: t("terminal.renameMenu"), accelerator: "F2", action: () => (renaming.value = { id: term.id, name: term.name }) },
+    { text: t(term.pinned ? "terminal.unpin" : "terminal.pin"), action: () => pin(term.id, !term.pinned) },
+    "separator",
+    { text: t("common.close"), accelerator: PANE_ACCELERATORS.close, action: () => close(term.id) },
+    { text: t("terminal.closeOthers"), enabled: others.length > 0, action: closeAll(others) },
+    { text: t("terminal.closeRight"), enabled: right.length > 0, action: closeAll(right) },
+    { text: t("terminal.closeLeft"), enabled: left.length > 0, action: closeAll(left) },
+    { text: t("terminal.closeAll"), enabled: all.length > 0, action: closeAll(all) },
+  ]);
+}
+
+/* ---------- the tabs last looked at (⌃⇥, MruSwitcher) ---------- */
+
+/** A tab counts as looked at once it has been on screen this long. */
+const LOOK_MS = 1_000;
+/** The terminal on screen, the panel open: the tab shown, with panes the focused pane's. */
+const looked = computed(() => (!visible.value || collapsed.value || showsOutput.value ? null : (active.value?.id ?? null)));
+let lookTimer: ReturnType<typeof setTimeout> | undefined;
+/** The one on screen a second and more: looked at until it goes. */
+let looking: number | null = null;
+
+function lookAway(): void {
+  clearTimeout(lookTimer);
+  if (looking !== null) lookedUntil(looking);
+  looking = null;
+}
+
+watch(
+  looked,
+  (id) => {
+    lookAway();
+    if (id === null) return;
+    lookTimer = setTimeout(() => {
+      looking = id;
+      lookedAt(id);
+    }, LOOK_MS);
+  },
+  { immediate: true },
+);
+
+/** Picked from ⌃⇥'s list: the tab left was looked at last, the one picked comes up with its
+ * project, open, the keyboard in it (as a session brought up does). */
+function pickRecent(path: string, id: number): void {
+  if (active.value) lookedAt(active.value.id);
+  lookedAt(id);
+  revealTab(path, id);
 }
 
 const tablist = ref<HTMLElement | null>(null);
@@ -2472,6 +2535,8 @@ function onTabKey(event: KeyboardEvent, id: number): void {
     case "Delete":
     case "Backspace":
       event.preventDefault();
+      // A pinned tab closes from its menu alone.
+      if (list[at]?.pinned) return;
       refocus = id;
       stayOnTabs = true;
       close(id);
@@ -2826,6 +2891,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(copiedTimer);
   panelMeasure.size = () => null;
   paneKeys.claim = () => false;
+  lookAway();
   panelTyping.value = false;
   panelOver.value = 0;
   document.removeEventListener("focusin", onFocusAnywhere);
@@ -2903,19 +2969,23 @@ defineExpose({ openTerminal, closeShown });
            waiting to be clicked or dragged into one. -->
       <div ref="tablist" :class="['tablist', { some: rowTabs.length }, tabDrag.listClass()]" role="tablist" :aria-label="t('terminal.tabs')">
         <TransitionGroup :key="project.path" :css="false" @enter="tabEnter" @leave="tabLeave">
+        <!-- A pinned tab: first in the row, its mark alone (its name in the tooltip), no close
+             button; a middle click and Delete leave it, its menu closes it. -->
         <div
           v-for="term in rowTabs"
           :key="term.id"
-          :class="['tab', { on: active?.id === term.id }, tabDrag.tabClass(term.id)]"
+          :class="['tab', { on: active?.id === term.id, pinned: term.pinned }, tabDrag.tabClass(term.id)]"
           :style="tabDrag.tabStyle(term.id)"
           :data-tab-id="term.id"
+          :data-tab-group="term.pinned ? 'pinned' : 'tabs'"
           role="none"
           :title="`${term.name}\n${terminalTip(term)}`"
           @pointerdown="tabDrag.down($event, term.id)"
           @click="clickTab(term.id)"
           @dblclick="renaming = { id: term.id, name: term.name }"
           @mousedown.prevent
-          @mouseup.middle="close(term.id)"
+          @mouseup.middle="!term.pinned && close(term.id)"
+          @contextmenu.prevent.stop="tabMenu($event, term)"
         >
           <div
             role="tab"
@@ -2923,18 +2993,20 @@ defineExpose({ openTerminal, closeShown });
             :data-tab="term.id"
             :tabindex="(panesOn ? rowTabs[0]?.id === term.id : active?.id === term.id) ? 0 : -1"
             :aria-selected="active?.id === term.id"
+            :aria-label="term.pinned ? `${names.get(term.id) ?? term.name}, ${t('terminal.pinnedTip')}` : undefined"
             aria-keyshortcuts="Delete F2"
             aria-describedby="terminal-tab-keys"
             @keydown="onTabKey($event, term.id)"
           >
             <AgentMark v-if="term.kind !== 'shell'" :agent="term.kind === 'chat' ? 'claude' : term.kind" :size="11" />
             <Icon v-else :name="shellIcon(term.shell)" :size="11" />
-            <span class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
-            <span v-if="tabAccountLabel(term)" class="tab-account">{{ tabAccountLabel(term) }}</span>
+            <span v-if="!term.pinned" class="tab-name">{{ names.get(term.id) ?? term.name }}</span>
+            <span v-if="!term.pinned && tabAccountLabel(term)" class="tab-account">{{ tabAccountLabel(term) }}</span>
             <span v-if="term.elevated" class="admin" role="img" :aria-label="t('terminal.adminBadge')"><Icon name="shield" :size="10" /></span>
             <ClaudeDot v-if="live.has(term.id)" :live="live.get(term.id)" />
           </div>
           <button
+            v-if="!term.pinned"
             type="button"
             class="x"
             tabindex="-1"
@@ -2973,6 +3045,8 @@ defineExpose({ openTerminal, closeShown });
         @agent="(start, account) => openTerminal(true, start, null, null, account)"
         @chat="openChat()"
       />
+      <!-- ⌃⇥: the tabs last looked at, every project's. -->
+      <MruSwitcher v-if="hosting" :path="project.path" :current="active?.id ?? null" :anchor="panel" @pick="pickRecent" />
       <span class="grow"></span>
       <!-- The outputs, always at the right end, as one button with Pitwall's menu of them: the
            dev server's, then the commands' that ran. -->
@@ -3087,6 +3161,7 @@ defineExpose({ openTerminal, closeShown });
           @settings="emit('openSettings')"
           @close="close"
           @rename="renameTerminal"
+          @pin="pin"
           @focus="focusPane"
           @remove="takeOut"
           @room="(w, h) => (paneRoom = { w, h })"
@@ -3486,6 +3561,13 @@ defineExpose({ openTerminal, closeShown });
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+/* A pinned tab never narrows: its mark (and its agent's dot) is all it shows. */
+.tab.pinned {
+  min-width: 0;
+  flex-shrink: 0;
+  padding: 0 7px;
 }
 
 /* A tab holds its whole name; what passes this is cut, and the tooltip shows it all. */

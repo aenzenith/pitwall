@@ -20,8 +20,9 @@ export type Elsewhere = { over: (id: number, x: number, y: number) => boolean; d
  * Drag-to-reorder for a row of tabs, as lib/reorder does it for the list's rows but sideways: the
  * dragged tab follows the pointer along the row, the others slide aside to show where it will
  * land, and on release it slides into that place before `onDrop` is given the new order. Tabs
- * carry `data-tab-id`; controls marked `data-no-drag` keep their own clicks and never start a
- * drag. Pointer events rather than HTML drag and drop, which Tauri's file-drop handling can
+ * carry `data-tab-id`, and `data-tab-group` where a tab moves among its group's alone (`onDrop` is
+ * then given that group's order); controls marked `data-no-drag` keep their own clicks and never
+ * start a drag. Pointer events rather than HTML drag and drop, which Tauri's file-drop handling can
  * swallow. `onEnd` is told once a drag is over, wherever the tab was let go, taken or not.
  *
  * Bind `listClass()` on the row, `tabClass(id)` and `tabStyle(id)` on each tab; a tab's click
@@ -58,7 +59,10 @@ export function useTabReorder(list: Ref<HTMLElement | null>, onDrop: (ids: numbe
     const root = list.value;
     if (!root) return null;
 
-    const tabs = Array.from(root.querySelectorAll<HTMLElement>("[data-tab-id]"));
+    // A tab moves among those of its own group alone (`data-tab-group`: the pinned ones, the others).
+    const every = Array.from(root.querySelectorAll<HTMLElement>("[data-tab-id]"));
+    const group = every.find((tab) => Number(tab.dataset.tabId) === id)?.dataset.tabGroup;
+    const tabs = every.filter((tab) => tab.dataset.tabGroup === group);
     const origin = root.getBoundingClientRect().left;
     const ids = tabs.map((tab) => Number(tab.dataset.tabId));
     const lefts = tabs.map((tab) => tab.getBoundingClientRect().left - origin);

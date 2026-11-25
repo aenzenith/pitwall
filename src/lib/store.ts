@@ -354,6 +354,7 @@ export const api = {
   /** The panel said that the last quit's or update's administrator's tabs weren't put back. */
   adminNotRestoredSeen: () => invoke("admin_not_restored_seen"),
   renameTerminal: (id: number, name: string) => invoke("rename_terminal", { id, name }),
+  pinTerminal: (id: number, pinned: boolean) => invoke("pin_terminal", { id, pinned }),
   writeTerminal: (id: number, data: string) => invoke("write_terminal", { id, data }),
   resizeTerminal: (id: number, cols: number, rows: number) => invoke("resize_terminal", { id, cols, rows }),
   /** The panel's tabs on screen in this page (lib/terminals: `showTabs`): the core sends the others' output in rarer batches. */

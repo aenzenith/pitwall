@@ -95,6 +95,10 @@ pub(super) struct Tab {
     /// every other tab, as every record before chats has it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) kind: Option<String>,
+    /// The user pinned it (`TerminalView::pinned`); written only when so, as no record before
+    /// pins has it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(super) pinned: bool,
     /// That session was at work, or (without one) a command was running.
     cut: bool,
     cols: u16,
@@ -252,6 +256,7 @@ impl Core {
                         shell: None,
                         account: view.account.clone(),
                         kind: Some(super::chat::CHAT.into()),
+                        pinned: view.pinned,
                         cut,
                         cols: 0,
                         rows: 0,
@@ -273,6 +278,7 @@ impl Core {
                     shell: view.shell,
                     account: tab_account(view, agent),
                     kind: None,
+                    pinned: view.pinned,
                     cut: session.map_or(running, |(_, busy, _)| *busy),
                     cols: state.cols,
                     rows: state.rows,
@@ -428,6 +434,9 @@ impl Core {
                 },
             };
             opened[at] = Some((id, tab.path.clone()));
+            if tab.pinned {
+                self.pin_terminal(id, true);
+            }
 
             restored.terminals += 1;
             match session {
@@ -499,7 +508,7 @@ mod tests {
 
     #[cfg(unix)]
     fn tab(path: &str, session: Option<&str>) -> Tab {
-        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), agent: Agent::Claude, shell: None, account: None, kind: None, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
+        Tab { id: 0, path: path.into(), name: "zsh".into(), renamed: false, session: session.map(str::to_string), agent: Agent::Claude, shell: None, account: None, kind: None, pinned: false, cut: false, cols: 80, rows: 24, scrollback: "old output\r\n".into() }
     }
 
     fn write(core: &Core, at: u64, servers: Vec<String>, tabs: Vec<Tab>) {
