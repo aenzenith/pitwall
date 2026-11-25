@@ -214,7 +214,9 @@ export type ChatUi = {
   /** The plan waiting on the user (its request's id) while its screen is folded onto the bar over
    * the composer (PL5); null while it shows. */
   planFolded: string | null;
-  /** The mode a plan starts in, as last picked in this chat (PlanStart). */
+  /** The mode a plan starts in, as last picked in this chat (PlanStart); auto until picked (the
+   * user's word, 25 Nov: no permission asked after every plan), accepting edits where the model
+   * has no auto mode (`planModeOf`). */
   planMode: PlanMode;
   /** The comments and words written on the waiting plan, while its screen isn't shown. */
   planNotes: PlanNotes | null;
@@ -309,7 +311,7 @@ function freshUi(): ChatUi {
     recent: false,
     btw: null,
     planFolded: null,
-    planMode: "acceptEdits",
+    planMode: "auto",
     planNotes: null,
   };
 }

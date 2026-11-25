@@ -1,67 +1,25 @@
 {
-  "since": "1.25.4",
+  "since": "1.26.0",
   "notes": [
     {
       "kind": "new",
       "title": {
-        "en": "Incoming and outgoing commits in the project column",
-        "tr": "Proje sütununda gelen giden commit'ler",
-        "de": "Ein- und ausgehende Commits in der Projektspalte",
-        "es": "Commits entrantes y salientes en la columna de proyectos",
-        "ru": "Входящие и исходящие коммиты в колонке проектов",
-        "ja": "プロジェクト列で送受信コミットが見えるようになりました",
-        "zh-Hans": "项目栏里能看到传入和传出的提交了"
+        "en": "Approved plans go on in auto mode",
+        "tr": "Onaylanan plan otomatik modda sürüyor",
+        "de": "Freigegebene Pläne laufen im automatischen Modus weiter",
+        "es": "Los planes aprobados siguen en modo automático",
+        "ru": "Одобренный план продолжается в автоматическом режиме",
+        "ja": "承認した計画は自動モードで進むようになりました",
+        "zh-Hans": "批准的计划会以自动模式继续"
       },
       "body": {
-        "en": "Under each project beside the terminal you see its branch, its changes and the commits to push or pull. Pitwall fetches now and then, so new commits show up by themselves.",
-        "tr": "Terminalin yanındaki her projenin altında dalını, değişikliklerini ve gelen giden commit'leri görürsün. Pitwall arada kendisi fetch ettiği için yeni commit'ler kendiliğinden belirir.",
-        "de": "Unter jedem Projekt neben dem Terminal siehst du seinen Branch, seine Änderungen und was zu pushen oder zu holen ist. Pitwall ruft zwischendurch selbst ab, neue Commits tauchen also von allein auf.",
-        "es": "Bajo cada proyecto junto a la terminal ves su rama, sus cambios y los commits por subir o por traer. Pitwall hace fetch de vez en cuando, así que los nuevos aparecen solos.",
-        "ru": "Под каждым проектом рядом с терминалом видны его ветка, изменения и коммиты, которые ждут push или pull. Pitwall время от времени сам делает fetch, так что новые коммиты появляются сами.",
-        "ja": "ターミナル横の各プロジェクトの下に、ブランチと変更、プッシュ待ちと取り込み待ちのコミットが表示されます。Pitwall がときどき fetch するので、新しいコミットは自然に現れます。",
-        "zh-Hans": "终端旁的每个项目下方会显示分支、更改，以及待推送和待拉取的提交。Pitwall 会不时自己执行 fetch，新提交会自动出现。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Cards open like a page",
-        "tr": "Kartlar sayfa gibi açılıyor",
-        "de": "Karten öffnen sich wie eine Seite",
-        "es": "Las tarjetas se abren como una página",
-        "ru": "Карточки открываются как страница",
-        "ja": "カードがページのように開くようになりました",
-        "zh-Hans": "卡片现在像页面一样打开"
-      },
-      "body": {
-        "en": "While you write a note, its headings, lists and pictures already look the way they will, and typing / adds a block.",
-        "tr": "Notu yazarken başlıklar, listeler ve görseller olacakları gibi görünüyor. / yazarak da blok ekleyebilirsin.",
-        "de": "Schon beim Schreiben sehen Überschriften, Listen und Bilder deiner Notiz so aus, wie sie bleiben, und mit / fügst du einen Block ein.",
-        "es": "Mientras escribes la nota, los títulos, las listas y las imágenes ya se ven como quedarán, y con / añades un bloque.",
-        "ru": "Пока вы пишете заметку, заголовки, списки и картинки уже выглядят так, как останутся, а через / можно добавить блок.",
-        "ja": "メモを書いているうちから、見出しやリスト、画像が仕上がりどおりに表示されます。/ を入力するとブロックを追加できます。",
-        "zh-Hans": "写备注时，标题、列表和图片会直接显示成最终的样子，输入 / 就能添加一个块。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Search in the project list",
-        "tr": "Proje listesinde arama",
-        "de": "Suche in der Projektliste",
-        "es": "Búsqueda en la lista de proyectos",
-        "ru": "Поиск в списке проектов",
-        "ja": "プロジェクト一覧で検索できるようになりました",
-        "zh-Hans": "项目列表可以搜索了"
-      },
-      "body": {
-        "en": "The project list on the Board and Sessions pages has a search box at its top now, so a few letters bring up the project you want.",
-        "tr": "Pano ve Oturumlar'daki proje listesinin üstünde artık bir arama kutusu var. Birkaç harf yazınca aradığın proje karşına çıkıyor.",
-        "de": "Die Projektliste auf Board und Sitzungen hat jetzt oben ein Suchfeld. Ein paar Buchstaben reichen, und das gesuchte Projekt steht da.",
-        "es": "La lista de proyectos de Tablero y Sesiones ahora tiene un buscador arriba. Con unas pocas letras aparece el proyecto que buscas.",
-        "ru": "Теперь у списка проектов на страницах «Доска» и «Сессии» есть поле поиска. Пара букв — и нужный проект уже перед вами.",
-        "ja": "ボードとセッションのプロジェクト一覧の上に検索欄が付きました。数文字打つだけで、探しているプロジェクトが見つかります。",
-        "zh-Hans": "看板和会话页面的项目列表顶部多了一个搜索框，输入几个字母就能找到想要的项目。"
+        "en": "When you approve Claude's plan in a chat, it carries on in auto mode and stops asking at every step. The arrow beside the button still picks another mode.",
+        "tr": "Sohbette Claude'un planını onayladığında Claude otomatik modda devam eder, artık her adımda izin sormaz. İstersen düğmenin yanındaki oktan başka bir mod seçebilirsin.",
+        "de": "Gibst du im Chat Claudes Plan frei, macht Claude im automatischen Modus weiter und fragt nicht mehr bei jedem Schritt. Über den Pfeil neben dem Button wählst du weiter einen anderen Modus.",
+        "es": "Cuando apruebas el plan de Claude en un chat, sigue en modo automático y ya no pregunta en cada paso. Con la flecha junto al botón puedes elegir otro modo.",
+        "ru": "Когда вы одобряете план Claude в чате, он продолжает в автоматическом режиме и больше не спрашивает на каждом шаге. Другой режим по-прежнему выбирается стрелкой рядом с кнопкой.",
+        "ja": "チャットで Claude の計画を承認すると、自動モードで進み、手順ごとに確認を求めなくなります。ボタン横の矢印からほかのモードも選べます。",
+        "zh-Hans": "在对话里批准 Claude 的计划后，它会以自动模式继续，不再每一步都来询问。想换别的模式，仍可以点按钮旁的箭头。"
       }
     }
   ]
