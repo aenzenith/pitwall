@@ -81,6 +81,8 @@ export type ComposerProps = {
   /** Context used, 0..1, or null when unknown. */
   contextShare: number | null;
   disabled: boolean;
+  /** The field's words while it is empty, instead of the chat's own (the empty panel's box). */
+  placeholder?: string;
 };
 /**
  * What `Composer.vue` emits. `send` carries the finished message (the uuid is the core's);
@@ -97,6 +99,9 @@ export type ComposerEmits = {
   cancelQueued: [uuid: string];
   terminal: [command: string];
   settings: [];
+  /** The empty panel's chat box (lib/chat/draft): a line only a chat runs (a dialog of the chat's,
+   * a command Claude Code answers), as it was typed, for the chat the box opens. */
+  later: [line: string];
 };
 /** What `Composer.vue` exposes (`defineExpose`). */
 export type ComposerApi = {
@@ -106,6 +111,8 @@ export type ComposerApi = {
   attach: (path: string, startLine?: number, endLine?: number) => void;
   /** Replace the draft (edit and resend, prompt history). */
   setText: (text: string) => void;
+  /** Run `line` as if it were typed and sent (what the empty panel's box handed over). */
+  run: (line: string) => void;
 };
 
 /** Props of `ChatCard.vue`: one pending CLI request, drawn as its card. */

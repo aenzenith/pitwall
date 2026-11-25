@@ -1040,6 +1040,10 @@ export type CodexChoice = { agent: "codex"; model: CodexModel | null; mode: Code
 /** A start of either agent, as the window says it. */
 export type AgentStartChoice = StartChoice | CodexChoice;
 
+/** How a chat is to start (the empty panel's chat box; `ChatStart` in src-tauri/src/start.rs): the
+ * model (null: Claude Code's own), a mode a chat starts in, the effort (null: Claude Code's own). */
+export type ChatStartChoice = { model: ClaudeModel | null; mode: "default" | "acceptEdits" | "plan" | "auto"; effort: "low" | "medium" | "high" | "xhigh" | "max" | null };
+
 /** A card told to wait: when it is given (ms), whether that moment is the 5-hour session's
  * refill (it then follows the reading), and what was chosen for it. `line`: its refill came while
  * a card before it was given or still with Claude, and it waits its turn (`at` is no moment then). */

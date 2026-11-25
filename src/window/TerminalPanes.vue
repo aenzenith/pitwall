@@ -598,6 +598,7 @@ defineExpose({ placed, shown, seen, rectOf, dropAt, focusEmpty });
           :shells="shells"
           pane
           :launch="(request) => launchIn(request, pane.leaf.key)"
+          @settings="emit('settings')"
         />
       </div>
       <div v-if="dropping?.key === pane.leaf.key" :class="['drop', dropping.side ?? 'swap']">

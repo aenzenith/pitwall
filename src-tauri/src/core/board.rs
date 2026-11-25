@@ -130,7 +130,7 @@ impl ImageKind {
         }
     }
 
-    fn ext(self) -> &'static str {
+    pub(super) fn ext(self) -> &'static str {
         match self {
             Self::Png => "png",
             Self::Jpeg => "jpg",
@@ -179,7 +179,7 @@ fn names(note: &str, n: u32) -> bool {
 
 /// The bytes of a `data:` URL and what image they are. Only how the bytes start counts, never
 /// the type the URL gives.
-fn decode_image(data: &str) -> Result<(ImageKind, Vec<u8>), String> {
+pub(super) fn decode_image(data: &str) -> Result<(ImageKind, Vec<u8>), String> {
     let too_large = || format!("an image is at most {} MB", IMAGE_BYTES_MAX / (1024 * 1024));
     let encoded = data.strip_prefix("data:").and_then(|rest| rest.split_once(";base64,")).map(|(_, encoded)| encoded).ok_or("not an image")?;
     if encoded.len() / 4 * 3 > IMAGE_BYTES_MAX + 3 {

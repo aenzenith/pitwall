@@ -34,6 +34,7 @@ import type {
   Snapshot,
   Agent,
   AgentStartChoice,
+  ChatStartChoice,
   SyncReport,
   TerminalLayout,
   TerminalOpened,
@@ -336,6 +337,8 @@ export const api = {
     shell: ShellChoice | null = null,
     account: string | null = null,
     prompt: string | null = null,
+    /** Pictures pasted into the empty panel's box, as `data:` URLs: the core writes them for the agent. */
+    images: string[] = [],
   ) =>
     invoke<TerminalOpened>("open_terminal", {
       path,
@@ -347,6 +350,7 @@ export const api = {
       elevated: shell?.elevated,
       account: account ?? undefined,
       prompt: prompt ?? undefined,
+      images: images.length ? images : undefined,
     }),
   /** The shells "+" offers on Windows (none elsewhere), asked of the system now. */
   terminalShells: () => invoke<TerminalShells>("terminal_shells"),
@@ -386,7 +390,16 @@ export const api = {
   // ---- chat (docs/SOHBET.md)
   openChat: (
     path: string,
-    opts: { start?: AgentStartChoice | null; account?: string | null; session?: string | null; fork?: { session: string; at?: string } | null; prompt?: ChatOutgoing | null; worktree?: boolean } = {},
+    opts: {
+      start?: AgentStartChoice | ChatStartChoice | null;
+      account?: string | null;
+      session?: string | null;
+      fork?: { session: string; at?: string } | null;
+      prompt?: ChatOutgoing | null;
+      worktree?: boolean;
+      /** `start`'s mode was picked: Normal stays Normal (the empty panel's chat box). */
+      exact?: boolean;
+    } = {},
   ) =>
     invoke<TerminalOpened>("open_chat", {
       path,
@@ -396,6 +409,7 @@ export const api = {
       fork: opts.fork ?? undefined,
       prompt: opts.prompt ?? undefined,
       worktree: opts.worktree ?? undefined,
+      exact: opts.exact || undefined,
     }),
   chatSend: (id: number, message: ChatOutgoing) => invoke<string>("chat_send", { id, message }),
   chatAnswer: (id: number, requestId: string, answer: ChatAnswer) => invoke("chat_answer", { id, requestId, answer }),

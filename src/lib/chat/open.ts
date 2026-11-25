@@ -17,11 +17,13 @@ import { computed, shallowRef } from "vue";
 import { revealTab } from "../panel";
 import { projectSettings } from "../projectSettings";
 import { api, snapshot } from "../store";
-import type { AgentStartChoice, TerminalOpened } from "../types";
+import type { AgentStartChoice, ChatStartChoice, TerminalOpened } from "../types";
 import { CHAT_DEFAULTS, voiceDelayOf, type ChatOutgoing, type ChatSettings } from "./wire";
 
 export type StartChatOptions = {
-  start?: AgentStartChoice | null;
+  start?: AgentStartChoice | ChatStartChoice | null;
+  /** `start`'s mode was picked (the empty panel's chat box): Normal stays Normal. */
+  exact?: boolean;
   account?: string | null;
   session?: string | null;
   fork?: { session: string; at?: string } | null;

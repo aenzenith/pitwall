@@ -9,6 +9,7 @@ import { dayName } from "../../../lib/day";
 import { language, t, type Key } from "../../../lib/i18n";
 import { dayShort, shiftDay } from "../../../lib/period";
 import { api, today } from "../../../lib/store";
+import { draftAsk, draftTake, isDraft } from "../../../lib/chat/draft";
 import { noteControl } from "../../../lib/chat/store";
 import type { ChatControl, ChatInfo, ChatModelInfo, ChatState } from "../../../lib/chat/wire";
 
@@ -74,7 +75,7 @@ export function errorText(reason: unknown): string {
 /**
  * Asks the chat's Claude Code one thing at a time: the last answer (`value`) or its error
  * (`error`), `busy` while it is under way. An answer to an older question than the last is
- * dropped.
+ * dropped. The empty panel's chat box, a chat to be (lib/chat/draft), answers for itself.
  */
 export function useAsk<T>(id: () => number) {
   const value = shallowRef<T | null>(null);
@@ -84,8 +85,13 @@ export function useAsk<T>(id: () => number) {
 
   async function load(control: ChatControl): Promise<T | null> {
     const mine = ++asked;
-    busy.value = true;
     error.value = null;
+    if (isDraft(id())) {
+      busy.value = false;
+      value.value = (draftAsk(id(), control) as T | null) ?? null;
+      return value.value;
+    }
+    busy.value = true;
     try {
       const answer = await api.chatControl<T>(id(), control);
       if (mine !== asked) return null;
@@ -103,8 +109,13 @@ export function useAsk<T>(id: () => number) {
 }
 
 /** One control sent for an action (a pick, a switch): its error, or null once it went through (the
- * composer's chips then show what it set). */
+ * composer's chips then show what it set). The empty panel's chat box keeps a pick itself, for the
+ * chat it opens; one no start takes is left alone (its menus offer none). */
 export async function send(id: number, control: ChatControl): Promise<string | null> {
+  if (isDraft(id)) {
+    draftTake(id, control);
+    return null;
+  }
   try {
     await api.chatControl(id, control);
     noteControl(id, control);

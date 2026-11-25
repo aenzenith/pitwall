@@ -5,6 +5,7 @@ import Icon from "../../../components/Icon.vue";
 import Spinner from "../../../components/Spinner.vue";
 import { t, type Key } from "../../../lib/i18n";
 import { useReturnFocus } from "../../../lib/dialogFocus";
+import { isDraft } from "../../../lib/chat/draft";
 import { noteControl, peekChat } from "../../../lib/chat/store";
 import type { ChatEffort, ChatModelInfo } from "../../../lib/chat/wire";
 import NotAnswered from "./NotAnswered.vue";
@@ -33,6 +34,10 @@ type Row = ChatModelInfo & { disabled?: boolean };
 const menu = ref<HTMLElement | null>(null);
 const listEl = ref<HTMLElement | null>(null);
 useReturnFocus();
+
+/** The empty panel's chat box (lib/chat/draft): a start takes the model and the effort alone, so
+ * thinking and Ultracode, which only a chat's Claude Code switches, aren't offered. */
+const draft = isDraft(props.id);
 
 const listed = useAsk<Listed>(() => props.id);
 const settings = useAsk<Settings>(() => props.id);
@@ -254,7 +259,7 @@ const rowId = (index: number) => `chat-model-${props.id}-${index}`;
         </div>
       </div>
 
-      <div v-if="models.length" class="options">
+      <div v-if="models.length && (!draft || (currentRow && levels.length))" class="options">
         <div v-if="currentRow && levels.length" class="option">
           <span id="chat-effort-label" class="option-name">
             {{ t("chatDialog.model.effort") }} <span class="option-value">({{ effortName }})</span>
@@ -286,13 +291,13 @@ const rowId = (index: number) => `chat-model-${props.id}-${index}`;
           </div>
         </div>
 
-        <label v-if="currentRow?.supportsThinkingOff" class="option">
+        <label v-if="!draft && currentRow?.supportsThinkingOff" class="option">
           <span class="option-name">{{ t("chatDialog.model.thinking") }}</span>
           <Spinner v-if="busy === 'thinking'" :size="11" />
           <input type="checkbox" role="switch" :checked="thinking" :disabled="!!busy" @change="setThinking" />
         </label>
 
-        <label class="option" :title="t('chatDialog.model.ultracodeNote')">
+        <label v-if="!draft" class="option" :title="t('chatDialog.model.ultracodeNote')">
           <span class="option-name">{{ t("chatDialog.model.ultracode") }}</span>
           <Spinner v-if="busy === 'ultracode'" :size="11" />
           <input type="checkbox" role="switch" :checked="ultracode" :disabled="!!busy" @change="setUltracode" />

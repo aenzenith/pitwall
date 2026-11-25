@@ -8,7 +8,9 @@ import HoverTip from "../components/HoverTip.vue";
 import Icon from "../components/Icon.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
 import { agentOn } from "../lib/agents";
+import { handOff } from "../lib/chat/draft";
 import { opensChat, startChat } from "../lib/chat/open";
+import type { ChatOutgoing } from "../lib/chat/wire";
 import { depJobName, depJobs } from "../lib/deps";
 import { showFiles } from "../lib/explorer";
 import { commandFaded } from "../lib/format";
@@ -117,7 +119,7 @@ import { firstPick, SEND_KEY, sendBox, sendCounts, sendKey, sendLocks, type Skip
 import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
 import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, showTabs, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { EmptyStart } from "../lib/terminalEmpty";
-import type { Agent, AgentStartChoice, CustomCommand, Project, Shell, ShellChoice, TerminalView } from "../lib/types";
+import type { Agent, AgentStartChoice, ChatStartChoice, CustomCommand, Project, Shell, ShellChoice, TerminalView } from "../lib/types";
 import AddMenu from "./AddMenu.vue";
 import ChatView from "./chat/ChatView.vue";
 import CommandDialog from "./CommandDialog.vue";
@@ -1177,6 +1179,7 @@ async function openTerminal(
   shell: ShellChoice | null = null,
   account: string | null = null,
   prompt: string | null = null,
+  images: string[] = [],
 ): Promise<boolean> {
   if (opening.value) return false;
   opening.value = true;
@@ -1187,7 +1190,7 @@ async function openTerminal(
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
     const size = viewport.value && !panesOn.value && !where ? measure(viewport.value) : null;
-    const opened = await api.openTerminal(props.project.path, claude, size, start, shell, account, claude ? prompt : null);
+    const opened = await api.openTerminal(props.project.path, claude, size, start, shell, account, claude ? prompt : null, claude ? images : []);
     if (opened.kind !== "tab") {
       notice.value = opened.kind;
       return false;
@@ -1238,9 +1241,16 @@ function pasteWhenQuiet(id: number, text: string): void {
 
 /** A new chat tab (the "+" menu's Yeni sohbet, an empty pane's button, the empty panel's box):
  * opened as every chat is, through `startChat` (lib/chat/open: the trust question first), placed
- * as a new tab is; `start` and `prompt`, the box's, the prompt sent once the chat is ready. True
- * once a tab opened. */
-async function openChat(where: Place | null = null, start: AgentStartChoice | null = null, prompt: string | null = null): Promise<boolean> {
+ * as a new tab is; `start` and `prompt`, the box's, the prompt sent once the chat is ready (the
+ * chat box's message as its composer made it); `later`, a line of the box's the chat runs once
+ * ready (lib/chat/draft); `exact`, the box's mode was picked. True once a tab opened. */
+async function openChat(
+  where: Place | null = null,
+  start: AgentStartChoice | ChatStartChoice | null = null,
+  prompt: string | ChatOutgoing | null = null,
+  later: string | null = null,
+  exact = false,
+): Promise<boolean> {
   if (opening.value) return false;
   opening.value = true;
   try {
@@ -1248,14 +1258,15 @@ async function openChat(where: Place | null = null, start: AgentStartChoice | nu
       toggleCollapsed();
       await new Promise((resolve) => setTimeout(resolve, COLLAPSE_MS + 60));
     }
-    const sent = prompt ? { text: prompt, images: [], documents: [], priority: "next" as const, pasted: false } : null;
-    const opened = await startChat(props.project.path, { start, prompt: sent });
+    const sent = typeof prompt === "string" ? { text: prompt, images: [], documents: [], priority: "next" as const, pasted: false } : prompt;
+    const opened = await startChat(props.project.path, { start, prompt: sent, exact });
     if (!opened) return false;
     if (opened.kind !== "tab") {
       notice.value = opened.kind;
       return false;
     }
     const view = opened.view;
+    if (later) handOff(view.id, later);
     asked = view.id;
     if (!terminals.value.some((term) => term.id === view.id)) fresh.add(view.id);
     if (where || layout.value) placeTerminal(view.id, where ?? { kind: "auto" }, "chat");
@@ -1280,12 +1291,13 @@ function launchEmpty(request: EmptyStart, where: Place | null = null): Promise<b
     window.clearTimeout(goingTimer);
     goingTimer = window.setTimeout(() => (emptyGoing.value = false), 4000);
   }
+  const chat = request.chat;
   const opened =
     request.kind === "chat"
-      ? openChat(where, request.start, prompt)
+      ? openChat(where, chat ? chat.start : request.start, chat?.message ?? prompt, chat?.later ?? null, chat?.exact ?? false)
       : request.kind === "shell"
         ? openTerminal(false, null, where, request.shell, null, prompt)
-        : openTerminal(true, request.start ?? codex, where, null, null, prompt);
+        : openTerminal(true, request.start ?? codex, where, null, null, prompt, request.images ?? []);
   return opened
     .catch(() => false)
     .then((ok) => {
@@ -3252,7 +3264,7 @@ defineExpose({ openTerminal, closeShown });
           <Transition name="empty-go" :css="emptyGoing" @after-leave="emptyLeft">
             <div v-if="!active" class="empty" @pointerdown="overlayOpen = false; columnOverlay = false">
               <!-- What opens and its first job, at hand where there is nothing yet. -->
-              <TerminalEmpty ref="emptyBox" :project="project" :draft-key="project.path" :opening="opening" :shells="shells" :launch="(request) => launchEmpty(request)" />
+              <TerminalEmpty ref="emptyBox" :project="project" :draft-key="project.path" :opening="opening" :shells="shells" :launch="(request) => launchEmpty(request)" @settings="emit('openSettings')" />
             </div>
           </Transition>
         </div>

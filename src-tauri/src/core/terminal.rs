@@ -249,24 +249,29 @@ impl Core {
     /// A Claude Code tab in the project's folder ("New Claude"): with the model and in the mode
     /// of `start`, or, without one, as the project's own settings say.
     pub fn open_claude_terminal(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>) -> Result<TerminalView, String> {
-        self.open_claude_terminal_with(path, start, size, None, None)
+        self.open_claude_terminal_with(path, start, size, None, None, &[])
     }
 
     /// `open_claude_terminal` with the account `account` names ("Start with account ›";
     /// `accounts::MAIN` for the main one); none: the one in use. `prompt`, the text typed into the
-    /// empty panel's box, is Claude's first job (`first_prompt`), as a board card's text is.
-    pub fn open_claude_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>, prompt: Option<String>) -> Result<TerminalView, String> {
+    /// empty panel's box, is Claude's first job (`first_prompt`), as a board card's text is, and
+    /// `images`, those pasted into it (`data:` URLs), are named under it as a card's are
+    /// (`Core::with_images`).
+    pub fn open_claude_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>, prompt: Option<String>, images: &[String]) -> Result<TerminalView, String> {
         let start = start.unwrap_or_else(|| self.lock().settings.project(path).start_with(Agent::Claude));
-        self.open_terminal_with(path, &Launch::Claude { prompt: first_prompt(prompt), start, images: None, session: None }, None, false, size, false, account)
+        let (prompt, images) = self.with_images(first_prompt(prompt), images)?;
+        self.open_terminal_with(path, &Launch::Claude { prompt, start, images, session: None }, None, false, size, false, account)
     }
 
     /// A Codex tab in the project's folder ("New Codex"), as `open_claude_terminal_with` is
     /// Claude's: with the model and in the mode of `start`'s Codex part, or, without one, as the
     /// project's own settings say for Codex; with the Codex account `account` names
-    /// (`accounts::MAIN` for the main one), else the one in use; with `prompt` as its first job.
-    pub fn open_codex_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>, prompt: Option<String>) -> Result<TerminalView, String> {
+    /// (`accounts::MAIN` for the main one), else the one in use; with `prompt` as its first job and
+    /// `images` named under it.
+    pub fn open_codex_terminal_with(self: &Arc<Self>, path: &str, start: Option<Start>, size: Option<(u16, u16)>, account: Option<&str>, prompt: Option<String>, images: &[String]) -> Result<TerminalView, String> {
         let start = start.unwrap_or_else(|| self.lock().settings.project(path).start_with(Agent::Codex));
-        self.open_terminal_with(path, &Launch::Codex { prompt: first_prompt(prompt), start, images: None }, None, false, size, false, account)
+        let (prompt, images) = self.with_images(first_prompt(prompt), images)?;
+        self.open_terminal_with(path, &Launch::Codex { prompt, start, images }, None, false, size, false, account)
     }
 
     /// How a Claude session of the project at `path` starts when nothing else was chosen: the

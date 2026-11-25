@@ -52,6 +52,7 @@ import {
   type TakeEnd,
   type VoiceProblem,
 } from "../../lib/chat/voice";
+import { draftTakes, isDraft } from "../../lib/chat/draft";
 import { MODE_ICONS, type ComposerApi, type ComposerEmits, type ComposerProps, type TerminalRef } from "../../lib/chat/ui";
 import { voiceDelayOf } from "../../lib/chat/wire";
 import type { Shot } from "../../lib/cardImages";
@@ -243,7 +244,7 @@ const argHint = computed(() => {
 /** The suggested next prompt (V26): shown in the empty field, taken with Tab, never sent by Enter. */
 const ghost = computed(() => (props.settings.suggestions && props.suggestion && !draft.value.text && !draft.value.attachments.length && !running.value ? props.suggestion : null));
 
-const placeholder = computed(() => ghost.value ?? t(running.value ? "chatInput.placeholder.queue" : "chatInput.placeholder"));
+const placeholder = computed(() => ghost.value ?? props.placeholder ?? t(running.value ? "chatInput.placeholder.queue" : "chatInput.placeholder"));
 
 /* ---------- the `/` menu ---------- */
 
@@ -312,6 +313,8 @@ function namesOf(path: string): Promise<FileHit[]> {
 
 /** Claude Code's own suggestions for `query` (`file_suggestions`), or none when it doesn't answer. */
 async function cliSuggestions(query: string): Promise<FileHit[]> {
+  // A box before its chat has no Claude Code to ask: the project's names alone.
+  if (isDraft(props.id)) return [];
   try {
     const answer = await Promise.race([api.chatControl<{ suggestions?: unknown[] }>(props.id, { kind: "fileSuggestions", query }), new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))]);
     const list = answer && Array.isArray(answer.suggestions) ? answer.suggestions : [];
@@ -558,6 +561,13 @@ function clearAfterSend(keepAttachments: boolean): void {
 }
 
 function runRoute(route: Exclude<Route, { kind: "send" }>, typed: string): void {
+  // The empty panel's box, a chat to be: what only a chat does goes on in the one it opens.
+  if (isDraft(props.id) && !draftTakes(route)) {
+    emit("later", typed);
+    remember(typed);
+    clearAfterSend(true);
+    return;
+  }
   switch (route.kind) {
     case "dialog":
       emit("dialog", route.open);
@@ -777,8 +787,10 @@ const modelLabel = computed(() => {
     return modelName(props.model);
   }
   // Before a turn or the CLI's settings name one, its default: the model that resolves to. Only
-  // before the CLI has told of its models at all does the chip say "Model".
-  return found?.resolvedModel ? modelName(found.resolvedModel) : t("chatInput.model.unknown");
+  // before the CLI has told of its models at all does the chip say "Model"; the empty panel's box
+  // then says Claude Code picks it, as its start does.
+  if (found?.resolvedModel) return modelName(found.resolvedModel);
+  return t(isDraft(props.id) ? "start.model.auto" : "chatInput.model.unknown");
 });
 
 const MODES: Record<string, Key> = {
@@ -1228,6 +1240,10 @@ const exposed: ComposerApi = {
   setText: (text: string) => {
     setFieldText(text);
     field.value?.focus();
+  },
+  run: (line: string) => {
+    setFieldText(line);
+    submit("next");
   },
 };
 defineExpose(exposed);

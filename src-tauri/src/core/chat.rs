@@ -739,6 +739,9 @@ pub struct ChatOpen {
     pub prompt: Option<ChatOutgoing>,
     /// In a git worktree of Pitwall's naming.
     pub worktree: bool,
+    /// `start`'s mode is the one picked (the empty panel's chat box): Normal stays Normal, the
+    /// settings' mode for a new chat (`with_mode`) taking no part.
+    pub exact: bool,
 }
 
 /// A tab about to be made: everything checked.
@@ -919,8 +922,8 @@ impl Core {
     /// chat that holds it comes up instead, anything else fails with `ELSEWHERE`; one Claude
     /// Code can't tell of fails too. Opened again once only, whoever asks (`open_once`).
     pub(super) fn open_chat_as(self: &Arc<Self>, path: &str, open: ChatOpen, program: PathBuf, name: Option<String>, renamed: bool, unasked: bool) -> Result<TerminalView, String> {
-        let ChatOpen { start, account, session, fork, prompt, worktree } = open;
-        let made = self.chat_made(path, start, account.as_deref(), program, prompt, worktree, name, renamed, unasked)?;
+        let ChatOpen { start, account, session, fork, prompt, worktree, exact } = open;
+        let made = self.chat_made(path, start.map(|start| (start, exact)), account.as_deref(), program, prompt, worktree, name, renamed, unasked)?;
 
         match (session, fork) {
             (_, Some((from, at))) => {
@@ -966,11 +969,12 @@ impl Core {
 
     /// Everything a chat in `path` needs checked before it opens: the folder, a listed project's,
     /// Claude on, the project's chats allowed (`UNTRUSTED`), the account, the first message.
+    /// `start`, and whether its mode stands as it is (`ChatOpen::exact`).
     #[allow(clippy::too_many_arguments)]
     fn chat_made<'a>(
         &self,
         path: &'a str,
-        start: Option<ChatStart>,
+        start: Option<(ChatStart, bool)>,
         account: Option<&str>,
         program: PathBuf,
         prompt: Option<ChatOutgoing>,
@@ -1004,7 +1008,11 @@ impl Core {
             path,
             program,
             account,
-            start: with_mode(start.unwrap_or_else(|| ChatStart::from_start(own)), mode),
+            start: match start {
+                Some((start, true)) => start,
+                Some((start, false)) => with_mode(start, mode),
+                None => with_mode(ChatStart::from_start(own), mode),
+            },
             worktree: worktree.then(worktree_name),
             prompt,
             name,

@@ -57,6 +57,7 @@ mod snapshot;
 mod supervise;
 mod teams;
 mod terminal;
+mod prompt_images;
 mod send;
 pub use send::SendResult;
 mod shells;
@@ -413,6 +414,8 @@ impl Core {
         let peers = registry.read_peers();
         // Beside the settings, on this Mac only.
         let board = board::Board::load(cfg.settings_file.with_file_name("board.json"), now_ms());
+        // What the empty panel's box gave an agent a day ago or more goes (`prompt_images`).
+        prompt_images::sweep(&cfg.settings_file.with_file_name(prompt_images::DIR), std::time::SystemTime::now());
         let laps = laps::Laps::load(&cfg.settings_file, now_ms());
 
         Arc::new(Self {

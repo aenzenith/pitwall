@@ -37,6 +37,7 @@ import {
   type UserEntry,
 } from "../../lib/chat/store";
 import { parseCommand, skillNames } from "../../lib/chat/commands";
+import { noteInfo, takeHandOff } from "../../lib/chat/draft";
 import { outgoing, scrub } from "../../lib/chat/composer";
 import { EXAMPLES_MOST, chatExamples, keepFirstExamples, setExamples } from "../../lib/chat/examples";
 import { planTitle, STARTS_IN, planModeOf } from "../../lib/chat/plan";
@@ -846,6 +847,22 @@ const contextShare = computed(() => {
 });
 const exited = computed(() => model.value.state === "exited");
 const starting = computed(() => model.value.state === "starting" && !model.value.info);
+
+// What the CLI says of itself is what the empty panel's chat box offers before its chat is there
+// (lib/chat/draft); a line that box couldn't run is run here, once the chat is ready for it.
+watch(
+  () => model.value.info,
+  (info) => info && noteInfo(path.value, info),
+  { immediate: true },
+);
+watch(
+  () => !!composer.value && !!model.value.info && !starting.value && !exited.value,
+  (ready) => {
+    const line = ready ? takeHandOff(id.value) : null;
+    if (line) composer.value?.run(line);
+  },
+  { immediate: true },
+);
 
 function fail(error: unknown, terminal = false): void {
   const text = typeof error === "string" ? error : error instanceof Error ? error.message : "";

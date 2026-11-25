@@ -84,6 +84,48 @@
         "ja": "ターミナルのタブにポインタを重ねると、タブが混み合って名前が途中で切れていても、名前全体が表示されます。",
         "zh-Hans": "把指针停在终端标签页上，就会弹出它的完整名称，即使标签栏拥挤、名字被截断也一样。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "The chat's own box in the empty panel",
+        "tr": "Boş panelde sohbetin kendi kutusu",
+        "de": "Das Chat-Feld direkt im leeren Panel",
+        "es": "La caja del chat, ya en el panel vacío",
+        "ru": "Поле чата прямо в пустой панели",
+        "ja": "空のパネルにチャットの入力欄",
+        "zh-Hans": "空面板里就是对话的输入框"
+      },
+      "body": {
+        "en": "Pick Chat in an empty terminal panel and you write in the chat's own box. Commands, attachments, voice and the model and mode menus work before the chat even opens.",
+        "tr": "Boş terminal panelinde Sohbet'i seçince doğrudan sohbetin kutusuna yazarsın. Komutlar, ekler, sesli mesaj, model ve kip menüleri sohbet açılmadan önce de çalışır.",
+        "de": "Wählst du im leeren Terminal-Panel „Chat“, schreibst du gleich ins Feld des Chats. Befehle, Anhänge, Sprachnachrichten und die Menüs für Modell und Modus funktionieren schon, bevor der Chat aufgeht.",
+        "es": "Elige Chat en un panel de terminal vacío y escribes directamente en la caja del chat. Los comandos, los adjuntos, la voz y los menús de modelo y modo funcionan antes de que se abra.",
+        "ru": "Выберите «Чат» в пустой панели терминала, и вы пишете прямо в поле чата. Команды, вложения, голос и меню модели и режима работают ещё до того, как чат откроется.",
+        "ja": "空のターミナルパネルで「チャット」を選ぶと、チャットと同じ入力欄に書けます。コマンドや添付、音声、モデルとモードのメニューも、チャットが開く前から使えます。",
+        "zh-Hans": "在空的终端面板里选「对话」，就直接在对话自己的输入框里写。命令、附件、语音以及模型和模式菜单，在对话打开前就能用。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Paste images for Claude and Codex",
+        "tr": "Claude ve Codex'e görsel yapıştır",
+        "de": "Bilder für Claude und Codex einfügen",
+        "es": "Pega imágenes para Claude y Codex",
+        "ru": "Картинки для Claude и Codex",
+        "ja": "Claude と Codex に画像を貼り付け",
+        "zh-Hans": "给 Claude 和 Codex 贴图"
+      },
+      "body": {
+        "en": "In an empty terminal panel, paste or drop screenshots into Claude's or Codex's box and they go along with your message.",
+        "tr": "Boş terminal panelinde Claude'un ya da Codex'in kutusuna ekran görüntüsü yapıştırabilir ya da sürükleyebilirsin; görseller mesajınla birlikte gider.",
+        "de": "Im leeren Terminal-Panel kannst du Screenshots in das Feld für Claude oder Codex einfügen oder hineinziehen; sie gehen mit deiner Nachricht mit.",
+        "es": "En un panel de terminal vacío puedes pegar o arrastrar capturas en la caja de Claude o de Codex, y se envían junto con tu mensaje.",
+        "ru": "В пустой панели терминала вставьте или перетащите скриншоты в поле Claude или Codex, и они уйдут вместе с вашим сообщением.",
+        "ja": "空のターミナルパネルで Claude や Codex の入力欄にスクリーンショットを貼り付けたりドロップしたりすると、メッセージと一緒に渡せます。",
+        "zh-Hans": "在空的终端面板里，可以把截图粘贴或拖进 Claude 或 Codex 的输入框，它们会随消息一起发送。"
+      }
     }
   ]
 }

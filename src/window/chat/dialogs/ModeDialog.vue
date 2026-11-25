@@ -6,6 +6,7 @@ import Spinner from "../../../components/Spinner.vue";
 import { useReturnFocus } from "../../../lib/dialogFocus";
 import { t, type Key } from "../../../lib/i18n";
 import { modelOf } from "../../../lib/chat/commands";
+import { isDraft, START_MODES } from "../../../lib/chat/draft";
 import { peekChat } from "../../../lib/chat/store";
 import { MODE_ICONS } from "../../../lib/chat/ui";
 import type { ChatPermissionMode } from "../../../lib/chat/wire";
@@ -51,7 +52,8 @@ const place = useChipMenu({
   close,
 });
 
-const modes = ALL;
+/** The empty panel's chat box offers the modes a chat starts in (lib/chat/draft). */
+const modes = isDraft(props.id) ? ALL.filter((mode) => START_MODES.includes(mode.id)) : ALL;
 
 /** The chat's model as it runs now (a switch made here, else the last turn's, else the CLI's
  * default): auto is off only where its row says so. */
