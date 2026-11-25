@@ -63,6 +63,27 @@
         "ja": "ターミナルパネルで ⇧⌘I を押し、このプロジェクトや他のプロジェクトのタブを選んで一度書くだけで全部に届きます。許可や返答を待っているタブは飛ばすので、うっかり承認してしまうことはありません。",
         "zh-Hans": "在终端面板按 ⇧⌘I，从这个或其他项目里勾选标签页，写一次就能发给它们。正在等授权或回答的标签页会被跳过，不会误点了批准。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "Tab names at a glance",
+        "tr": "Sekmenin tam adı bir bakışta",
+        "de": "Tab-Namen auf einen Blick",
+        "es": "Nombres de pestaña de un vistazo",
+        "ru": "Имена вкладок с одного взгляда",
+        "ja": "タブ名がすぐわかる",
+        "zh-Hans": "一眼看清标签页名称"
+      },
+      "body": {
+        "en": "Rest the pointer on a terminal tab and its full name pops up, even when the row is crowded and the name is cut short.",
+        "tr": "Bir terminal sekmesinin üzerine gelince tam adı açılır. Satır kalabalıkken kısalan isimleri artık tahmin etmen gerekmez.",
+        "de": "Fahr mit dem Zeiger über einen Terminal-Tab, und sein ganzer Name erscheint, auch wenn er in einer vollen Leiste abgeschnitten ist.",
+        "es": "Pasa el puntero por una pestaña del terminal y verás su nombre completo, aunque la fila esté llena y el nombre aparezca cortado.",
+        "ru": "Наведите указатель на вкладку терминала, и появится её полное имя, даже если в тесном ряду оно обрезано.",
+        "ja": "ターミナルのタブにポインタを重ねると、タブが混み合って名前が途中で切れていても、名前全体が表示されます。",
+        "zh-Hans": "把指针停在终端标签页上，就会弹出它的完整名称，即使标签栏拥挤、名字被截断也一样。"
+      }
     }
   ]
 }

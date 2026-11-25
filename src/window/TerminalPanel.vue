@@ -4,6 +4,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 
 import AgentMark from "../components/AgentMark.vue";
 import ClaudeDot from "../components/ClaudeDot.vue";
+import HoverTip from "../components/HoverTip.vue";
 import Icon from "../components/Icon.vue";
 import ProjectPicker from "../components/ProjectPicker.vue";
 import { agentOn } from "../lib/agents";
@@ -108,6 +109,7 @@ import { shellIcon } from "../lib/shells";
 import { settingsAsked, updateProjectSettings } from "../lib/projectSettings";
 import { projectCodexChoice } from "../lib/start";
 import { api, now, sessions, snapshot, visible } from "../lib/store";
+import { useHoverTip } from "../lib/hoverTip";
 import { distinctNames } from "../lib/tabs";
 import { tabStates } from "../lib/tabStates";
 import { useTabReorder } from "../lib/tabReorder";
@@ -2513,6 +2515,36 @@ const tabDrag = useTabReorder(
   tabDragEnded,
 );
 
+/* ---------- a tab's tooltip ---------- */
+
+/** A tab's tooltip, Pitwall's own (the system's `title` is slow and small): above the row, below it
+ * where the window has no room above. */
+const tabTip = useHoverTip<number>();
+
+/** The tab under the pointer: its name and, pinned (its name isn't on it), what its agent is doing;
+ * then its account, an administrator's and how to rename it. */
+const tabTipShown = computed(() => {
+  const at = tabTip.shown.value;
+  const term = at ? terminals.value.find((each) => each.id === at.key) : undefined;
+  if (!at || !term) return null;
+  const state = term.pinned ? [t("terminal.pinnedTip"), live.value.get(term.id)?.text].filter(Boolean).join(" · ") : "";
+  return { anchor: at.anchor, title: names.value.get(term.id) ?? term.name, lines: [state, ...terminalTip(term).split("\n")].filter(Boolean) };
+});
+
+/** The pointer onto a tab, or back onto it from its close button (whose own tooltip is the
+ * system's, "Close"). */
+function tabTipEnter(event: PointerEvent, id: number): void {
+  const tab = (event.currentTarget as Element).closest(".tab");
+  if (tab && tabDrag.dragging.value === null && event.pointerType !== "touch") tabTip.enter(tab, id);
+}
+
+/** The keyboard on a tab (←/→): its tooltip too, as the pointer's. */
+function tabTipFocus(event: FocusEvent, id: number): void {
+  const label = event.currentTarget as HTMLElement;
+  const tab = label.closest(".tab");
+  if (tab && label.matches(":focus-visible")) tabTip.showAt(tab, id);
+}
+
 /** A tab's drag is over, taken off the row or not: the keyboard goes to the terminal shown, as
  * after a click on a tab, the panel open. Never to the tab itself (a press on one leaves the
  * keyboard where it is): left on its label, a Backspace would close that tab. */
@@ -3039,7 +3071,7 @@ defineExpose({ openTerminal, closeShown });
            moves it. A press leaves the keyboard where it is: Tab alone brings it to the tabs. -->
       <!-- With panes the names of the terminals in them are on the panes: the row lists the others,
            waiting to be clicked or dragged into one. -->
-      <div ref="tablist" :class="['tablist', { some: rowTabs.length }, tabDrag.listClass()]" role="tablist" :aria-label="t('terminal.tabs')">
+      <div ref="tablist" :class="['tablist', { some: rowTabs.length }, tabDrag.listClass()]" role="tablist" :aria-label="t('terminal.tabs')" @scroll="tabTip.hide()">
         <TransitionGroup :key="project.path" :css="false" @enter="tabEnter" @leave="tabLeave">
         <!-- A pinned tab: first in the row, its mark alone (its name in the tooltip), no close
              button; a middle click and Delete leave it, its menu closes it. -->
@@ -3051,13 +3083,14 @@ defineExpose({ openTerminal, closeShown });
           :data-tab-id="term.id"
           :data-tab-group="term.pinned ? 'pinned' : 'tabs'"
           role="none"
-          :title="`${term.name}\n${terminalTip(term)}`"
-          @pointerdown="tabDrag.down($event, term.id)"
+          @pointerenter="tabTipEnter($event, term.id)"
+          @pointerleave="tabTip.leave()"
+          @pointerdown="tabTip.hide(); tabDrag.down($event, term.id)"
           @click="clickTab(term.id)"
           @dblclick="renaming = { id: term.id, name: term.name }"
           @mousedown.prevent
           @mouseup.middle="!term.pinned && close(term.id)"
-          @contextmenu.prevent.stop="tabMenu($event, term)"
+          @contextmenu.prevent.stop="tabTip.hide(); tabMenu($event, term)"
         >
           <div
             role="tab"
@@ -3069,6 +3102,8 @@ defineExpose({ openTerminal, closeShown });
             aria-keyshortcuts="Delete F2"
             aria-describedby="terminal-tab-keys"
             @keydown="onTabKey($event, term.id)"
+            @focus="tabTipFocus($event, term.id)"
+            @blur="tabTip.hide()"
           >
             <AgentMark v-if="term.kind !== 'shell'" :agent="term.kind === 'chat' ? 'claude' : term.kind" :size="11" />
             <Icon v-else :name="shellIcon(term.shell)" :size="11" />
@@ -3084,13 +3119,13 @@ defineExpose({ openTerminal, closeShown });
             tabindex="-1"
             aria-hidden="true"
             data-no-drag
-            :title="t('common.close')"
             @click.stop="close(term.id)"
             @dblclick.stop
           >×</button>
         </div>
         </TransitionGroup>
       </div>
+      <HoverTip v-if="tabTipShown" :anchor="tabTipShown.anchor" :title="tabTipShown.title" :lines="tabTipShown.lines" />
       <!-- The terminals' tabs and right after them the button that opens one; at the right end, the
            outputs' tabs, the history and collapse. -->
       <span :class="['divider', { shown: rowTabs.length }]" aria-hidden="true"></span>
