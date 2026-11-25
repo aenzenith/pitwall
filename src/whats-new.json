@@ -42,6 +42,27 @@
         "ja": "ターミナルのタブを右クリックで固定すると先頭に並び、⌘W でも閉じなくなります。⌃⇥（Windows と Linux では Ctrl+Tab）を押したままにすると、どのプロジェクトでも最近見たタブへすぐ移れます。",
         "zh-Hans": "右键点按终端标签页即可把它固定在最前面，⌘W 也不会关掉它。按住 ⌃⇥（Windows 和 Linux 上是 Ctrl+Tab），就能在最近看过的标签页之间来回切换，不论属于哪个项目。"
       }
+    },
+    {
+      "kind": "new",
+      "title": {
+        "en": "One message to several tabs",
+        "tr": "Tek mesaj, birden çok sekme",
+        "de": "Eine Nachricht an mehrere Tabs",
+        "es": "Un mensaje para varias pestañas",
+        "ru": "Одно сообщение — в несколько вкладок",
+        "ja": "1 つのメッセージを複数のタブへ",
+        "zh-Hans": "一条消息发给多个标签页"
+      },
+      "body": {
+        "en": "Press ⇧⌘I in the terminal panel, pick tabs from this project or any other, and write once. A tab waiting on a permission or an answer is skipped, so nothing gets approved by accident.",
+        "tr": "Terminal panelinde ⇧⌘I'ye bas, bu projeden ya da başka projelerden sekmeleri seç ve bir kez yaz. İzin ya da yanıt bekleyen sekme atlanır, böylece hiçbir şey yanlışlıkla onaylanmaz.",
+        "de": "Drück im Terminal-Panel ⇧⌘I, wähl Tabs aus diesem oder einem anderen Projekt und schreib einmal. Ein Tab, der auf eine Erlaubnis oder Antwort wartet, wird übersprungen, damit nichts aus Versehen freigegeben wird.",
+        "es": "Pulsa ⇧⌘I en el panel de terminal, elige pestañas de este proyecto o de cualquier otro y escribe una sola vez. Si una espera un permiso o una respuesta, se salta, así nada se aprueba sin querer.",
+        "ru": "Нажмите ⇧⌘I в панели терминала, отметьте вкладки этого или любого другого проекта и напишите один раз. Вкладка, которая ждёт разрешения или ответа, пропускается, чтобы ничего не одобрилось случайно.",
+        "ja": "ターミナルパネルで ⇧⌘I を押し、このプロジェクトや他のプロジェクトのタブを選んで一度書くだけで全部に届きます。許可や返答を待っているタブは飛ばすので、うっかり承認してしまうことはありません。",
+        "zh-Hans": "在终端面板按 ⇧⌘I，从这个或其他项目里勾选标签页，写一次就能发给它们。正在等授权或回答的标签页会被跳过，不会误点了批准。"
+      }
     }
   ]
 }

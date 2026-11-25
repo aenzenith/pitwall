@@ -57,6 +57,8 @@ mod snapshot;
 mod supervise;
 mod teams;
 mod terminal;
+mod send;
+pub use send::SendResult;
 mod shells;
 mod watch;
 mod radio;

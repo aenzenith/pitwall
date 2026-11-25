@@ -50,6 +50,7 @@ import {
   revealTab,
   TAB_CHROME,
   TAB_ROOM,
+  tabsInOrder,
   terminalCollapsed,
   terminalHeight,
   terminalHistoryShown,
@@ -110,6 +111,7 @@ import { api, now, sessions, snapshot, visible } from "../lib/store";
 import { distinctNames } from "../lib/tabs";
 import { tabStates } from "../lib/tabStates";
 import { useTabReorder } from "../lib/tabReorder";
+import { firstPick, SEND_KEY, sendBox, sendCounts, sendKey, sendLocks, type Skipped } from "../lib/terminalSend";
 import { doubleClickAgent, terminalSettings } from "../lib/terminalSettings";
 import { attach, findKey, finds, findStep, fitView, focusView, measure, openFind, paneKeys, showTabs, tabAccountLabel, terminalTip } from "../lib/terminals";
 import type { EmptyStart } from "../lib/terminalEmpty";
@@ -129,6 +131,7 @@ import TerminalEmpty from "./TerminalEmpty.vue";
 import TerminalHistory from "./TerminalHistory.vue";
 import TerminalPanes from "./TerminalPanes.vue";
 import TerminalProjects from "./TerminalProjects.vue";
+import TerminalSend from "./TerminalSend.vue";
 
 /** A card made from an output's error: the card dialog loads apart, as on the board. */
 const CardDialog = defineAsyncComponent(() => import("./board/CardDialog.vue"));
@@ -315,14 +318,7 @@ const renaming = ref<{ id: number; name: string } | null>(null);
 
 /** The project's terminals, in the order their tabs were dragged into (lib/panel), new ones last;
  * the pinned ones before the others, each in that order. */
-const terminals = computed(() => {
-  const list = props.project.terminals;
-  const order = terminalOrder.value[props.project.path];
-  const rank = new Map((order ?? []).map((id, i) => [id, i]));
-  const unranked = Number.MAX_SAFE_INTEGER;
-  const sorted = order ? [...list].sort((a, b) => (rank.get(a.id) ?? unranked) - (rank.get(b.id) ?? unranked)) : list;
-  return sorted.some((term) => term.pinned) ? [...sorted.filter((term) => term.pinned), ...sorted.filter((term) => !term.pinned)] : sorted;
-});
+const terminals = computed(() => tabsInOrder(props.project.terminals, terminalOrder.value[props.project.path]));
 
 /** The project's panes (lib/panes), or none: one terminal at a time. */
 const layout = computed(() => paneLayouts.value[props.project.path] ?? null);
@@ -439,6 +435,72 @@ function toggleCollapsed(): void {
   if (windowed.value) return;
   collapsed.value = !collapsed.value;
 }
+
+/* ---------- one message to several tabs (TerminalSend) ---------- */
+
+/** This project's send window (lib/terminalSend): open or not, its list, the tabs picked, what is
+ * typed, what came of the last send. */
+const sending = computed(() => sendBox(props.project.path));
+/** With one tab in all the projects there is nobody else to send to. */
+const canSend = computed(() => sendCounts(props.project.path).all > 1);
+
+/** ⇧⌘I, or the row's button: the window opens over the terminals with the project's tabs of the
+ * kind in front picked (the list the last one showed; every project's when this one has a single
+ * tab), and takes the keyboard; again, it closes. */
+function toggleSend(): void {
+  const box = sending.value;
+  if (box.on) return closeSend();
+  if (!canSend.value) return;
+  box.picked = firstPick(terminals.value, active.value, sendLocks(terminals.value));
+  if (terminals.value.length < 2) box.scope = "all";
+  box.outcome = null;
+  box.on = true;
+  if (collapsed.value) toggleCollapsed();
+}
+
+/** ×, Esc, a click beside it, a send or the key again: the window goes, the keyboard back to the
+ * terminal in front. */
+function closeSend(): void {
+  sending.value.on = false;
+  if (active.value && active.value.kind !== "chat") focusView(active.value.id);
+}
+
+/** A tab left out, from the panel's line: this project's comes up here, another's in its project. */
+function showSkipped(skip: Skipped): void {
+  if (skip.path === props.project.path) open(skip.id);
+  else revealTab(skip.path, skip.id);
+}
+
+/** What the last send came to stays on the panel's line while a tab was left out, until it is
+ * closed; when every tab took it, a few seconds. */
+let sentTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => sending.value.outcome,
+  (outcome) => {
+    clearTimeout(sentTimer);
+    if (outcome && !outcome.skipped.length) sentTimer = setTimeout(() => (outcome === sending.value.outcome ? (sending.value.outcome = null) : undefined), 4000);
+  },
+);
+onBeforeUnmount(() => clearTimeout(sentTimer));
+
+// The panel turning to another project leaves the window it had open: it doesn't come back with it.
+watch(
+  () => props.project.path,
+  (_, before) => {
+    if (before) sendBox(before).on = false;
+  },
+);
+
+// A tab that closed is picked no more; with no tab left anywhere, the window goes.
+watch(
+  () => snapshot.value?.projects,
+  (projects) => {
+    const box = sending.value;
+    const open = new Set((projects ?? []).flatMap((project) => project.terminals.map((term) => term.id)));
+    if ([...box.picked].some((id) => !open.has(id))) box.picked = new Set([...box.picked].filter((id) => open.has(id)));
+    if (box.on && open.size === 0) closeSend();
+  },
+);
 
 /* ---------- a card minimised into the sidebar ---------- */
 
@@ -1680,6 +1742,12 @@ function moveFocus(act: PaneAction): void {
  * (lib/terminals: `findKey`) where the keyboard is in neither the terminal nor its search bar, which
  * answer them themselves: on the tabs, a pane's head. */
 function onPanelKey(event: KeyboardEvent): void {
+  if (sendKey(event) && !event.defaultPrevented && !renaming.value && !errorCard.value) {
+    event.preventDefault();
+    return toggleSend();
+  }
+  // The send window holds the keyboard: the panel's own keys wait until it is gone.
+  if (sending.value.on) return;
   const find = findKey(event);
   const shown = active.value && !showsOutput.value ? active.value.id : null;
   if (find && shown !== null && !event.defaultPrevented && (find === "open" || finds.has(shown))) {
@@ -2326,10 +2394,12 @@ function close(id: number): void {
 let closing: number | null = null;
 
 /**
- * ⌘W with the panel in front (WindowApp: `closeFront`): the output shown gives its place back, as
- * its tab picked again does; else the terminal shown closes; with no terminal left, the panel folds.
+ * ⌘W with the panel in front (WindowApp: `closeFront`): the send window goes, what is typed kept;
+ * the output shown gives its place back, as its tab picked again does; else the terminal shown
+ * closes; with no terminal left, the panel folds.
  */
 function closeShown(): void {
+  if (sending.value.on) return closeSend();
   if (showsOutput.value) return closeOutput();
   // An empty pane goes.
   const now = layout.value;
@@ -2853,6 +2923,8 @@ onMounted(() => {
   // A terminal outside the panel (a lap run's, in its dialog) keeps them as any other key.
   paneKeys.claim = (event) => {
     if (!(event.target instanceof Node && panel.value?.contains(event.target))) return false;
+    // The send box's key too (TerminalSend).
+    if (sendKey(event)) return true;
     const act = paneAction(event);
     return !!act && (panesOn.value || act === "right" || act === "down");
   };
@@ -3051,6 +3123,18 @@ defineExpose({ openTerminal, closeShown });
       <!-- The outputs, always at the right end, as one button with Pitwall's menu of them: the
            dev server's, then the commands' that ran. -->
       <OutputsMenu v-if="outputs.length" :items="outputs" :shown="showsOutput ? job : undefined" @pick="openOutput" />
+      <!-- One message to several tabs: a window over the terminals, the tabs picked in its list. -->
+      <button
+        type="button"
+        :class="['icon', 'send-toggle', { on: sending.on }]"
+        :aria-pressed="sending.on"
+        :aria-label="t('terminal.send.title')"
+        :title="canSend || sending.on ? `${t('terminal.send.title')} (${SEND_KEY})` : t('terminal.send.single')"
+        :disabled="!canSend && !sending.on"
+        @click="toggleSend"
+      >
+        <Icon name="fan-out" :size="13" />
+      </button>
       <LayoutMenu :current="presetNow" :count="layoutCount" :room="menuRoom" :fits="fitsPreset" :panes="panesOn" :compact="snug" @pick="pickLayout" @even="evenPanes" />
       <button
         type="button"
@@ -3207,6 +3291,9 @@ defineExpose({ openTerminal, closeShown });
             </div>
           </OutputLog>
         </div>
+        <!-- The send window, over the terminals while it is open: the tabs to pick on its left,
+             what goes to them on its right. -->
+        <TerminalSend v-if="sending.on" :path="project.path" @done="closeSend" />
       </div>
       <!-- The history's room beside the terminal: the panel's right margin alone while it is
            hidden; shown, it grows to the left and the terminal gives up that width as it goes. -->
@@ -3274,6 +3361,23 @@ defineExpose({ openTerminal, closeShown });
           <template v-else>{{ t("terminal.adminNotRestored", { count: notRestored }) }}</template>
         </span>
         <button type="button" class="notice-x" :aria-label="t('common.close')" :title="t('common.close')" @click="closeNotice">×</button>
+      </div>
+    </Transition>
+    <!-- What the last send came to, once its window is gone: each tab left out by its name and
+         why, with Show for the first; plain and brief when every tab took it. -->
+    <Transition name="fade">
+      <div v-if="sending.outcome && !sending.on && !collapsed" :class="['notice', 'sent', { calm: !sending.outcome.skipped.length }]" role="status">
+        <Icon name="fan-out" :size="13" />
+        <span class="notice-text">
+          <strong>{{ sending.outcome.sent ? t("terminal.send.sent", { count: sending.outcome.sent }) : t("terminal.send.sentNone") }}</strong>
+          <template v-for="skip in sending.outcome.skipped" :key="skip.id">
+            <span class="notice-dot">·</span>{{ t("terminal.send.skipped", { name: skip.name }) }}<span class="notice-dot">·</span>{{ skip.why }}
+          </template>
+          <template v-if="sending.outcome.skipped.length">
+            <span class="notice-dot">·</span><button type="button" class="notice-link" @click="showSkipped(sending.outcome.skipped[0])">{{ t("terminal.send.show") }}</button>
+          </template>
+        </span>
+        <button type="button" class="notice-x" :aria-label="t('common.close')" :title="t('common.close')" @click="sending.outcome = null">×</button>
       </div>
     </Transition>
 
@@ -3705,6 +3809,18 @@ defineExpose({ openTerminal, closeShown });
 .column-toggle.on,
 .column-toggle.on:hover:not(:disabled) {
   color: var(--text-lit);
+}
+
+/* The send box's button: lit while the box is open, faint with one tab and nobody to send to. */
+.send-toggle.on,
+.send-toggle.on:hover:not(:disabled) {
+  background: var(--bg-icon-hover);
+  color: var(--text-lit);
+}
+
+.send-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* "History", drawn as the outputs' tabs are: no ground, its colour alone says it is hovered or
@@ -4415,5 +4531,30 @@ defineExpose({ openTerminal, closeShown });
 .notice-x:hover {
   background: var(--bg-icon-hover);
   color: var(--text-strong);
+}
+
+/* What a send came to: a tab left out says so as the other notices do; when every tab took it,
+   the line is plain. Two lines at once stand a little apart. */
+.notice + .notice {
+  margin-top: -4px;
+}
+
+.notice.calm {
+  border-color: var(--line-strong);
+  background: var(--bg-panel);
+}
+
+.notice.calm > :deep(svg) {
+  color: var(--text-faint);
+}
+
+.notice.sent strong {
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.notice-dot {
+  margin: 0 5px;
+  color: var(--text-faint);
 }
 </style>

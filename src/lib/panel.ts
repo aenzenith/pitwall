@@ -278,6 +278,16 @@ export const historyWidth = ref(HISTORY_WIDTH);
  */
 export const terminalOrder = ref<Record<string, number[]>>({});
 
+/** A project's tabs as its row shows them: in the order they were dragged into (`terminalOrder`),
+ * new ones last; the pinned ones before the others, each in that order. The list itself when that
+ * changes nothing, so that what follows it isn't stirred for nothing. */
+export function tabsInOrder<T extends { id: number; pinned: boolean }>(list: T[], order: readonly number[] | undefined): T[] {
+  const rank = new Map((order ?? []).map((id, i) => [id, i]));
+  const unranked = Number.MAX_SAFE_INTEGER;
+  const sorted = order ? [...list].sort((a, b) => (rank.get(a.id) ?? unranked) - (rank.get(b.id) ?? unranked)) : list;
+  return sorted.some((term) => term.pinned) ? [...sorted.filter((term) => term.pinned), ...sorted.filter((term) => !term.pinned)] : sorted;
+}
+
 /** A terminal looked at: its id, and when it was last on screen (ms). */
 export type Looked = { id: number; at: number };
 

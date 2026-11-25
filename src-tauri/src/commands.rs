@@ -363,6 +363,14 @@ pub fn write_terminal(state: State<'_, AppState>, id: u64, data: String) {
     state.core.write_terminal(id, &data);
 }
 
+/// One message to several tabs (the panel's send box): each judged and written to in turn, an
+/// agent's Return a moment after its paste. Off the main thread.
+#[tauri::command]
+pub async fn send_to_tabs(app: AppHandle, ids: Vec<u64>, text: String) -> Result<Vec<crate::core::SendResult>, String> {
+    let core = std::sync::Arc::clone(&app.state::<AppState>().core);
+    tauri::async_runtime::spawn_blocking(move || core.send_to_tabs(&ids, &text)).await.map_err(|error| error.to_string())?
+}
+
 #[tauri::command]
 pub fn resize_terminal(state: State<'_, AppState>, id: u64, cols: u16, rows: u16) {
     state.core.resize_terminal(id, cols, rows);

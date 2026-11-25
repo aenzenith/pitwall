@@ -818,6 +818,15 @@ impl Core {
         })
     }
 
+    /// Whether chat `id` waits on the user with a card open (a permission, a question, a plan);
+    /// none when it is no open chat. A message from the send box never goes to one that does
+    /// (`send_to_tabs`).
+    pub(super) fn chat_asks(&self, id: u64) -> Option<bool> {
+        let tab = self.chat(id)?;
+        let shared = tab.lock();
+        Some(shared.state == ChatState::RequiresAction || !shared.pending.is_empty())
+    }
+
     /// A tab is open: a terminal's shell or a chat (the board's cards).
     pub(super) fn tab_open(&self, id: u64) -> bool {
         self.terminal_sessions().contains_key(&id) || self.chat(id).is_some()

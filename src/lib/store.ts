@@ -48,6 +48,7 @@ import type { CalendarDay, DayRow, Lap, LapKind, LapResult, LapRun, LapsState, L
 import type { Found } from "./explorer";
 import type { ChatAnswer, ChatBuffer, ChatControl, ChatInterruptReceipt, ChatOutgoing, ChatSettings, SessionsMeta, SessionsMetaPatch } from "./chat/wire";
 import type { VoiceModel, VoiceStatus } from "./chat/voice";
+import type { SendResult } from "./terminalSend";
 
 /** The whole app state, pushed by the core on every change. */
 export const snapshot = ref<Snapshot | null>(null);
@@ -356,6 +357,8 @@ export const api = {
   renameTerminal: (id: number, name: string) => invoke("rename_terminal", { id, name }),
   pinTerminal: (id: number, pinned: boolean) => invoke("pin_terminal", { id, pinned }),
   writeTerminal: (id: number, data: string) => invoke("write_terminal", { id, data }),
+  /** One message to several tabs (the panel's send box, lib/terminalSend): what came of each. */
+  sendToTabs: (ids: number[], text: string) => invoke<SendResult[]>("send_to_tabs", { ids, text }),
   resizeTerminal: (id: number, cols: number, rows: number) => invoke("resize_terminal", { id, cols, rows }),
   /** The panel's tabs on screen in this page (lib/terminals: `showTabs`): the core sends the others' output in rarer batches. */
   setTabsShown: (ids: number[]) => invoke("set_tabs_shown", { ids }),

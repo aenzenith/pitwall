@@ -2,7 +2,7 @@
 // Inline stroke icons; currentColor follows the button. Claude's own is components/ClaudeLogo.
 withDefaults(
   defineProps<{
-    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex" | "laps" | "pause" | "zap" | "panel-dock" | "panel-float" | "panel-window" | "pin" | "enter" | "sidebar" | "heading" | "list-ordered" | "checklist" | "quote" | "image";
+    name: "play" | "stop" | "restart" | "back" | "search" | "external" | "window" | "power" | "plus" | "star" | "star-filled" | "chevron" | "settings" | "editor" | "folder" | "close" | "pencil" | "terminal" | "coffee" | "calendar" | "grid" | "pulse" | "chat" | "link" | "copy" | "check" | "server" | "speaker" | "info" | "fuel" | "sparkles" | "lock" | "tools" | "wifi-off" |"board" | "list" | "chevron-down" | "flag" | "shuffle" | "clock" | "eye" | "download" | "users" | "user" | "sun" | "moon" | "monitor" | "upload" | "more" | "grip" | "bell" | "trash" | "bell-off" | "filter" | "skip" | "file" | "folder-open" | "minus" | "collapse" | "diff" | "files" | "source-control" | "commit" | "arrow-right" | "arrow-up-right" | "layout" | "split-right" | "split-down" | "maximize" | "minimize" | "powershell" | "shield" | "case" | "word" | "regex" | "laps" | "pause" | "zap" | "panel-dock" | "panel-float" | "panel-window" | "pin" | "fan-out" | "enter" | "sidebar" | "heading" | "list-ordered" | "checklist" | "quote" | "image";
     size?: number;
   }>(),
   { size: 15 },
@@ -102,6 +102,8 @@ withDefaults(
     <g v-else-if="name === 'panel-float'"><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><rect x="10.5" y="10.5" width="7" height="5.5" rx="1.2" /></g>
     <g v-else-if="name === 'panel-window'"><rect x="3.5" y="8.5" width="12.5" height="11" rx="2" /><path d="M8 5.5h10.5a2 2 0 0 1 2 2V15" /></g>
     <!-- A pin: a window kept above the others. -->
+    <!-- One message to several tabs (the terminal panel's send box): a line that forks three ways. -->
+    <path v-else-if="name === 'fan-out'" d="M4 12h6M10 12l8.5-5.5M10 12h9.5M10 12l8.5 5.5" />
     <g v-else-if="name === 'pin'"><path d="M9.5 4h5l-.8 5.5 3.3 3.3H7l3.3-3.3z" /><path d="M12 12.8V20" /></g>
     <!-- The return key: what is written is kept. -->
     <path v-else-if="name === 'enter'" d="M19 5v7a3 3 0 0 1-3 3H6M10 11l-4 4 4 4" />

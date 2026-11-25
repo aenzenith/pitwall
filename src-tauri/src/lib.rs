@@ -543,6 +543,7 @@ pub fn run() {
             commands::panel_ask,
             commands::set_terminals_on_top,
             commands::write_terminal,
+            commands::send_to_tabs,
             commands::resize_terminal,
             commands::close_terminal,
             commands::open_chat,
