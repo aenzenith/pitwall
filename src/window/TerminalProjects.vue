@@ -114,6 +114,50 @@ const groups = computed<Group[]>(() => {
 });
 
 const lines = computed(() => groups.value.flatMap((group) => group.lines));
+/** The heads and the lines as one list, so that a line going from one group to another slides there. */
+const items = computed<Array<Line | { kind: "group"; key: string; label: string }>>(() =>
+  groups.value.flatMap((group) => [{ kind: "group" as const, key: `group:${group.key}`, label: group.label }, ...group.lines]),
+);
+
+/**
+ * The list changing by itself (a project opened, closed, starred, added or forgotten, a Git line
+ * coming) moves: the lines that stay slide to their new places, one that comes fades in once its
+ * room has opened, one that goes fades and folds up where it stood. A search answers at once, as it
+ * is typed and as it is emptied: `still` holds until the frame after the list was drawn, its lines'
+ * enter hooks having run by then.
+ */
+const still = ref(false);
+watch(query, () => {
+  still.value = true;
+  requestAnimationFrame(() => (still.value = !!typed.value));
+});
+
+const EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+function calm(): boolean {
+  return still.value || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function lineEnter(el: Element, done: () => void): void {
+  if (calm()) return done();
+  const motion = (el as HTMLElement).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, delay: 120, easing: EASE, fill: "backwards" });
+  motion.onfinish = () => done();
+  motion.oncancel = () => done();
+}
+
+function lineLeave(el: Element, done: () => void): void {
+  if (calm()) return done();
+  const line = el as HTMLElement;
+  // It stays in the flow and folds up, so that the lines after it close its place as it goes.
+  const style = getComputedStyle(line);
+  const full = { height: `${line.offsetHeight}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom };
+  const none = { height: "0px", paddingTop: "0px", paddingBottom: "0px" };
+  Object.assign(line.style, { minHeight: "0px", overflow: "hidden", pointerEvents: "none" });
+  const motion = line.animate([{ ...full, opacity: 1 }, { opacity: 0, offset: 0.6 }, { ...none, opacity: 0 }], { duration: 220, easing: EASE, fill: "forwards" });
+  motion.onfinish = () => done();
+  motion.oncancel = () => done();
+}
+
 /** No projects folder to look in: a search says so under what it found. */
 const noFolder = computed(() => !!typed.value && !projectsDir.value);
 
@@ -243,11 +287,11 @@ defineExpose({ focus, clear });
       <div v-if="typed && !lines.length" class="note">
         {{ projectsDir ? t("switcher.noMatchAnywhere", { folder: dirName, query: query.trim() }) : t("switcher.noMatch", { query: query.trim() }) }}
       </div>
-      <template v-for="group in groups" :key="group.key">
-        <div class="group" role="presentation">{{ group.label }}</div>
-        <template v-for="line in group.lines" :key="line.key">
+      <TransitionGroup :name="still ? 'still' : 'line'" :css="false" @enter="lineEnter" @leave="lineLeave">
+        <template v-for="line in items" :key="line.key">
+          <div v-if="line.kind === 'group'" class="group" role="presentation">{{ line.label }}</div>
           <div
-            v-if="line.kind === 'project'"
+            v-else-if="line.kind === 'project'"
             :id="rowId(line.key)"
             :class="['row', { on: line.project.path === project.path, picked: picked === line.key, repo: line.project.git }]"
             role="option"
@@ -291,7 +335,7 @@ defineExpose({ focus, clear });
             <span v-else class="add">{{ t("suggest.add") }}</span>
           </div>
         </template>
-      </template>
+      </TransitionGroup>
       <div v-if="noFolder" class="hint">{{ t("switcher.chooseFolderHint") }}</div>
     </div>
   </div>
@@ -362,6 +406,18 @@ defineExpose({ focus, clear });
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* A line that stays slides to its new place (the TransitionGroup's FLIP); none while a search is
+   typed, nor with reduced motion. */
+.line-move {
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line-move {
+    transition: none;
+  }
 }
 
 .note {
