@@ -63,8 +63,25 @@ function nextOpen(): void {
 }
 
 function show(at: number): void {
+  if (at !== tab.value) roomBox.value?.scrollTo({ top: 0 });
   tab.value = at;
   pointed.value = 0;
+}
+
+/** The option the keys moved to comes into the room's sight, as little as it takes; the first one
+ * brings its question along when both fit. */
+function reveal(): void {
+  void nextTick(() => {
+    const box = roomBox.value;
+    const option = box?.querySelectorAll<HTMLElement>(".opt")[pointed.value];
+    if (!box || !option) return;
+    const room = box.getBoundingClientRect();
+    const at = option.getBoundingClientRect();
+    const start = room.top - box.scrollTop;
+    const top = pointed.value === 0 && at.bottom - start <= box.clientHeight ? start : at.top;
+    if (top < room.top) box.scrollTop -= room.top - top;
+    else if (at.bottom > room.bottom) box.scrollTop += at.bottom - room.bottom;
+  });
 }
 
 function toggle(index: number): void {
@@ -147,12 +164,14 @@ function key(event: KeyboardEvent): boolean {
   const digit = Number(event.key);
   if (Number.isInteger(digit) && digit >= 1 && digit <= count) {
     toggle(digit - 1);
+    reveal();
     return true;
   }
   switch (event.key) {
     case "ArrowDown":
     case "ArrowUp":
       pointed.value = (pointed.value + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
+      reveal();
       return true;
     case "ArrowLeft":
     case "ArrowRight":
@@ -178,31 +197,23 @@ function key(event: KeyboardEvent): boolean {
 
 /* The question's room follows what its tab holds, its height easing from one tab to the next and
    as "Other"'s field comes or goes (the user's word, 16 Nov: "tak diye geçiş istemiyorum"); the
-   first height is the one it stands at. What doesn't fit yet is hidden while it moves. */
+   first height is the one it stands at. Given less than that, it scrolls between the tabs and the
+   buttons, which stay in sight (25 Nov); a new tab shows its question from the top. */
+const roomBox = ref<HTMLElement | null>(null);
 const roomIn = ref<HTMLElement | null>(null);
 const roomHeight = ref<number | null>(null);
-const roomMoving = ref(false);
-let roomTimer: ReturnType<typeof setTimeout> | undefined;
 let roomWatch: ResizeObserver | null = null;
 watch(roomIn, (el) => {
   roomWatch?.disconnect();
   if (!el) return;
+  // Nothing while the card is folded (no height at all): it opens again at the height it had.
   roomWatch ??= new ResizeObserver(() => {
     const height = roomIn.value?.offsetHeight;
-    if (height === undefined || height === roomHeight.value) return;
-    if (roomHeight.value !== null) {
-      roomMoving.value = true;
-      clearTimeout(roomTimer);
-      roomTimer = setTimeout(() => (roomMoving.value = false), 260);
-    }
-    roomHeight.value = height;
+    if (height) roomHeight.value = height;
   });
   roomWatch.observe(el);
 });
-onBeforeUnmount(() => {
-  roomWatch?.disconnect();
-  clearTimeout(roomTimer);
-});
+onBeforeUnmount(() => roomWatch?.disconnect());
 
 defineExpose({ key });
 </script>
@@ -214,7 +225,7 @@ defineExpose({ key });
     </button>
   </div>
 
-  <div v-if="current" :class="['room', { moving: roomMoving }]" :style="roomHeight === null ? undefined : { height: `${roomHeight}px` }">
+  <div v-if="current" ref="roomBox" class="room" :style="roomHeight === null ? undefined : { height: `${roomHeight}px` }">
     <div ref="roomIn" class="room-in">
       <p class="cc-lead selectable">{{ current.question }}</p>
       <div :class="['qbody', { split: hasPreview }]">
@@ -274,18 +285,27 @@ defineExpose({ key });
 </template>
 
 <style scoped>
+/* Its scroll bar stands in the card's right padding, its place always kept, so the options never
+   change width as it comes or goes; 3 px round what it holds keep the keyboard's ring in sight. */
 .room {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: -3px -13px -3px -3px;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
   transition: height 0.22s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.room.moving {
-  overflow: hidden;
 }
 
 .room-in {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 3px;
+}
+
+.tabs,
+.cc-actions {
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

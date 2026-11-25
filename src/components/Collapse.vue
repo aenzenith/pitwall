@@ -5,8 +5,10 @@
  * (a diff drawn a moment after it came), so it never jumps at the end. Its box has no padding of
  * its own, so it eases down to nothing; put the padding on what it holds. At once under reduced
  * motion. `keep`: shut, what it holds is hidden, not dropped (what was typed in it stays).
+ * `fit`: it is a flex column that may be given less height than what it holds, which scrolls
+ * inside; what it holds then follows the ease, so the ease doesn't follow what it holds.
  */
-defineProps<{ show: boolean; keep?: boolean }>();
+const props = defineProps<{ show: boolean; keep?: boolean; fit?: boolean }>();
 
 const EASE = "height 0.2s cubic-bezier(0.2, 0, 0, 1)";
 
@@ -53,7 +55,7 @@ function ease(box: HTMLElement, from: number, to: number, done: () => void, inne
 function enter(el: Element, done: () => void): void {
   const box = el as HTMLElement;
   const inner = box.firstElementChild as HTMLElement | null;
-  ease(box, 0, inner?.offsetHeight ?? box.scrollHeight, done, inner);
+  ease(box, 0, inner?.offsetHeight ?? box.scrollHeight, done, props.fit ? null : inner);
 }
 
 function leave(el: Element, done: () => void): void {
@@ -72,7 +74,7 @@ function settle(el: Element): void {
 
 <template>
   <Transition :css="false" @enter="enter" @after-enter="settle" @enter-cancelled="settle" @leave="leave" @after-leave="settle" @leave-cancelled="settle">
-    <div v-if="keep || show" v-show="!keep || show" class="collapse"><div class="held"><slot /></div></div>
+    <div v-if="keep || show" v-show="!keep || show" :class="['collapse', { fit }]"><div class="held"><slot /></div></div>
   </Transition>
 </template>
 
@@ -80,5 +82,12 @@ function settle(el: Element): void {
 /* Its children's margins stay inside what it holds, eased or not. */
 .held {
   display: flow-root;
+}
+
+.fit,
+.fit > .held {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>

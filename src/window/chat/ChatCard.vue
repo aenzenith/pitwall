@@ -110,7 +110,7 @@ function refocus(): void {
       <span v-if="more > 0" class="cc-more">{{ t("chatInput.card.more", { count: more }) }}</span>
       <Icon name="chevron-down" :size="13" :class="['cc-chev', { shut: folded }]" />
     </button>
-    <Collapse :show="!folded" keep>
+    <Collapse :show="!folded" keep :fit="kind === 'question'">
       <div class="cc-body">
         <PermissionCard v-if="kind === 'permission' && tool" :id="id" :key="`p${pending.requestId}`" ref="inner" :path="path" :request="tool" :compact="false" @answer="answer" @refocus="refocus" />
         <QuestionCard v-else-if="kind === 'question' && tool" :key="`q${pending.requestId}`" ref="inner" :request="tool" @answer="answer" @refocus="refocus" />
@@ -144,6 +144,33 @@ function refocus(): void {
 .cc.elicit,
 .cc.dialog {
   border-color: var(--line-strong);
+}
+
+/* A question's card keeps its head, its tabs and its buttons in sight; what it asks scrolls between
+   them (QuestionCard's room; the user's word, 25 Nov). It never gets smaller than about two
+   options' room, below which the to-do list and the card scroll together as before. Its least
+   height eases with its fold, so it never stands taller than what is shown. */
+.cc.question {
+  min-height: 0;
+  transition: min-height 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.cc.question:not(.folded) {
+  min-height: 200px;
+}
+
+.cc.question > .cc-head {
+  flex-shrink: 0;
+}
+
+.cc.question .cc-body {
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc.question {
+    transition: none;
+  }
 }
 
 .cc-head {
