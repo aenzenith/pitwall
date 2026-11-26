@@ -21,6 +21,27 @@
         "ja": "チャットで Claude の回答を中断すると、中断したことだけが表示され、その下に赤いエラー表示は出なくなりました。",
         "zh-Hans": "在对话里中断 Claude 的回答后，只会显示你中断了它，下面不再出现红色的错误框。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Clicking a recent tab opens it",
+        "tr": "Son bakılanlar listesinde tıklama düzeltildi",
+        "de": "Ein Klick öffnet den zuletzt angesehenen Tab",
+        "es": "Un clic en «Vistas hace poco» abre la pestaña",
+        "ru": "Щелчок в «Недавних вкладках» открывает вкладку",
+        "ja": "最近見たタブがクリックで開くようになりました",
+        "zh-Hans": "点击“最近查看”里的标签即可打开"
+      },
+      "body": {
+        "en": "A click in the ⌃Tab list now opens that tab instead of reaching what's behind it. Each tab shows its project underneath, and this project's tabs come first.",
+        "tr": "⌃Tab listesinde bir sekmeye tıklayınca artık arkadaki şey değil o sekme açılıyor. Her sekmenin altında projesi yazıyor, açık projenin sekmeleri de en üstte duruyor.",
+        "de": "Ein Klick in der ⌃Tab-Liste öffnet jetzt den Tab, statt durchzurutschen. Unter jedem Tab steht sein Projekt, und die Tabs des aktuellen Projekts kommen zuerst.",
+        "es": "Un clic en la lista de ⌃Tab ya abre esa pestaña en vez de llegar a lo que hay detrás. Cada pestaña muestra su proyecto debajo, y las del proyecto abierto van primero.",
+        "ru": "Щелчок в списке ⌃Tab теперь открывает вкладку, а не то, что под списком. Под каждой вкладкой виден её проект, а вкладки открытого проекта идут первыми.",
+        "ja": "⌃Tab の一覧でタブをクリックすると、後ろにあるものではなくそのタブが開くようになりました。各タブの下にプロジェクト名が出て、今のプロジェクトのタブが先頭に並びます。",
+        "zh-Hans": "在 ⌃Tab 列表里点击标签，现在会打开这个标签，而不是点到后面的内容。每个标签下方会显示所属项目，当前项目的标签排在最前面。"
+      }
     }
   ]
 }

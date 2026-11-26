@@ -3165,7 +3165,7 @@ defineExpose({ openTerminal, closeShown });
         @chat="openChat()"
       />
       <!-- ⌃⇥: the tabs last looked at, every project's. -->
-      <MruSwitcher v-if="hosting" :path="project.path" :current="active?.id ?? null" :anchor="panel" @pick="pickRecent" />
+      <MruSwitcher v-if="hosting" :path="project.path" :current="active?.id ?? null" @pick="pickRecent" />
       <span class="grow"></span>
       <!-- The outputs, always at the right end, as one button with Pitwall's menu of them: the
            dev server's, then the commands' that ran. -->
