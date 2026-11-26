@@ -147,16 +147,25 @@ function refocus(): void {
 }
 
 /* A question's card keeps its head, its tabs and its buttons in sight; what it asks scrolls between
-   them (QuestionCard's room; the user's word, 25 Nov). It never gets smaller than about two
-   options' room, below which the to-do list and the card scroll together as before. Its least
-   height eases with its fold, so it never stands taller than what is shown. */
+   them (QuestionCard's room; the user's word, 25 Nov). It takes no more than the room over the
+   composer leaves it (the to-do list giving its own up first), so that room never scrolls along
+   with it (the user's word, 26 Nov: a second scroll bar moved it by a pixel or two). Its least
+   height is its head, tabs and buttons alone: only a room smaller than those scrolls, the card's
+   own then shut. That least height eases with its fold, so it never stands taller than what is
+   shown. */
 .cc.question {
   min-height: 0;
   transition: min-height 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* The head (36), the buttons (28), the gap and the padding under them (10, 12) and the edge. */
 .cc.question:not(.folded) {
-  min-height: 200px;
+  min-height: 88px;
+}
+
+/* And the tabs' row (26) with its gap. */
+.cc.question:not(.folded):has(.tabs) {
+  min-height: 124px;
 }
 
 .cc.question > .cc-head {

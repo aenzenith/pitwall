@@ -1936,6 +1936,12 @@ const retryText = computed(() => {
   overscroll-behavior: contain;
 }
 
+/* Short of room, the to-do list gives its up before a question's card does, down to its least
+   (TodoList: its head, and one item while open). */
+.pinned > .todo-list {
+  flex-shrink: 10000;
+}
+
 /* Claude's plan folded onto the composer: one row, Claude's colour in its edge and head as a card's. */
 .plan-bar {
   flex-shrink: 0;

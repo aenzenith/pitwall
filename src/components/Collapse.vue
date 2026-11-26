@@ -12,7 +12,7 @@ const props = defineProps<{ show: boolean; keep?: boolean; fit?: boolean }>();
 
 const EASE = "height 0.2s cubic-bezier(0.2, 0, 0, 1)";
 
-type Run = { done: () => void; timer: ReturnType<typeof setTimeout>; end: (event: TransitionEvent) => void; watcher: ResizeObserver | null };
+type Run = { done: () => void; opening: boolean; timer: ReturnType<typeof setTimeout>; end: (event: TransitionEvent) => void; watcher: ResizeObserver | null };
 const runs = new WeakMap<HTMLElement, Run>();
 
 function finish(box: HTMLElement): void {
@@ -48,12 +48,20 @@ function ease(box: HTMLElement, from: number, to: number, done: () => void, inne
   watcher?.observe(inner!);
   // Done all the same should no end come (a box hidden on the way); a new target restarts the
   // ease, so the fallback allows for one.
-  runs.set(box, { done, end, watcher, timer: setTimeout(() => finish(box), 450) });
+  runs.set(box, { done, opening: to > from, end, watcher, timer: setTimeout(() => finish(box), 450) });
   box.addEventListener("transitionend", end);
 }
 
 function enter(el: Element, done: () => void): void {
   const box = el as HTMLElement;
+  // A box that comes with its `v-if` is entered twice, by it and by its `v-show`: the second goes on
+  // with the first's ease, which it ends. Measured again, a `fit` box's content would have shrunk
+  // with the box to nothing, and it would open at once.
+  const run = runs.get(box);
+  if (run?.opening) {
+    run.done = done;
+    return;
+  }
   const inner = box.firstElementChild as HTMLElement | null;
   ease(box, 0, inner?.offsetHeight ?? box.scrollHeight, done, props.fit ? null : inner);
 }

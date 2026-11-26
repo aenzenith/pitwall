@@ -25,7 +25,7 @@ const current = computed(() => props.todos.find((todo) => todo.state === "in_pro
       <span class="count">{{ t("chat.todos.count", { done, total: todos.length }) }}</span>
       <span v-if="folded && current" class="now">{{ current.active || current.content }}</span>
     </button>
-    <Collapse :show="!folded">
+    <Collapse :show="!folded" fit>
       <ul class="items">
         <li v-for="(todo, i) in todos" :key="i" :class="todo.state">
           <span class="box" aria-hidden="true"><Icon v-if="todo.state === 'completed'" name="check" :size="10" /></span>
@@ -37,14 +37,32 @@ const current = computed(() => props.todos.find((todo) => todo.state === "in_pro
 </template>
 
 <style scoped>
+/* Given less height than it holds (ChatView's room over the composer, beside a question's card), its
+   items scroll under its head, which always shows: its least height is the head and its edge (30),
+   and open, one item (19) with the padding under it, easing with its fold. */
 .todo-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 30px;
+  transition: min-height 0.2s cubic-bezier(0.2, 0, 0, 1);
   border: 1px solid var(--line-inset);
   border-radius: 8px;
   background: var(--bg-panel);
   font-size: 12.5px;
 }
 
+.todo-list:not(.folded) {
+  min-height: 57px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-list {
+    transition: none;
+  }
+}
+
 .head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 7px;
