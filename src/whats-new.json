@@ -126,6 +126,27 @@
         "ja": "空のターミナルパネルで Claude や Codex の入力欄にスクリーンショットを貼り付けたりドロップしたりすると、メッセージと一緒に渡せます。",
         "zh-Hans": "在空的终端面板里，可以把截图粘贴或拖进 Claude 或 Codex 的输入框，它们会随消息一起发送。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "Changes in Files stay current",
+        "tr": "Dosyalar'daki değişiklikler hep güncel",
+        "de": "Änderungen in Dateien bleiben aktuell",
+        "es": "Los cambios en Archivos, siempre al día",
+        "ru": "Изменения в «Файлах» всегда свежие",
+        "ja": "ファイルウィンドウの変更がいつも最新に",
+        "zh-Hans": "文件窗口中的更改保持最新"
+      },
+      "body": {
+        "en": "Source control in the Files window shows your changes as soon as it opens, and keeps up with them while it stays open.",
+        "tr": "Dosyalar penceresindeki Kaynak denetimi, değişikliklerini pencere açılır açılmaz gösteriyor ve pencere açık kaldıkça onları takip ediyor.",
+        "de": "Die Quellcodeverwaltung im Fenster Dateien zeigt deine Änderungen gleich beim Öffnen und bleibt dran, solange das Fenster offen ist.",
+        "es": "El control de código fuente de la ventana Archivos muestra tus cambios en cuanto se abre y los sigue mientras la tengas abierta.",
+        "ru": "Система контроля версий в окне «Файлы» сразу показывает ваши изменения и следит за ними, пока окно открыто.",
+        "ja": "ファイルウィンドウのソース管理が、開いてすぐに変更を表示し、開いている間はずっと追いかけるようになりました。",
+        "zh-Hans": "文件窗口的源代码管理会在打开时立即显示你的更改，并在窗口打开期间一直跟进。"
+      }
     }
   ]
 }

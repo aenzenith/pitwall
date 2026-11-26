@@ -42,6 +42,11 @@ export type ProjectFiles = {
   folders: Map<string, Folder>;
   /** Null: not a Git work tree, or not read yet. */
   marks: Map<string, Mark> | null;
+  /** Reads of the marks asked for: an answer is taken only while it is the latest one asked (a
+   * follow's read and a refresh's can cross). */
+  marksAsked: number;
+  /** Git's answer the marks were made from, as it came: a follow tells by it whether they changed. */
+  marksKey: string | null;
   /** A folder's strongest mark among what it holds. */
   folderMarks: Map<string, Mark>;
   /** Folders Git ignores or doesn't track as a whole (`node_modules/`, `new/`). */
@@ -145,6 +150,8 @@ export function projectFiles(path: string): ProjectFiles {
       expanded: new Set([""]),
       folders: new Map(),
       marks: null,
+      marksAsked: 0,
+      marksKey: null,
       folderMarks: new Map(),
       wholeFolders: [],
       tabs: [],
@@ -170,8 +177,11 @@ export function projectFiles(path: string): ProjectFiles {
 /** `path`'s window up and in front: its own when it has one (out of the sidebar when folded),
  * else a new one, a step from the last. */
 export function showFiles(path: string): void {
-  projectFiles(path);
+  const read = projects.has(path);
+  const files = projectFiles(path);
   const win = filesWindows.find((w) => w.path === path);
+  // What was read before it was closed or folded may be old: read again as it comes up.
+  if (read && !(win?.open && !win.minimized)) void refreshFiles(files);
   if (win) {
     win.open = true;
     win.minimized = false;
@@ -246,13 +256,20 @@ export function revealInTree(files: ProjectFiles, file: string): void {
 
 const STRENGTH: Record<Mark, number> = { "!": 4, M: 3, R: 3, D: 3, A: 2, U: 2, I: 0 };
 
-export async function loadMarks(files: ProjectFiles): Promise<void> {
+/** Git's marks read again: true when they changed. A read asked for after this one takes over
+ * (this one's answer is let go); with `keep`, Git not answering (in time) leaves what is shown. */
+export async function loadMarks(files: ProjectFiles, keep = false): Promise<boolean> {
+  const asked = ++files.marksAsked;
   const list = await api.explorerStatus(files.path).catch(() => null);
+  if (files.marksAsked !== asked || (keep && !list)) return false;
+  const key = list ? JSON.stringify(list) : null;
+  if (key === files.marksKey) return false;
+  files.marksKey = key;
   if (!list) {
     files.marks = null;
     files.folderMarks = new Map();
     files.wholeFolders = [];
-    return;
+    return true;
   }
   const marks = new Map<string, Mark>();
   const folderMarks = new Map<string, Mark>();
@@ -277,6 +294,7 @@ export async function loadMarks(files: ProjectFiles): Promise<void> {
   files.marks = marks;
   files.folderMarks = folderMarks;
   files.wholeFolders = wholeFolders;
+  return true;
 }
 
 /** A file's mark: its own, or that of a folder Git takes as a whole. */
@@ -442,10 +460,24 @@ export function gutterOf(files: ProjectFiles, file: string, lines: number): Map<
  * state of the project changed). */
 export async function refreshFiles(files: ProjectFiles): Promise<void> {
   await loadMarks(files);
+  refreshShown(files);
+}
+
+/** What the window shows besides the marks read again: open folders, open files, the search's
+ * list, the history. */
+function refreshShown(files: ProjectFiles): void {
   for (const dir of files.expanded) void loadFolder(files, dir);
   for (const file of files.tabs) if (!file.startsWith(COMMIT_TAB)) void readFile(files, file);
   if (files.index && files.index !== "loading") files.index = null;
   if (files.history) void loadHistory(files);
+}
+
+/** A window that is up follows Git (FilesWindow): the marks read again, and only when they
+ * changed, everything shown with them. Gives how long Git took, for the wait before the next. */
+export async function followGit(files: ProjectFiles): Promise<number> {
+  const started = performance.now();
+  if (await loadMarks(files, true)) refreshShown(files);
+  return performance.now() - started;
 }
 
 /** The changes Git sees, as the Source control tab lists them (what it ignores left out). */

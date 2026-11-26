@@ -5,7 +5,7 @@ import Icon from "../../components/Icon.vue";
 import StatusIcon from "../../components/StatusIcon.vue";
 import { agentOn } from "../../lib/agents";
 import { attachToChat, useChatLink } from "../../lib/chat/filesLink";
-import { absolutePath, changesOf, closeFiles, closeShownTab, COMMIT_TAB, forgetFiles, minimizeFiles, peekFiles, raiseFiles, refreshFiles, type FilesWin, type Rect } from "../../lib/explorer";
+import { absolutePath, changesOf, closeFiles, closeShownTab, COMMIT_TAB, followGit, forgetFiles, minimizeFiles, peekFiles, raiseFiles, refreshFiles, type FilesWin, type Rect } from "../../lib/explorer";
 import { gitLine } from "../../lib/format";
 import { holding, moving } from "../../lib/holding";
 import { t } from "../../lib/i18n";
@@ -167,19 +167,47 @@ function refreshSoon(): void {
   timer = window.setTimeout(() => void refreshFiles(target), 250);
 }
 
-// Git's state of the project moved (a save, a commit, a checkout): its marks and files again.
+// Git's state of the project moved (a save, a commit, a checkout): its marks and files again. As
+// the window comes up out of the sidebar or anew, `showFiles` reads them again itself.
 watch(() => JSON.stringify(project.value?.git ?? null), refreshSoon);
 watch(visible, (on) => on && refreshSoon());
-watch(shown, (on, was) => on && was === false && refreshSoon());
+
+/* Git followed while the window is up and Pitwall shows: the marks read again (a file saved in
+   the editor touches nothing the core watches), after a wait that grows with how long Git took
+   (a few seconds in a small repository, half a minute at most in a large one), and what is shown
+   read again only when they changed. Nothing while it is folded or closed, or Pitwall hidden. */
+const FOLLOW_MIN = 3000;
+const FOLLOW_MAX = 30_000;
+let follow: number | undefined;
+let alive = true;
+const following = computed(() => shown.value && visible.value);
+
+function followLater(wait: number): void {
+  clearTimeout(follow);
+  follow = window.setTimeout(() => void followNow(), wait);
+}
+
+async function followNow(): Promise<void> {
+  follow = undefined;
+  const target = files.value;
+  if (!following.value || !target) return;
+  const took = await followGit(target);
+  // Off meanwhile, or brought up again and so already waiting for its next read.
+  if (alive && following.value && follow === undefined) followLater(Math.min(Math.max(took * 20, FOLLOW_MIN), FOLLOW_MAX));
+}
+
+watch(following, (on) => (on ? followLater(FOLLOW_MIN) : clearTimeout(follow)), { immediate: true });
 
 onMounted(() => {
   addEventListener("resize", onResize);
   addEventListener("focus", refreshSoon);
 });
 onBeforeUnmount(() => {
+  alive = false;
   removeEventListener("resize", onResize);
   removeEventListener("focus", refreshSoon);
   clearTimeout(timer);
+  clearTimeout(follow);
   clearTimeout(zoomTimer);
 });
 
@@ -243,6 +271,8 @@ const changeCount = computed(() => (files.value ? changesOf(files.value).length 
 /** A tab shows its panel; the one shown, pressed again, hides it (the file takes the room). */
 function pickSide(side: "files" | "scm"): void {
   win.side = win.side === side ? null : side;
+  // Source control opened: what Git sees now, not at the follow's next read.
+  if (win.side === "scm" && files.value) void followGit(files.value);
 }
 
 /* ---------- motion: it opens and closes in place, and folds into its sidebar entry and back ---------- */
