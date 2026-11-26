@@ -970,6 +970,16 @@ export type RadioResult =
   | { kind: "stopped"; name: string; running: boolean }
   | { kind: "team"; count: number }
   | { kind: "fuel"; session: number | null; week: number | null }
+  // [seam D tab results]
+  | { kind: "tabs"; count: number }
+  | { kind: "tabOpened"; name: string }
+  | { kind: "tabsClosed"; count: number }
+  | { kind: "tabsSent"; count: number }
+  | { kind: "tabWoken"; name: string }
+  | { kind: "tabRead"; name: string }
+  | { kind: "tabRenamed"; name: string }
+  | { kind: "tabPinned"; name: string; pinned: boolean }
+  | { kind: "tabAwake"; name: string; awake: boolean }
   | { kind: "refused" };
 
 /** One call a session made over the radio. */

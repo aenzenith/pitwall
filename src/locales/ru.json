@@ -2097,6 +2097,15 @@
   "radio.tool.board_take": "Берёт карточку из «Далее» и работает над ней в своей сессии",
   "radio.tool.team_status": "Кто ещё работает в проекте: состояние каждой сессии, где она запущена и её карточка",
   "radio.tool.fuel_status": "Свои лимиты по последнему чтению Pitwall и когда они пополнятся",
+  "radio.tool.tab_list": "Перечисляет вкладки терминала проекта, и ваши тоже: агент, состояние и сессию каждой",
+  "radio.tool.tab_open": "Открывает в фоне вкладки Claude, Codex и чата в терминале проекта",
+  "radio.tool.tab_close": "Закрывает вкладки проекта, и ваши тоже; закреплённую никогда, работающую только по прямому указанию",
+  "radio.tool.tab_send": "Отправляет сообщение агентам во вкладках проекта; никогда в оболочку или в открытый диалог",
+  "radio.tool.tab_wake": "Снова запускает сессию в её вкладке, когда агент там завершился",
+  "radio.tool.tab_result": "Читает последний ответ агента во вкладке",
+  "radio.tool.tab_rename": "Переименовывает вкладки проекта",
+  "radio.tool.tab_pin": "Закрепляет и открепляет вкладки проекта",
+  "radio.tool.tab_keep_awake": "Не даёт чату уснуть или позволяет ему снова засыпать",
   "radio.tool.lap_list": "Показывает круги проекта, читает запуски задачи и её последний результат",
   "radio.tool.lap_add": "Добавляет задачу в круги проекта; задача с написанным им скриптом ждёт на паузе, пока вы её не продолжите",
   "radio.tool.lap_edit": "Меняет только задачи, добавленные через радио",
@@ -2143,6 +2152,30 @@
     "other": "{count} сессии"
   },
   "radio.result.noFuel": "Нет данных",
+  "radio.result.tabs": {
+    "one": "{count} вкладка",
+    "few": "{count} вкладки",
+    "many": "{count} вкладок",
+    "other": "{count} вкладки"
+  },
+  "radio.result.tabOpened": "«{name}» · открыта",
+  "radio.result.tabsClosed": {
+    "one": "Закрыта {count} вкладка",
+    "few": "Закрыто {count} вкладки",
+    "many": "Закрыто {count} вкладок",
+    "other": "Закрыто {count} вкладки"
+  },
+  "radio.result.tabsSent": {
+    "one": "Отправлено в {count} вкладку",
+    "few": "Отправлено в {count} вкладки",
+    "many": "Отправлено в {count} вкладок",
+    "other": "Отправлено в {count} вкладки"
+  },
+  "radio.result.tabWoken": "«{name}» · запущена снова",
+  "radio.result.tabPinned": "«{name}» · Закреплена",
+  "radio.result.tabUnpinned": "«{name}» · Откреплена",
+  "radio.result.tabAwake": "«{name}» · не засыпает",
+  "radio.result.tabMaySleep": "«{name}» · может уснуть",
   "radio.kind.codex": "MCP-сервер Codex",
   "radio.hint.codex": "Codex спрашивает Pitwall о dev-сервере, а не запускает свой.",
   "radio.missing.codex": "Codex не найден.",

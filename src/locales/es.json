@@ -2001,6 +2001,15 @@
   "radio.tool.board_take": "Toma una tarjeta de «Siguiente» y trabaja en ella en su sesión",
   "radio.tool.team_status": "Quién más trabaja en el proyecto: el estado de cada sesión, dónde corre y su tarjeta",
   "radio.tool.fuel_status": "Sus propios límites de uso según la última lectura de Pitwall, y cuándo se rellenan",
+  "radio.tool.tab_list": "Enumera las pestañas de terminal del proyecto, también las tuyas: el agente, el estado y la sesión de cada una",
+  "radio.tool.tab_open": "Abre en segundo plano pestañas de Claude, Codex y chat en el terminal del proyecto",
+  "radio.tool.tab_close": "Cierra pestañas del proyecto, también las tuyas; nunca una fijada, y una que trabaja solo si se le pide",
+  "radio.tool.tab_send": "Envía un mensaje a los agentes de las pestañas del proyecto; nunca a una shell ni dentro de un diálogo",
+  "radio.tool.tab_wake": "Vuelve a iniciar una sesión en su pestaña cuando su agente terminó allí",
+  "radio.tool.tab_result": "Lee la última respuesta del agente de una pestaña",
+  "radio.tool.tab_rename": "Cambia el nombre de las pestañas del proyecto",
+  "radio.tool.tab_pin": "Fija las pestañas del proyecto y las deja de fijar",
+  "radio.tool.tab_keep_awake": "Evita que un chat descanse, o deja que vuelva a descansar",
   "radio.tool.lap_list": "Enumera las vueltas del proyecto y lee las ejecuciones y el último resultado de una tarea",
   "radio.tool.lap_add": "Agrega una tarea a las vueltas del proyecto; si escribe un script, la tarea espera en pausa hasta que la reanudes",
   "radio.tool.lap_edit": "Cambia solo las tareas agregadas desde la radio",
@@ -2037,6 +2046,24 @@
     "other": "{count} sesiones"
   },
   "radio.result.noFuel": "Sin lectura",
+  "radio.result.tabs": {
+    "one": "{count} pestaña",
+    "other": "{count} pestañas"
+  },
+  "radio.result.tabOpened": "«{name}» · abierta",
+  "radio.result.tabsClosed": {
+    "one": "{count} pestaña cerrada",
+    "other": "{count} pestañas cerradas"
+  },
+  "radio.result.tabsSent": {
+    "one": "Enviado a {count} pestaña",
+    "other": "Enviado a {count} pestañas"
+  },
+  "radio.result.tabWoken": "«{name}» · iniciada de nuevo",
+  "radio.result.tabPinned": "«{name}» · Fijada",
+  "radio.result.tabUnpinned": "«{name}» · Sin fijar",
+  "radio.result.tabAwake": "«{name}» · sigue despierto",
+  "radio.result.tabMaySleep": "«{name}» · puede descansar",
   "radio.kind.codex": "Servidor MCP de Codex",
   "radio.hint.codex": "Codex le pregunta a Pitwall por el servidor de desarrollo en vez de iniciar uno.",
   "radio.missing.codex": "No se encontró Codex.",

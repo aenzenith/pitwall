@@ -223,7 +223,7 @@ struct Mate {
 }
 
 /// Where a session stands, in plain words: its tool's name the only thing of it said.
-fn state_of(phase: SessionPhase, turn: Option<Turn>, since: Option<u64>, tool: Option<&str>) -> String {
+pub(super) fn state_of(phase: SessionPhase, turn: Option<Turn>, since: Option<u64>, tool: Option<&str>) -> String {
     match phase {
         SessionPhase::Working => since.map_or_else(|| "working".to_string(), |since| format!("working since {}", crate::clock::clock(since as i64))),
         SessionPhase::Waiting => match turn.map(|turn| turn.kind) {
@@ -253,12 +253,12 @@ fn place_of(run: &Running, shells: &[u32]) -> Option<String> {
 }
 
 /// `text` on one line, without control characters.
-fn one_line(text: &str) -> String {
+pub(super) fn one_line(text: &str) -> String {
     text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// `text` cut to `max` characters, an ellipsis where it was.
-fn cut(text: &str, max: usize) -> String {
+pub(super) fn cut(text: &str, max: usize) -> String {
     match text.char_indices().nth(max) {
         Some((end, _)) => format!("{}…", &text[..end]),
         None => text.to_string(),

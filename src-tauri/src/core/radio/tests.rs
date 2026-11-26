@@ -12,6 +12,8 @@ use crate::settings::CustomCommand;
 mod ask_first;
 mod board;
 mod laps;
+#[cfg(unix)]
+mod tabs;
 mod team;
 
 struct Paddock {

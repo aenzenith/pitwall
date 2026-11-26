@@ -87,6 +87,24 @@ function result(call: RadioCall): string {
       const parts = [...left(t("fuel.name.sessionShort"), came.session), ...left(t("fuel.name.weekShort"), came.week)];
       return parts.length ? parts.join(" · ") : t("radio.result.noFuel");
     }
+    // [seam D tab results]
+    case "tabs":
+      return t("radio.result.tabs", { count: came.count });
+    case "tabOpened":
+      return t("radio.result.tabOpened", { name: came.name });
+    case "tabsClosed":
+      return t("radio.result.tabsClosed", { count: came.count });
+    case "tabsSent":
+      return t("radio.result.tabsSent", { count: came.count });
+    case "tabWoken":
+      return t("radio.result.tabWoken", { name: came.name });
+    case "tabRead":
+    case "tabRenamed":
+      return t("radio.result.read", { title: came.name });
+    case "tabPinned":
+      return t(came.pinned ? "radio.result.tabPinned" : "radio.result.tabUnpinned", { name: came.name });
+    case "tabAwake":
+      return t(came.awake ? "radio.result.tabAwake" : "radio.result.tabMaySleep", { name: came.name });
     case "refused":
       return t("radio.result.refused");
   }

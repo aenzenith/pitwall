@@ -1953,6 +1953,15 @@
   "radio.tool.board_take": "Nimmt eine Karte aus „Als Nächstes“ und arbeitet in seiner Sitzung daran",
   "radio.tool.team_status": "Wer sonst im Projekt arbeitet: Stand, Ort und Karte jeder Sitzung",
   "radio.tool.fuel_status": "Die eigenen Nutzungslimits, wie Pitwall sie zuletzt las, und wann sie sich füllen",
+  "radio.tool.tab_list": "Listet die Terminal-Tabs des Projekts auf, deine auch: Agent, Zustand und Sitzung jedes Tabs",
+  "radio.tool.tab_open": "Öffnet im Hintergrund Claude-, Codex- und Chat-Tabs im Terminal des Projekts",
+  "radio.tool.tab_close": "Schließt Tabs des Projekts, deine auch; nie einen angehefteten, einen arbeitenden nur auf Ansage",
+  "radio.tool.tab_send": "Schickt den Agenten in den Tabs des Projekts eine Nachricht; nie an eine Shell oder in einen Dialog",
+  "radio.tool.tab_wake": "Startet eine Sitzung in ihrem Tab neu, wenn ihr Agent dort beendet ist",
+  "radio.tool.tab_result": "Liest die letzte Antwort des Agenten in einem Tab",
+  "radio.tool.tab_rename": "Benennt Tabs des Projekts um",
+  "radio.tool.tab_pin": "Heftet Tabs des Projekts an und löst sie wieder",
+  "radio.tool.tab_keep_awake": "Lässt einen Chat nicht ruhen oder erlaubt es ihm wieder",
   "radio.tool.lap_list": "Listet die Runden des Projekts und liest die Läufe und das letzte Ergebnis einer Aufgabe",
   "radio.tool.lap_add": "Legt eine Aufgabe in den Runden des Projekts an; eine mit selbst geschriebenem Skript wartet pausiert, bis du sie fortsetzt",
   "radio.tool.lap_edit": "Ändert nur über den Funk angelegte Aufgaben",
@@ -1989,6 +1998,24 @@
     "other": "{count} Sitzungen"
   },
   "radio.result.noFuel": "Kein Messwert",
+  "radio.result.tabs": {
+    "one": "{count} Tab",
+    "other": "{count} Tabs"
+  },
+  "radio.result.tabOpened": "„{name}“ · geöffnet",
+  "radio.result.tabsClosed": {
+    "one": "{count} Tab geschlossen",
+    "other": "{count} Tabs geschlossen"
+  },
+  "radio.result.tabsSent": {
+    "one": "An {count} Tab gesendet",
+    "other": "An {count} Tabs gesendet"
+  },
+  "radio.result.tabWoken": "„{name}“ · neu gestartet",
+  "radio.result.tabPinned": "„{name}“ · Angeheftet",
+  "radio.result.tabUnpinned": "„{name}“ · Losgelöst",
+  "radio.result.tabAwake": "„{name}“ · bleibt wach",
+  "radio.result.tabMaySleep": "„{name}“ · darf ruhen",
   "radio.kind.codex": "Codex-MCP-Server",
   "radio.hint.codex": "Codex fragt Pitwall nach dem Dev-Server, statt selbst einen zu starten.",
   "radio.missing.codex": "Codex wurde nicht gefunden.",

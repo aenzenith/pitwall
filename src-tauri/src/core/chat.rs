@@ -238,6 +238,9 @@ struct Shared {
     /// Its process holds what no start brings back (a rule allowed for the session, a folder
     /// added, an MCP server switched, a wakeup it set itself): it never sleeps.
     pinned: bool,
+    /// Kept awake at a session's word over the radio (`tab_keep_awake`): it doesn't sleep until
+    /// it is let sleep again the same way, or closed. In memory only.
+    awake: bool,
     /// The lasting controls the process took, the latest of each kind: a process that wakes is
     /// asked them again.
     kept: Vec<ChatControl>,
@@ -282,6 +285,7 @@ impl Shared {
             active: Instant::now(),
             background: HashSet::new(),
             pinned: false,
+            awake: false,
             kept: Vec::new(),
         }
     }
@@ -310,6 +314,7 @@ impl Shared {
             && !self.wire_lost
             && !self.reset
             && !self.pinned
+            && !self.awake
             && self.state == ChatState::Idle
             && self.pending.is_empty()
             && self.replies.is_empty()
@@ -696,7 +701,7 @@ fn last_lines(text: &str, lines: usize, bytes: usize) -> String {
 }
 
 /// The `claude` a chat runs: the one on the terminal's `PATH`; in a test, the stand-in it set.
-fn chat_program() -> Option<PathBuf> {
+pub(super) fn chat_program() -> Option<PathBuf> {
     #[cfg(test)]
     if let Some(program) = tests::PROGRAM.with(|program| program.borrow().clone()) {
         return Some(program);
@@ -1046,6 +1051,7 @@ impl Core {
                 account: made.account.as_ref().map(|(id, _)| id.clone()),
                 apart: false,
                 pinned: false,
+                by: None,
             };
             inner.terminal_list.push(view.clone());
             view
@@ -1689,6 +1695,30 @@ impl Core {
             }
             shared = tab.changed.wait_timeout(shared, left).map(|(shared, _)| shared).unwrap_or_else(|poisoned| poisoned.into_inner().0);
         }
+    }
+
+    /// Chat tab `id` kept awake, or let sleep again (`awake` false), at a session's word over the
+    /// radio (`tab_keep_awake`): one asleep, or falling asleep, is woken and waited for. Whether it
+    /// was asleep; none when the tab is no chat.
+    pub(super) fn chat_keep_awake(self: &Arc<Self>, id: u64, awake: bool) -> Option<Result<bool, String>> {
+        let tab = self.chat(id)?;
+        let asleep = {
+            let mut shared = tab.lock();
+            shared.awake = awake;
+            shared.rest != Rest::Awake
+        };
+        if awake && asleep {
+            return Some(self.chat_awake(&tab).map(|_| true));
+        }
+        Some(Ok(asleep))
+    }
+
+    /// Where chat tab `id` stands for the radio's list (`tab_list`): its state, whether it sleeps
+    /// (it wakes as soon as anything needs it) and whether a session keeps it awake.
+    pub(super) fn chat_rest_of(&self, id: u64) -> Option<(ChatState, bool, bool)> {
+        let tab = self.chat(id)?;
+        let shared = tab.lock();
+        Some((shared.state, shared.rest != Rest::Awake, shared.awake))
     }
 
     /// A chat asleep, or falling asleep, is taken out of it before its tab ends its chat

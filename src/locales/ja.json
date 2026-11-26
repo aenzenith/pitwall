@@ -1881,6 +1881,15 @@
   "radio.tool.board_take": "「次に」からカードを取り、自分のセッションで作業",
   "radio.tool.team_status": "プロジェクトでほかに作業中のセッション：それぞれの状態、実行場所、カード",
   "radio.tool.fuel_status": "自分の使用上限（Pitwall が最後に読んだ値）と回復時刻",
+  "radio.tool.tab_list": "プロジェクトのターミナルタブを一覧にします。あなたのタブも含め、各タブのエージェント・状態・セッションがわかります",
+  "radio.tool.tab_open": "プロジェクトのターミナルに Claude、Codex、チャットのタブをバックグラウンドで開きます",
+  "radio.tool.tab_close": "プロジェクトのタブを閉じます。あなたのタブも対象ですが、固定タブは閉じず、作業中のタブは指示があるときだけ閉じます",
+  "radio.tool.tab_send": "プロジェクトのタブにいるエージェントにメッセージを送ります。シェルやダイアログには送りません",
+  "radio.tool.tab_wake": "エージェントが終了したタブで、そのセッションを再び始めます",
+  "radio.tool.tab_result": "タブのエージェントが最後に答えた内容を読みます",
+  "radio.tool.tab_rename": "プロジェクトのタブの名前を変えます",
+  "radio.tool.tab_pin": "プロジェクトのタブを固定し、固定を解除します",
+  "radio.tool.tab_keep_awake": "チャットが休まないようにするか、再び休めるようにします",
   "radio.tool.lap_list": "プロジェクトのラップを一覧し、タスクの実行履歴と最後の結果を読む",
   "radio.tool.lap_add": "プロジェクトのラップにタスクを追加（自分でスクリプトを書いたタスクは、あなたが再開するまで一時停止のまま）",
   "radio.tool.lap_edit": "無線で追加されたタスクだけを変更",
@@ -1912,6 +1921,21 @@
     "other": "{count} セッション"
   },
   "radio.result.noFuel": "読み取りなし",
+  "radio.result.tabs": {
+    "other": "{count} タブ"
+  },
+  "radio.result.tabOpened": "「{name}」 · 開きました",
+  "radio.result.tabsClosed": {
+    "other": "{count} タブを閉じました"
+  },
+  "radio.result.tabsSent": {
+    "other": "{count} タブに送信"
+  },
+  "radio.result.tabWoken": "「{name}」 · 再開しました",
+  "radio.result.tabPinned": "「{name}」 · 固定",
+  "radio.result.tabUnpinned": "「{name}」 · 固定を解除",
+  "radio.result.tabAwake": "「{name}」 · 休まない",
+  "radio.result.tabMaySleep": "「{name}」 · 休んでもよい",
   "radio.kind.codex": "Codex の MCP サーバー",
   "radio.hint.codex": "Codex は開発サーバーを自分で起動せず、Pitwall に尋ねます。",
   "radio.missing.codex": "Codex が見つかりません。",

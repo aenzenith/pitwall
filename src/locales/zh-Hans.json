@@ -1881,6 +1881,15 @@
   "radio.tool.board_take": "从“待办”中领取一张卡片，并在自己的会话中处理",
   "radio.tool.team_status": "还有谁在这个项目里工作：每个会话的状态、运行位置和卡片",
   "radio.tool.fuel_status": "自己的限额（Pitwall 最近读取的值）及恢复时间",
+  "radio.tool.tab_list": "列出项目的终端标签页，你的也包括在内：每个标签页的智能体、状态和会话",
+  "radio.tool.tab_open": "在项目的终端里于后台打开 Claude、Codex 和对话标签页",
+  "radio.tool.tab_close": "关闭项目的标签页，你的也包括在内；从不关闭已固定的，正在工作的只在被要求时才关闭",
+  "radio.tool.tab_send": "给项目标签页里的智能体发消息；从不发给 shell，也不写进对话框",
+  "radio.tool.tab_wake": "在智能体已结束的标签页里重新开始它的会话",
+  "radio.tool.tab_result": "读取标签页里智能体最后的回答",
+  "radio.tool.tab_rename": "重命名项目的标签页",
+  "radio.tool.tab_pin": "固定项目的标签页，或取消固定",
+  "radio.tool.tab_keep_awake": "让对话不休息，或允许它再次休息",
   "radio.tool.lap_list": "列出项目的圈次，读取任务的运行记录和最近结果",
   "radio.tool.lap_add": "向项目的圈次添加任务；它自己写了脚本的任务会保持暂停，直到你继续",
   "radio.tool.lap_edit": "只修改通过无线电添加的任务",
@@ -1912,6 +1921,21 @@
     "other": "{count} 个会话"
   },
   "radio.result.noFuel": "无读数",
+  "radio.result.tabs": {
+    "other": "{count} 个标签页"
+  },
+  "radio.result.tabOpened": "“{name}” · 已打开",
+  "radio.result.tabsClosed": {
+    "other": "已关闭 {count} 个标签页"
+  },
+  "radio.result.tabsSent": {
+    "other": "已发送到 {count} 个标签页"
+  },
+  "radio.result.tabWoken": "“{name}” · 已重新开始",
+  "radio.result.tabPinned": "“{name}” · 已固定",
+  "radio.result.tabUnpinned": "“{name}” · 已取消固定",
+  "radio.result.tabAwake": "“{name}” · 保持唤醒",
+  "radio.result.tabMaySleep": "“{name}” · 可休息",
   "radio.kind.codex": "Codex 的 MCP 服务器",
   "radio.hint.codex": "Codex 向 Pitwall 询问开发服务器，而不是自己启动。",
   "radio.missing.codex": "未找到 Codex。",

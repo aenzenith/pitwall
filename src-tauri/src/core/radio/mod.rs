@@ -32,6 +32,7 @@ use crate::mcp::{self, receive, same_secret, send, Call, Endpoint, Hello, Reply,
 
 mod board_tools;
 mod lap_tools;
+mod tab_tools;
 pub(super) mod register;
 mod team_tools;
 mod tools;
@@ -89,6 +90,9 @@ pub(super) struct Radio {
     /// What the team's tools keep: where each caller last read an output, and how the fuel
     /// readings are asked for (`team_tools.rs`).
     pub(super) team: team_tools::Team,
+    /// When each session last opened tabs over the radio, the latest few (`tab_tools.rs`): its
+    /// bound on tabs a minute. In memory only.
+    pub(super) opens: HashMap<String, VecDeque<Instant>>,
 }
 
 /// Who calls: the folder Claude Code started its server in, and Claude Code's own pid.
@@ -153,6 +157,22 @@ pub enum CallResult {
     /// The shares used `fuel_status` answered, in whole percents: the 5-hour session's and the
     /// week's, none where there was no reading of it.
     Fuel { session: Option<u32>, week: Option<u32> },
+    // [seam D tab results]
+    /// The tabs `tab_list` listed: how many.
+    Tabs { count: usize },
+    /// A tab opened, by its name.
+    TabOpened { name: String },
+    /// Tabs closed, or sent a message: how many of those asked.
+    TabsClosed { count: usize },
+    TabsSent { count: usize },
+    /// A tab's session started again, its last answer read, or the tab renamed: by its name.
+    TabWoken { name: String },
+    TabRead { name: String },
+    TabRenamed { name: String },
+    /// A tab pinned, or unpinned (`pinned` false), by its name.
+    TabPinned { name: String, pinned: bool },
+    /// A chat kept awake, or let sleep again (`awake` false), by its name.
+    TabAwake { name: String, awake: bool },
     Refused,
 }
 

@@ -85,6 +85,10 @@ pub struct TerminalView {
     /// mark alone, and closes it from its menu only. The records of a quit and of an update's
     /// restart keep it (`resume.rs`, `restore.rs`). A laps' tab is never pinned.
     pub pinned: bool,
+    /// Opened over the radio, by this agent's session (`tab_open`, `radio/tab_tools.rs`): for the
+    /// radio's list and its bound on such tabs. In memory only, in no record.
+    #[serde(skip)]
+    pub by: Option<Agent>,
 }
 
 /// A terminal's recent output and the number of its last chunk, so a view can draw the history
@@ -443,7 +447,7 @@ impl Core {
                 None => format!("{base} {}", same + 1),
             };
             let account = account.map(|(id, _)| id);
-            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), chat: None, shell, elevated, renamed, unasked, account, apart, pinned: false };
+            let view = TerminalView { id, path: path.to_string(), name, kind: kind.into(), chat: None, shell, elevated, renamed, unasked, account, apart, pinned: false, by: None };
             inner.terminal_list.push(view.clone());
             view
         };
@@ -701,6 +705,7 @@ impl Core {
     /// (`refresh_claude`) and costs nothing while no tab is left to name. Codex's tabs are named
     /// the same way first (`name_codex_terminals`).
     pub(super) fn name_terminals(&self) {
+        self.remember_tab_sessions();
         self.name_codex_terminals();
         self.name_chats();
         let open: Vec<u64> = self.lock().terminal_list.iter().filter(|t| t.kind == "claude" && !t.renamed && !t.apart).map(|t| t.id).collect();
@@ -759,6 +764,69 @@ impl Core {
                 .collect()
         };
         self.give_names(names);
+    }
+
+    /// Notes the session that runs under each agent's tab, of the tab's own agent, as the tabs'
+    /// names find it (`tab_sessions`): what the radio's `tab_wake` starts again in that tab once its
+    /// agent has ended there (`Inner::tab_seen`). An agent that is off is read for nothing, and
+    /// none of the laps' tabs is looked at.
+    fn remember_tab_sessions(&self) {
+        let open: Vec<(u64, Agent)> = self.lock().terminal_list.iter().filter(|t| !t.apart).filter_map(|t| Some((t.id, Agent::of_tab(&t.kind)?))).collect();
+        if open.is_empty() {
+            return;
+        }
+        let shells = self.terminal_shells();
+        let mut seen = Vec::new();
+        for agent in Agent::ALL {
+            let ids: Vec<u64> = open.iter().filter(|(_, of)| *of == agent).map(|(id, _)| *id).collect();
+            if ids.is_empty() || !self.agent_on(agent) {
+                continue;
+            }
+            let running = match agent {
+                Agent::Claude => self.running_cached(),
+                Agent::Codex => self.codex_running(),
+            };
+            let Some(running) = running else {
+                continue;
+            };
+            seen.extend(tab_sessions(&running, &shells, &ids).into_iter().map(|(tab, (session, _))| (tab, agent, session.clone())));
+        }
+        if seen.is_empty() {
+            return;
+        }
+        let mut inner = self.lock();
+        for (tab, agent, session) in seen {
+            if inner.terminal_list.iter().any(|t| t.id == tab) {
+                inner.tab_seen.insert(tab, (agent, session));
+            }
+        }
+    }
+
+    /// The session last seen under tab `id`, of the tab's own agent (`remember_tab_sessions`).
+    pub(super) fn tab_seen(&self, id: u64) -> Option<(Agent, String)> {
+        self.lock().tab_seen.get(&id).cloned()
+    }
+
+    /// Starts `agent`'s session `session` again in tab `id`, whose agent ended there and whose
+    /// shell is at its prompt: the line `resume_command` (`codex_resume_command`) runs, typed at
+    /// that prompt after what was typed there is cleared, and the tab counts as just opened
+    /// (`STARTING`) while the agent comes up. Only a session id gets into the line.
+    pub(super) fn wake_terminal(&self, id: u64, agent: Agent, session: &str) -> bool {
+        if !is_session_id(session) {
+            return false;
+        }
+        let line = match agent {
+            Agent::Claude => format!("claude --resume {session}"),
+            Agent::Codex => format!("codex resume --no-daemon {session}"),
+        };
+        // What was typed at the prompt goes first: Ctrl+U on Unix, Esc in Command Prompt.
+        let clear = if cfg!(windows) { "\x1b" } else { "\x15" };
+        let mut sessions = self.terminal_sessions();
+        let Some(tab) = sessions.get_mut(&id) else {
+            return false;
+        };
+        tab.opened = Instant::now();
+        tab.input.send(format!("{clear}{line}\r")).is_ok()
     }
 
     /// Each tab of `names` takes its new title, unless the user renamed it meanwhile.
@@ -844,6 +912,7 @@ impl Core {
             let mut inner = self.lock();
             let before = inner.terminal_list.len();
             inner.terminal_list.retain(|t| t.id != id);
+            inner.tab_seen.remove(&id);
             before != inner.terminal_list.len()
         };
 
@@ -1015,7 +1084,7 @@ const FIRST_PROMPT_BYTES: usize = 100_000;
 /// a character's boundary; none when nothing is left. A lone word gets a line break after it:
 /// Claude reads a prompt that is one of its subcommands' names (`update`, `doctor`…) as that
 /// subcommand even after `--` (see the board's), and only one that is the name whole.
-fn first_prompt(text: Option<String>) -> Option<String> {
+pub(super) fn first_prompt(text: Option<String>) -> Option<String> {
     let text: String = text?.chars().filter(|&c| c != '\0').collect();
     let mut text = text.trim().to_string();
     if text.is_empty() {
@@ -1208,7 +1277,7 @@ pub(super) fn codex_resume_command(_shell: &str, session: &str) -> Result<Comman
 /// Each tab of `open`'s session among `running`: the one nearest its shell (one that the agent
 /// started itself runs further down), the one started last of two as near; with the session's
 /// folder, else the tab's project.
-fn tab_sessions<'a>(running: &'a HashMap<String, super::sessions::Running>, shells: &'a [(u32, u64, String)], open: &[u64]) -> HashMap<u64, (&'a String, &'a str)> {
+pub(super) fn tab_sessions<'a>(running: &'a HashMap<String, super::sessions::Running>, shells: &'a [(u32, u64, String)], open: &[u64]) -> HashMap<u64, (&'a String, &'a str)> {
     let mut sessions: HashMap<u64, (usize, u64, &String, &str)> = HashMap::new();
     for (session, run) in running {
         let Some((depth, terminal, path)) =

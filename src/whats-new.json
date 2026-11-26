@@ -4,6 +4,27 @@
     {
       "kind": "new",
       "title": {
+        "en": "Agents can work your tabs",
+        "tr": "Ajanlar sekmelerini yönetebiliyor",
+        "de": "Agenten bedienen deine Tabs",
+        "es": "Los agentes manejan tus pestañas",
+        "ru": "Агенты управляют вкладками",
+        "ja": "エージェントがタブを操作できるように",
+        "zh-Hans": "智能体可以操作你的标签页"
+      },
+      "body": {
+        "en": "Over the team radio, Claude or Codex can open, close and message the tabs of its project, and start an ended session again in its tab. You switch each tool on in Settings.",
+        "tr": "Claude ya da Codex, takım radyosu üzerinden projesindeki sekmeleri açıp kapatabilir, onlara mesaj yollayabilir, kapanmış bir oturumu sekmesinde yeniden başlatabilir. Her aracı Ayarlar'dan sen açarsın.",
+        "de": "Über den Teamfunk kann Claude oder Codex die Tabs seines Projekts öffnen, schließen und ihnen schreiben, und eine beendete Sitzung in ihrem Tab neu starten. Jedes Werkzeug schaltest du in den Einstellungen ein.",
+        "es": "Por la radio del equipo, Claude o Codex pueden abrir y cerrar las pestañas de su proyecto, escribirles y volver a iniciar en su pestaña una sesión que terminó. Cada herramienta la activas tú en Ajustes.",
+        "ru": "Через командное радио Claude или Codex может открывать и закрывать вкладки своего проекта, писать в них и снова запускать завершённую сессию в её вкладке. Каждый инструмент вы включаете в настройках.",
+        "ja": "チーム無線を通じて、Claude や Codex がプロジェクトのタブを開いたり閉じたり、メッセージを送ったり、終了したセッションをそのタブで再開したりできます。各ツールは設定でオンにします。",
+        "zh-Hans": "通过车队无线电，Claude 或 Codex 可以打开、关闭项目里的标签页，给它们发消息，还能在原标签页里重新开始已结束的会话。每个工具都在设置里由你打开。"
+      }
+    },
+    {
+      "kind": "new",
+      "title": {
         "en": "Approved plans go on in auto mode",
         "tr": "Onaylanan plan otomatik modda sürüyor",
         "de": "Freigegebene Pläne laufen im automatischen Modus weiter",

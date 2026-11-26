@@ -349,6 +349,136 @@ pub const TOOLS: &[Tool] = &[
         arguments: || json!({}),
         required: &[],
     },
+    // [seam D tab tools]
+    Tool {
+        name: "tab_list",
+        description: "Lists the tabs of this project's terminal panel in Pitwall, the user's too: each tab's id, its kind (a Claude or \
+                      Codex terminal, a Claude chat, a shell), its name, where its agent stands and its session's id, who opened it and \
+                      whether it is pinned; this session's own tab is marked. Use this before acting on a tab.",
+        acts: false,
+        default_on: true,
+        arguments: || json!({}),
+        required: &[],
+    },
+    Tool {
+        name: "tab_open",
+        description: "Opens a new Claude or Codex terminal tab, or a Claude chat, in this project's terminal panel, in the background: \
+                      the user sees it there and can step in. Give it a `prompt` to start it on a job, then follow it with tab_list and \
+                      read its answer with tab_result once its turn is over. No shell tab is opened over the radio.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "kind": { "type": "string", "enum": ["claude", "codex", "chat"], "description": "claude or codex: an agent in a terminal tab; chat: a Claude chat." },
+                "prompt": { "type": "string", "description": "Its first job." },
+                "model": {
+                    "type": "string",
+                    "description": "Claude (and a chat): fable, opus, sonnet or haiku. Codex: gpt-6.1-sol, gpt-6.1-terra, gpt-6-astra or gpt-6-luna. The project's own when left out.",
+                },
+                "mode": {
+                    "type": "string",
+                    "description": "Claude: normal, plan or acceptEdits. A chat: normal, plan, acceptEdits or auto. Codex: normal or readOnly. The project's own when left out.",
+                },
+                "name": { "type": "string", "description": "The tab's name. It takes its session's when left out." },
+            })
+        },
+        required: &["kind"],
+    },
+    Tool {
+        name: "tab_close",
+        description: "Closes tabs of this project's terminal panel, the user's too, ending what runs in them. A pinned tab, an \
+                      administrator's and this session's own are left open, and so is a tab whose agent is at work or whose shell runs \
+                      a program, unless `force` is true. A session that ended stays in its log and can be opened again.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "tabs": { "type": "array", "items": { "type": "integer" }, "description": "The tabs' ids, as tab_list gives them." },
+                "force": { "type": "boolean", "description": "Close a tab even while its agent works or its shell runs a program." },
+            })
+        },
+        required: &["tabs"],
+    },
+    Tool {
+        name: "tab_send",
+        description: "Sends a message to the agents of tabs of this project's terminal panel, the user's too: a Claude or Codex terminal \
+                      gets it as typed text and a Return, a chat as its next message. Nothing is written to a tab whose agent shows a \
+                      dialog (a permission, a question), whose state can't be read or whose agent ended, nor to a shell.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "tabs": { "type": "array", "items": { "type": "integer" }, "description": "The tabs' ids, as tab_list gives them." },
+                "text": { "type": "string", "description": "The message." },
+            })
+        },
+        required: &["tabs", "text"],
+    },
+    Tool {
+        name: "tab_wake",
+        description: "Starts the session of a tab of this project again where its agent ended and the tab stayed open: a Claude or Codex \
+                      terminal goes on with the same session, a chat whose process ended starts again. With `text`, that message follows \
+                      once the agent is up. A session that runs elsewhere isn't started a second time.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "tab": { "type": "integer", "description": "The tab's id, as tab_list gives it." },
+                "text": { "type": "string", "description": "A message for the agent once it is up." },
+            })
+        },
+        required: &["tab"],
+    },
+    Tool {
+        name: "tab_result",
+        description: "What the agent of a tab of this project last said: the text of its last answer, read from its session's log now. \
+                      Use this once a tab you gave a job to is no longer at work.",
+        acts: false,
+        default_on: false,
+        arguments: || json!({ "tab": { "type": "integer", "description": "The tab's id, as tab_list gives it." } }),
+        required: &["tab"],
+    },
+    Tool {
+        name: "tab_rename",
+        description: "Renames a tab of this project's terminal panel. It keeps that name from then on, as one the user gave.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "tab": { "type": "integer", "description": "The tab's id, as tab_list gives it." },
+                "name": { "type": "string", "description": "Its new name." },
+            })
+        },
+        required: &["tab", "name"],
+    },
+    Tool {
+        name: "tab_pin",
+        description: "Pins a tab of this project's terminal panel at the start of its row, or unpins it. A pinned tab isn't closed over the radio.",
+        acts: true,
+        default_on: false,
+        arguments: || {
+            json!({
+                "tab": { "type": "integer", "description": "The tab's id, as tab_list gives it." },
+                "pinned": { "type": "boolean", "description": "true pins it (when left out), false unpins it." },
+            })
+        },
+        required: &["tab"],
+    },
+    Tool {
+        name: "tab_keep_awake",
+        description: "Keeps a chat of this project from falling asleep, or lets it sleep again: a chat nothing happened in for a while \
+                      lets its process go until something needs it. Use this when a session must stay up, waiting for something. This \
+                      session's own tab when `tab` is left out. Terminal tabs never sleep.",
+        acts: true,
+        default_on: true,
+        arguments: || {
+            json!({
+                "tab": { "type": "integer", "description": "The tab's id, as tab_list gives it. This session's own when left out." },
+                "awake": { "type": "boolean", "description": "true keeps it awake (when left out), false lets it sleep again." },
+            })
+        },
+        required: &[],
+    },
 ];
 
 impl Tool {

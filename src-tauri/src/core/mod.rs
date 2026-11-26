@@ -245,6 +245,10 @@ struct Inner {
     tails: HashMap<String, Tail>,
     /// Open project terminals, in the order they were opened.
     terminal_list: Vec<TerminalView>,
+    /// The agent's session last seen under each agent's tab, by the tab's id
+    /// (`remember_tab_sessions`): the one the radio's `tab_wake` starts again once its agent has
+    /// ended there. In memory only, gone with the tab.
+    tab_seen: HashMap<u64, (Agent, String)>,
     /// How the panel lays each project's terminals out, by project, while not one at a time
     /// (`layout.rs`).
     terminal_layouts: HashMap<String, layout::TerminalLayout>,

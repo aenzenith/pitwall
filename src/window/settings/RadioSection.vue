@@ -62,6 +62,16 @@ const TEXT: Record<string, Key> = {
   // [seam C2 team tools]
   team_status: "radio.tool.team_status",
   fuel_status: "radio.tool.fuel_status",
+  // [seam D tab tools]
+  tab_list: "radio.tool.tab_list",
+  tab_open: "radio.tool.tab_open",
+  tab_close: "radio.tool.tab_close",
+  tab_send: "radio.tool.tab_send",
+  tab_wake: "radio.tool.tab_wake",
+  tab_result: "radio.tool.tab_result",
+  tab_rename: "radio.tool.tab_rename",
+  tab_pin: "radio.tool.tab_pin",
+  tab_keep_awake: "radio.tool.tab_keep_awake",
 };
 
 /** `stacked`: in Settings › Agents' narrower part, what the radio is goes under its name, not

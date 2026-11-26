@@ -198,6 +198,8 @@ impl Core {
             "stop_command" => self.radio_stop(project, args),
             "team_status" => self.radio_team(project, session),
             "fuel_status" => self.radio_fuel(agent),
+            // [seam D tab dispatch]
+            name if name.starts_with("tab_") => self.radio_tab(agent, project, name, session, args),
             _ => refused(format!("Unknown tool: {name}")),
         }
     }

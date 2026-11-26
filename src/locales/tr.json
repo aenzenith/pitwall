@@ -1936,6 +1936,15 @@
   "radio.tool.board_take": "Sıradaki'nden bir kart alır, oturumunda onun üzerinde çalışır",
   "radio.tool.team_status": "Projede başka kimlerin çalıştığı: her oturumun durumu, nerede çalıştığı ve kartı",
   "radio.tool.fuel_status": "Kendi kullanım limitleri ve dolum saatleri, Pitwall'un son okumasıyla",
+  "radio.tool.tab_list": "Projenin terminal sekmelerini listeler, seninkiler de dahil: her birinin ajanı, durumu ve oturumu",
+  "radio.tool.tab_open": "Projenin terminal panelinde arka planda Claude, Codex ve sohbet sekmesi açar",
+  "radio.tool.tab_close": "Projenin sekmelerini kapatır, seninkiler de dahil; sabit sekmeyi asla, çalışanı yalnız istenirse kapatır",
+  "radio.tool.tab_send": "Projenin sekmelerindeki ajanlara mesaj gönderir; kabuğa ve açık bir diyaloğa asla yazmaz",
+  "radio.tool.tab_wake": "Ajanı kapanmış sekmede oturumu yeniden başlatır",
+  "radio.tool.tab_result": "Bir sekmedeki ajanın son cevabını okur",
+  "radio.tool.tab_rename": "Projenin sekmelerini yeniden adlandırır",
+  "radio.tool.tab_pin": "Projenin sekmelerini sabitler ve sabitlemeyi kaldırır",
+  "radio.tool.tab_keep_awake": "Bir sohbetin dinlenmeye geçmesini önler ya da yeniden dinlenmesine izin verir",
   "radio.tool.lap_list": "Projenin turlarını listeler, bir işin koşularını ve son sonucunu okur",
   "radio.tool.lap_add": "Projenin turlarına iş ekler; betiğini kendisi yazdıysa iş, sen sürdürene dek duraklatılmış bekler",
   "radio.tool.lap_edit": "Yalnız radyodan eklenen işleri değiştirir",
@@ -1972,6 +1981,24 @@
     "other": "{count} oturum"
   },
   "radio.result.noFuel": "Okuma yok",
+  "radio.result.tabs": {
+    "one": "{count} sekme",
+    "other": "{count} sekme"
+  },
+  "radio.result.tabOpened": "“{name}” · açıldı",
+  "radio.result.tabsClosed": {
+    "one": "{count} sekme kapandı",
+    "other": "{count} sekme kapandı"
+  },
+  "radio.result.tabsSent": {
+    "one": "{count} sekmeye gitti",
+    "other": "{count} sekmeye gitti"
+  },
+  "radio.result.tabWoken": "“{name}” · yeniden başladı",
+  "radio.result.tabPinned": "“{name}” · Sabitlendi",
+  "radio.result.tabUnpinned": "“{name}” · Sabitleme kaldırıldı",
+  "radio.result.tabAwake": "“{name}” · uyanık tutuluyor",
+  "radio.result.tabMaySleep": "“{name}” · dinlenebilir",
   "radio.kind.codex": "Codex MCP sunucusu",
   "radio.hint.codex": "Codex sunucuyu kendisi başlatmak yerine Pitwall'a sorar.",
   "radio.missing.codex": "Codex bulunamadı.",
