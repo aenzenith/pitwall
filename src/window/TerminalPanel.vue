@@ -3716,9 +3716,32 @@ defineExpose({ openTerminal, closeShown });
 
 /* A pinned tab never narrows: its mark (and its agent's dot) is all it shows. */
 .tab.pinned {
+  position: relative;
   min-width: 0;
   flex-shrink: 0;
   padding: 0 7px;
+}
+
+/* The pinned tabs set off from the others by a line, as the tabs are from the buttons after them
+   (.divider). It goes with the last pinned tab, which a drag among the others never moves; while
+   the pinned ones themselves are dragged, it is out of sight. */
+.tab.pinned:has(+ .tab:not(.pinned)) {
+  margin-right: 9px;
+}
+
+.tab.pinned:has(+ .tab:not(.pinned))::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: -6px;
+  width: 1px;
+  height: 14px;
+  background: var(--line);
+  pointer-events: none;
+}
+
+.tablist.reordering:has(.tab.pinned.dragging) .tab.pinned::after {
+  visibility: hidden;
 }
 
 /* A tab holds its whole name; what passes this is cut, and the tooltip shows it all. */
