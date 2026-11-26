@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.27.1](https://github.com/aenzenith/pitwall/compare/v1.27.0...v1.27.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **chat:** an answer the user interrupted ended without an error under it ([479b72b](https://github.com/aenzenith/pitwall/commit/479b72bc8e4f6902390b509da4fc65f33bcff30b))
+* **terminal:** a click in the recent tabs list opened its tab, not what stood behind it ([0e1c64d](https://github.com/aenzenith/pitwall/commit/0e1c64d6d16fe9b5ad71f02998310bb12213faa5))
+* **terminals:** the terminals' window on Windows wore Pitwall's own title bar instead of two stacked bars ([d037c54](https://github.com/aenzenith/pitwall/commit/d037c5492a7e31df78020f76c1b29e06b465841d))
+
 ## [1.27.0](https://github.com/aenzenith/pitwall/compare/v1.26.0...v1.27.0) (2026-11-26)
 
 
