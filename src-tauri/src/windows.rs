@@ -86,10 +86,11 @@ pub fn get_or_create<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<Webv
     // the switcher is opaque there and its page paints the whole window.
     #[cfg(target_os = "linux")]
     let config = tauri::utils::config::WindowConfig { transparent: false, ..config };
-    // Windows: the main window draws its own title bar (window/TitleBar), the system's is off. Its
-    // edges, shadow, corners and resizing stay the system's (the shadow is on by default).
+    // Windows: the main window and the terminals' window draw their own title bar (window/TitleBar),
+    // the system's is off. Their edges, shadow, corners and resizing stay the system's (the shadow
+    // is on by default).
     #[cfg(windows)]
-    let config = if label == MAIN { tauri::utils::config::WindowConfig { decorations: false, ..config } } else { config };
+    let config = if label == MAIN || label == TERMINALS { tauri::utils::config::WindowConfig { decorations: false, ..config } } else { config };
     // No window opens the Web Inspector, a dev build's neither: no "Inspect Element" in the
     // browser menu of a text field or selectable text, no F12 or Ctrl+Shift+I on Windows, nothing
     // for Safari's Develop menu. Tauri's own ⌥⌘I goes through `internal_toggle_devtools`, which

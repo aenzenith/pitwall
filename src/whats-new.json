@@ -42,6 +42,27 @@
         "ja": "⌃Tab の一覧でタブをクリックすると、後ろにあるものではなくそのタブが開くようになりました。各タブの下にプロジェクト名が出て、今のプロジェクトのタブが先頭に並びます。",
         "zh-Hans": "在 ⌃Tab 列表里点击标签，现在会打开这个标签，而不是点到后面的内容。每个标签下方会显示所属项目，当前项目的标签排在最前面。"
       }
+    },
+    {
+      "kind": "fix",
+      "title": {
+        "en": "One title bar on the terminals window",
+        "tr": "Terminaller penceresindeki çift çubuk düzeltildi",
+        "de": "Nur noch eine Titelleiste im Terminalfenster",
+        "es": "Una sola barra en la ventana de terminales",
+        "ru": "У окна терминалов одна строка заголовка",
+        "ja": "ターミナルのウィンドウのバーが 1 本になりました",
+        "zh-Hans": "终端窗口只剩一条标题栏"
+      },
+      "body": {
+        "en": "On Windows, the terminals' own window no longer stacks two bars. It wears Pitwall's title bar like the main window, with Always on top and Back to Pitwall right in it.",
+        "tr": "Windows'ta terminallerin ayrı penceresinde artık üst üste iki çubuk çıkmıyor. Pencere, ana pencere gibi Pitwall'ın kendi çubuğunu kullanıyor; Hep üstte ve Pitwall'a geri al da o çubukta duruyor.",
+        "de": "Unter Windows zeigt das eigene Terminalfenster keine zwei Leisten mehr übereinander. Es trägt jetzt wie das Hauptfenster Pitwalls Titelleiste, mit „Immer im Vordergrund“ und „Zurück zu Pitwall“ direkt darin.",
+        "es": "En Windows, la ventana propia de los terminales ya no muestra dos barras una encima de otra. Lleva la barra de título de Pitwall, como la ventana principal, con «Siempre encima» y «Volver a Pitwall» dentro.",
+        "ru": "В Windows у отдельного окна терминалов больше нет двух полос друг над другом. У него теперь заголовок Pitwall, как у главного окна, и в нём же «Поверх всех окон» и «Вернуть в Pitwall».",
+        "ja": "Windows では、ターミナル専用ウィンドウにバーが 2 本重なって出なくなりました。メインウィンドウと同じ Pitwall のタイトルバーになり、「常に手前」と「Pitwall に戻す」もそこに並びます。",
+        "zh-Hans": "在 Windows 上，终端的独立窗口不再叠着两条栏。它和主窗口一样用上了 Pitwall 自己的标题栏，“始终置顶”和“放回 Pitwall”也都在这条栏里。"
+      }
     }
   ]
 }

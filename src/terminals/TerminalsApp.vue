@@ -8,16 +8,19 @@ import { chatAsks } from "../lib/chat/open";
 import { t } from "../lib/i18n";
 import { focusPanel, panelPath, revealTab, terminalCollapsed } from "../lib/panel";
 import { followStand, keepPanelState, listenPanelAsks, standPanel, takePanelState } from "../lib/panelStand";
-import { closeChord, dragRegion, terminalChord } from "../lib/platform";
+import { closeChord, dragRegion, isWindows, terminalChord } from "../lib/platform";
 import { api, connectDeps, connectSessions, snapshot } from "../lib/store";
 import StartChatDialog from "../window/chat/StartChatDialog.vue";
 import TerminalPanel from "../window/TerminalPanel.vue";
+import TitleBar from "../window/TitleBar.vue";
 
 /**
  * The terminals' own window (Settings › General, the panel's buttons, the card let go out of
  * Pitwall's window): the panel of the main window's bottom, standing alone, over the same
- * terminals. Its bar keeps the window buttons' room, says what it is, and holds "Always on top" and
- * the way back into Pitwall's window. Closing it puts the panel back there too (the core).
+ * terminals. Its bar says what it is and holds "Always on top" and the way back into Pitwall's
+ * window: on macOS beside the traffic lights, on Windows in Pitwall's own title bar (TitleBar, the
+ * system's being off, `windows.rs`) before Windows' buttons. Closing it puts the panel back there
+ * too (the core).
  */
 
 // In its own window the panel never folds.
@@ -100,7 +103,19 @@ onBeforeUnmount(() => {
 
 <template>
   <div :class="['terminals', { shown }]">
-    <header class="bar" :data-tauri-drag-region="dragRegion">
+    <!-- Windows: Pitwall's own title bar, as the main window has it, with the window's name and its
+         two buttons; the system's is off. -->
+    <TitleBar v-if="isWindows" class="win-bar" :label="t('terminals.title')">
+      <button type="button" :class="['bar-button', { on: onTop }]" :aria-pressed="onTop" :aria-label="t('terminals.onTop')" :title="t('terminals.onTopHint')" @click="toggleOnTop">
+        <Icon name="pin" :size="12" />
+        <span class="bar-label">{{ t("terminals.onTop") }}</span>
+      </button>
+      <button type="button" class="bar-button" :aria-label="t('terminals.back')" :title="t('terminals.backHint')" @click="bringBack">
+        <Icon name="panel-dock" :size="12" />
+        <span class="bar-label">{{ t("terminals.back") }}</span>
+      </button>
+    </TitleBar>
+    <header v-else class="bar" :data-tauri-drag-region="dragRegion">
       <Icon name="terminal" :size="13" />
       <span class="title">{{ t("terminals.title") }}</span>
       <span class="grow"></span>
@@ -169,6 +184,25 @@ onBeforeUnmount(() => {
 
 :root:not([data-platform="mac"]) .bar {
   padding-left: 14px;
+}
+
+/* Windows: the title bar over the panel's room, a hairline under it. */
+.win-bar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* A narrow window keeps the two buttons' marks alone, their names in the tooltip. */
+@media (max-width: 639px) {
+  .win-bar .bar-button {
+    width: 28px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .win-bar .bar-label {
+    display: none;
+  }
 }
 
 .title {

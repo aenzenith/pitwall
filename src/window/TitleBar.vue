@@ -9,12 +9,20 @@ import { t } from "../lib/i18n";
 import { TITLE_BAR } from "../lib/platform";
 
 /**
- * Windows: the main window's title bar, Pitwall's own (the system's is off, `windows.rs`), on the
- * sidebar's ground. The logo, the name and the version, with the way to a new one beside it; the
- * rest of it drags the window and a double click fills the screen, as the system's bar does; and
- * Windows' three buttons at its end. The window's edges, shadow and corners stay the system's.
+ * Windows: the title bar of Pitwall's own windows (the system's is off, `windows.rs`), on the
+ * sidebar's ground: the main window's and the terminals' window's. The logo and the name, then
+ * the main window's version with the way to a new one beside it, or another window's name
+ * (`label`); what the window puts in it (its slot) before Windows' three buttons at its end. The
+ * rest of it drags the window and a double click fills the screen, as the system's bar does. The
+ * window's edges, shadow and corners stay the system's.
  */
-defineProps<{ version: string | null; next: string | null; updateButton: boolean; installing: boolean }>();
+withDefaults(defineProps<{ version?: string | null; next?: string | null; updateButton?: boolean; installing?: boolean; label?: string | null }>(), {
+  version: null,
+  next: null,
+  updateButton: false,
+  installing: false,
+  label: null,
+});
 const emit = defineEmits<{ update: [] }>();
 
 const win = getCurrentWindow();
@@ -102,6 +110,10 @@ onBeforeUnmount(() => {
     <div class="brand">
       <PitwallGlyph :size="20" lamps="var(--run)" />
       <span class="name">Pitwall</span>
+      <template v-if="label">
+        <span class="label-line" aria-hidden="true"></span>
+        <span class="label">{{ label }}</span>
+      </template>
       <span v-if="version" class="version">{{ version }}</span>
       <button
         v-if="updateButton"
@@ -117,6 +129,8 @@ onBeforeUnmount(() => {
         <Icon v-else name="download" :size="13" />
       </button>
     </div>
+    <!-- The window's own buttons (the terminals' window's Always on top and Back to Pitwall). -->
+    <div v-if="$slots.default" class="end"><slot /></div>
     <!-- Out of the Tab order, as the system's are; Alt+F4 and Win+↑/↓ do the same from the keys. -->
     <div class="caption">
       <button type="button" tabindex="-1" :aria-label="t('titleBar.minimize')" :title="t('titleBar.minimize')" @click="minimize">
@@ -154,7 +168,9 @@ onBeforeUnmount(() => {
   background: var(--bg-sidebar);
 }
 
+/* It takes the room left over, so what follows it stands at the bar's end. */
 .brand {
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -166,6 +182,24 @@ onBeforeUnmount(() => {
 .name {
   font-size: 13px;
   font-weight: 600;
+}
+
+/* Another window's name, after a hairline: quieter than Pitwall's, the last to give way. */
+.label-line {
+  width: 1px;
+  height: 14px;
+  flex-shrink: 0;
+  margin: 0 2px;
+  background: var(--line-strong);
+}
+
+.label {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .version {
@@ -197,9 +231,17 @@ onBeforeUnmount(() => {
   background: var(--bg-control-hover);
 }
 
-.caption {
-  margin-left: auto;
+.end {
   display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 12px;
+}
+
+.caption {
+  display: flex;
+  flex-shrink: 0;
 }
 
 /* Windows' buttons: the bar's full height, square, the arrow and not the hand. */
@@ -242,6 +284,7 @@ onBeforeUnmount(() => {
 }
 
 .blurred .name,
+.blurred .label,
 .blurred .caption button:not(:hover) {
   color: var(--text-faint);
 }
