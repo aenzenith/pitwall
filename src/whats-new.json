@@ -1,172 +1,25 @@
 {
-  "since": "1.26.0",
+  "since": "1.27.0",
   "notes": [
-    {
-      "kind": "new",
-      "title": {
-        "en": "Agents can work your tabs",
-        "tr": "Ajanlar sekmelerini yönetebiliyor",
-        "de": "Agenten bedienen deine Tabs",
-        "es": "Los agentes manejan tus pestañas",
-        "ru": "Агенты управляют вкладками",
-        "ja": "エージェントがタブを操作できるように",
-        "zh-Hans": "智能体可以操作你的标签页"
-      },
-      "body": {
-        "en": "Over the team radio, Claude or Codex can open, close and message the tabs of its project, and start an ended session again in its tab. You switch each tool on in Settings.",
-        "tr": "Claude ya da Codex, takım radyosu üzerinden projesindeki sekmeleri açıp kapatabilir, onlara mesaj yollayabilir, kapanmış bir oturumu sekmesinde yeniden başlatabilir. Her aracı Ayarlar'dan sen açarsın.",
-        "de": "Über den Teamfunk kann Claude oder Codex die Tabs seines Projekts öffnen, schließen und ihnen schreiben, und eine beendete Sitzung in ihrem Tab neu starten. Jedes Werkzeug schaltest du in den Einstellungen ein.",
-        "es": "Por la radio del equipo, Claude o Codex pueden abrir y cerrar las pestañas de su proyecto, escribirles y volver a iniciar en su pestaña una sesión que terminó. Cada herramienta la activas tú en Ajustes.",
-        "ru": "Через командное радио Claude или Codex может открывать и закрывать вкладки своего проекта, писать в них и снова запускать завершённую сессию в её вкладке. Каждый инструмент вы включаете в настройках.",
-        "ja": "チーム無線を通じて、Claude や Codex がプロジェクトのタブを開いたり閉じたり、メッセージを送ったり、終了したセッションをそのタブで再開したりできます。各ツールは設定でオンにします。",
-        "zh-Hans": "通过车队无线电，Claude 或 Codex 可以打开、关闭项目里的标签页，给它们发消息，还能在原标签页里重新开始已结束的会话。每个工具都在设置里由你打开。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Approved plans go on in auto mode",
-        "tr": "Onaylanan plan otomatik modda sürüyor",
-        "de": "Freigegebene Pläne laufen im automatischen Modus weiter",
-        "es": "Los planes aprobados siguen en modo automático",
-        "ru": "Одобренный план продолжается в автоматическом режиме",
-        "ja": "承認した計画は自動モードで進むようになりました",
-        "zh-Hans": "批准的计划会以自动模式继续"
-      },
-      "body": {
-        "en": "When you approve Claude's plan in a chat, it carries on in auto mode and stops asking at every step. The arrow beside the button still picks another mode.",
-        "tr": "Sohbette Claude'un planını onayladığında Claude otomatik modda devam eder, artık her adımda izin sormaz. İstersen düğmenin yanındaki oktan başka bir mod seçebilirsin.",
-        "de": "Gibst du im Chat Claudes Plan frei, macht Claude im automatischen Modus weiter und fragt nicht mehr bei jedem Schritt. Über den Pfeil neben dem Button wählst du weiter einen anderen Modus.",
-        "es": "Cuando apruebas el plan de Claude en un chat, sigue en modo automático y ya no pregunta en cada paso. Con la flecha junto al botón puedes elegir otro modo.",
-        "ru": "Когда вы одобряете план Claude в чате, он продолжает в автоматическом режиме и больше не спрашивает на каждом шаге. Другой режим по-прежнему выбирается стрелкой рядом с кнопкой.",
-        "ja": "チャットで Claude の計画を承認すると、自動モードで進み、手順ごとに確認を求めなくなります。ボタン横の矢印からほかのモードも選べます。",
-        "zh-Hans": "在对话里批准 Claude 的计划后，它会以自动模式继续，不再每一步都来询问。想换别的模式，仍可以点按钮旁的箭头。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Pin your tabs, hop back with ⌃⇥",
-        "tr": "Sabit sekmeler, ⌃⇥ ile hızlı geçiş",
-        "de": "Tabs anheften, mit ⌃⇥ zurückspringen",
-        "es": "Fija pestañas y vuelve con ⌃⇥",
-        "ru": "Закреплённые вкладки и ⌃⇥",
-        "ja": "タブの固定と ⌃⇥ での切り替え",
-        "zh-Hans": "固定标签页，⌃⇥ 快速切回"
-      },
-      "body": {
-        "en": "Right-click a terminal tab to pin it up front, where ⌘W won't close it. Hold ⌃⇥ (Ctrl+Tab on Windows and Linux) to hop between the tabs you looked at last, in any project.",
-        "tr": "Bir terminal sekmesine sağ tıklayıp sabitlersen satırın başına geçer, ⌘W de onu kapatmaz. ⌃⇥ tuşlarını basılı tutarsan (Windows ve Linux'ta Ctrl+Tab) hangi projede olursa olsun son baktığın sekmelere dönersin.",
-        "de": "Mit einem Rechtsklick heftest du einen Terminal-Tab vorne an, dann schließt ⌘W ihn nicht mehr. Halte ⌃⇥ (unter Windows und Linux Strg+Tab), um zwischen deinen zuletzt angesehenen Tabs zu springen, egal in welchem Projekt.",
-        "es": "Haz clic derecho en una pestaña de terminal para fijarla al principio, donde ⌘W ya no la cierra. Mantén ⌃⇥ (Ctrl+Tab en Windows y Linux) para saltar entre las pestañas que viste hace poco, sea cual sea el proyecto.",
-        "ru": "Закрепите вкладку терминала через правый щелчок: она встанет в начало ряда, и ⌘W её не закроет. Удерживайте ⌃⇥ (Ctrl+Tab в Windows и Linux), чтобы переходить между недавними вкладками любых проектов.",
-        "ja": "ターミナルのタブを右クリックで固定すると先頭に並び、⌘W でも閉じなくなります。⌃⇥（Windows と Linux では Ctrl+Tab）を押したままにすると、どのプロジェクトでも最近見たタブへすぐ移れます。",
-        "zh-Hans": "右键点按终端标签页即可把它固定在最前面，⌘W 也不会关掉它。按住 ⌃⇥（Windows 和 Linux 上是 Ctrl+Tab），就能在最近看过的标签页之间来回切换，不论属于哪个项目。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "One message to several tabs",
-        "tr": "Tek mesaj, birden çok sekme",
-        "de": "Eine Nachricht an mehrere Tabs",
-        "es": "Un mensaje para varias pestañas",
-        "ru": "Одно сообщение — в несколько вкладок",
-        "ja": "1 つのメッセージを複数のタブへ",
-        "zh-Hans": "一条消息发给多个标签页"
-      },
-      "body": {
-        "en": "Press ⇧⌘I in the terminal panel, pick tabs from this project or any other, and write once. A tab waiting on a permission or an answer is skipped, so nothing gets approved by accident.",
-        "tr": "Terminal panelinde ⇧⌘I'ye bas, bu projeden ya da başka projelerden sekmeleri seç ve bir kez yaz. İzin ya da yanıt bekleyen sekme atlanır, böylece hiçbir şey yanlışlıkla onaylanmaz.",
-        "de": "Drück im Terminal-Panel ⇧⌘I, wähl Tabs aus diesem oder einem anderen Projekt und schreib einmal. Ein Tab, der auf eine Erlaubnis oder Antwort wartet, wird übersprungen, damit nichts aus Versehen freigegeben wird.",
-        "es": "Pulsa ⇧⌘I en el panel de terminal, elige pestañas de este proyecto o de cualquier otro y escribe una sola vez. Si una espera un permiso o una respuesta, se salta, así nada se aprueba sin querer.",
-        "ru": "Нажмите ⇧⌘I в панели терминала, отметьте вкладки этого или любого другого проекта и напишите один раз. Вкладка, которая ждёт разрешения или ответа, пропускается, чтобы ничего не одобрилось случайно.",
-        "ja": "ターミナルパネルで ⇧⌘I を押し、このプロジェクトや他のプロジェクトのタブを選んで一度書くだけで全部に届きます。許可や返答を待っているタブは飛ばすので、うっかり承認してしまうことはありません。",
-        "zh-Hans": "在终端面板按 ⇧⌘I，从这个或其他项目里勾选标签页，写一次就能发给它们。正在等授权或回答的标签页会被跳过，不会误点了批准。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Tab names at a glance",
-        "tr": "Sekmenin tam adı bir bakışta",
-        "de": "Tab-Namen auf einen Blick",
-        "es": "Nombres de pestaña de un vistazo",
-        "ru": "Имена вкладок с одного взгляда",
-        "ja": "タブ名がすぐわかる",
-        "zh-Hans": "一眼看清标签页名称"
-      },
-      "body": {
-        "en": "Rest the pointer on a terminal tab and its full name pops up, even when the row is crowded and the name is cut short.",
-        "tr": "Bir terminal sekmesinin üzerine gelince tam adı açılır. Satır kalabalıkken kısalan isimleri artık tahmin etmen gerekmez.",
-        "de": "Fahr mit dem Zeiger über einen Terminal-Tab, und sein ganzer Name erscheint, auch wenn er in einer vollen Leiste abgeschnitten ist.",
-        "es": "Pasa el puntero por una pestaña del terminal y verás su nombre completo, aunque la fila esté llena y el nombre aparezca cortado.",
-        "ru": "Наведите указатель на вкладку терминала, и появится её полное имя, даже если в тесном ряду оно обрезано.",
-        "ja": "ターミナルのタブにポインタを重ねると、タブが混み合って名前が途中で切れていても、名前全体が表示されます。",
-        "zh-Hans": "把指针停在终端标签页上，就会弹出它的完整名称，即使标签栏拥挤、名字被截断也一样。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "The chat's own box in the empty panel",
-        "tr": "Boş panelde sohbetin kendi kutusu",
-        "de": "Das Chat-Feld direkt im leeren Panel",
-        "es": "La caja del chat, ya en el panel vacío",
-        "ru": "Поле чата прямо в пустой панели",
-        "ja": "空のパネルにチャットの入力欄",
-        "zh-Hans": "空面板里就是对话的输入框"
-      },
-      "body": {
-        "en": "Pick Chat in an empty terminal panel and you write in the chat's own box. Commands, attachments, voice and the model and mode menus work before the chat even opens.",
-        "tr": "Boş terminal panelinde Sohbet'i seçince doğrudan sohbetin kutusuna yazarsın. Komutlar, ekler, sesli mesaj, model ve kip menüleri sohbet açılmadan önce de çalışır.",
-        "de": "Wählst du im leeren Terminal-Panel „Chat“, schreibst du gleich ins Feld des Chats. Befehle, Anhänge, Sprachnachrichten und die Menüs für Modell und Modus funktionieren schon, bevor der Chat aufgeht.",
-        "es": "Elige Chat en un panel de terminal vacío y escribes directamente en la caja del chat. Los comandos, los adjuntos, la voz y los menús de modelo y modo funcionan antes de que se abra.",
-        "ru": "Выберите «Чат» в пустой панели терминала, и вы пишете прямо в поле чата. Команды, вложения, голос и меню модели и режима работают ещё до того, как чат откроется.",
-        "ja": "空のターミナルパネルで「チャット」を選ぶと、チャットと同じ入力欄に書けます。コマンドや添付、音声、モデルとモードのメニューも、チャットが開く前から使えます。",
-        "zh-Hans": "在空的终端面板里选「对话」，就直接在对话自己的输入框里写。命令、附件、语音以及模型和模式菜单，在对话打开前就能用。"
-      }
-    },
-    {
-      "kind": "new",
-      "title": {
-        "en": "Paste images for Claude and Codex",
-        "tr": "Claude ve Codex'e görsel yapıştır",
-        "de": "Bilder für Claude und Codex einfügen",
-        "es": "Pega imágenes para Claude y Codex",
-        "ru": "Картинки для Claude и Codex",
-        "ja": "Claude と Codex に画像を貼り付け",
-        "zh-Hans": "给 Claude 和 Codex 贴图"
-      },
-      "body": {
-        "en": "In an empty terminal panel, paste or drop screenshots into Claude's or Codex's box and they go along with your message.",
-        "tr": "Boş terminal panelinde Claude'un ya da Codex'in kutusuna ekran görüntüsü yapıştırabilir ya da sürükleyebilirsin; görseller mesajınla birlikte gider.",
-        "de": "Im leeren Terminal-Panel kannst du Screenshots in das Feld für Claude oder Codex einfügen oder hineinziehen; sie gehen mit deiner Nachricht mit.",
-        "es": "En un panel de terminal vacío puedes pegar o arrastrar capturas en la caja de Claude o de Codex, y se envían junto con tu mensaje.",
-        "ru": "В пустой панели терминала вставьте или перетащите скриншоты в поле Claude или Codex, и они уйдут вместе с вашим сообщением.",
-        "ja": "空のターミナルパネルで Claude や Codex の入力欄にスクリーンショットを貼り付けたりドロップしたりすると、メッセージと一緒に渡せます。",
-        "zh-Hans": "在空的终端面板里，可以把截图粘贴或拖进 Claude 或 Codex 的输入框，它们会随消息一起发送。"
-      }
-    },
     {
       "kind": "fix",
       "title": {
-        "en": "Changes in Files stay current",
-        "tr": "Dosyalar'daki değişiklikler hep güncel",
-        "de": "Änderungen in Dateien bleiben aktuell",
-        "es": "Los cambios en Archivos, siempre al día",
-        "ru": "Изменения в «Файлах» всегда свежие",
-        "ja": "ファイルウィンドウの変更がいつも最新に",
-        "zh-Hans": "文件窗口中的更改保持最新"
+        "en": "Interrupting a chat answer isn't an error",
+        "tr": "Yanıt kesilince çıkan hata düzeltildi",
+        "de": "Unterbrechen ist kein Fehler mehr",
+        "es": "Interrumpir una respuesta ya no es un error",
+        "ru": "Прерванный ответ больше не ошибка",
+        "ja": "回答の中断がエラー扱いされなくなりました",
+        "zh-Hans": "中断回答不再算作出错"
       },
       "body": {
-        "en": "Source control in the Files window shows your changes as soon as it opens, and keeps up with them while it stays open.",
-        "tr": "Dosyalar penceresindeki Kaynak denetimi, değişikliklerini pencere açılır açılmaz gösteriyor ve pencere açık kaldıkça onları takip ediyor.",
-        "de": "Die Quellcodeverwaltung im Fenster Dateien zeigt deine Änderungen gleich beim Öffnen und bleibt dran, solange das Fenster offen ist.",
-        "es": "El control de código fuente de la ventana Archivos muestra tus cambios en cuanto se abre y los sigue mientras la tengas abierta.",
-        "ru": "Система контроля версий в окне «Файлы» сразу показывает ваши изменения и следит за ними, пока окно открыто.",
-        "ja": "ファイルウィンドウのソース管理が、開いてすぐに変更を表示し、開いている間はずっと追いかけるようになりました。",
-        "zh-Hans": "文件窗口的源代码管理会在打开时立即显示你的更改，并在窗口打开期间一直跟进。"
+        "en": "When you interrupt Claude's answer in a chat, it now just says you did, without the red error box under it.",
+        "tr": "Sohbette Claude'un yanıtını yarıda kestiğinde artık altında kırmızı hata kutusu çıkmıyor, yalnızca yanıtı kestiğin yazıyor.",
+        "de": "Unterbrichst du Claudes Antwort im Chat, steht dort jetzt nur noch, dass du sie unterbrochen hast, ohne roten Fehlerkasten darunter.",
+        "es": "Si interrumpes la respuesta de Claude en un chat, ahora solo verás que la interrumpiste, sin el recuadro rojo de error debajo.",
+        "ru": "Если прервать ответ Claude в чате, теперь там просто сказано, что вы его прервали, и красного окна с ошибкой под ним больше нет.",
+        "ja": "チャットで Claude の回答を中断すると、中断したことだけが表示され、その下に赤いエラー表示は出なくなりました。",
+        "zh-Hans": "在对话里中断 Claude 的回答后，只会显示你中断了它，下面不再出现红色的错误框。"
       }
     }
   ]

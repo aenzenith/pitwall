@@ -1365,7 +1365,11 @@ function result(model: ChatModel, inner: Inner, frame: ResultFrame): void {
   const window = usage.reduce((most, each) => Math.max(most, each?.contextWindow ?? 0), 0);
   if (window) model.contextWindow = window;
   const list = target(model, inner);
-  const failed = frame.is_error === true || (frame.subtype !== "success" && frame.subtype !== undefined);
+  // A turn the user stopped ends as an `error_during_execution` too, `terminal_reason`
+  // `aborted_streaming` or `aborted_tools` with a diagnostic line of the CLI's in `errors`: no
+  // failure, its interrupt line already says what happened.
+  const aborted = frame.terminal_reason?.startsWith("aborted") === true;
+  const failed = !aborted && (frame.is_error === true || (frame.subtype !== "success" && frame.subtype !== undefined));
   if (failed) {
     const text = (frame.errors?.length ? frame.errors.join("\n") : str(frame.result)) ?? "";
     push(list, { kind: "error", key: nextKey(inner, "e"), code: frame.terminal_reason ?? frame.subtype ?? null, text } as ErrorEntry);
@@ -1383,7 +1387,7 @@ function result(model: ChatModel, inner: Inner, frame: ResultFrame): void {
     reason: str(frame.terminal_reason),
     time: inner.inHistory ? null : Date.now(),
   } as ResultEntry);
-  settleAll(model, inner, frame.terminal_reason?.startsWith("aborted") ? "stopped" : null);
+  settleAll(model, inner, aborted ? "stopped" : null);
   if (!inner.inHistory && model.state !== "requires_action") model.turnStarted = null;
 }
 
