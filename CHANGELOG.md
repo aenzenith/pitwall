@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.27.0](https://github.com/aenzenith/pitwall/compare/v1.26.0...v1.27.0) (2026-11-26)
+
+
+### Features
+
+* **radio:** a session opened, messaged, woke and closed the project's terminal tabs over the team radio ([53cf143](https://github.com/aenzenith/pitwall/commit/53cf1433266ea31d37b19ef617ca2d7adf616923))
+* **terminal:** one message went to several picked tabs at once, skipping those that couldn't take it ([3d64f6c](https://github.com/aenzenith/pitwall/commit/3d64f6c62d50a80a92e0a67fa7546b762b29a5eb))
+* **terminal:** tabs were pinned from their menu and ⌃⇥ went back to the tabs last looked at ([c84e65a](https://github.com/aenzenith/pitwall/commit/c84e65a019134b17a21b86b0df897cfefb2c971a))
+* **terminal:** the empty panel's box became the chat's own and took images for Claude and Codex ([84f43e2](https://github.com/aenzenith/pitwall/commit/84f43e27cb337b4d668cb11e08303a02ad56c408))
+
+
+### Bug Fixes
+
+* **files:** the Files window read Git's changes again as it opened, and followed them while it stayed open ([eb7d86a](https://github.com/aenzenith/pitwall/commit/eb7d86ae85209720e43af71820115b44ffff6a2c))
+
+
+### Improvements
+
+* **chat:** an approved plan went on in auto mode ([6b3cbe1](https://github.com/aenzenith/pitwall/commit/6b3cbe1e4fb750dd4bbddb3f8b8b9227f16c0a96))
+* **terminal:** a tab's name showed in Pitwall's own tooltip, above the row or below it ([bc1ea43](https://github.com/aenzenith/pitwall/commit/bc1ea439cb3e24a798b6498010e3c7efb7c92d71))
+
 ## [1.26.0](https://github.com/aenzenith/pitwall/compare/v1.25.4...v1.26.0) (2026-11-24)
 
 
