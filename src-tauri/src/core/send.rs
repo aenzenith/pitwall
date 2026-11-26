@@ -321,8 +321,8 @@ mod tests {
             ("shell busy", "shell", None, false, None, "sleep", Some(SendSkip::Busy)),
             ("admin", "shell", None, false, None, "admin", Some(SendSkip::Admin)),
             ("laps", "shell", None, false, None, "apart", Some(SendSkip::Laps)),
-            ("claude idle", "claude", Some(Some("idle")), false, Some((Agent::Claude, Some(TurnKind::Finished), true)), "", None),
-            ("claude at work", "claude", Some(Some("busy")), false, None, "", None),
+            ("claude idle", "claude", Some(Some("idle")), false, Some((Agent::Claude, Some(TurnKind::Finished), true)), "agent", None),
+            ("claude at work", "claude", Some(Some("busy")), false, None, "agent", None),
         ];
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("paddock");
@@ -345,6 +345,10 @@ mod tests {
         for ((_, _, _, _, _, first, _), (_, id, _)) in cases.iter().zip(&tabs) {
             match *first {
                 "sleep" => core.write_terminal(*id, "sleep 60\r"),
+                // An agent's stand-in, which takes its input as Claude Code does: a paste in its
+                // brackets, sent by the Return after it. The shell itself can't stand in: bash 3.2
+                // (the login shell of GitHub's macOS runners) knows no bracketed paste.
+                "agent" => core.write_terminal(*id, "sh -c 'stty -echo; while IFS= read -r line; do case \"$line\" in *\"[200~\"*\"[201~\"*) echo \"cg-$((40+2))\";; esac; done'\r"),
                 // A stand-in whose command line names Codex, for a Codex tab its hook never tied.
                 "codex" => core.write_terminal(*id, "sh -c 'sleep 60; :' codex-stand-in\r"),
                 "admin" => core.mark_elevated(*id),
@@ -352,7 +356,7 @@ mod tests {
                 _ => {}
             }
         }
-        assert!(wait_for(|| cases.iter().zip(&tabs).filter(|(case, _)| matches!(case.5, "sleep" | "codex")).all(|(_, (_, id, _))| core.terminal_busy(*id, &mut None))), "the programs never started");
+        assert!(wait_for(|| cases.iter().zip(&tabs).filter(|(case, _)| matches!(case.5, "sleep" | "codex" | "agent")).all(|(_, (_, id, _))| core.terminal_busy(*id, &mut None))), "the programs never started");
         // A tab is taken for one whose agent is still starting for a moment after it opens
         // (`STARTING`); only after that is an agent that ended told apart. A shell that comes up
         // fast must not beat it.
